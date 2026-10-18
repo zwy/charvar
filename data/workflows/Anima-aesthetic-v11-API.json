@@ -1,0 +1,204 @@
+{
+  "8": {
+    "inputs": {
+      "samples": [
+        "69",
+        0
+      ],
+      "vae": [
+        "15",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE解码"
+    }
+  },
+  "11": {
+    "inputs": {
+      "text": "masterpiece, best quality, good quality, highres, absurdres, shiny skin, bloom, shadow, (anime screenshot:1.5), 5 fingers, uncensored, \nAnnerose, mature female, collar, chained, bound wrists, top-down bottom-up, breast press, on floor, ass up, ass focus, hands on another's ass, spreading another's anus, legs apart, kneeling, three quarter view, \npointy ears, 2girls, cowboy shot, fingernail, nail polish, (purple nails:1.5), female pov, feet out of frame, pov hands,\nlooking at viewer, blush, open mouth, looking back, embarrassed, turning head,\nblack hair, long hair, yellow eyes, \nblack pantyhose, crotch cutout, ass cutout, torn pantyhose, nude, crotch cutout, pussy, female pubic hair, pussy juice, trembling, anus, detached sleeves, \ncurvy, huge breasts, thighs,\nindoors, warehouse, might, moonlight, dark, spotlight, \n <lora:Anima-Dit 1_0 Annerose:1>",
+      "clip": [
+        "72",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Positive Prompt)"
+    }
+  },
+  "12": {
+    "inputs": {
+      "text": "worst quality, low quality, bad quality, lowres, extra digits, mutated fingers, jpeg artifacts old, early, flat color, (blurry:1.2)",
+      "clip": [
+        "72",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Negative Prompt)"
+    }
+  },
+  "15": {
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "加载VAE"
+    }
+  },
+  "28": {
+    "inputs": {
+      "width": 1152,
+      "height": 1536,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "空Latent图像"
+    }
+  },
+  "44": {
+    "inputs": {
+      "unet_name": "anima_aestheticV11.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "UNet加载器"
+    }
+  },
+  "45": {
+    "inputs": {
+      "clip_name": "qwen_3_06b_base.safetensors",
+      "type": "stable_diffusion",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "加载CLIP"
+    }
+  },
+  "47": {
+    "inputs": {
+      "filename_prefix": "20260828",
+      "images": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "保存图像"
+    }
+  },
+  "60": {
+    "inputs": {
+      "reuse_threshold": 0.21,
+      "start_percent": 0.15,
+      "end_percent": 0.95,
+      "verbose": true
+    },
+    "class_type": "EasyCache",
+    "_meta": {
+      "title": "EasyCache"
+    }
+  },
+  "69": {
+    "inputs": {
+      "add_noise": "enable",
+      "noise_seed": [
+        "70",
+        0
+      ],
+      "steps": 30,
+      "cfg": 4,
+      "sampler_name": "dpmpp_2m_sde_gpu",
+      "scheduler": "simple",
+      "start_at_step": 0,
+      "end_at_step": 10000,
+      "return_with_leftover_noise": "disable",
+      "model": [
+        "72",
+        0
+      ],
+      "positive": [
+        "11",
+        0
+      ],
+      "negative": [
+        "12",
+        0
+      ],
+      "latent_image": [
+        "28",
+        0
+      ]
+    },
+    "class_type": "KSamplerAdvanced",
+    "_meta": {
+      "title": "🔧 K采样器（高级）"
+    }
+  },
+  "70": {
+    "inputs": {
+      "seed": -1
+    },
+    "class_type": "Seed (rgthree)",
+    "_meta": {
+      "title": "Seed (1ST)"
+    }
+  },
+  "72": {
+    "inputs": {
+      "__lm_autocomplete_meta_text": {
+        "version": 1,
+        "textWidgetName": "text",
+        "lastAccepted": {
+          "start": 0,
+          "end": 30,
+          "insertedText": "<lora:doburingo_AnimaB_v01:1>,",
+          "textSnapshot": "<lora:doburingo_AnimaB_v01:1>,"
+        }
+      },
+      "text": "<lora:neisan_AnimaB_v03-1:1.00> <lora:Anima-Dit 1_0 Annerose:1.00>",
+      "loras": {
+        "__value__": [
+          {
+            "name": "neisan_AnimaB_v03-1",
+            "strength": 1,
+            "active": true,
+            "expanded": false,
+            "clipStrength": 1,
+            "selected": true,
+            "locked": false
+          },
+          {
+            "name": "Anima-Dit 1_0 Annerose",
+            "strength": 1,
+            "active": true,
+            "expanded": false,
+            "clipStrength": 1,
+            "selected": false,
+            "locked": false
+          }
+        ]
+      },
+      "model": [
+        "44",
+        0
+      ],
+      "clip": [
+        "45",
+        0
+      ]
+    },
+    "class_type": "Lora Loader (LoraManager)",
+    "_meta": {
+      "title": "Lora Loader (LoraManager)"
+    }
+  }
+}

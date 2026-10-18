@@ -1,0 +1,40 @@
+# 维度组合版（设计文档 §5.2）：3 景别 x 8 朝向（24 条）+ 头像正面 x 6 表情（6 条）
+name: matrix_basic
+type: matrix
+version: 1
+description: 维度组合生成，扩展维度时加 dimensions 条目与 rule 即可
+master_template: >-
+  Create an image of the {subject_noun} in the character sheet in {reference_tag}.
+  {style_lock_sentence}{identity_lock_sentence}{outfit_lock_sentence}{extra}
+suffix_template: >-
+  Put them against a {background} background. The lighting is {lighting}.
+backgrounds_ref: wildcards/backgrounds.yaml
+lighting_ref: wildcards/lighting.yaml
+dimensions:
+  framing:
+    full:  "Full-body shot of one {subject_noun}, entire figure visible from head to shoes, standing upright with arms relaxed at the sides"
+    chest: "Chest-up portrait of one {subject_noun}, framed from the mid-chest to just above the head"
+    head:  "Close-up headshot of one {subject_noun}, framed tightly on the head and shoulders"
+  angle:
+    front: "facing directly toward the camera"
+    l45:   "body rotated 45 degrees toward the left side of the frame, three-quarter view"
+    r45:   "body rotated 45 degrees toward the right side of the frame, three-quarter view"
+    l90:   "body rotated 90 degrees to face the left side of the frame, full side profile view"
+    r90:   "body rotated 90 degrees to face the right side of the frame, full side profile view"
+    l135:  "body rotated 135 degrees away from the camera toward the left side of the frame, three-quarter rear view, face only partly visible"
+    r135:  "body rotated 135 degrees away from the camera toward the right side of the frame, three-quarter rear view, face only partly visible"
+    back:  "seen directly from behind, back fully toward the camera, face not visible"
+  expression:
+    neutral: "calm, neutral expression, relaxed face"
+    smile:   "warm, genuine smile, happy expression"
+    sad:     "sad expression, eyes looking downward, corners of the mouth turned down"
+    pout:    "cute pouty expression, lips pushed forward in a soft pout"
+    cringe:  "cringing expression, teeth clenched in an awkward grimace, eyes slightly squinted"
+    silly:   "silly, playful expression, tongue sticking out, eyes wide and bright"
+rules:
+  - product: { framing: [full, chest, head], angle: "*" }          # 24 条
+  - product: { framing: [head], angle: [front], expression: "*" }  # 6 条
+exclude:
+  - { angle: back, expression: "*" }   # 背面不加表情
+join: ", "
+end: "."

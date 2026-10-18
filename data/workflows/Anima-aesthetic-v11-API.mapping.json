@@ -1,0 +1,44 @@
+{
+  "description": "Mapping config for Anima-aesthetic-v11-API workflow. Node IDs match the API-format workflow exported from ComfyUI. Adjust node_id values if your workflow differs.",
+  "output_nodes": ["47"],
+  "mappings": [
+    {
+      "field": "prompt",
+      "node_id": "11",
+      "input_key": "text",
+      "required": true,
+      "comment": "正向提示词 → CLIPTextEncode Positive Prompt"
+    },
+    {
+      "field": "negative_prompt",
+      "node_id": "12",
+      "input_key": "text",
+      "required": false,
+      "default": "oversaturated, (monochrome:1.3), harsh contrast, (worst quality:0), (low quality:0), (score_1:0), (score_2:0), (score_3:0), jpeg artifacts, logo, watermark, bad anatomy, (bad hands:1.5), missing finger, extra digits, fewer digits, disfigured, mutation, 4 fingers, 6 fingers, speech bubble",
+      "comment": "负向提示词 → CLIPTextEncode Negative Prompt"
+    },
+    {
+      "field": "width",
+      "node_id": "28",
+      "input_key": "width",
+      "required": false,
+      "default": 1152,
+      "comment": "图片宽度 → EmptyLatentImage"
+    },
+    {
+      "field": "height",
+      "node_id": "28",
+      "input_key": "height",
+      "required": false,
+      "default": 1536,
+      "comment": "图片高度 → EmptyLatentImage"
+    },
+    {
+      "field": "lora_loader",
+      "node_id": "72",
+      "input_key": "loras",
+      "required": false,
+      "comment": "LoRA list 整段覆写到 node 72 (Lora Loader / LoraManager) 的 loras[] widget;v2.34 协议,GenerateRequest.loras=[] 时不动 workflow 默认 loras。raw_prompt 里的 <lora:...> 段由 run_queue._extract_loras_from_prompt 抽好后塞进 request.loras"
+    }
+  ]
+}

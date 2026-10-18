@@ -1,0 +1,16 @@
+{
+  "description": "mapping.json 示例（与 shared/comfy_client 同格式）。workflow 与 mapping 成对放在 data/workflows/{name}.json + {name}.mapping.json；节点 id 以你导出的 API workflow 为准。",
+  "output_nodes": ["9"],
+  "mappings": [
+    { "field": "prompt", "node_id": "11", "input_key": "text", "required": true },
+    { "field": "negative_prompt", "node_id": "12", "input_key": "text", "required": false,
+      "default": "worst quality, low quality, bad anatomy" },
+    { "field": "width", "node_id": "28", "input_key": "width", "required": false, "default": 1152 },
+    { "field": "height", "node_id": "28", "input_key": "height", "required": false, "default": 1536 },
+    { "field": "seed", "node_id": "70", "input_key": "seed", "required": false, "default": -1,
+      "comment": "mode: increment(默认)=seed+index；fixed=全部同 seed；default=-1 交给 ComfyUI 随机" },
+    { "field": "steps", "node_id": "69", "input_key": "steps", "required": false, "default": 8 },
+    { "field": "filename_prefix", "node_id": "47", "input_key": "filename_prefix", "required": false,
+      "comment": "默认模板 {subject}_{index:03d}_{variant_id}，与 captions 目录同名对应" }
+  ]
+}

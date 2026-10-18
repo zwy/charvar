@@ -1,0 +1,17 @@
+id: silver_witch
+name: 银白女巫
+subject_noun: woman
+trigger_word: sw1tch
+reference_tag: <image1>
+style_lock:
+- the original illustration style
+- the color palette
+identity_lock:
+- long silver-white hair
+- warm light-beige skin tone with subtle natural blush
+- the same facial coloring and lip tone
+- the same face and eye color
+- the same physique
+outfit_lock:
+- the black witch robe and pointed hat
+extra: ''

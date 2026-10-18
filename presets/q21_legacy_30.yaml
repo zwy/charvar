@@ -1,0 +1,234 @@
+# 子图 Text Multiline 残留的旧版 30 条（含 smooth youthful skin, no wrinkles），备选
+name: q21_legacy_30
+type: list
+version: 1
+master_template: >-
+  Create an image of the {subject_noun} in the character sheet in {reference_tag}.
+  {style_lock_sentence}{identity_lock_sentence}{outfit_lock_sentence}{extra}
+suffix_template: >-
+  Put them against a {background} background. The lighting is {lighting}.
+backgrounds_ref: wildcards/backgrounds.yaml
+lighting_ref: wildcards/lighting.yaml
+variants:
+- id: full_front
+  text: Full-body shot, standing pose, arms relaxed at their sides, facing directly toward the camera.
+  framing: full
+  angle: front
+  tags:
+  - full
+  - front
+- id: full_l45
+  text: Full-body shot, standing pose, arms relaxed at their sides, body turned 45 degrees to the left, three-quarter angle.
+  framing: full
+  angle: l45
+  tags:
+  - full
+  - l45
+- id: full_r45
+  text: Full-body shot, standing pose, arms relaxed at their sides, body turned 45 degrees to the right, three-quarter angle.
+  framing: full
+  angle: r45
+  tags:
+  - full
+  - r45
+- id: full_l90
+  text: Full-body shot, standing pose, arms relaxed at their sides, body turned 90 degrees to the left, left side in profile.
+  framing: full
+  angle: l90
+  tags:
+  - full
+  - l90
+- id: full_r90
+  text: Full-body shot, standing pose, arms relaxed at their sides, body turned 90 degrees to the right, right side in profile.
+  framing: full
+  angle: r90
+  tags:
+  - full
+  - r90
+- id: full_l135
+  text: Full-body shot, standing pose, arms relaxed at their sides, body turned 135 degrees to the left, three-quarter back angle.
+  framing: full
+  angle: l135
+  tags:
+  - full
+  - l135
+- id: full_r135
+  text: Full-body shot, standing pose, arms relaxed at their sides, body turned 135 degrees to the right, three-quarter back angle.
+  framing: full
+  angle: r135
+  tags:
+  - full
+  - r135
+- id: full_back
+  text: Full-body shot, standing pose, arms relaxed at their sides, viewed directly from behind, back facing the camera.
+  framing: full
+  angle: back
+  tags:
+  - full
+  - back
+- id: chest_front
+  text: Chest-up shot, framed from the chest up, facing directly toward the camera.
+  framing: chest
+  angle: front
+  tags:
+  - chest
+  - front
+- id: chest_l45
+  text: Chest-up shot, framed from the chest up, body turned 45 degrees to the left, three-quarter angle.
+  framing: chest
+  angle: l45
+  tags:
+  - chest
+  - l45
+- id: chest_r45
+  text: Chest-up shot, framed from the chest up, body turned 45 degrees to the right, three-quarter angle.
+  framing: chest
+  angle: r45
+  tags:
+  - chest
+  - r45
+- id: chest_l90
+  text: Chest-up shot, framed from the chest up, body turned 90 degrees to the left, left side in profile.
+  framing: chest
+  angle: l90
+  tags:
+  - chest
+  - l90
+- id: chest_r90
+  text: Chest-up shot, framed from the chest up, body turned 90 degrees to the right, right side in profile.
+  framing: chest
+  angle: r90
+  tags:
+  - chest
+  - r90
+- id: chest_l135
+  text: Chest-up shot, framed from the chest up, body turned 135 degrees to the left, three-quarter back angle.
+  framing: chest
+  angle: l135
+  tags:
+  - chest
+  - l135
+- id: chest_r135
+  text: Chest-up shot, framed from the chest up, body turned 135 degrees to the right, three-quarter back angle.
+  framing: chest
+  angle: r135
+  tags:
+  - chest
+  - r135
+- id: chest_back
+  text: Chest-up shot, framed from the chest up, viewed directly from behind, back facing the camera.
+  framing: chest
+  angle: back
+  tags:
+  - chest
+  - back
+- id: head_front
+  text: Close-up headshot, framed tightly on the face and shoulders, facing directly toward the camera, smooth youthful skin, no wrinkles.
+  framing: head
+  angle: front
+  tags:
+  - head
+  - front
+- id: head_l45
+  text: Close-up headshot, framed tightly on the face and shoulders, body turned 45 degrees to the left, three-quarter angle, smooth youthful skin, no wrinkles.
+  framing: head
+  angle: l45
+  tags:
+  - head
+  - l45
+- id: head_r45
+  text: Close-up headshot, framed tightly on the face and shoulders, body turned 45 degrees to the right, three-quarter angle, smooth youthful skin, no wrinkles.
+  framing: head
+  angle: r45
+  tags:
+  - head
+  - r45
+- id: head_l90
+  text: Close-up headshot, framed tightly on the face and shoulders, body turned 90 degrees to the left, left side in profile, smooth youthful skin, no wrinkles.
+  framing: head
+  angle: l90
+  tags:
+  - head
+  - l90
+- id: head_r90
+  text: Close-up headshot, framed tightly on the face and shoulders, body turned 90 degrees to the right, right side in profile, smooth youthful skin, no wrinkles.
+  framing: head
+  angle: r90
+  tags:
+  - head
+  - r90
+- id: head_l135
+  text: Close-up headshot, framed tightly on the face and shoulders, body turned 135 degrees to the left, three-quarter back angle, smooth youthful skin, no wrinkles.
+  framing: head
+  angle: l135
+  tags:
+  - head
+  - l135
+- id: head_r135
+  text: Close-up headshot, framed tightly on the face and shoulders, body turned 135 degrees to the right, three-quarter back angle, smooth youthful skin, no wrinkles.
+  framing: head
+  angle: r135
+  tags:
+  - head
+  - r135
+- id: head_back
+  text: Close-up headshot, framed tightly on the face and shoulders, viewed directly from behind, back facing the camera, smooth youthful skin, no wrinkles.
+  framing: head
+  angle: back
+  tags:
+  - head
+  - back
+- id: expr_neutral
+  text: Close-up headshot, framed tightly on the face and shoulders, facing directly toward the camera, calm, neutral facial expression, smooth relaxed skin, no wrinkles.
+  framing: head
+  angle: front
+  expression: neutral
+  tags:
+  - head
+  - front
+  - neutral
+- id: expr_smile
+  text: Close-up headshot, framed tightly on the face and shoulders, facing directly toward the camera, warm, genuine smile, happy expression, eyes gently crinkled at the outer corners only, smooth skin elsewhere, no forehead or cheek wrinkles.
+  framing: head
+  angle: front
+  expression: smile
+  tags:
+  - head
+  - front
+  - smile
+- id: expr_sad
+  text: Close-up headshot, framed tightly on the face and shoulders, facing directly toward the camera, sad expression, eyes downcast, corners of the mouth turned down, smooth skin, no wrinkles.
+  framing: head
+  angle: front
+  expression: sad
+  tags:
+  - head
+  - front
+  - sad
+- id: expr_pout
+  text: Close-up headshot, framed tightly on the face and shoulders, facing directly toward the camera, cute pouty expression, smooth skin, no wrinkles.
+  framing: head
+  angle: front
+  expression: pout
+  tags:
+  - head
+  - front
+  - pout
+- id: expr_cringe
+  text: Close-up headshot, framed tightly on the face and shoulders, facing directly toward the camera, a cringing expression, minimal skin creasing, no exaggerated wrinkles.
+  framing: head
+  angle: front
+  expression: cringe
+  tags:
+  - head
+  - front
+  - cringe
+- id: expr_silly
+  text: Close-up headshot, framed tightly on the face and shoulders, facing directly toward the camera, silly, playful expression, tongue out, exaggerated grin, smooth skin, no wrinkles.
+  framing: head
+  angle: front
+  expression: silly
+  tags:
+  - head
+  - front
+  - silly

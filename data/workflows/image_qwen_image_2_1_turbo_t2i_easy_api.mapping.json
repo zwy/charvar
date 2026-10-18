@@ -1,0 +1,56 @@
+{
+  "description": "Qwen Image 2.1 Turbo 文生图 API workflow；正向/负向提示词直接注入 TextEncodeQwenImage21；宽高注入 EmptyLatentImage；无参考图。",
+  "output_nodes": [
+    "461"
+  ],
+  "mappings": [
+    {
+      "field": "prompt",
+      "node_id": "459:452",
+      "input_key": "prompt",
+      "required": true
+    },
+    {
+      "field": "negative_prompt",
+      "node_id": "459:452",
+      "input_key": "negative_prompt",
+      "required": false
+    },
+    {
+      "field": "width",
+      "node_id": "459:456",
+      "input_key": "width",
+      "required": false,
+      "default": 1024
+    },
+    {
+      "field": "height",
+      "node_id": "459:456",
+      "input_key": "height",
+      "required": false,
+      "default": 1024
+    },
+    {
+      "field": "batch_size",
+      "node_id": "459:456",
+      "input_key": "batch_size",
+      "required": false,
+      "default": 1
+    },
+    {
+      "field": "seed",
+      "node_id": "459:488",
+      "input_key": "noise_seed",
+      "required": false,
+      "mode": "increment",
+      "comment": "每条变体递增 seed（result.seed + index）；想固定同一 seed 改成 mode: fixed"
+    },
+    {
+      "field": "filename_prefix",
+      "node_id": "461",
+      "input_key": "filename_prefix",
+      "required": false,
+      "comment": "默认模板 {subject}_{index:03d}_{variant_id}"
+    }
+  ]
+}

@@ -1,0 +1,234 @@
+# 原工作流外层 Text Multiline 的 30 条（逐字保留）：3 景别 x 8 朝向 + 6 表情
+name: q21_default_30
+type: list
+version: 1
+master_template: >-
+  Create an image of the {subject_noun} in the character sheet in {reference_tag}.
+  {style_lock_sentence}{identity_lock_sentence}{outfit_lock_sentence}{extra}
+suffix_template: >-
+  Put them against a {background} background. The lighting is {lighting}.
+backgrounds_ref: wildcards/backgrounds.yaml
+lighting_ref: wildcards/lighting.yaml
+variants:
+- id: full_front
+  text: Full-body shot of one person, entire figure visible from head to shoes, standing upright with arms relaxed at the sides, facing directly toward the camera.
+  framing: full
+  angle: front
+  tags:
+  - full
+  - front
+- id: full_l45
+  text: Full-body shot of one person, entire figure visible from head to shoes, standing upright with arms relaxed at the sides, body rotated 45 degrees toward the left side of the frame, three-quarter view.
+  framing: full
+  angle: l45
+  tags:
+  - full
+  - l45
+- id: full_r45
+  text: Full-body shot of one person, entire figure visible from head to shoes, standing upright with arms relaxed at the sides, body rotated 45 degrees toward the right side of the frame, three-quarter view.
+  framing: full
+  angle: r45
+  tags:
+  - full
+  - r45
+- id: full_l90
+  text: Full-body shot of one person, entire figure visible from head to shoes, standing upright with arms relaxed at the sides, body rotated 90 degrees to face the left side of the frame, full side profile view.
+  framing: full
+  angle: l90
+  tags:
+  - full
+  - l90
+- id: full_r90
+  text: Full-body shot of one person, entire figure visible from head to shoes, standing upright with arms relaxed at the sides, body rotated 90 degrees to face the right side of the frame, full side profile view.
+  framing: full
+  angle: r90
+  tags:
+  - full
+  - r90
+- id: full_l135
+  text: Full-body shot of one person, entire figure visible from head to shoes, standing upright with arms relaxed at the sides, body rotated 135 degrees away from the camera toward the left side of the frame, three-quarter rear view, face only partly visible.
+  framing: full
+  angle: l135
+  tags:
+  - full
+  - l135
+- id: full_r135
+  text: Full-body shot of one person, entire figure visible from head to shoes, standing upright with arms relaxed at the sides, body rotated 135 degrees away from the camera toward the right side of the frame, three-quarter rear view, face only partly visible.
+  framing: full
+  angle: r135
+  tags:
+  - full
+  - r135
+- id: full_back
+  text: Full-body shot of one person, entire figure visible from head to shoes, standing upright with arms relaxed at the sides, seen directly from behind, back fully toward the camera, face not visible.
+  framing: full
+  angle: back
+  tags:
+  - full
+  - back
+- id: chest_front
+  text: Chest-up portrait of one person, framed from the mid-chest to just above the head, facing directly toward the camera.
+  framing: chest
+  angle: front
+  tags:
+  - chest
+  - front
+- id: chest_l45
+  text: Chest-up portrait of one person, framed from the mid-chest to just above the head, body rotated 45 degrees toward the left side of the frame, three-quarter view.
+  framing: chest
+  angle: l45
+  tags:
+  - chest
+  - l45
+- id: chest_r45
+  text: Chest-up portrait of one person, framed from the mid-chest to just above the head, body rotated 45 degrees toward the right side of the frame, three-quarter view.
+  framing: chest
+  angle: r45
+  tags:
+  - chest
+  - r45
+- id: chest_l90
+  text: Chest-up portrait of one person, framed from the mid-chest to just above the head, body rotated 90 degrees to face the left side of the frame, full side profile view.
+  framing: chest
+  angle: l90
+  tags:
+  - chest
+  - l90
+- id: chest_r90
+  text: Chest-up portrait of one person, framed from the mid-chest to just above the head, body rotated 90 degrees to face the right side of the frame, full side profile view.
+  framing: chest
+  angle: r90
+  tags:
+  - chest
+  - r90
+- id: chest_l135
+  text: Chest-up portrait of one person, framed from the mid-chest to just above the head, body rotated 135 degrees away from the camera toward the left side of the frame, three-quarter rear view, face only partly visible.
+  framing: chest
+  angle: l135
+  tags:
+  - chest
+  - l135
+- id: chest_r135
+  text: Chest-up portrait of one person, framed from the mid-chest to just above the head, body rotated 135 degrees away from the camera toward the right side of the frame, three-quarter rear view, face only partly visible.
+  framing: chest
+  angle: r135
+  tags:
+  - chest
+  - r135
+- id: chest_back
+  text: Chest-up portrait of one person, framed from the mid-chest to just above the head, seen directly from behind, back fully toward the camera, face not visible.
+  framing: chest
+  angle: back
+  tags:
+  - chest
+  - back
+- id: head_front
+  text: Close-up headshot of one person, framed tightly on the head and shoulders, facing directly toward the camera, smooth, even skin texture.
+  framing: head
+  angle: front
+  tags:
+  - head
+  - front
+- id: head_l45
+  text: Close-up headshot of one person, framed tightly on the head and shoulders, body rotated 45 degrees toward the left side of the frame, three-quarter view, smooth, even skin texture.
+  framing: head
+  angle: l45
+  tags:
+  - head
+  - l45
+- id: head_r45
+  text: Close-up headshot of one person, framed tightly on the head and shoulders, body rotated 45 degrees toward the right side of the frame, three-quarter view, smooth, even skin texture.
+  framing: head
+  angle: r45
+  tags:
+  - head
+  - r45
+- id: head_l90
+  text: Close-up headshot of one person, framed tightly on the head and shoulders, body rotated 90 degrees to face the left side of the frame, full side profile view, smooth, even skin texture.
+  framing: head
+  angle: l90
+  tags:
+  - head
+  - l90
+- id: head_r90
+  text: Close-up headshot of one person, framed tightly on the head and shoulders, body rotated 90 degrees to face the right side of the frame, full side profile view, smooth, even skin texture.
+  framing: head
+  angle: r90
+  tags:
+  - head
+  - r90
+- id: head_l135
+  text: Close-up headshot of one person, framed tightly on the head and shoulders, body rotated 135 degrees away from the camera toward the left side of the frame, three-quarter rear view, face only partly visible.
+  framing: head
+  angle: l135
+  tags:
+  - head
+  - l135
+- id: head_r135
+  text: Close-up headshot of one person, framed tightly on the head and shoulders, body rotated 135 degrees away from the camera toward the right side of the frame, three-quarter rear view, face only partly visible.
+  framing: head
+  angle: r135
+  tags:
+  - head
+  - r135
+- id: head_back
+  text: Close-up headshot of one person, framed tightly on the head and shoulders, seen directly from behind, showing the back of the head and hair, face not visible.
+  framing: head
+  angle: back
+  tags:
+  - head
+  - back
+- id: expr_neutral
+  text: Close-up headshot of one person, framed tightly on the head and shoulders, facing directly toward the camera, calm, neutral expression, relaxed face, smooth, even skin texture.
+  framing: head
+  angle: front
+  expression: neutral
+  tags:
+  - head
+  - front
+  - neutral
+- id: expr_smile
+  text: Close-up headshot of one person, framed tightly on the head and shoulders, facing directly toward the camera, warm, genuine smile, happy expression, slight crinkle at the outer corners of the eyes only, otherwise smooth, even skin on the forehead and cheeks.
+  framing: head
+  angle: front
+  expression: smile
+  tags:
+  - head
+  - front
+  - smile
+- id: expr_sad
+  text: Close-up headshot of one person, framed tightly on the head and shoulders, facing directly toward the camera, sad expression, eyes looking downward, corners of the mouth turned down, smooth, even skin texture.
+  framing: head
+  angle: front
+  expression: sad
+  tags:
+  - head
+  - front
+  - sad
+- id: expr_pout
+  text: Close-up headshot of one person, framed tightly on the head and shoulders, facing directly toward the camera, cute pouty expression, lips pushed forward in a soft pout, smooth, even skin texture.
+  framing: head
+  angle: front
+  expression: pout
+  tags:
+  - head
+  - front
+  - pout
+- id: expr_cringe
+  text: Close-up headshot of one person, framed tightly on the head and shoulders, facing directly toward the camera, cringing expression, teeth clenched in an awkward grimace, eyes slightly squinted, only light creasing around the eyes.
+  framing: head
+  angle: front
+  expression: cringe
+  tags:
+  - head
+  - front
+  - cringe
+- id: expr_silly
+  text: Close-up headshot of one person, framed tightly on the head and shoulders, facing directly toward the camera, silly, playful expression, tongue sticking out, eyes wide and bright, smooth, even skin texture.
+  framing: head
+  angle: front
+  expression: silly
+  tags:
+  - head
+  - front
+  - silly
