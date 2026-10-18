@@ -282,6 +282,11 @@ def submit(
             }
             try:
                 item_overrides = dict(overrides or {})
+                if not item_overrides.get("negative_prompt"):
+                    item_overrides["negative_prompt"] = item.meta.get(
+                        "negative_prompt",
+                        "full body, lower body, hips, waist, shorts, socks, shoes, legs, feet, knees, thighs, floor, ground"
+                    ) if item.meta.get("framing") in ("chest", "head") else ""
                 if aspect_ratio:
                     width, height = dimensions_for_item(aspect_ratio, resolution, item)
                     item_overrides["width"] = width

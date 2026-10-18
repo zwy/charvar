@@ -65,6 +65,23 @@ def subject_mapping(subject: SubjectProfile) -> dict[str, str | None]:
     }
 
 
+CLOSEUP_FRAMING_GUARDS = {
+    "chest": (
+        "Chest-up framing, no lower body, hips, waist, shorts, socks, shoes, "
+        "legs, feet, knees, thighs, floor or ground."
+    ),
+    "head": (
+        "Tight head-and-shoulders framing, no lower body, hips, waist, shorts, "
+        "socks, shoes, legs, feet, knees, thighs, floor or ground."
+    ),
+}
+
+
+def closeup_framing_guard(framing: str | None) -> str:
+    """非全身景别自动追加 guard；默认留空，由 prompt 显式阻断下半身。"""
+    return CLOSEUP_FRAMING_GUARDS.get(str(framing or ""), "")
+
+
 def expand_matrix(preset: MatrixPreset) -> list[VariantSpec]:
     """matrix 预设 → VariantSpec 列表。
 
@@ -225,8 +242,11 @@ def generate(subject: SubjectProfile, preset: Preset, req: GenerateRequest) -> G
         if suffix:
             suffix = expand_inline(suffix, rng)[0]
 
+        framing_guard = closeup_framing_guard(spec.framing)
         prompt = normalize(
-            req.separator.join(part for part in (master, variant_text, suffix) if part.strip())
+            req.separator.join(
+                part for part in (master, variant_text, framing_guard, suffix) if part.strip()
+            )
         )
         caption = build_caption(subject, spec, background, lighting, preset.caption_tags)
         items.append(
