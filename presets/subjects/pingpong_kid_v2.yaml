@@ -1,0 +1,22 @@
+id: pingpong_kid_v2
+name: 乒乓小子
+subject_noun: boy
+reference_tag: <image1>
+style_lock:
+- 2D hand-drawn digital picture-book illustration style
+- simplified color blocks with soft, low-contrast shading
+- sparse and restrained line work
+- no thick outlines, complex texture, 3D rendering or photographic depth
+identity_lock:
+- slightly lazy cartoon boy proportions with a not-oversized head
+- wide round face, full cheeks, round chin and slightly large ears
+- small half-lidded dark-brown eyes with short light-brown eight-shaped brows
+- dark brown-black fluffy short hair and low-saturation violet fringe highlights
+- two small black facial moles
+- warm peach-brown skin and relaxed, slightly serious expression
+outfit_lock:
+- pure red loose sports short-sleeve with bright yellow collar and shoulder accents
+- pure black loose athletic shorts with thin light-gold side accents
+- white short socks and white low-top sports shoes with subtle navy and gold details
+extra: Keep the same clothing structure, hairstyle silhouette, facial marks and shoe
+  colors.

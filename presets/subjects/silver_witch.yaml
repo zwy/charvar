@@ -4,14 +4,27 @@ subject_noun: woman
 trigger_word: sw1tch
 reference_tag: <image1>
 style_lock:
-- the original illustration style
-- the color palette
+- low-brow pop flavored 2D watercolor mixed-media illustration
+- fine facial rendering against a large dark color-block silhouette
+- watercolor blooms, pigment sedimentation, paper grain, dry-brush texture and white
+  paint dots
 identity_lock:
-- long silver-white hair
-- warm light-beige skin tone with subtle natural blush
-- the same facial coloring and lip tone
-- the same face and eye color
-- the same physique
+- six-heads-tall adult witch proportions with slightly enlarged head, narrow shoulders
+  and slender body
+- round upper face, small soft chin and ivory-white skin tone
+- soft pink blush on the cheeks, nose tip and under the eyes
+- huge gray-blue almond eyes with low-lidded upward-curving eye corners
+- dark upper eyeliner, extended outer lashes, gray-brown short eyebrows and coral-red
+  lips
+- quiet, slightly melancholy default expression
+- silver-white short bob with straight bangs, slightly flared ends and pale gray-blue
+  shadowing
 outfit_lock:
-- the black witch robe and pointed hat
-extra: ''
+- black high-collar long-sleeve inner dress with continuous opaque chest fabric and
+  a naturally tucked waist
+- dark charcoal-gray open wizard robe over the inner dress
+- lowered hood resting on the shoulders and back
+- wider robe sleeves revealing the inner sleeves and hands
+- black round-toe low-heeled short boots
+extra: Keep the same inner-dress and outer-robe layering, face coloring, short silver
+  bob and watercolor paint texture.
