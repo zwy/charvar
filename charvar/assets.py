@@ -1,0 +1,269 @@
+"""Run 图片资产：从 ComfyUI outputs 同步、生成本地缩略图和 contact sheet。"""
+from __future__ import annotations
+
+import json
+import re
+import sqlite3
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+from PIL import Image, ImageDraw, ImageFont
+
+from charvar import paths, storage
+from charvar.models import GenerateResult
+
+_SAFE_RUN_ID = re.compile(r"^[A-Za-z0-9_.-]+$")
+_SAFE_FILENAME = re.compile(r"^[A-Za-z0-9_.-]+$")
+_THUMB_MAX = 512
+_SHEET_CELL_WIDTH = 320
+_SHEET_GAP = 10
+_SHEET_LABEL_HEIGHT = 22
+
+
+def safe_run_id(run_id: str) -> str:
+    if not _SAFE_RUN_ID.fullmatch(str(run_id)):
+        raise ValueError("非法 run_id")
+    return str(run_id)
+
+
+def safe_filename(name: str) -> str:
+    n = str(name)
+    if not _SAFE_FILENAME.fullmatch(n):
+        raise ValueError("非法文件名")
+    return n
+
+
+def run_assets_dir(run_id: str) -> Path:
+    return paths.data_dir() / "generated" / safe_run_id(run_id)
+
+
+def original_dir(run_id: str) -> Path:
+    return run_assets_dir(run_id) / "original"
+
+
+def thumb_dir(run_id: str) -> Path:
+    return run_assets_dir(run_id) / "thumbs"
+
+
+def sheet_dir(run_id: str) -> Path:
+    return run_assets_dir(run_id) / "sheets"
+
+
+def run_manifest_path(run_id: str) -> Path:
+    return run_assets_dir(run_id) / "image_manifest.json"
+
+
+def thumb_path(run_id: str, item_index: int) -> Path:
+    return thumb_dir(run_id) / f"{item_index:06d}.webp"
+
+def sheet_path(run_id: str, kind: str) -> Path:
+    if kind not in {"contact", "face"}:
+        raise ValueError("非法 sheet 类型")
+    return sheet_dir(run_id) / f"{kind}_sheet.png"
+
+
+def resolve_run_asset(run_id: str, scene: str, filename: str) -> Path:
+    if scene not in {"original", "thumbs", "sheets"}:
+        raise ValueError("非法资产目录")
+    path = run_assets_dir(run_id) / scene / safe_filename(filename)
+    if not path.exists():
+        raise FileNotFoundError(filename)
+    return path
+
+
+def _original_path(run_id: str, item_index: int, output_file: dict[str, str]) -> Path:
+    suffix = Path(str(output_file.get("filename", ""))).suffix or ".png"
+    return original_dir(run_id) / f"{item_index:06d}{suffix}"
+
+
+def _download_output(client, base: str, file: dict[str, str], destination: Path) -> Path:
+    suffix = Path(file.get("filename", "")).suffix or ".png"
+    target = destination.with_suffix(suffix)
+    params = {
+        "filename": file.get("filename", ""),
+        "subfolder": file.get("subfolder", ""),
+        "type": file.get("type", "output"),
+    }
+    resp = client.get(f"{base.rstrip('/')}/view", params=params, timeout=15)
+    resp.raise_for_status()
+    if not resp.content:
+        raise RuntimeError(f"ComfyUI 输出为空：{file}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(resp.content)
+    return target
+
+
+def ensure_thumb(run_id: str, item_index: int) -> Path | None:
+    """按 item_index 补齐 WebP 缩略图，返回可用的本地缩略图路径。"""
+    for suffix in [".png", ".jpg", ".jpeg", ".webp"]:
+        source = original_dir(run_id) / f"{item_index:06d}{suffix}"
+        if not source.exists():
+            continue
+        destination = thumb_path(run_id, item_index)
+        if not destination.exists():
+            make_thumb(source, destination)
+        return destination
+    return None
+
+
+def make_thumb(source: Path, destination: Path, max_side: int = _THUMB_MAX) -> Path:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with Image.open(source) as image:
+        image.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
+        image.convert("RGB").save(destination, format="WEBP", quality=84, optimize=True)
+    return destination
+
+
+def _draw_label(image: Image.Image, label: str) -> Image.Image:
+    label_box = Image.new("RGB", (image.width, _SHEET_LABEL_HEIGHT), (24, 32, 42))
+    draw = ImageDraw.Draw(label_box)
+    draw.text((8, 3), label, font=ImageFont.load_default(size=17), fill=(240, 244, 249))
+    cell = Image.new("RGB", (image.width, image.height + _SHEET_LABEL_HEIGHT), (246, 247, 249))
+    cell.paste(image, (0, 0))
+    cell.paste(label_box, (0, image.height))
+    return cell
+
+
+def make_contact_sheet(
+    run_id: str,
+    result: GenerateResult,
+    records: list[dict[str, Any]],
+    *,
+    mode: str = "contact",
+) -> Path:
+    by_index = {int(record.get("item_index", -1)): record for record in records}
+    images: list[tuple[Path, str]] = []
+    for item in result.items:
+        record = by_index.get(item.index)
+        files = (record or {}).get("output_files") or []
+        if files:
+            output_file = files[0]
+            path = original_dir(run_id) / f"{item.index:06d}{Path(str(output_file.get('filename'))).suffix or '.png'}"
+        else:
+            for suffix in [".png", ".jpg", ".jpeg", ".webp"]:
+                path = original_dir(run_id) / f"{item.index:06d}{suffix}"
+                if path.exists():
+                    break
+            else:
+                path = None
+        if path and path.exists():
+            images.append((path, f"#{item.index:03d} {item.variant_id}"))
+    if not images:
+        raise FileNotFoundError("没有可用图片")
+    first_path = images[0][0]
+    with Image.open(first_path) as first_image:
+        sample = first_image.convert("RGB")
+        aspect = sample.height / sample.width
+    cell_width = 320
+    cell_height = int(cell_width * aspect) + _SHEET_LABEL_HEIGHT
+    columns = 6
+    rows = (len(images) + columns - 1) // columns
+    sheet = Image.new("RGB", (
+        columns * cell_width + (columns + 1) * _SHEET_GAP,
+        rows * cell_height + (rows + 1) * _SHEET_GAP,
+    ), (246, 247, 249))
+    for index, (path, label) in enumerate(images):
+        with Image.open(path) as src:
+            image = src.convert("RGB")
+        image.thumbnail((cell_width, cell_height - _SHEET_LABEL_HEIGHT), Image.Resampling.LANCZOS)
+        sheet.paste(_draw_label(image, label), (_SHEET_GAP + (index % columns) * (cell_width + _SHEET_GAP), _SHEET_GAP + (index // columns) * (cell_height + _SHEET_GAP)))
+    out = sheet_path(run_id, mode)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    sheet.save(out, format="PNG", optimize=True)
+    return out
+
+
+def sync_run_outputs(
+    conn: sqlite3.Connection,
+    result: GenerateResult,
+    base: str,
+    records: list[dict[str, Any]] | None = None,
+    *,
+    build_sheets: bool = True,
+) -> dict[str, Any]:
+    """把 ComfyUI outputs 固化到本地，方便后续展示和 contact sheet。"""
+    from charvar.exporters import comfyui as comfyui_exporter
+
+    if records is None:
+        records = storage.list_comfy_submissions(conn, result.run_id)
+    downloaded = 0
+    for record in records:
+        prompt_id = str(record.get("prompt_id") or "")
+        files = record.get("output_files") or []
+        item_index = int(record.get("item_index", -1))
+        if not files and prompt_id:
+            with comfyui_exporter._httpx_client(timeout=15) as client:
+                entry = history_entry(client, base, prompt_id, 15)
+            if entry:
+                files = comfyui_exporter._output_filenames(entry, None)
+                if files:
+                    record["output_files"] = files
+                    storage.save_comfy_submission(
+                        conn,
+                        result.run_id,
+                        item_index,
+                        str(record["variant_id"]),
+                        prompt_id,
+                        str(record.get("filename_prefix") or ""),
+                        files,
+                    )
+        files = record.get("output_files") or []
+        if files and prompt_id:
+            output_file = files[0]
+            destination = _original_path(result.run_id, item_index, output_file)
+            downloaded_new_file = False
+            if not destination.exists():
+                with comfyui_exporter._httpx_client(timeout=15) as client:
+                    destination = _download_output(client, base, output_file, destination)
+                downloaded += 1
+                downloaded_new_file = True
+            thumbnail = thumb_dir(result.run_id) / f"{item_index:06d}.webp"
+            if not thumbnail.exists():
+                make_thumb(destination, thumbnail)
+                downloaded += int(not downloaded_new_file)
+    if build_sheets:
+        make_contact_sheet(result.run_id, result, records)
+    return {
+        "completed": sum(1 for record in records if record.get("output_files")),
+        "downloaded": downloaded,
+    }
+
+
+def history_entry(client, base: str, prompt_id: str, timeout: float = 15.0) -> dict[str, Any] | None:
+    response = client.get(f"{base.rstrip('/')}/history/{prompt_id}", timeout=timeout)
+    response.raise_for_status()
+    return (response.json() or {}).get(prompt_id)
+
+
+def image_entry(
+    run_id: str,
+    item_index: int,
+    variant_id: str,
+    records: list[dict[str, Any]],
+    fallback_text: str | None = None,
+) -> dict[str, Any]:
+    record = next(
+        (record for record in records if int(record.get("item_index", -1)) == item_index),
+        None,
+    )
+    files = record.get("output_files") or [] if record else []
+    original = None
+    for suffix in [".png", ".jpg", ".jpeg", ".webp"]:
+        candidate = original_dir(run_id) / f"{item_index:06d}{suffix}"
+        if candidate.exists():
+            original = candidate
+            break
+    return {
+        "item_index": item_index,
+        "variant_id": variant_id,
+        "prompt_id": record.get("prompt_id") if record else None,
+        "filename_prefix": record.get("filename_prefix") if record else None,
+        "status": "done" if (files or original) else "queued",
+        "files": files,
+        "primary_url": f"/runs/{safe_run_id(run_id)}/comfy-image/{item_index}" if (files or original) else None,
+        "thumb_url": f"/runs/{safe_run_id(run_id)}/assets/thumbs/{item_index:06d}.webp" if (thumb_dir(run_id) / f"{item_index:06d}.webp").exists() else None,
+        "original_url": f"/runs/{safe_run_id(run_id)}/assets/original/{original.name}" if original else None,
+        "text": fallback_text,
+        "record": record,
+    }

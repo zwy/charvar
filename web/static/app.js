@@ -109,6 +109,10 @@ $("#btn-generate").addEventListener("click", async () => {
     state.lastRun = await api("/generate", { method: "POST", body: JSON.stringify(payload) });
     setStatus($("#gen-status"), `完成：${state.lastRun.items.length} 条（run_id: ${state.lastRun.run_id}）`);
     renderResult(state.lastRun);
+    Media.setView("images");
+    Media.loadImages(state.lastRun.run_id)
+      .then((data) => Media.setStatus(`图片 ${data.completed}/${data.items.length} 完成${data.errors ? `，失败 ${data.errors}` : ""}`))
+      .catch(() => Media.setStatus("图片加载失败", true));
   } catch (err) {
     setStatus($("#gen-status"), `失败：${err.message}`, true);
   }
@@ -224,6 +228,7 @@ ASPECT_BUTTONS.forEach((btn) => {
 });
 $("#comfy-resolution").addEventListener("change", updateComfyDimensionPreview);
 setAspect("auto");
+Media.setView("images");
 
 $("#btn-comfy-status").addEventListener("click", async () => {
   setStatus($("#comfy-result"), "检查中…");
@@ -262,6 +267,9 @@ $("#btn-comfy-queue").addEventListener("click", async () => {
         const files = (s.files || []).map((f) => f.filename).join(", ");
         return `${head} → prompt_id ${s.prompt_id}${files ? ` → ${files}` : ""}`;
       }).join("\n");
+    Media.syncImages(state.lastRun.run_id).then((data) => {
+      Media.setStatus(`图片 ${data.completed}/${data.items.length} 完成${data.errors ? `，失败 ${data.errors}` : ""}`);
+    }).catch((error) => Media.setStatus(`同步失败：${error.message}`, true));
   } catch (err) {
     setStatus($("#comfy-result"), `失败：${err.message}`, true);
   }
@@ -419,6 +427,10 @@ async function loadRuns() {
       try {
         state.lastRun = await api(`/runs/${encodeURIComponent(btn.dataset.run)}`);
         renderResult(state.lastRun);
+    Media.setView("images");
+    Media.loadImages(state.lastRun.run_id)
+      .then((data) => Media.setStatus(`图片 ${data.completed}/${data.items.length} 完成${data.errors ? `，失败 ${data.errors}` : ""}`))
+      .catch(() => Media.setStatus("图片加载失败", true));
         $$(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === "gen"));
         $$(".tab-page").forEach((p) => p.classList.toggle("active", p.id === "tab-gen"));
       } catch (err) {

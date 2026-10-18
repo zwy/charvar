@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal, Literal
+from typing import Any, Literal
 
 from contextlib import closing
 
@@ -17,9 +17,11 @@ from fastapi.responses import FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from charvar import __version__, storage
+from charvar import __version__, assets, paths, storage
+from charvar import __version__, assets, paths, storage
+from charvar.assets import ensure_thumb, resolve_run_asset, sheet_path, thumb_path
+
 from charvar.composer import expand_matrix, generate as compose_generate
-from charvar import paths
 from charvar.exporters import captions as captions_exporter
 from charvar.exporters import comfyui as comfyui_exporter
 from charvar.exporters import jsonl as jsonl_exporter
@@ -45,6 +47,14 @@ class ComfyQueueRequest(BaseModel):
     aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
     resolution: Literal["1k", "2k", "4k"] | None = None
     overrides: dict[str, Any] = Field(default_factory=dict)
+
+
+class SyncOutputsRequest(BaseModel):
+    build_sheets: bool = True
+
+
+class ContactSheetRequest(BaseModel):
+    mode: Literal["contact", "face"] = "contact"
 
 
 class Message(BaseModel):
@@ -293,6 +303,130 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             "failed": len(submissions) - ok_count,
             "submissions": submissions,
         }
+
+    # ---- 图片资产：历史回看 + contact sheet ----
+    @app.post("/runs/{run_id}/sync-outputs")
+    def api_run_sync_outputs(run_id: str, req: SyncOutputsRequest | None = None) -> dict[str, Any]:
+        with _db() as conn:
+            result = storage.get_run(conn, run_id)
+            if result is None:
+                raise HTTPException(404, f"生成记录不存在：{run_id}")
+            records = storage.list_comfy_submissions(conn, run_id)
+            try:
+                summary = assets.sync_run_outputs(
+                    conn,
+                    result,
+                    paths.comfy_base_url(),
+                    records=records,
+                    build_sheets=(req.build_sheets if req else True),
+                )
+            except Exception as exc:  # noqa: BLE001
+                raise HTTPException(400, f"同步 ComfyUI outputs 失败：{exc}") from exc
+            refreshed = storage.list_comfy_submissions(conn, run_id)
+            items = [assets.image_entry(run_id, item.index, item.variant_id, refreshed, item.prompt) for item in result.items]
+        completed = sum(1 for entry in items if entry["status"] == "done")
+        queued = sum(1 for entry in items if entry["status"] == "queued")
+        errors = sum(1 for entry in items if entry["status"] == "error")
+        return {
+            "run_id": run_id,
+            "summary": summary,
+            "items": items,
+            "completed": completed,
+            "queued": queued,
+            "errors": errors,
+        }
+
+    @app.get("/runs/{run_id}/images")
+    def api_run_images(run_id: str) -> dict[str, Any]:
+        with _db() as conn:
+            result = storage.get_run(conn, run_id)
+            if result is None:
+                raise HTTPException(404, f"生成记录不存在：{run_id}")
+            records = storage.list_comfy_submissions(conn, run_id)
+            items = []
+            for item in result.items:
+                ensure_thumb(run_id, item.index)
+                items.append(assets.image_entry(run_id, item.index, item.variant_id, records, item.prompt))
+        contact_sheet = sheet_path(run_id, "contact")
+        face_sheet = sheet_path(run_id, "face")
+        return {
+            "run_id": run_id,
+            "completed": sum(1 for entry in items if entry["status"] == "done"),
+            "queued": sum(1 for entry in items if entry["status"] == "queued"),
+            "errors": sum(1 for entry in items if entry["status"] == "error"),
+            "contact_sheet": contact_sheet.name if contact_sheet.exists() else None,
+            "face_sheet": face_sheet.name if face_sheet.exists() else None,
+            "items": items,
+        }
+
+    @app.get("/runs/{run_id}/comfy-image/{item_index}")
+    def api_run_comfy_image(run_id: str, item_index: int) -> Response:
+        with _db() as conn:
+            result = storage.get_run(conn, run_id)
+            if result is None:
+                raise HTTPException(404, f"生成记录不存在：{run_id}")
+            records = storage.list_comfy_submissions(conn, run_id)
+        entry = assets.image_entry(run_id, item_index, None, records)
+        if not entry["primary_url"]:
+            raise HTTPException(404, "该条目还没有输出文件")
+        for suffix in [".png", ".jpg", ".jpeg", ".webp"]:
+            try:
+                original = assets.resolve_run_asset(run_id, "original", f"{item_index:06d}{suffix}")
+                return FileResponse(original)
+            except FileNotFoundError:
+                continue
+        file = next(iter(entry["files"]), None)
+        if not file:
+            raise HTTPException(404, "缺少输出文件")
+        base = paths.comfy_base_url()
+        params = {
+            "filename": file.get("filename", ""),
+            "subfolder": file.get("subfolder", ""),
+            "type": file.get("type", "output"),
+        }
+        with comfyui_exporter._httpx_client(timeout=10.0) as client:
+            resp = client.get(f"{base}/view", params=params, timeout=10)
+            resp.raise_for_status()
+        media_type = resp.headers.get("content-type") or "image/png"
+        if not media_type.startswith("image/"):
+            media_type = "image/png"
+        return Response(resp.content, media_type=media_type)
+
+    @app.get("/runs/{run_id}/assets/{scene}/{filename}")
+    def api_run_asset(run_id: str, scene: str, filename: str) -> FileResponse:
+        try:
+            return FileResponse(resolve_run_asset(run_id, scene, filename))
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.get("/runs/{run_id}/sheets/{kind}")
+    def api_run_sheet(run_id: str, kind: str) -> FileResponse:
+        try:
+            target = sheet_path(run_id, kind)
+            if not target.exists():
+                raise FileNotFoundError(target.name)
+            return FileResponse(target)
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.post("/runs/{run_id}/contact-sheet")
+    def api_run_contact_sheet(run_id: str, req: ContactSheetRequest) -> dict[str, Any]:
+        with _db() as conn:
+            result = storage.get_run(conn, run_id)
+            if result is None:
+                raise HTTPException(404, f"生成记录不存在：{run_id}")
+            records = storage.list_comfy_submissions(conn, run_id)
+            if not records:
+                raise HTTPException(404, "run 还没有提交到 ComfyUI")
+            try:
+                path = assets.make_contact_sheet(run_id, result, records, mode=req.mode)
+            except Exception as exc:
+                raise HTTPException(400, f"生成 contact sheet 失败：{exc}") from exc
+        return {"ok": True, "mode": req.mode, "path": str(path)}
 
     @app.get("/api/version")
     def api_version() -> dict[str, str]:

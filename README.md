@@ -130,6 +130,11 @@ YAML 预设放 `presets/*.yaml`，两种类型：
 | GET | `/runs/{run_id}/export?format=txt\|jsonl\|captions_zip` | 导出（`&download=1` 触发下载） |
 | GET/POST | `/runs/{run_id}/comfyui` | 查看 ComfyUI 提交记录 / 逐条入队（`workload` + 可选 `wait`） |
 | GET | `/comfy/workflows`、`/comfy/status` | workflows 目录清单 / ComfyUI 连接检查 |
+| POST | `/runs/{run_id}/sync-outputs` | 按 ComfyUI history 同步输出图，生成缩略图和 contact sheet |
+| GET | `/runs/{run_id}/images` | 图片墙数据（本地原图/缩略图/sheet 状态） |
+| GET | `/runs/{run_id}/comfy-image/{item_index}` | 单条输出图（优先本地资产，缺失时代理 ComfyUI） |
+| GET | `/runs/{run_id}/assets/{scene}/{filename}`、`/runs/{run_id}/sheets/{kind}` | 本地原图/缩略图/拼图资产 |
+| POST | `/runs/{run_id}/contact-sheet` | 手动生成 `contact_sheet.png` |
 
 ## 数据文件
 

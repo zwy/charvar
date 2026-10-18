@@ -12,3 +12,5 @@ dist/
 .DS_Store
 .env
 .playwright-mcp/
+
+.charvar-web-*.pid

@@ -41,7 +41,15 @@
 <label class="span2">负向提示词（可选，mapping 需配 field=negative_prompt）<input type="text" id="comfy-negative"></label>
 <label class="check"><input type="checkbox" id="comfy-wait"> 等待完成并记录输出文件名</label>
 </div><div class="actions"><button id="btn-comfy-status">检查连接</button><button id="btn-comfy-queue" class="primary">逐条入队</button><span class="hint">workflow 必须是 ComfyUI「导出 (API)」格式 + 同名 mapping.json。</span></div><pre id="comfy-result" class="log"></pre></div>
-<div class="table-wrap"><table id="result-table"><thead><tr><th>#</th><th>变体</th><th>景别</th><th>角度</th><th>表情</th><th>背景</th><th>光照</th><th>最终提示词</th><th>caption</th></tr></thead><tbody></tbody></table></div></div></section>
+<div class="media-toolbar">
+      <button id="btn-sync-images" class="chip">同步图片</button>
+      <button id="btn-view-images" class="chip active" aria-pressed="true">图片墙</button>
+      <button id="btn-view-table" class="chip" aria-pressed="false">表格</button>
+      <button id="btn-contact-sheet" class="chip">Contact sheet</button>
+      <span id="image-status" class="status"></span>
+    </div>
+    <div id="result-images" class="image-grid"></div>
+<div class="table-wrap" id="result-table-wrap"><table id="result-table"><thead><tr><th>#</th><th>变体</th><th>景别</th><th>角度</th><th>表情</th><th>背景</th><th>光照</th><th>最终提示词</th><th>caption</th></tr></thead><tbody></tbody></table></div></div></section>
 <section id="tab-subjects" class="tab-page"><div class="card"><h2>主体档案</h2><ul id="subject-list" class="subject-list"></ul><div class="actions"><button id="btn-subject-new">+ 新建</button></div></div><div class="card"><h2 id="subject-form-title">档案详情</h2><div class="form-grid">
 <label>ID（slug）<input type="text" id="s-id" placeholder="silver_witch"></label>
 <label>显示名<input type="text" id="s-name"></label>
@@ -55,4 +63,4 @@
 </div><div class="actions"><button id="btn-subject-save" class="primary">保存</button><button id="btn-subject-delete" class="danger">删除</button></div>
 <details class="import-box"><summary>粘贴 YAML 导入档案</summary><textarea id="s-yaml" rows="8" placeholder="id: silver_witch&#10;name: 银白女巫&#10;subject_noun: woman&#10;trigger_word: sw1tch&#10;style_lock: [the original illustration style]&#10;identity_lock: [long silver-white hair]&#10;outfit_lock: [the black witch robe]"></textarea><div class="actions"><button id="btn-subject-import">解析并保存</button></div></details></div></section>
 <section id="tab-runs" class="tab-page"><div class="card"><h2>生成历史</h2><div class="table-wrap"><table id="runs-table"><thead><tr><th>run_id</th><th>主体</th><th>预设</th><th>种子</th><th>条数</th><th>ComfyUI</th><th>时间</th><th>操作</th></tr></thead><tbody></tbody></table></div><div class="actions"><button id="btn-runs-refresh">刷新</button></div></div></section>
-</main><script src="/static/app.js"></script></body></html>
+</main><script src="/static/media.js"></script><script src="/static/app.js"></script></body></html>
