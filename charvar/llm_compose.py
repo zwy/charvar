@@ -128,7 +128,10 @@ def generate_llm(
     for i, intent in enumerate(intents):
         spec = _spec_by_id(preset, intent["id"])
         prompt = normalize(rewritten[intent["id"]])
-        caption = build_caption(subject, spec, intent["background"], intent["lighting"], preset.caption_tags)
+        caption = build_caption(
+            subject, spec, intent["background"], intent["lighting"], preset.caption_tags,
+            background_suffix=preset.caption_background_suffix,
+        )
         items.append(
             PromptItem(
                 index=i,

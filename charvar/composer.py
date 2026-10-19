@@ -248,7 +248,10 @@ def generate(subject: SubjectProfile, preset: Preset, req: GenerateRequest) -> G
                 part for part in (master, variant_text, framing_guard, suffix) if part.strip()
             )
         )
-        caption = build_caption(subject, spec, background, lighting, preset.caption_tags)
+        caption = build_caption(
+            subject, spec, background, lighting, preset.caption_tags,
+            background_suffix=preset.caption_background_suffix,
+        )
         items.append(
             PromptItem(
                 index=i,

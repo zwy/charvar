@@ -1,0 +1,8 @@
+# 新版 Q21 工作流的 5 条光照选项，逐字；这里剥去了 The lighting is 前缀
+#（由 q21_v2_30 的 suffix_template 还原成完整句）。
+items:
+- soft natural window light, diffused and even
+- warm golden hour sunlight, with directional side lighting
+- cool overcast outdoor light, soft and even
+- a dramatic single-source key light with strong contrast, with the face and body clearly lit
+- bright high-key lighting with minimal shadows, slightly overexposed

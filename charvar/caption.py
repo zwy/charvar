@@ -49,6 +49,8 @@ def build_caption(
     background: str | None,
     lighting: str | None,
     caption_tags: dict[str, dict[str, str]] | None = None,
+    *,
+    background_suffix: bool = True,
 ) -> str:
     tags = {k: {**v} for k, v in ((k, DEFAULT_CAPTION_TAGS.get(k, {})) for k in ("framing", "angle", "expression"))}
     for group, mapping in (caption_tags or {}).items():
@@ -64,7 +66,7 @@ def build_caption(
     if spec.expression and spec.angle not in REAR_ANGLES:
         parts.append(tags["expression"].get(spec.expression, spec.expression))
     if background:
-        parts.append(f"{background} background")
+        parts.append(f"{background} background" if background_suffix else background)
     if lighting:
         parts.append(lighting_short(lighting))
     return ", ".join(parts)

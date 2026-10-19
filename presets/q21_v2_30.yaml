@@ -1,0 +1,246 @@
+# 新版 Q21 数据集构建工作流（根目录 characterDataset_q21Chardatasetbuilder_v2.json）
+# 的 30 条变体提示词，逐字提取自 Prompt 子图 Four Images 文本（剥 [BODY_NOTES] 等
+# Customize 微调占位符（原文件里默认为空）与无效的 [BACKGROUND]/[LIGHTING] 注入点）。
+# 结构变化：chest 组 l135/r135 → high/low 机位；head 组 6 机位；表情 8 张。
+name: q21_v2_30
+type: list
+version: 1
+master_template: '{style_lock_sentence}{identity_lock_sentence}{outfit_lock_sentence}{extra}'
+suffix_template: The background is {background}. The lighting is {lighting}.
+backgrounds_ref: wildcards/backgrounds_v2.yaml
+lighting_ref: wildcards/lighting_v2.yaml
+caption_background_suffix: false
+caption_tags:
+  angle:
+    high: high-angle view
+    low: low-angle view
+  expression:
+    shocked: shocked expression
+    laugh: laughing
+variants:
+- id: full_front
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Create a new straight-on full-body front view of the character in <image2>. Use <image2> for the outfit and body only; its body angle and stance are replaced. Copy the face, hair, and headwear exactly as they appear in <image1>, and the body shape, proportions, complete outfit, and footwear exactly as they appear in <image2>, including their colors, materials, and details. Use <image1> only for the face, not its crop or close-up framing. The camera is at chest height, directly in front of the character, straight on, far enough back to fit the entire figure. The whole body faces the camera squarely: both feet point straight toward the camera, shoulder-width apart, with the toes of both shoes equally visible; the hips and shoulders are level and equally wide on both sides of the body; the center line of the outfit runs straight down the middle of the figure; both arms hang relaxed at the sides and are equally visible; the head is straight and level, the face symmetrical with the nose on the center line and both eyes, both cheeks, and both sides of the jaw equally visible, and any headwear level and symmetrical. The eyes look straight into the camera, with the face at rest: the eyebrows level in their natural position, the lips closed and resting together, and the jaw relaxed. The character stands upright and still in a neutral pose, with weight on both feet, feet shoulder-width apart, legs straight, and arms relaxed at the sides. The whole body is visible from the top of the head to the soles of the shoes, centered, with a small margin above the head and below the feet, and the camera is far enough back to fit the entire figure. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - full
+  - front
+  framing: full
+  angle: front
+- id: full_l45
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Turn the character in <image2> about 45 degrees toward the left edge of the image in a full-body three-quarter view, halfway between the straight-on view in <image2> and the left-facing profile in <image3>. Copy the face, hair, and headwear exactly as they appear in <image1>, and the body shape, proportions, complete outfit, and footwear exactly as they appear in <image2>, including their colors, materials, and details. Use <image1> only for the face, not its crop or close-up framing. The camera is at chest height. The nose and toes point toward the left side of the frame, both eyes are visible, the side of the body on the right of the image is fully visible, the far side on the left of the image is partly hidden, and the eyes look where the face points. The head stays in line with the body, facing the same way, with the face at rest: the eyebrows level in their natural position, the lips closed and resting together, and the jaw relaxed. Keep the hair part and any one-sided details, markings, or accessories on the same side of the character''s body as in the references. The character stands upright and still in a neutral pose, with weight on both feet, feet shoulder-width apart, legs straight, and arms relaxed at the sides. The whole body is visible from the top of the head to the soles of the shoes, centered, with a small margin above the head and below the feet, and the camera is far enough back to fit the entire figure. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - full
+  - l45
+  framing: full
+  angle: l45
+- id: full_r45
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Turn the character in <image2> about 45 degrees toward the right edge of the image in a full-body three-quarter view, halfway between the straight-on view in <image2> and a right-facing profile, the mirror direction of the profile in <image3>. Copy the face, hair, and headwear exactly as they appear in <image1>, and the body shape, proportions, complete outfit, and footwear exactly as they appear in <image2>, including their colors, materials, and details. Use <image1> only for the face, not its crop or close-up framing. The camera is at chest height. The nose and toes point toward the right side of the frame, both eyes are visible, the side of the body on the left of the image is fully visible, the far side on the right of the image is partly hidden, and the eyes look where the face points. The head stays in line with the body, facing the same way, with the face at rest: the eyebrows level in their natural position, the lips closed and resting together, and the jaw relaxed. Keep the hair part and any one-sided details, markings, or accessories on the same side of the character''s body as in the references. The character stands upright and still in a neutral pose, with weight on both feet, feet shoulder-width apart, legs straight, and arms relaxed at the sides. The whole body is visible from the top of the head to the soles of the shoes, centered, with a small margin above the head and below the feet, and the camera is far enough back to fit the entire figure. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - full
+  - r45
+  framing: full
+  angle: r45
+- id: full_l90
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Turn the character in <image2> 90 degrees so they face the left edge of the image in a true full-body side profile, matching the side view in <image3>. Copy the face, hair, and headwear exactly as they appear in <image1>, and the body shape, proportions, complete outfit, and footwear exactly as they appear in <image2>, including their colors, materials, and details. Use <image1> only for the face, not its crop or close-up framing. The camera is at chest height. The whole body, including the head and feet, faces the left edge of the image; only one eye and one ear are visible, the nose, lips, and chin form a clean profile outline, and the head stays in line with the body, facing the left edge, with the face at rest: the eyebrows level in their natural position, the lips closed and resting together, and the jaw relaxed. Keep the hair part and any one-sided details, markings, or accessories on the same side of the character''s body as in the references. The character stands upright and still in a neutral pose, with weight on both feet, feet shoulder-width apart, legs straight, and arms relaxed at the sides. The whole body is visible from the top of the head to the soles of the shoes, centered, with a small margin above the head and below the feet, and the camera is far enough back to fit the entire figure. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - full
+  - l90
+  framing: full
+  angle: l90
+- id: full_r90
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Turn the character in <image2> 90 degrees so they face the right edge of the image in a true full-body side profile, the opposite direction from the side view in <image3>, showing the other side of the body. Copy the face, hair, and headwear exactly as they appear in <image1>, and the body shape, proportions, complete outfit, and footwear exactly as they appear in <image2>, including their colors, materials, and details. Use <image1> only for the face, not its crop or close-up framing. The camera is at chest height. The whole body, including the head and feet, faces the right edge of the image; only one eye and one ear are visible, the nose, lips, and chin form a clean profile outline, and the head stays in line with the body, facing the right edge, with the face at rest: the eyebrows level in their natural position, the lips closed and resting together, and the jaw relaxed. Keep the hair part and any one-sided details, markings, or accessories on the same side of the character''s body as in the references. The character stands upright and still in a neutral pose, with weight on both feet, feet shoulder-width apart, legs straight, and arms relaxed at the sides. The whole body is visible from the top of the head to the soles of the shoes, centered, with a small margin above the head and below the feet, and the camera is far enough back to fit the entire figure. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - full
+  - r90
+  framing: full
+  angle: r90
+- id: full_l135
+  text: Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Turn the character in <image2> about 135 degrees so the body faces away from the camera, angled toward the upper left of the frame in a full-body rear three-quarter view, halfway between the side view in <image3> and the rear view in <image4>. Copy the face, hair, and headwear exactly as they appear in <image1>, and the body shape, proportions, complete outfit, and footwear exactly as they appear in <image2>, including their colors, materials, and details. Use <image1> only for the face, not its crop or close-up framing. The camera is at chest height. The back and one side of the body are visible, the face is turned away with only the edge of the cheek and the ear showing, the toes point toward the upper left of the frame, and the head stays in line with the body, facing the same way. Any headwear or clothing with front decorations shows its back and side, with all emblems, logos, and decorations from the front facing away from the camera. Keep the hair part and any one-sided details, markings, or accessories on the same side of the character's body as in the references. The character stands upright and still in a neutral pose, with weight on both feet, feet shoulder-width apart, legs straight, and arms relaxed at the sides. The whole body is visible from the top of the head to the soles of the shoes, centered, with a small margin above the head and below the feet, and the camera is far enough back to fit the entire figure. Take only the character's identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.
+  tags:
+  - full
+  - l135
+  framing: full
+  angle: l135
+- id: full_r135
+  text: Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Turn the character in <image2> about 135 degrees so the body faces away from the camera, angled toward the upper right of the frame in a full-body rear three-quarter view, halfway between a right-facing profile and the rear view in <image4>. Copy the face, hair, and headwear exactly as they appear in <image1>, and the body shape, proportions, complete outfit, and footwear exactly as they appear in <image2>, including their colors, materials, and details. Use <image1> only for the face, not its crop or close-up framing. The camera is at chest height. The back and one side of the body are visible, the face is turned away with only the edge of the cheek and the ear showing, the toes point toward the upper right of the frame, and the head stays in line with the body, facing the same way. Any headwear or clothing with front decorations shows its back and side, with all emblems, logos, and decorations from the front facing away from the camera. Keep the hair part and any one-sided details, markings, or accessories on the same side of the character's body as in the references. The character stands upright and still in a neutral pose, with weight on both feet, feet shoulder-width apart, legs straight, and arms relaxed at the sides. The whole body is visible from the top of the head to the soles of the shoes, centered, with a small margin above the head and below the feet, and the camera is far enough back to fit the entire figure. Take only the character's identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.
+  tags:
+  - full
+  - r135
+  framing: full
+  angle: r135
+- id: full_back
+  text: Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Turn the character in <image2> 180 degrees so they face directly away from the camera, seen from directly behind in a full-body rear view, matching the rear view in <image4>. Copy the face, hair, and headwear exactly as they appear in <image1>, and the body shape, proportions, complete outfit, and footwear exactly as they appear in <image2>, including their colors, materials, and details. Use <image1> only for the face, not its crop or close-up framing. The camera is at chest height. The back of the head, the back of the body, and the backs of both legs are visible, and the face is completely hidden. Both shoulders, both hips, and both heels are level and equally visible, centered in the frame, with the feet pointing away from the camera. Any headwear or clothing with front decorations is seen from behind, showing its plain back side, with all emblems, logos, and decorations from the front facing away from the camera. The head faces straight ahead, level with the shoulders. The character stands upright and still in a neutral pose, with weight on both feet, feet shoulder-width apart, legs straight, and arms relaxed at the sides. The whole body is visible from the top of the head to the soles of the shoes, centered, with a small margin above the head and below the feet, and the camera is far enough back to fit the entire figure. Take only the character's identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.
+  tags:
+  - full
+  - back
+  framing: full
+  angle: back
+- id: chest_front
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Create a new straight-on front view chest-up portrait of the character in <image1>. Use <image1> for the character''s identity only; its head turn and head tilt are replaced. Keep their face, hair, skin tone, and headwear exactly as shown in <image1>, and the outfit exactly as shown in <image2>. The camera is at eye level, directly in front of the face. The head and shoulders face the camera squarely: the nose sits exactly on the vertical center line of the face, both eyes are the same size and on the same horizontal line, both cheeks and both sides of the jaw are equally visible, both ears show equally, and any headwear is level and symmetrical. The head is straight and level, tilted neither left nor right nor up nor down, and both shoulders are level and equally wide. The eyes look straight into the camera, with the face at rest: the eyebrows level in their natural position, the lips closed and resting together, and the jaw relaxed. The frame runs from mid-chest to just above the top of the head, with the head centered. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - chest
+  - front
+  framing: chest
+  angle: front
+- id: chest_l45
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Create a new chest-up portrait of the character in <image1> in a three-quarter view turned toward the left edge of the image, halfway between the straight-on view in <image1> and the left-facing profile in <image3>. Keep their face, hair, skin tone, and headwear exactly as shown in <image1>, and the outfit exactly as shown in <image2>. The camera is at eye level and the head and shoulders turn about 45 degrees toward the left edge of the image. The nose points toward the left side of the frame, both eyes are visible, the cheek on the right side of the image is fully visible, the far cheek on the left side of the image is partly hidden, and the eyes look toward the left side of the frame. The head is upright, with the face at rest: the eyebrows level in their natural position, the lips closed and resting together, and the jaw relaxed. Keep the hair part and any one-sided details, markings, or accessories on the same side of the character''s body as in the references. The frame runs from mid-chest to just above the top of the head, with the head centered. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - chest
+  - l45
+  framing: chest
+  angle: l45
+- id: chest_r45
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Create a new chest-up portrait of the character in <image1> in a three-quarter view turned toward the right edge of the image, halfway between the straight-on view in <image1> and a right-facing profile, the mirror direction of the profile in <image3>. Keep their face, hair, skin tone, and headwear exactly as shown in <image1>, and the outfit exactly as shown in <image2>. The camera is at eye level and the head and shoulders turn about 45 degrees toward the right edge of the image. The nose points toward the right side of the frame, both eyes are visible, the cheek on the left side of the image is fully visible, the far cheek on the right side of the image is partly hidden, and the eyes look toward the right side of the frame. The head is upright, with the face at rest: the eyebrows level in their natural position, the lips closed and resting together, and the jaw relaxed. Keep the hair part and any one-sided details, markings, or accessories on the same side of the character''s body as in the references. The frame runs from mid-chest to just above the top of the head, with the head centered. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - chest
+  - r45
+  framing: chest
+  angle: r45
+- id: chest_l90
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Create a new chest-up portrait of the character in <image1> in a true side profile facing the left edge of the image, matching the side view in <image3>. Keep their face, hair, skin tone, and headwear exactly as shown in <image1>, and the outfit exactly as shown in <image2>. The camera is at eye level and the head and shoulders turn 90 degrees to face the left edge of the image, so only one eye and one ear are visible, the nose, lips, and chin form a clean profile outline, and the eyes look straight ahead toward the left edge. The head is upright, with the face at rest: the eyebrows level in their natural position, the lips closed and resting together, and the jaw relaxed. Keep the hair part and any one-sided details, markings, or accessories on the same side of the character''s body as in the references. The frame runs from mid-chest to just above the top of the head, with the head centered. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - chest
+  - l90
+  framing: chest
+  angle: l90
+- id: chest_r90
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Create a new chest-up portrait of the character in <image1> in a true side profile facing the right edge of the image, the opposite direction from the side view in <image3>. Keep their face, hair, skin tone, and headwear exactly as shown in <image1>, and the outfit exactly as shown in <image2>. The camera is at eye level and the head and shoulders turn 90 degrees to face the right edge of the image, so only one eye and one ear are visible, the nose, lips, and chin form a clean profile outline, and the eyes look straight ahead toward the right edge. The head is upright, with the face at rest: the eyebrows level in their natural position, the lips closed and resting together, and the jaw relaxed. Keep the hair part and any one-sided details, markings, or accessories on the same side of the character''s body as in the references. The frame runs from mid-chest to just above the top of the head, with the head centered. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - chest
+  - r90
+  framing: chest
+  angle: r90
+- id: chest_high
+  text: Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Create a new high-angle chest-up portrait of the character in <image1>. Keep their face, hair, skin tone, and headwear exactly as shown in <image1>, and the outfit exactly as shown in <image2>. The camera is raised about 45 degrees above eye level, directly in front of the character, looking down at them from above. The character tilts their face up toward the camera and looks up into the lens. Seen from this high angle, the top of the head and the crown of the hair are clearly visible from above, the forehead appears larger, the chin appears smaller, and the shoulders and chest sit below the face and recede away from the camera. The face is at rest, the lips closed and resting together and the jaw relaxed. The frame runs from mid-chest to just above the top of the head, with the head centered. Take only the character's identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.
+  tags:
+  - chest
+  - high
+  framing: chest
+  angle: high
+- id: chest_low
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Create a new low-angle chest-up portrait of the character in <image1>. Keep their face, hair, skin tone, and headwear exactly as shown in <image1>, and the outfit exactly as shown in <image2>. The camera is placed low, about 30 degrees below the chin, directly in front of the character, looking up at them. Seen from this low angle, the underside of the chin and the jawline are clearly visible, the neck appears longer, and the shoulders and chest are closest to the camera. The character looks down toward the camera with the face at rest: the eyebrows level in their natural position, the lips closed and resting together, and the jaw relaxed. The frame runs from mid-chest to just above the top of the head, with the head centered. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - chest
+  - low
+  framing: chest
+  angle: low
+- id: chest_back
+  text: Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Turn the character in <image1> 180 degrees so they face directly away from the camera, creating a new chest-up view seen from directly behind, matching the back of the head and outfit in <image4>. Keep their face, hair, skin tone, and headwear exactly as shown in <image1>, and the outfit exactly as shown in <image2>. The camera is at eye level, level with the back of the head. The back of the head, the full hairstyle from behind, the back of the neck, and the backs of both shoulders are visible, and the face, eyes, nose, and mouth are completely hidden. Both shoulders are level and equally wide, centered in the frame. Any headwear is seen from behind, showing its plain back side. The frame runs from mid-chest to just above the top of the head, with the head centered. Take only the character's identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.
+  tags:
+  - chest
+  - back
+  framing: chest
+  angle: back
+- id: head_front
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Create a new straight-on extreme close-up of the face of the character in <image1>. Use <image1> for the character''s identity only; its head turn and head tilt are replaced. Keep their face, hair, skin tone, and headwear exactly as shown in <image1>, and the outfit exactly as shown in <image2>. The camera is at eye level, directly in front of the face. The face is straight on: the nose sits exactly on the vertical center line, both eyes are the same size and on the same horizontal line, and both cheeks and both sides of the jaw are equally visible. The head is straight and level, tilted neither left nor right nor up nor down. The eyes look straight into the camera, with the face at rest: the eyebrows level in their natural position, the lips closed and resting together, and the jaw relaxed. The frame is an extreme close-up: the face fills the entire frame from the top of the forehead to just below the chin, with the frame edges cropping through the hair and ears. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - head
+  - front
+  framing: head
+  angle: front
+- id: head_l45
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Create a new extreme close-up of the face of the character in <image1> in a three-quarter view turned toward the left edge of the image, halfway between the straight-on view in <image1> and the left-facing profile in <image3>. Keep their face, hair, skin tone, and headwear exactly as shown in <image1>, and the outfit exactly as shown in <image2>. The camera is at eye level and the head turns about 45 degrees toward the left edge of the image. The nose points toward the left side of the frame, both eyes are visible, the cheek on the right side of the image is fully visible, the far cheek on the left side of the image is partly hidden, and the eyes look toward the left side of the frame. The head is upright, with the face at rest: the eyebrows level in their natural position, the lips closed and resting together, and the jaw relaxed. Keep the hair part and any one-sided details, markings, or accessories on the same side of the character''s body as in the references. The frame is an extreme close-up: the face fills the entire frame from the top of the forehead to just below the chin, with the frame edges cropping through the hair and ears. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - head
+  - l45
+  framing: head
+  angle: l45
+- id: head_r45
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Create a new extreme close-up of the face of the character in <image1> in a three-quarter view turned toward the right edge of the image, halfway between the straight-on view in <image1> and a right-facing profile, the mirror direction of the profile in <image3>. Keep their face, hair, skin tone, and headwear exactly as shown in <image1>, and the outfit exactly as shown in <image2>. The camera is at eye level and the head turns about 45 degrees toward the right edge of the image. The nose points toward the right side of the frame, both eyes are visible, the cheek on the left side of the image is fully visible, the far cheek on the right side of the image is partly hidden, and the eyes look toward the right side of the frame. The head is upright, with the face at rest: the eyebrows level in their natural position, the lips closed and resting together, and the jaw relaxed. Keep the hair part and any one-sided details, markings, or accessories on the same side of the character''s body as in the references. The frame is an extreme close-up: the face fills the entire frame from the top of the forehead to just below the chin, with the frame edges cropping through the hair and ears. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - head
+  - r45
+  framing: head
+  angle: r45
+- id: head_l90
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Create a new extreme close-up of the face of the character in <image1> in a true side profile facing the left edge of the image, matching the side view in <image3>. Keep their face, hair, skin tone, and headwear exactly as shown in <image1>, and the outfit exactly as shown in <image2>. The camera is at eye level and the head turns 90 degrees to face the left edge of the image, so only one eye and one ear are visible, the forehead, nose, lips, and chin form a clean profile outline against the background, and the eyes look straight ahead toward the left edge. The head is upright, with the face at rest: the eyebrows level in their natural position, the lips closed and resting together, and the jaw relaxed. Keep the hair part and any one-sided details, markings, or accessories on the same side of the character''s body as in the references. The frame is an extreme close-up: the face fills the entire frame from the top of the forehead to just below the chin, with the frame edges cropping through the hair and ears. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - head
+  - l90
+  framing: head
+  angle: l90
+- id: head_r90
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Create a new extreme close-up of the face of the character in <image1> in a true side profile facing the right edge of the image, the opposite direction from the side view in <image3>. Keep their face, hair, skin tone, and headwear exactly as shown in <image1>, and the outfit exactly as shown in <image2>. The camera is at eye level and the head turns 90 degrees to face the right edge of the image, so only one eye and one ear are visible, the forehead, nose, lips, and chin form a clean profile outline against the background, and the eyes look straight ahead toward the right edge. The head is upright, with the face at rest: the eyebrows level in their natural position, the lips closed and resting together, and the jaw relaxed. Keep the hair part and any one-sided details, markings, or accessories on the same side of the character''s body as in the references. The frame is an extreme close-up: the face fills the entire frame from the top of the forehead to just below the chin, with the frame edges cropping through the hair and ears. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - head
+  - r90
+  framing: head
+  angle: r90
+- id: head_back
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Turn the character in <image1> 180 degrees so they face directly away from the camera, creating a new extreme close-up of the back of the head, matching the back of the head in <image4>. Keep their face, hair, skin tone, and headwear exactly as shown in <image1>, and the outfit exactly as shown in <image2>. The camera is at eye level, level with the back of the head. Only the back of the head and the hairstyle from behind are visible, and the face, eyes, nose, and mouth are completely hidden. Any headwear is seen from behind, showing its plain back side. The frame is an extreme close-up: the back of the head fills the entire frame from the crown to the nape of the neck. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - head
+  - back
+  framing: head
+  angle: back
+- id: expr_shocked
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Create a new straight-on extreme close-up of the face of the character in <image1>. Use <image1> for the character''s identity only; its head turn and head tilt are replaced. Keep their face, hair, skin tone, and headwear exactly as shown in <image1>, and the outfit exactly as shown in <image2>. The camera is at eye level, directly in front of the face. The face is straight on: the nose sits exactly on the vertical center line, both eyes are the same size and on the same horizontal line, and both cheeks and both sides of the jaw are equally visible. The head is straight and level, tilted neither left nor right nor up nor down. The facial features are set like this: the eyes opened as wide as possible with white showing above and below the irises, the upper eyelids lifted high, the eyebrows raised high and arched with horizontal creases across the forehead, the jaw dropped, and the lips parted in a small round O shape. The frame is an extreme close-up: the face fills the entire frame from the top of the forehead to just below the chin, with the frame edges cropping through the hair and ears. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - head
+  - front
+  - shocked
+  framing: head
+  angle: front
+  expression: shocked
+- id: expr_laugh
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Create a new straight-on extreme close-up of the face of the character in <image1>. Use <image1> for the character''s identity only; its head turn and head tilt are replaced. Keep their face, hair, skin tone, and headwear exactly as shown in <image1>, and the outfit exactly as shown in <image2>. The camera is at eye level, directly in front of the face. The face is straight on: the nose sits exactly on the vertical center line, both eyes are the same size and on the same horizontal line, and both cheeks and both sides of the jaw are equally visible. The head is straight and level, tilted neither left nor right nor up nor down. The facial features are set like this: the mouth open wide with both corners pulled up and back toward the cheeks, the top row of teeth fully showing, the cheeks raised and rounded, the lower eyelids pushed up so the eyes narrow into upward curves, and small creases at the outer corners of the eyes. The frame is an extreme close-up: the face fills the entire frame from the top of the forehead to just below the chin, with the frame edges cropping through the hair and ears. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - head
+  - front
+  - laugh
+  framing: head
+  angle: front
+  expression: laugh
+- id: expr_neutral
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Create a new straight-on extreme close-up of the face of the character in <image1>. Use <image1> for the character''s identity only; its head turn and head tilt are replaced. Keep their face, hair, skin tone, and headwear exactly as shown in <image1>, and the outfit exactly as shown in <image2>. The camera is at eye level, directly in front of the face. The face is straight on: the nose sits exactly on the vertical center line, both eyes are the same size and on the same horizontal line, and both cheeks and both sides of the jaw are equally visible. The head is straight and level, tilted neither left nor right nor up nor down. The facial features are set like this: the eyebrows level in their natural position, the eyelids relaxed and fully open, the eyes looking into the lens, the lips closed and resting together with the corners of the mouth level, and the jaw relaxed. The frame is an extreme close-up: the face fills the entire frame from the top of the forehead to just below the chin, with the frame edges cropping through the hair and ears. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - head
+  - front
+  - neutral
+  framing: head
+  angle: front
+  expression: neutral
+- id: expr_smile
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Create a new straight-on extreme close-up of the face of the character in <image1>. Use <image1> for the character''s identity only; its head turn and head tilt are replaced. Keep their face, hair, skin tone, and headwear exactly as shown in <image1>, and the outfit exactly as shown in <image2>. The camera is at eye level, directly in front of the face. The face is straight on: the nose sits exactly on the vertical center line, both eyes are the same size and on the same horizontal line, and both cheeks and both sides of the jaw are equally visible. The head is straight and level, tilted neither left nor right nor up nor down. The facial features are set like this: the lips closed with both corners of the mouth lifted upward evenly, the cheeks raised and rounded, the lower eyelids lifted slightly, faint creases at the outer corners of the eyes, and the eyebrows relaxed and level. The frame is an extreme close-up: the face fills the entire frame from the top of the forehead to just below the chin, with the frame edges cropping through the hair and ears. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - head
+  - front
+  - smile
+  framing: head
+  angle: front
+  expression: smile
+- id: expr_sad
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Create a new straight-on extreme close-up of the face of the character in <image1>. Use <image1> for the character''s identity only; its head turn and head tilt are replaced. Keep their face, hair, skin tone, and headwear exactly as shown in <image1>, and the outfit exactly as shown in <image2>. The camera is at eye level, directly in front of the face. The face is straight on: the nose sits exactly on the vertical center line, both eyes are the same size and on the same horizontal line, and both cheeks and both sides of the jaw are equally visible. The head is straight and level, tilted neither left nor right nor up nor down. The facial features are set like this: the inner ends of the eyebrows lifted and drawn together so the brows slant down toward the temples, the upper eyelids lowered, the eyes looking down, the corners of the mouth pulled down, the lower lip pushed up slightly, and the chin slightly creased. The frame is an extreme close-up: the face fills the entire frame from the top of the forehead to just below the chin, with the frame edges cropping through the hair and ears. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - head
+  - front
+  - sad
+  framing: head
+  angle: front
+  expression: sad
+- id: expr_pout
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Create a new straight-on extreme close-up of the face of the character in <image1>. Use <image1> for the character''s identity only; its head turn and head tilt are replaced. Keep their face, hair, skin tone, and headwear exactly as shown in <image1>, and the outfit exactly as shown in <image2>. The camera is at eye level, directly in front of the face. The face is straight on: the nose sits exactly on the vertical center line, both eyes are the same size and on the same horizontal line, and both cheeks and both sides of the jaw are equally visible. The head is straight and level, tilted neither left nor right nor up nor down. The facial features are set like this: the lips pressed together and pushed forward, the lower lip pushed out slightly past the upper lip, the cheeks slightly puffed, the inner ends of the eyebrows lifted a little, and the eyes open and looking into the lens. The frame is an extreme close-up: the face fills the entire frame from the top of the forehead to just below the chin, with the frame edges cropping through the hair and ears. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - head
+  - front
+  - pout
+  framing: head
+  angle: front
+  expression: pout
+- id: expr_cringe
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Create a new straight-on extreme close-up of the face of the character in <image1>. Use <image1> for the character''s identity only; its head turn and head tilt are replaced. Keep their face, hair, skin tone, and headwear exactly as shown in <image1>, and the outfit exactly as shown in <image2>. The camera is at eye level, directly in front of the face. The face is straight on: the nose sits exactly on the vertical center line, both eyes are the same size and on the same horizontal line, and both cheeks and both sides of the jaw are equally visible. The head is straight and level, tilted neither left nor right nor up nor down. The facial features are set like this: the teeth clenched together and showing, the lips pulled back and stretched sideways, the corners of the mouth pulled down and out, the eyes squeezed half shut, the eyebrows pulled down and together, and the nose slightly wrinkled. The frame is an extreme close-up: the face fills the entire frame from the top of the forehead to just below the chin, with the frame edges cropping through the hair and ears. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - head
+  - front
+  - cringe
+  framing: head
+  angle: front
+  expression: cringe
+- id: expr_silly
+  text: 'Use the same art style, medium, and rendering as <image1>, <image2>, <image3>, and <image4>. Create a new straight-on extreme close-up of the face of the character in <image1>. Use <image1> for the character''s identity only; its head turn and head tilt are replaced. Keep their face, hair, skin tone, and headwear exactly as shown in <image1>, and the outfit exactly as shown in <image2>. The camera is at eye level, directly in front of the face. The face is straight on: the nose sits exactly on the vertical center line, both eyes are the same size and on the same horizontal line, and both cheeks and both sides of the jaw are equally visible. The head is straight and level, tilted neither left nor right nor up nor down. The facial features are set like this: the mouth open with the tongue sticking straight out over the lower lip, the eyes opened wide, the eyebrows raised high, and the cheeks lifted. The frame is an extreme close-up: the face fills the entire frame from the top of the forehead to just below the chin, with the frame edges cropping through the hair and ears. Take only the character''s identity from <image1>, <image2>, <image3>, and <image4> and create a new pose, camera angle, background, and lighting. One character only, no text.'
+  tags:
+  - head
+  - front
+  - silly
+  framing: head
+  angle: front
+  expression: silly

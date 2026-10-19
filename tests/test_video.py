@@ -147,3 +147,38 @@ def test_render_video_smoke(tmp_path, monkeypatch):
     assert len(data) > 0
     assert b"ftyp" in data[:32]
     assert video.list_videos(run_id)[0]["name"] == "q21_turnaround.mp4"
+
+def test_resolve_order_q21_v2_turnaround():
+    """v2 预设的 chest_high/chest_low 是序列外机位，落在 chest 组尾部（生成序）。"""
+    v2_angles = [
+        *(f"full_{a}" for a in ("front", "l45", "r45", "l90", "r90", "l135", "r135", "back")),
+        *(f"chest_{a}" for a in ("front", "l45", "r45", "l90", "r90", "high", "low", "back")),
+        *(f"head_{a}" for a in ("front", "l45", "r45", "l90", "r90", "back")),
+        *(f"expr_{e}" for e in ("shocked", "laugh", "neutral", "smile", "sad", "pout", "cringe", "silly")),
+    ]
+    specs = []
+    for vid in v2_angles:
+        if vid.startswith("expr_"):
+            specs.append(VariantSpec(id=vid, framing="head", angle="front", expression=vid[5:], text="t"))
+        else:
+            framing, angle = vid.split("_")
+            specs.append(VariantSpec(id=vid, framing=framing, angle=angle, text="t"))
+    result_items = [_item(i, spec) for i, spec in enumerate(specs)]
+
+    seq = [
+        item.variant_id
+        for item in (_result(result_items).items[i] for i in video.resolve_order(result_items, _preset()))
+    ]
+    assert seq[:8] == [f"full_{a}" for a in ("front", "l45", "l90", "l135", "back", "r135", "r90", "r45")]
+    # chest：顺时针圈到 back，high/low 两个序列外机位按生成序补尾
+    assert seq[8:16] == [
+        "chest_front", "chest_l45", "chest_l90", "chest_back", "chest_r90",
+        "chest_r45", "chest_high", "chest_low",
+    ]
+    assert seq[22:] == [
+        "expr_shocked", "expr_laugh", "expr_neutral", "expr_smile",
+        "expr_sad", "expr_pout", "expr_cringe", "expr_silly",
+    ]
+    assert sorted(video.resolve_order(result_items, _preset())) == sorted(
+        item.index for item in result_items
+    )

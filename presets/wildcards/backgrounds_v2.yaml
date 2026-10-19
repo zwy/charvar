@@ -1,0 +1,23 @@
+# 新版 Q21 工作流的 20 条背景选项（10 影棚 + 10 场景，带景深虚化），逐字；
+# 这里剥去了 The background is 前缀（由 q21_v2_30 的 suffix_template 还原成完整句）。
+items:
+- a seamless light gray studio backdrop
+- a smooth gradient studio backdrop fading from soft blue at the top to white at the bottom
+- a seamless deep red studio backdrop
+- a seamless forest green studio backdrop
+- a seamless pure white studio backdrop
+- a seamless matte black studio backdrop
+- a seamless warm mustard yellow studio backdrop
+- a seamless pastel pink studio backdrop
+- a seamless warm beige studio backdrop
+- a seamless teal studio backdrop
+- a sunlit city sidewalk, with the storefronts softly out of focus
+- a grassy park, with leafy green trees softly out of focus
+- a sandy beach, with calm blue ocean and a clear sky
+- a cozy living room, with a sofa and a bookshelf softly out of focus
+- a bright modern kitchen, with white cabinets softly out of focus
+- a café, with wooden tables and warm pendant lights softly out of focus
+- an office, with large windows and a desk softly out of focus
+- a red brick wall in a quiet city alley
+- a forest trail, with tall trees softly out of focus
+- a snowy mountain meadow under a bright blue sky

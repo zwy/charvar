@@ -3,7 +3,9 @@
 - `type: list`：逐条写死（兼容原工作流，q21_default_30 逐字保留）；
 - `type: matrix`：维度组合 + rules 笛卡尔积 + exclude；
 - 背景/光照：背景用 `backgrounds:`/`lighting:` 内联，或 `backgrounds_ref:`/`lighting_ref:`
-  引用相对预设文件的通配符 YAML（items: [...]）。
+  引用相对预设文件的通配符 YAML（items: [...]）；
+- `caption_tags` 覆盖 caption 标签映射；`caption_background_suffix: false` 时
+  caption 只写背景描述本身（不加 " background" 后缀，长句背景形态）。
 """
 from __future__ import annotations
 
@@ -27,6 +29,8 @@ class CommonPreset(BaseModel):
     backgrounds: list[str] = Field(default_factory=list)
     lighting: list[str] = Field(default_factory=list)
     caption_tags: dict[str, dict[str, str]] | None = None
+    # caption 里背景 token 是否拼 " background" 后缀（新预设为完整描述句式时关掉）
+    caption_background_suffix: bool = True
 
 
 class ListPreset(CommonPreset):
@@ -100,6 +104,8 @@ def load_file(path: Path) -> ListPreset | MatrixPreset:
         "version": raw.get("version", 1),
         "master_template": raw.get("master_template"),
         "suffix_template": raw.get("suffix_template"),
+        "caption_tags": raw.get("caption_tags"),
+        "caption_background_suffix": raw.get("caption_background_suffix", True),
     }
     # 背景/光照：内联优先，其次 _ref 相对路径
     for key, ref_key in (("backgrounds", "backgrounds_ref"), ("lighting", "lighting_ref")):
