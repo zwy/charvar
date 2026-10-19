@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from charvar.api import build_app
-from charvar import paths, storage
+from charvar import llm, paths, storage
 
 
 @pytest.fixture()
@@ -332,3 +332,38 @@ def test_subject_delete_cascades(client, tmp_path):
     conn = storage.connect(pathlib.Path(tmp_path) / "test.db")
     assert storage.list_subject_images(conn, "demo_witch") == []
     assert storage.get_subject_template(conn, "demo_witch") is None
+
+def test_suggest_prompt_persists_to_db(client, tmp_path, monkeypatch):
+    """AI 起草结果必须落库（否则生成任一图后其他草稿会被前端态冲掉）。"""
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+    monkeypatch.setattr(llm, "chat_json", lambda messages, config=None: {"prompt": "Drafted prompt only."})
+    resp = client.post("/subjects/demo_witch/images/front/suggest-prompt")
+    assert resp.status_code == 200
+    assert resp.json()["prompt"] == "Drafted prompt only."
+    conn = storage.connect(pathlib.Path(tmp_path) / "test.db")
+    row = storage.get_subject_image(conn, "demo_witch", "front")
+    assert row["prompt"] == "Drafted prompt only."
+    assert row["status"] == "empty"  # 只写 prompt，状态机不动
+
+
+def test_prompt_put_upsert_and_preserve(client, tmp_path):
+    """手工编辑提示词落库：无行时建 empty 行；ready 行只改 prompt 不动文件/状态。"""
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+    put1 = client.put("/subjects/demo_witch/images/front/prompt", json={"prompt": "  hand written  "})
+    assert put1.status_code == 200
+    assert put1.json()["prompt"] == "hand written"
+    conn = storage.connect(pathlib.Path(tmp_path) / "test.db")
+    row = storage.get_subject_image(conn, "demo_witch", "front")
+    assert row["prompt"] == "hand written" and row["status"] == "empty"
+
+    client.post(
+        "/subjects/demo_witch/images/front/upload",
+        files={"file": ("front.png", _png_bytes(), "image/png")},
+    )
+    put2 = client.put("/subjects/demo_witch/images/front/prompt", json={"prompt": "edited after upload"})
+    row = storage.get_subject_image(conn, "demo_witch", "front")
+    assert row["prompt"] == "edited after upload"
+    assert row["status"] == "ready" and row["file_path"]  # 文件与 ready 状态原样保留
+
+    assert client.put("/subjects/demo_witch/images/other/prompt", json={"prompt": "x"}).status_code == 400
+    assert client.put("/subjects/missing/images/front/prompt", json={"prompt": "x"}).status_code == 404

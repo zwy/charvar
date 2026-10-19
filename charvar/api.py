@@ -78,6 +78,10 @@ class SubjectImageBatchRequest(BaseModel):
     wait: bool = True
 
 
+class SubjectPromptPutRequest(BaseModel):
+    prompt: str = ""
+
+
 class TemplatePutRequest(BaseModel):
     template_md: str
 
@@ -249,7 +253,21 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         prompt = str(data.get("prompt") or "").strip()
         if not prompt:
             raise HTTPException(502, "LLM 未返回提示词")
+        # 起草结果立即落库：只写 prompt，不动状态机（否则草稿只在前端，会丢）
+        with _db() as conn:
+            subject_images.save_subject_prompt(conn, subject_id, kind, prompt)
         return {"kind": kind, "prompt": prompt}
+
+    @app.put("/subjects/{subject_id}/images/{kind}/prompt")
+    def api_subject_prompt_put(subject_id: str, kind: str, req: SubjectPromptPutRequest) -> dict[str, Any]:
+        """手工编辑提示词落库（textarea 失焦时前端调用）。"""
+        _require_subject(subject_id)
+        with _db() as conn:
+            try:
+                slot = subject_images.save_subject_prompt(conn, subject_id, kind, req.prompt)
+            except subject_images.SubjectImageError as exc:
+                raise HTTPException(400, str(exc)) from exc
+        return slot.model_dump()
 
     @app.post("/subjects/{subject_id}/images/{kind}/generate")
     def api_subject_image_generate(subject_id: str, kind: str, req: SubjectImageGenerateRequest) -> dict[str, Any]:

@@ -179,7 +179,8 @@ td .caption { color: var(--muted); }
 
 /* 主体档案图片槽位：一行一个，避免横图/有图无图时宽度不一 */
 .slot-grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 12px; }
-.slot-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 18px; margin-bottom: 12px; }
+/* 工具栏两行：第一行流程提示，第二行统一种子 + 一键起草 + 状态 */
+.slot-toolbar { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 12px; }
 .slot-toolbar .actions { margin: 0; }
 .seed-inline { flex-direction: row; align-items: center; gap: 6px; padding-bottom: 0; }
 .seed-inline input { width: 110px; }

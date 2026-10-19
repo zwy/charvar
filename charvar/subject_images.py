@@ -176,6 +176,21 @@ def _save_row(conn: sqlite3.Connection, slot: SubjectImageSlot) -> None:
     storage.upsert_subject_image(conn, slot.model_dump())
 
 
+def save_subject_prompt(
+    conn: sqlite3.Connection, subject_id: str, kind: str, prompt: str
+) -> SubjectImageSlot:
+    """只把 prompt 写进槽位行（其余字段与状态机保持不变），AI 起草与手工编辑共用。
+
+    AI 起草必须经此落库：否则草稿只存在于前端 textarea，生成任一图片后
+    重新拉取槽位就会把其余草稿冲掉。
+    """
+    _validate_kind(kind)
+    slot = get_slot(conn, subject_id, kind)
+    slot.prompt = (prompt or "").strip()
+    _save_row(conn, slot)
+    return slot
+
+
 # ---------- ComfyUI 生成 ----------
 
 def _synthetic_result(subject_id: str, seed: int, prompts: list[tuple[str, str]]) -> GenerateResult:

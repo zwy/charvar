@@ -398,7 +398,6 @@ function fillSubjectForm(s) {
   $("#s-name").value = s.name;
   $("#s-noun").value = s.subject_noun;
   $("#s-trigger").value = s.trigger_word || "";
-  $("#s-ref").value = s.reference_tag;
   $("#s-style").value = (s.style_lock || []).join("\n");
   $("#s-identity").value = (s.identity_lock || []).join("\n");
   $("#s-outfit").value = (s.outfit_lock || []).join("\n");
@@ -413,7 +412,6 @@ function clearSubjectForm() {
   $("#subject-form-title").textContent = "档案详情";
   ["s-id", "s-name", "s-trigger", "s-style", "s-identity", "s-outfit", "s-extra"].forEach((id) => ($(id).value = ""));
   $("#s-noun").value = "person";
-  $("#s-ref").value = "<image1>";
   $("#subject-images-card").hidden = true;
   $("#template-card").hidden = true;
 }
@@ -425,7 +423,6 @@ function collectSubjectFromForm() {
     name: $("#s-name").value.trim(),
     subject_noun: $("#s-noun").value.trim() || "person",
     trigger_word: $("#s-trigger").value.trim() || null,
-    reference_tag: $("#s-ref").value.trim() || "<image1>",
     style_lock: list("#s-style"),
     identity_lock: list("#s-identity"),
     outfit_lock: list("#s-outfit"),
@@ -690,7 +687,33 @@ $("#btn-slots-draft").addEventListener("click", async () => {
   btn.disabled = false;
 });
 
+/* 提示词 textarea 失焦保存（change 事件）：没改动不请求。 */
+async function saveSlotPrompt(textarea) {
+  const card = textarea.closest(".subject-image-slot");
+  const kind = card?.dataset.slotKind;
+  const sid = state.currentSubject;
+  if (!card || !kind || !sid) return;
+  const slot = state.subjectImages.find((s) => s.kind === kind);
+  const text = textarea.value.trim();
+  if (slot && (slot.prompt || "") === text) return; // 与已保存内容一致
+  const statusEl = card.querySelector(".slot-status");
+  try {
+    await api(`/subjects/${encodeURIComponent(sid)}/images/${kind}/prompt`, {
+      method: "PUT",
+      body: JSON.stringify({ prompt: text }),
+    });
+    if (slot) slot.prompt = text;
+    setStatus(statusEl, "提示词已保存");
+  } catch (err) {
+    setStatus(statusEl, `提示词保存失败：${err.message}`, true);
+  }
+}
+
 $("#subject-image-slots").addEventListener("change", async (ev) => {
+  if (ev.target.classList?.contains("slot-prompt")) {
+    await saveSlotPrompt(ev.target);
+    return;
+  }
   const input = ev.target.closest("input[data-upload]");
   if (!input || !input.files.length) return;
   const kind = input.dataset.upload;
