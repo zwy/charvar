@@ -46,6 +46,11 @@ class VideoPreset(BaseModel):
     order_mode: Literal["turnaround", "sequential"] = "turnaround"
     group_order: list[str] = Field(default_factory=lambda: ["full", "chest", "head"])
     direction: Literal["clockwise", "counterclockwise"] = "clockwise"
+    # 背景音乐：presets/video/music/ 里的文件名；None = 无音乐。
+    # 音乐比视频短→自动循环补齐；比视频长→截到视频长度；结尾按 music_fade 淡出。
+    music: str | None = None
+    music_volume: float = Field(default=1.0, ge=0.0, le=2.0)
+    music_fade: float = Field(default=1.0, ge=0.0, le=10.0)
 
 
 class VideoPresetError(ValueError):
@@ -54,6 +59,50 @@ class VideoPresetError(ValueError):
 
 def video_presets_dir() -> Path:
     return paths.presets_dir() / "video"
+
+
+# 音乐文件名白名单：纯文件名（防路径穿越），常见音频后缀；\w 为 Unicode 感知，中文文件名可用。
+_MUSIC_SUFFIX_RE = re.compile(r"^[\w][\w .\-]{0,64}\.(mp3|m4a|aac|wav|ogg|flac|opus)$")
+
+
+def music_dir() -> Path:
+    return video_presets_dir() / "music"
+
+
+def music_files() -> list[str]:
+    """music 目录里可用的音乐文件名（按字母序）。"""
+    directory = music_dir()
+    if not directory.exists():
+        return []
+    return sorted(
+        p.name
+        for p in directory.iterdir()
+        if p.is_file() and _MUSIC_SUFFIX_RE.fullmatch(p.name)
+    )
+
+
+def resolve_music(preset: VideoPreset, override: str | None) -> Path | None:
+    """解析本次渲染用的音乐文件。
+
+    override：None 或空白 = 用预设默认 music；"none" = 明确不加；
+    其余 = music 目录里的文件名（须命中白名单，否则 VideoPresetError）。
+    文件不存在同样报错（显式失败，绝不静默静音）。
+    """
+    if override is None or not override.strip():
+        name = preset.music
+    else:
+        name = override.strip()
+    if name is None or name == "none":
+        return None
+    name = str(name).strip()
+    if not name:
+        return None
+    if not _MUSIC_SUFFIX_RE.fullmatch(name):
+        raise VideoPresetError(f"音乐文件名不合法：{name}（只能是 presets/video/music/ 里的文件名）")
+    path = music_dir() / name
+    if not path.is_file():
+        raise VideoPresetError(f"音乐文件不存在：presets/video/music/{name}")
+    return path
 
 
 def parse_video_preset(path: Path) -> VideoPreset:
@@ -222,6 +271,7 @@ def render_video(
     records: list[dict[str, Any]],
     preset: VideoPreset,
     *,
+    music_override: str | None = None,
     timeout: float = 900.0,
 ) -> dict[str, Any]:
     """把 run 里已有原图按预设顺序合成 MP4，返回产物信息。"""
@@ -229,6 +279,8 @@ def render_video(
     fps = preset.fps
     frames_per_image = max(1, round(preset.seconds_per_image * fps))
     seconds_per_image = frames_per_image / fps
+    # 音乐先解析（文件名/存在性校验在图像扫描前，空 run 也能给出准确报错）
+    music_path = resolve_music(preset, music_override)
 
     # 首帧封面：contact sheet
     clips: list[tuple[Path, float, str]] = []
@@ -258,14 +310,33 @@ def render_video(
     concat_inputs = "".join(f"[v{i}]" for i in range(len(clips)))
     graph = "".join(graph_parts) + f"{concat_inputs}concat=n={len(clips)}:v=1:a=0[vout]"
 
+    total_seconds = sum(seconds for _p, seconds, _l in clips)
+    if music_path is not None:
+        audio_index = len(clips)
+        chain = (
+            f"[{audio_index}:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo,"
+            f"volume={preset.music_volume}"
+        )
+        if preset.music_fade > 0:  # 结尾淡出，避免音乐被硬切
+            start = max(0.0, total_seconds - preset.music_fade)
+            chain += f",afade=t=out:st={start:.3f}:d={preset.music_fade:.3f}"
+        graph += ";" + chain + "[aout]"
+
     cmd = [_ffmpeg_bin(), "-y", "-hide_banner", "-loglevel", "error"]
     for path, seconds, _label in clips:
         cmd += ["-loop", "1", "-framerate", str(fps), "-t", f"{seconds:.6f}", "-i", str(path)]
+    if music_path is not None:
+        # -stream_loop=-1 让短音乐循环补齐视频长度，-t 截到视频总时长
+        cmd += ["-stream_loop", "-1", "-t", f"{total_seconds:.6f}", "-i", str(music_path)]
     cmd += [
         "-filter_complex",
         graph,
         "-map",
         "[vout]",
+    ]
+    if music_path is not None:
+        cmd += ["-map", "[aout]", "-c:a", "aac", "-b:a", "192k"]
+    cmd += [
         "-c:v",
         "libx264",
         "-preset",
@@ -299,8 +370,9 @@ def render_video(
         "size": [width, height],
         "fps": fps,
         "seconds_per_image": preset.seconds_per_image,
-        "duration": round(sum(seconds for _p, seconds, _l in clips), 3),
+        "duration": round(total_seconds, 3),
         "images_used": used_images,
         "skipped": skipped,
         "contact_sheet_open": clips[0][2] == "contact sheet" if clips else False,
+        "music": music_path.name if music_path else None,
     }

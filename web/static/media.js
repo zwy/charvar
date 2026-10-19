@@ -341,22 +341,59 @@ document.addEventListener("DOMContentLoaded", () => {
         select.appendChild(opt);
       }
       body.appendChild(label);
+      const musicLabel = document.createElement("label");
+      musicLabel.innerHTML = `背景音乐<select id="video-music-select"></select>`;
+      const musicSel = musicLabel.querySelector("select");
+      body.appendChild(musicLabel);
+      let musicFiles = [];
+      try {
+        musicFiles = ((await api("/video-music")) || {}).files || [];
+      } catch (_err) {
+        musicFiles = [];
+      }
+      const defOpt = document.createElement("option");
+      defOpt.value = "";
+      musicSel.appendChild(defOpt);
+      const noneOpt = document.createElement("option");
+      noneOpt.value = "none";
+      noneOpt.textContent = "不加音乐";
+      musicSel.appendChild(noneOpt);
+      for (const f of musicFiles) {
+        const opt = document.createElement("option");
+        opt.value = f;
+        opt.textContent = f;
+        musicSel.appendChild(opt);
+      }
+      const refreshDefaultOpt = () => {
+        const preset = presets.find((x) => x.name === select.value);
+        defOpt.textContent = `用预设默认（${preset && preset.music ? preset.music : "无"}）`;
+      };
+      const musicName = () => {
+        if (musicSel.value === "none") return null;
+        if (musicSel.value) return musicSel.value;
+        const preset = presets.find((x) => x.name === select.value);
+        return preset && preset.music ? preset.music : null;
+      };
       const hint = document.createElement("div");
       hint.className = "hint";
       body.appendChild(hint);
       const updateHint = () => {
         const preset = presets.find((x) => x.name === select.value);
         if (!preset) return;
+        refreshDefaultOpt();
         const count = Media.currentData ? Media.currentData.completed : 0;
         const total = (preset.include_contact_sheet ? preset.contact_sheet_seconds : 0) + count * preset.seconds_per_image;
         hint.textContent = [
           `${preset.size[0]}×${preset.size[1]} · ${preset.fps}fps`,
           `每张 ${preset.seconds_per_image}s`,
           preset.include_contact_sheet ? `封面 contact sheet ${preset.contact_sheet_seconds}s` : null,
+          `背景音乐：${musicName() || "无"}`,
           `预计约 ${Math.round(total)} 秒（按已生成 ${count} 张）`,
         ].filter((part) => part).join(" · ");
       };
       select.addEventListener("change", updateHint);
+      musicSel.addEventListener("change", updateHint);
+      refreshDefaultOpt();
       updateHint();
       const actions = document.createElement("div");
       actions.className = "actions";
@@ -377,12 +414,13 @@ document.addEventListener("DOMContentLoaded", () => {
         try {
           const info = await api(`/runs/${encodeURIComponent(runId)}/video`, {
             method: "POST",
-            body: JSON.stringify({ preset: select.value }),
+            body: JSON.stringify({ preset: select.value, music: musicSel.value || null }),
           });
           status.classList.remove("error");
           status.textContent = "完成：" + [
             info.size[0] + "×" + info.size[1],
             Math.round(info.duration) + "s",
+            info.music ? "音乐 " + info.music : "无音乐",
             info.skipped && info.skipped.length ? "跳过未生成 " + info.skipped.length + " 张" : null,
           ].filter(Boolean).join(" · ");
           resultBox.innerHTML = "";

@@ -1,6 +1,7 @@
 """视频合成：预设解析 / 顺序 / 分辨率换算 / ffmpeg 渲染冒烟。"""
 from __future__ import annotations
 
+import json
 import shutil
 
 import pytest
@@ -182,3 +183,155 @@ def test_resolve_order_q21_v2_turnaround():
     assert sorted(video.resolve_order(result_items, _preset())) == sorted(
         item.index for item in result_items
     )
+
+
+def test_music_preset_fields_and_files():
+    """默认预设带背景音乐 1.mp3，白名单能列出它。"""
+    preset = video.load_video_preset("q21_turnaround")
+    assert preset.music == "轻跳节拍.wav"
+    assert preset.music_volume == pytest.approx(1.0)
+    assert preset.music_fade == pytest.approx(1.0)
+    assert (video.music_dir() / "轻跳节拍.wav").is_file()
+    files = video.music_files()
+    assert "1.mp3" in files and "轻跳节拍.wav" in files
+    assert files == sorted(files)
+    # 非音频/隐藏文件不进列表
+    assert all(f.endswith((".mp3", ".m4a", ".aac", ".wav", ".ogg", ".flac", ".opus")) for f in files)
+
+
+def test_resolve_music_cases():
+    preset = _preset()
+    # None/空白 = 预设默认（轻跳节拍.wav，中文文件名须过白名单）
+    assert video.resolve_music(preset, None) == video.music_dir() / "轻跳节拍.wav"
+    assert video.resolve_music(preset, "  ") == video.music_dir() / "轻跳节拍.wav"
+    # "none" = 明确不加
+    assert video.resolve_music(preset, "none") is None
+    # 无音乐预设 → None
+    assert video.resolve_music(_preset(music=None), None) is None
+    # 路径穿越/非法文件名 → 拒绝
+    for bad in ("../evil.mp3", "/etc/passwd.mp3", "a/b.mp3", "sub.mp3.mp4", "tone"):
+        with pytest.raises(video.VideoPresetError, match="不合法"):
+            video.resolve_music(preset, bad)
+    # 覆盖文件名不存在 → 拒绝
+    with pytest.raises(video.VideoPresetError, match="不存在"):
+        video.resolve_music(preset, "missing.mp3")
+
+
+def _write_wav(path, seconds: float = 2.0, rate: int = 8000):
+    import math
+    import wave
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(path), "w") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        frames = bytearray()
+        for i in range(int(rate * seconds)):
+            sample = int(0.4 * 32767 * math.sin(2 * math.pi * 440 * i / rate))
+            frames += sample.to_bytes(2, "little", signed=True)
+        w.writeframes(bytes(frames))
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="需要 ffmpeg")
+def test_render_video_with_music(tmp_path, monkeypatch):
+    """背景音乐：短音乐循环补齐、时长对齐视频、产物有音频流。"""
+    import subprocess
+
+    wav = tmp_path / "music" / "tone.wav"
+    _write_wav(wav, seconds=2.0)
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(video, "music_dir", lambda: wav.parent)
+    run_id = "music_run"
+    result_items = _q21_items(shuffled=False)[:3]
+    for item in result_items:
+        _write_png(tmp_path / "generated" / run_id / "original" / f"{item.index:06d}.png")
+    result = _result(result_items)
+
+    preset = _preset(
+        include_contact_sheet=False, fps=8, seconds_per_image=0.25,
+        resolution="720p", music="tone.wav",
+    )
+    info = video.render_video(run_id, result, [], preset, timeout=120)
+    assert info["music"] == "tone.wav"
+    assert info["duration"] == pytest.approx(0.75)  # 3 张 × 0.25s
+
+    ffprobe = shutil.which("ffprobe")
+    if ffprobe:
+        out = subprocess.run(
+            [ffprobe, "-v", "error", "-show_entries",
+             "stream=codec_type,codec_name:format=duration", "-of", "json", str(info["path"])],
+            capture_output=True, text=True, check=True,
+        )
+        data = json.loads(out.stdout)
+        types = [stream["codec_type"] for stream in data["streams"]]
+        assert "audio" in types and "video" in types
+        audio = next(stream for stream in data["streams"] if stream["codec_type"] == "audio")
+        assert audio["codec_name"] in ("aac", "mp4a")
+        # 容器总时长 ≈ 视频时长（短 wav 循环 + 截断到位）
+        assert 0.75 <= float(data["format"]["duration"]) <= 1.2
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="需要 ffmpeg")
+def test_render_video_music_override_none(tmp_path, monkeypatch):
+    """请求 music_override="none" → 无音乐分支照常渲染。"""
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    run_id = "nomusic_run"
+    result_items = _q21_items(shuffled=False)[:2]
+    for item in result_items:
+        _write_png(tmp_path / "generated" / run_id / "original" / f"{item.index:06d}.png")
+    preset = _preset(
+        include_contact_sheet=False, fps=8, seconds_per_image=0.25,
+        resolution="720p", music=None,
+    )
+    info = video.render_video(run_id, _result(result_items), [], preset, music_override="none", timeout=120)
+    assert info["music"] is None
+
+
+# ---------- API 层：/video-music 列表 + 音乐覆盖校验 ----------
+
+@pytest.fixture()
+def client(tmp_path, monkeypatch):
+    import pathlib
+
+    from fastapi.testclient import TestClient
+
+    from charvar.api import build_app
+
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    app = build_app(static_dir=None, db_path=pathlib.Path(tmp_path) / "test.db")
+    return TestClient(app)
+
+
+def _classic_run(client) -> str:
+    client.post("/subjects", json={"id": "demo", "name": "演示"})
+    return client.post(
+        "/generate", json={"subject_id": "demo", "preset": "q21_default_30", "seed": 1}
+    ).json()["run_id"]
+
+
+def test_api_video_music_list(client):
+    data = client.get("/video-music").json()
+    assert "1.mp3" in data["files"]
+
+
+def test_api_video_music_bad_name_400(client):
+    run_id = _classic_run(client)
+    resp = client.post(f"/runs/{run_id}/video", json={"preset": "q21_turnaround", "music": "../evil.mp3"})
+    assert resp.status_code == 400
+    assert "不合法" in resp.json()["detail"]
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="需要 ffmpeg")
+def test_api_video_render_with_music(client, tmp_path, monkeypatch):
+    """端到端：经典 run + 两张原图 + music="1.mp3" 覆盖 → 产物带音乐。"""
+    run_id = _classic_run(client)
+    _write_png(tmp_path / "generated" / run_id / "original" / "000000.png")
+    _write_png(tmp_path / "generated" / run_id / "original" / "000001.png")
+    resp = client.post(
+        f"/runs/{run_id}/video", json={"preset": "q21_turnaround", "music": "1.mp3"}
+    )
+    assert resp.status_code == 200, resp.text
+    info = resp.json()
+    assert info["music"] == "1.mp3"
+    assert info["duration"] == pytest.approx(2.0)  # contact sheet 缺失 → 只 2 张 × 1s

@@ -68,6 +68,8 @@ class ContactSheetRequest(BaseModel):
 
 class VideoRenderRequest(BaseModel):
     preset: str = "q21_turnaround"
+    # None/"" = 用预设内置音乐；"none" = 本次不加；其余 = presets/video/music/ 文件名
+    music: str | None = None
 
 
 class SubjectImageGenerateRequest(BaseModel):
@@ -756,9 +758,15 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                     "order_mode": preset.order_mode,
                     "direction": preset.direction,
                     "fit": preset.fit,
+                    "music": preset.music,
                 }
             )
         return presets
+
+    @app.get("/video-music")
+    def api_video_music() -> dict[str, Any]:
+        """presets/video/music/ 里的可用音乐文件（视频配置弹窗下拉用）。"""
+        return {"files": video_service.music_files()}
 
     @app.post("/runs/{run_id}/video")
     def api_run_video(run_id: str, req: VideoRenderRequest) -> dict[str, Any]:
@@ -772,7 +780,11 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             except video_service.VideoPresetError as exc:
                 raise HTTPException(400, str(exc)) from exc
             try:
-                info = video_service.render_video(run_id, result, records, preset)
+                # req.music：None/"" = 预设内置音乐；"none" = 不加；文件名 = 覆盖（文件名
+                # 合法性与存在性在 render_video 里校验，报错走下方 VideoPresetError → 400）
+                info = video_service.render_video(
+                    run_id, result, records, preset, music_override=req.music
+                )
             except video_service.VideoPresetError as exc:
                 raise HTTPException(400, str(exc)) from exc
             except Exception as exc:  # noqa: BLE001
