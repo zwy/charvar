@@ -340,3 +340,95 @@ def test_queue_multi_reference_mapping_1_to_4(client, tmp_path, monkeypatch):
         assert "516" not in wf and "517" not in wf
         assert "images.image_3" not in wf["459:474"]["inputs"]
         assert "images.image_4" not in wf["459:474"]["inputs"]
+
+
+def _intents(ids: list[str]) -> list[dict]:
+    return [
+        {
+            "id": vid,
+            "text": "variant text",
+            "framing": "full",
+            "angle": "front",
+            "expression": None,
+            "background": "bg",
+            "lighting": "light",
+            "framing_guard": None,
+        }
+        for vid in ids
+    ]
+
+
+def test_salvage_variants_from_truncated_text():
+    from charvar import llm_compose
+
+    text = '{"variants":[{"id":"full_front","prompt":"P one"},{"id":"full_l45","prompt":"P tw'
+    assert llm_compose._salvage_variants(text) == {"variants": [{"id": "full_front", "prompt": "P one"}]}
+    # prose 包裹也能从 variants 数组起点捞
+    wrapped = '好的： {"variants":[{"id":"a","prompt":"x"},{"id":"b","prompt":"y"}]…被截断'
+    assert llm_compose._salvage_variants(wrapped) == {"variants": [{"id": "a", "prompt": "x"}, {"id": "b", "prompt": "y"}]}
+    assert llm_compose._salvage_variants("完全没有 JSON") == {"variants": []}
+
+
+def test_rewrite_missing_ids_retry(monkeypatch):
+    """缺失条目触发缩批补调一次；schema 传入且 max_tokens 不设上限。"""
+    import charvar.llm_prompts as llm_prompts
+    from charvar import llm, llm_compose
+    from charvar.models import SubjectProfile
+
+    calls: list[dict] = []
+
+    def fake_chat_json(messages, **kw):
+        calls.append(kw)
+        if len(calls) == 1:
+            return {"variants": [{"id": "a", "prompt": "P1"}, {"id": "b", "prompt": "P2"}]}
+        return {"variants": [{"id": "c", "prompt": "P3"}]}
+
+    monkeypatch.setattr(llm, "chat_json", fake_chat_json)
+    out = llm_compose.rewrite_prompts(
+        SubjectProfile(id="s", name="n", subject_noun="person"), "", _intents(["a", "b", "c"]), []
+    )
+    assert out == {"a": "P1", "b": "P2", "c": "P3"}
+    assert len(calls) == 2
+    assert calls[0].get("schema") is llm_prompts.REWRITE_SCHEMA
+    assert calls[0].get("max_tokens") is None
+
+
+def test_rewrite_salvage_truncated_then_retry(monkeypatch):
+    """截断 → 抢救已完整条目 → 用缺失 id 补调补齐。"""
+    from charvar import llm, llm_compose
+    from charvar.models import SubjectProfile
+
+    texts = [
+        '{"variants":[{"id":"a","prompt":"P1"},{"id":"b","prompt":"P2',  # 截断
+        '{"variants":[{"id":"b","prompt":"P2b"},{"id":"c","prompt":"P3"}]}',
+    ]
+    calls: list[int] = []
+
+    def fake_chat_json(messages, **kw):
+        calls.append(1)
+        text = texts[len(calls) - 1]
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            raise llm.LLMParseError("invalid JSON response", text=text)
+
+    monkeypatch.setattr(llm, "chat_json", fake_chat_json)
+    out = llm_compose.rewrite_prompts(
+        SubjectProfile(id="s", name="n", subject_noun="person"), "", _intents(["a", "b", "c"]), []
+    )
+    assert out == {"a": "P1", "b": "P2b", "c": "P3"}
+    assert len(calls) == 2
+
+
+def test_rewrite_still_missing_after_retry_raises(monkeypatch):
+    from charvar import llm, llm_compose
+    from charvar.models import SubjectProfile
+
+    def fake_chat_json(messages, **kw):
+        return {"variants": [{"id": "a", "prompt": "P1"}]}
+
+    monkeypatch.setattr(llm, "chat_json", fake_chat_json)
+    with pytest.raises(llm.LLMError, match="缺少变体"):
+        llm_compose.rewrite_prompts(
+            SubjectProfile(id="s", name="n", subject_noun="person"), "", _intents(["a", "b"]), []
+        )

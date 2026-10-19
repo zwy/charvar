@@ -8,6 +8,7 @@
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 
 from charvar import llm
@@ -20,12 +21,16 @@ from charvar.composer import (
     normalize,
     render,
 )
-from charvar.llm_prompts import build_rewrite_messages
+from charvar.llm_prompts import REWRITE_SCHEMA, build_rewrite_messages
 from charvar.models import GenerateRequest, GenerateResult, PromptItem, SubjectProfile
 from charvar.preset_loader import ListPreset, MatrixPreset, Preset, PresetError
 from charvar.wildcard import expand_inline, rng_for, seed_for
 
-_REWRITE_MAX_TOKENS = 12000
+_REWRITE_MAX_TOKENS: int | None = None
+# None = 请求不传 max_tokens，输出长度交由模型自身上限（q21_v2_30 + 4 参考图时
+# 30 条全批输出约 1.5 万 token，固定 12000 会截断 JSON）。
+# 截断兜底见 _salvage_variants / 缺条补调；若仍偶发失败，可退回分批：
+# rewrite_prompts(..., max_per_call=10)。
 
 
 def collect_intent(subject: SubjectProfile, preset: Preset, req: GenerateRequest) -> list[dict]:
@@ -66,6 +71,64 @@ def collect_intent(subject: SubjectProfile, preset: Preset, req: GenerateRequest
     return intents
 
 
+def _salvage_variants(text: str) -> dict:
+    """从被截断的响应文本中抢救已完整的 variant 条目（{"variants": [...] 形式）。
+
+    JSON 断在字符串中间时整体解析失败，但数组里已经写完的对象可以逐个
+    raw_decode 捞回，返回值交给缺条补调补齐剩下的。
+    """
+    entries: list[dict] = []
+    pos = text.find('"variants"')
+    if pos >= 0:
+        decoder = json.JSONDecoder()
+        while True:
+            brace = text.find("{", pos)
+            if brace < 0:
+                break
+            try:
+                obj, end = decoder.raw_decode(text, brace)
+            except json.JSONDecodeError:
+                break  # 从这里开始是被截断的残段
+            pos = end
+            if isinstance(obj, dict) and isinstance(obj.get("id"), str) and isinstance(obj.get("prompt"), str):
+                entries.append({"id": obj["id"], "prompt": obj["prompt"]})
+    return {"variants": entries}
+
+
+def _rewrite_once(
+    subject: SubjectProfile,
+    template_md: str,
+    refs: list[dict],
+    instructions: str | None,
+    chunk: list[dict],
+    rewritten: dict[str, str],
+    config: dict | None,
+) -> None:
+    """改写一批 intent 并把 {id: prompt} 并入 rewritten；截断时先抢救半截 JSON。"""
+    messages = build_rewrite_messages(subject, template_md, refs, chunk, instructions)
+    try:
+        data = llm.chat_json(
+            messages,
+            max_tokens=_REWRITE_MAX_TOKENS,
+            schema=REWRITE_SCHEMA,
+            schema_name="rewrite_variants",
+            config=config,
+        )
+    except llm.LLMParseError as exc:
+        # 输出被截断：整体 JSON 解析失败，先抢救已完整的条目
+        data = _salvage_variants(exc.text)
+    variants = data.get("variants")
+    if not isinstance(variants, list):
+        raise llm.LLMError(f"LLM 输出缺少 variants 列表：{str(data)[:200]}")
+    for entry in variants:
+        if not isinstance(entry, dict):
+            continue
+        variant_id = str(entry.get("id") or "")
+        prompt = str(entry.get("prompt") or "").strip()
+        if variant_id and prompt:
+            rewritten[variant_id] = prompt
+
+
 def rewrite_prompts(
     subject: SubjectProfile,
     template_md: str,
@@ -78,7 +141,10 @@ def rewrite_prompts(
 ) -> dict[str, str]:
     """一次（或分批）chat_json 调用，返回 {variant_id: prompt}。
 
-    校验：每个 intent 的 id 都必须出现且 prompt 非空，缺失/为空 → LLMError。
+    请求 json_schema（strict）结构化输出，供应商不支持时 chat() 自动降级
+    json_object；max_tokens 不设上限，避免 30 条全批被截断。
+    单批有缺失/截断时，用缺失的 id 缩批补调一次；仍缺失 → LLMError。
+    校验：每个 intent 的 id 都必须出现且 prompt 非空。
     ref_kinds 按顺序分配 <image1>、<image2>… 标签。
     """
     if not intents:
@@ -87,21 +153,17 @@ def rewrite_prompts(
     rewritten: dict[str, str] = {}
     chunks = [intents[i : i + max_per_call] for i in range(0, len(intents), max_per_call)]
     for chunk in chunks:
-        messages = build_rewrite_messages(subject, template_md, refs, chunk, instructions)
-        data = llm.chat_json(messages, max_tokens=_REWRITE_MAX_TOKENS, config=config)
-        variants = data.get("variants")
-        if not isinstance(variants, list):
-            raise llm.LLMError(f"LLM 输出缺少 variants 列表：{str(data)[:200]}")
-        for entry in variants:
-            if not isinstance(entry, dict):
-                continue
-            variant_id = str(entry.get("id") or "")
-            prompt = str(entry.get("prompt") or "").strip()
-            if variant_id and prompt:
-                rewritten[variant_id] = prompt
-        missing = [i["id"] for i in chunk if not rewritten.get(i["id"])]
-        if missing:
-            raise llm.LLMError(f"LLM 输出缺少变体提示词：{missing[:5]}（共缺 {len(missing)} 条）")
+        _rewrite_once(subject, template_md, refs, instructions, chunk, rewritten, config)
+        missing = [item for item in chunk if not rewritten.get(item["id"])]
+        if not missing:
+            continue
+        # 缺条补调一次：只带缺失条目再调用（批次更小，输出更短，命中率高）
+        _rewrite_once(subject, template_md, refs, instructions, missing, rewritten, config)
+        still_missing = [item["id"] for item in missing if not rewritten.get(item["id"])]
+        if still_missing:
+            raise llm.LLMError(
+                f"LLM 输出缺少变体提示词：{still_missing[:5]}（共缺 {len(still_missing)} 条）"
+            )
     return rewritten
 
 

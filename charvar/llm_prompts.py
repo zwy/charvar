@@ -164,6 +164,37 @@ REFERENCE_TAIL_SENTENCE: str = (
 )
 
 
+# ---- structured outputs（response_format: json_schema） ----
+# 只用 type/properties/required/additionalProperties 兼容 strict 模式（OpenAI/OpenRouter
+# 拒绝 minItems 等扩展关键字）；条目数量不靠 schema 保证，由缺条补调兜底。
+REWRITE_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "variants": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "prompt": {"type": "string"},
+                },
+                "required": ["id", "prompt"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["variants"],
+    "additionalProperties": False,
+}
+
+DRAFT_SCHEMA: dict = {
+    "type": "object",
+    "properties": {"prompt": {"type": "string"}},
+    "required": ["prompt"],
+    "additionalProperties": False,
+}
+
+
 def reference_anchor_sentence(refs: list[dict]) -> str:
     """按勾选的参考图顺序生成逐图分工锚定句；无参考图 → 空串（改写省略锚定句）。"""
     clauses = []

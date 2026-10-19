@@ -336,7 +336,7 @@ def test_subject_delete_cascades(client, tmp_path):
 def test_suggest_prompt_persists_to_db(client, tmp_path, monkeypatch):
     """AI 起草结果必须落库（否则生成任一图后其他草稿会被前端态冲掉）。"""
     client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
-    monkeypatch.setattr(llm, "chat_json", lambda messages, config=None: {"prompt": "Drafted prompt only."})
+    monkeypatch.setattr(llm, "chat_json", lambda messages, **kwargs: {"prompt": "Drafted prompt only."})
     resp = client.post("/subjects/demo_witch/images/front/suggest-prompt")
     assert resp.status_code == 200
     assert resp.json()["prompt"] == "Drafted prompt only."

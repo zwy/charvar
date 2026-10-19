@@ -18,13 +18,21 @@ import httpx
 
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash"
-_TIMEOUT = 180.0
+_TIMEOUT = 300.0  # 30 条全批改写的输出很长（>1.5 万 token），放宽到 5 分钟
 
 _CONFIG_KEYS = ("base_url", "api_key", "model")
 
 
 class LLMError(RuntimeError):
     pass
+
+
+class LLMParseError(LLMError):
+    """返回文本解析 JSON 失败；.text 保留原始返回，供调用方做截断抢救。"""
+
+    def __init__(self, message: str, text: str = ""):
+        super().__init__(message)
+        self.text = text
 
 
 def _http_client(**kw: Any) -> httpx.Client:
@@ -53,14 +61,20 @@ def get_llm_config(override: dict | None = None) -> dict:
 def chat(
     messages: list[dict],
     model: str | None = None,
-    max_tokens: int = 4000,
+    max_tokens: int | None = 4000,
     json_mode: bool = True,
     retries: int = 3,
     config: dict | None = None,
+    schema: dict | None = None,
+    schema_name: str = "response",
+    strict: bool = True,
 ) -> str:
     """调用一次 chat completion，返回 assistant 文本。
 
     json_mode=True 时请求 JSON 输出并关闭 reasoning 回显；带指数退避重试。
+    schema 给定时请求 json_schema（structured outputs）；供应商不支持（400/422）
+    时自动降级 json_object，降级不消耗重试次数。
+    max_tokens=None 时不传该字段，输出长度交由模型自身上限决定（类似 -1）。
     """
     cfg = get_llm_config(config)
     api_key = cfg["api_key"]
@@ -73,14 +87,28 @@ def chat(
     body: dict = {
         "model": model or cfg["model"],
         "messages": messages,
-        "max_tokens": max_tokens,
         "reasoning": {"exclude": True},
     }
-    if json_mode:
-        body["response_format"] = {"type": "json_object"}
+    if max_tokens is not None:
+        body["max_tokens"] = max_tokens
 
+    def _response_format(use_schema: bool) -> dict | None:
+        if use_schema and schema is not None:
+            return {
+                "type": "json_schema",
+                "json_schema": {"name": schema_name, "strict": strict, "schema": schema},
+            }
+        return {"type": "json_object"} if json_mode else None
+
+    schema_on = schema is not None
     last_err: Exception | None = None
-    for attempt in range(retries):
+    attempt = 0
+    while attempt < retries:
+        payload = {**body}
+        rf = _response_format(schema_on)
+        if rf is not None:
+            payload["response_format"] = rf
+        attempt += 1
         try:
             with _http_client(timeout=httpx.Timeout(_TIMEOUT, write=60.0)) as client:
                 resp = client.post(
@@ -89,9 +117,14 @@ def chat(
                         "Authorization": f"Bearer {api_key}",
                         "Content-Type": "application/json",
                     },
-                    json=body,
+                    json=payload,
                     timeout=_TIMEOUT,
                 )
+            if resp.status_code in (400, 422) and schema_on:
+                # 供应商不支持 structured outputs → 降级 json_object 重试（不消耗次数）
+                schema_on = False
+                attempt -= 1
+                continue
             if resp.status_code == 429:
                 time.sleep(2**attempt * 3)
                 last_err = LLMError("rate limited")
@@ -104,13 +137,16 @@ def chat(
             return content
         except (httpx.HTTPError, KeyError, LLMError) as e:  # noqa: PERF203
             last_err = e
-            if attempt < retries - 1:
+            if attempt < retries:
                 time.sleep(2**attempt * 2)
     raise LLMError(f"LLM call failed after {retries} attempts: {last_err}")
 
 
 def chat_json(messages: list[dict], **kw: Any) -> dict:
-    """调用并解析 JSON 输出；解析失败时尝试从文本中截取第一个 JSON 对象。"""
+    """调用并解析 JSON 输出；解析失败时尝试从文本中截取第一个 JSON 对象。
+
+    仍失败时抛 LLMParseError（.text 保留原始返回全文，供调用方抢救截断输出）。
+    """
     text = chat(messages, json_mode=True, **kw)
     try:
         return json.loads(text)
@@ -121,4 +157,4 @@ def chat_json(messages: list[dict], **kw: Any) -> dict:
                 return json.loads(text[start : text.rfind("}") + 1])
             except json.JSONDecodeError:
                 pass
-        raise LLMError(f"invalid JSON response: {text[:200]}") from None
+        raise LLMParseError(f"invalid JSON response: {text[:200]}", text=text) from None

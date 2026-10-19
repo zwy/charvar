@@ -27,7 +27,7 @@ from charvar.exporters import comfyui as comfyui_exporter
 from charvar.exporters import jsonl as jsonl_exporter
 from charvar.exporters import txt as txt_exporter
 from charvar.llm_compose import generate_llm
-from charvar.llm_prompts import draft_subject_image_prompt_messages
+from charvar.llm_prompts import DRAFT_SCHEMA, draft_subject_image_prompt_messages
 from charvar.models import GenerateRequest, GenerateResult, SubjectProfile
 from charvar.preset_loader import (
     ListPreset,
@@ -257,7 +257,9 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             config = settings_service.llm_overrides(conn)
         messages = draft_subject_image_prompt_messages(subject, kind, template)
         try:
-            data = llm.chat_json(messages, config=config)
+            data = llm.chat_json(
+                messages, config=config, schema=DRAFT_SCHEMA, schema_name="subject_image_prompt"
+            )
         except llm.LLMError as exc:
             raise HTTPException(502, f"LLM 起草提示词失败：{exc}") from exc
         prompt = str(data.get("prompt") or "").strip()

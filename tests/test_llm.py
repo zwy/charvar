@@ -96,3 +96,65 @@ def test_config_precedence(monkeypatch):
     # 空串 override 不覆盖 env
     partial = llm.get_llm_config({"model": ""})
     assert partial["model"] == "env-model"
+
+
+def test_chat_schema_strict_and_no_max_tokens(monkeypatch):
+    """schema 请求发 json_schema(strict)，max_tokens=None 不传该字段。"""
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content.decode()))
+        return _ok_content('{"a": 1}')
+
+    _fake_llm(monkeypatch, handler)
+    monkeypatch.setenv("LLM_API_KEY", "sk-test")
+    schema = {
+        "type": "object",
+        "properties": {"a": {"type": "integer"}},
+        "required": ["a"],
+        "additionalProperties": False,
+    }
+    assert llm.chat_json([{"role": "user", "content": "hi"}], max_tokens=None, schema=schema, schema_name="x") == {"a": 1}
+    body = seen[0]
+    assert body["response_format"] == {
+        "type": "json_schema",
+        "json_schema": {"name": "x", "strict": True, "schema": schema},
+    }
+    assert "max_tokens" not in body
+
+
+def test_chat_schema_downgrade_on_400(monkeypatch):
+    """供应商不支持 json_schema（400）→ 自动降级 json_object，不消耗重试次数。"""
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content.decode())
+        seen.append(body)
+        if body.get("response_format", {}).get("type") == "json_schema":
+            return httpx.Response(400, json={"error": "provider does not support structured outputs"})
+        return _ok_content('{"ok": 1}')
+
+    _fake_llm(monkeypatch, handler)
+    monkeypatch.setenv("LLM_API_KEY", "sk-test")
+    schema = {
+        "type": "object",
+        "properties": {"ok": {"type": "integer"}},
+        "required": ["ok"],
+        "additionalProperties": False,
+    }
+    # retries=1 仍能成功：降级重试免费
+    assert llm.chat([{"role": "user", "content": "hi"}], retries=1, schema=schema) == '{"ok": 1}'
+    assert seen[0]["response_format"]["type"] == "json_schema"
+    assert seen[1]["response_format"] == {"type": "json_object"}
+    assert len(seen) == 2
+
+
+def test_chat_json_parse_error_carries_text(monkeypatch):
+    def handler(request: httpx.Request) -> httpx.Response:
+        return _ok_content('{"variants": [{"id": "a", "prompt": "p')
+
+    _fake_llm(monkeypatch, handler)
+    monkeypatch.setenv("LLM_API_KEY", "sk-test")
+    with pytest.raises(llm.LLMParseError) as exc_info:
+        llm.chat_json([{"role": "user", "content": "hi"}])
+    assert exc_info.value.text == '{"variants": [{"id": "a", "prompt": "p'
