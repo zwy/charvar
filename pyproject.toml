@@ -13,6 +13,8 @@ dependencies = [
   "httpx>=0.27",
   "Pillow>=10.0",
 ]
+license = { text = "MIT" }
+classifiers = ["License :: OSI Approved :: MIT License"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]

@@ -1,4 +1,4 @@
-# 新版 Q21 数据集构建工作流（根目录 characterDataset_q21Chardatasetbuilder_v2.json）
+# 新版 Q21 数据集构建工作流（原 characterDataset_q21Chardatasetbuilder_v2.json 已移出仓库；30 条文本逐字保留于此，tests 以 sha256 锁基准）
 # 的 30 条变体提示词，逐字提取自 Prompt 子图 Four Images 文本（剥 [BODY_NOTES] 等
 # Customize 微调占位符（原文件里默认为空）与无效的 [BACKGROUND]/[LIGHTING] 注入点）。
 # 结构变化：chest 组 l135/r135 → high/low 机位；head 组 6 机位；表情 8 张。

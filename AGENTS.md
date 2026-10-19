@@ -13,7 +13,7 @@
 ## 测试
 
 - `python3 -m pytest -q` 必须全绿再交付。
-- 与原工作流逐字相关的红线：`presets/q21_default_30.yaml` 的 30 条 variants 文本不许改动（tests/test_presets.py 以 `characterDataset_q21Chardatasetbuilder.json` 外层 nodes[5] widgets_values[3] 为基准校验）。
+- 与原工作流逐字相关的红线：`presets/q21_default_30.yaml` 的 30 条 variants 文本不许改动。第三方工作流 JSON 已移出仓库，tests/test_presets.py 改用 sha256 文本基准锁定（不得把原工作流 JSON 加回仓库根）。
 
 ## 实现红线
 

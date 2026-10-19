@@ -1,50 +1,40 @@
-"""设计文档 §10.1：q21_default_30 展开后正好 30 条，文本与原 JSON 逐字一致。
+"""预设加载与结构校验。
 
-原 JSON 位置：仓库根 characterDataset_q21Chardatasetbuilder.json；
-外层 nodes[]（id=1194，Prompt 子图实例）widgets_values[3] 为当前接入流程的 30 行文本。
-子图内 Text Multiline 节点残留旧版 30 行，作为 q21_legacy_30 预设。
+第三方工作流 JSON（characterDataset_q21*.json）已移出仓库；「30 条文本逐字不改动」
+的红线改用 sha256 基准锁定，不在仓库保留第三方文件或全文副本。基准配方：
+    sha256(("\n".join(v.text for v in preset.variants)).encode("utf-8")).hexdigest()
+基准值取自当时与原工作流 JSON 逐字比对全绿的版本；如确需修改预设，请显式重算并
+更新基准（并说明理由）。
 """
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
-import yaml
+import hashlib
 
 from charvar.preset_loader import ListPreset, MatrixPreset, load
 
-ROOT = Path(__file__).resolve().parent.parent
-WORKFLOW = ROOT / "characterDataset_q21Chardatasetbuilder.json"
+# 文本基准 sha256（= 与原工作流 JSON 逐字比对通过版本的 preset 文本）
+Q21_DEFAULT_30_DIGEST = "847afccf764b43e55af82d8c80d2e5fc816aa82eaf3500f6852d18a8b599ae13"
+Q21_LEGACY_30_DIGEST = "aada7b57aee5e27438db8bbb45e87749ac09000415af506a6249a6ae0b83ad9a"
 
 
-def _workflow_lines() -> list[str]:
-    wf = json.loads(WORKFLOW.read_text(encoding="utf-8"))
-    widget = wf["nodes"][5]["widgets_values"][3]
-    return [line for line in widget.split("\n") if line.strip()]
+def _texts_digest(preset_name: str) -> str:
+    preset = load(preset_name)
+    return hashlib.sha256("\n".join(v.text for v in preset.variants).encode("utf-8")).hexdigest()
 
 
-def _legacy_lines() -> list[str]:
-    wf = json.loads(WORKFLOW.read_text(encoding="utf-8"))
-    node = wf["definitions"]["subgraphs"][1]["nodes"][6]
-    widget = node["widgets_values"][0]
-    return [line for line in widget.split("\n") if line.strip()]
+def test_q21_default_30_digest_locked():
+    """红线：q21_default_30 的 30 条 variants 文本逐字不变（基准不再依赖第三方 JSON）。"""
+    assert len(load("q21_default_30").variants) == 30
+    assert _texts_digest("q21_default_30") == Q21_DEFAULT_30_DIGEST, (
+        "q21_default_30 的变体文本偏离原工作流基准；如确需修改，请显式重算并更新基准"
+    )
 
 
-def test_q21_default_30_matches_workflow_verbatim():
-    preset = load("q21_default_30")
-    assert isinstance(preset, ListPreset)
-    assert len(preset.variants) == 30
-    expected = _workflow_lines()
-    for i, spec in enumerate(preset.variants):
-        assert spec.text == expected[i], f"variants[{i}] 文本与原 JSON 不一致"
-
-
-def test_q21_legacy_30_matches_subgraph_multiline():
+def test_q21_legacy_30_digest_locked():
+    """legacy 30 条（原工作流子图残留旧版）同样锁定。"""
     preset = load("q21_legacy_30")
     assert len(preset.variants) == 30
-    expected = _legacy_lines()
-    for i, spec in enumerate(preset.variants):
-        assert spec.text == expected[i]
+    assert _texts_digest("q21_legacy_30") == Q21_LEGACY_30_DIGEST
     assert any("smooth youthful skin" in v.text for v in preset.variants)
 
 
@@ -93,7 +83,6 @@ def test_matrix_basic_expands_30():
 
 # ---------- q21_v2_30（新版 Q21 数据集构建工作流提取） ----------
 
-WORKFLOW_V2 = ROOT / "characterDataset_q21Chardatasetbuilder_v2.json"
 V2_IDS = {
     *(f"{fr}_{ang}" for fr in ("full", "chest") for ang in
       ("front", "l45", "r45", "l90", "r90")),
@@ -103,30 +92,16 @@ V2_IDS = {
     *(f"expr_{e}" for e in ("shocked", "laugh", "neutral", "smile", "sad", "pout", "cringe", "silly")),
 }
 
-
-def _v2_lines() -> list[str]:
-    import re
-
-    wf = json.loads(WORKFLOW_V2.read_text(encoding="utf-8"))
-    sg = next(s for s in wf["definitions"]["subgraphs"] if s["name"] == "Prompt")
-    node = next(n for n in sg["nodes"] if n["id"] == 1289)  # Four Images（推荐 4 参考图）
-
-    def clean(text: str) -> str:
-        t = re.sub(
-            r"\[(?:BODY|PORTRAIT|HEAD|BACK)_NOTES\]|\[(?:BACKGROUND|LIGHTING)\]", "", text
-        )
-        return re.sub(r"\s{2,}", " ", t).strip()
-
-    return [clean(line) for line in node["widgets_values"][0].split("\n") if line.strip()]
+Q21_V2_30_DIGEST = "11f45f6a8f4e7b123005d6c82d9b50ac1fb44b2837d9c424a9d57e5c7e2f9ec2"
 
 
-def test_q21_v2_30_matches_workflow_verbatim():
+def test_q21_v2_30_digest_locked():
     preset = load("q21_v2_30")
     assert isinstance(preset, ListPreset)
     assert len(preset.variants) == 30
-    expected = _v2_lines()
-    for i, spec in enumerate(preset.variants):
-        assert spec.text == expected[i], f"variants[{i}] 文本与新工作流不一致"
+    assert _texts_digest("q21_v2_30") == Q21_V2_30_DIGEST, (
+        "q21_v2_30 的变体文本偏离新版工作流基准；如确需修改，请显式重算并更新基准"
+    )
     assert {v.id for v in preset.variants} == V2_IDS
 
 

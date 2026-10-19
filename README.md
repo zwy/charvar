@@ -37,30 +37,45 @@ COMFYUI_WORKFLOWS_DIR=./data/workflows
 - 网页「生成 → 推送 ComfyUI」面板与 CLI 共用这套配置。
 - 推送前可选择 `智能 / 1:1 / 3:4 / 16:9 / 4:3 / 9:16 / 2:3 / 3:2 / 21:9` 与 `1K / 2K / 4K`；4K 长边上限 4096，短边取 64 倍数；`智能` 会按景别使用全身 `2:3`、胸像/头像/表情 `3:4`。
 
+## LLM 配置（可选）
+
+「LLM 优化」生成模式与主体图「一键 AI 起草」需要一个 OpenAI 规范 chat completions 的 API；不配置则网页两处 LLM 功能不可用（经典模板模式不受影响）。
+
+```env
+LLM_BASE_URL=https://openrouter.ai/api/v1
+LLM_API_KEY=sk-or-v1-******
+LLM_MODEL=deepseek/deepseek-v4.1-flash
+```
+
+- 写 `.env`（不进 git，`.env.example` 是模板），或直接在网页「设置」页填 Base URL / 模型 / Key——DB 设置优先于环境变量，改后重启生效。
+- LLM 都要求返回 JSON：优先发 `json_schema`（strict 结构化输出），供应商不支持时自动降级 `json_object`；改写输出不设 max_tokens，截断时自动抢救已完整条目并对缺失条目缩批补调。
+
 ## 安装
 
 ```bash
-cd /Users/zwy/Sites/charvar
-pip install -r requirements.txt   # 或 pip install -e . 安装 CLI（可用 charvar 命令）
+pip install -r requirements.txt   # 项目根目录执行；或 pip install -e . 安装 CLI（可用 charvar 命令）
+brew install ffmpeg               # 可选：合成视频需要（macOS Homebrew）
 ```
 
-## 启动服务
+## 启动 / 停止
 
 ```bash
-./scripts/start.sh            # 后台启动，打开 http://127.0.0.1:8710
-./scripts/stop.sh             # 停止（./scripts/stop.sh 9000 停指定端口）
+./scripts/start.sh            # 后台启动（screen 会话 charvar-8710），打开 http://127.0.0.1:8710
+./scripts/stop.sh             # 停止；./scripts/stop.sh 9000 可停指定端口
+CHARVAR_WEB_PORT=8799 ./scripts/start.sh   # 换端口多开；停止时同款环境变量或传端口参数
 ```
 
-手动前台运行 / 热重载开发：
+- `CHARVAR_WEB_PORT`（默认 8710）：`start.sh` / `stop.sh` 只认 shell 环境变量；`python3 -m web.app` 前台模式也会读 `.env` 里的该键。换端口建议统一用 `CHARVAR_WEB_PORT=8799 ./scripts/start.sh`。
+- stop.sh 优先按 PID 文件停止，再按「端口 + 本仓库 cwd」安全匹配进程，不会误杀无关进程；无论哪种路径命中都会顺带清理同名 screen 会话。
+- 手动前台运行 / 热重载开发：
 
 ```bash
-python3 -m web.app            # 前台运行
-uvicorn web.app:app --reload --port 8710
+python3 -m web.app                             # 前台运行（export CHARVAR_WEB_PORT=8710 换端口）
+uvicorn web.app:app --reload --port 8710       # 热重载（先 stop.sh 释放端口）
 ```
 
-- 改了 Python 代码后必须重启才生效；只改 `web/static/**` 刷新页面即可。
-- 推送前可设置画幅比例与分辨率：`智能` 或 `1:1 / 3:4 / 16:9 / 4:3 / 9:16 / 2:3 / 3:2 / 21:9`；档位 `1K / 2K / 4K`，4K 长边上限 4096。
-- 服务只监听 `127.0.0.1`。日志：`/tmp/charvar-web-8710.log`。
+- 改了 Python 代码（`charvar/**`、`web/app.py`）后必须重启才生效；只改 `web/static/**` 刷新页面即可。
+- 服务只监听 `127.0.0.1`。日志：`/tmp/charvar-web-8710.log`（端口跟随 `CHARVAR_WEB_PORT`）。
 
 ## 命令行
 
@@ -165,3 +180,13 @@ python3 -m pytest -q
 ```
 
 覆盖：`q21_default_30` 与原 JSON 逐字一致、matrix 30 条 id 唯一且顺序稳定、同种子完全相等、删除变体不影响其他条目背景/光照、无 `.`/`..`/双空格/花括号残留、`subject_noun=man` 不出现 woman、ComfyUI payload 注入与 filename_prefix 唯一、API 冒烟。
+
+## 致谢
+
+- [Character Dataset Builder - Q21](https://civitai.red/models/2719177/character-dataset-builder)（作者 [AirbagGuy](https://civitai.com/user/AirbagGuy)，Qwen 2.1 Workflows）——本项目的提示词生成体系抽离并改造自该 ComfyUI 工作流：`q21_default_30`（V1 30 条变体）与 `q21_v2_30`（V2 30 条）的逐条文本、景别/朝向/表情编排与参考图分工结构均逐字保留自其 Text Multiline 设计，并在此之上修复了分隔符缺失、随机不可复现、caption 未接线等已知缺陷（见文档开头）。
+- 原工作流 JSON 文件不随本仓库分发（第三方产物，版权归原作者）；预设文本的回归测试以 sha256 基准锁定逐字一致性，仓库内不保留其文件副本。
+
+## 许可证
+
+- 本项目代码与配置按 [MIT License](LICENSE) 发布（`Copyright (c) 2026 zwy`）。
+- q21 系预设中逐字保留的原工作流变体文本不属于本许可证覆盖范围，版权归原工作流作者。
