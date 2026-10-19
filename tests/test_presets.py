@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import hashlib
 
-from charvar.preset_loader import ListPreset, MatrixPreset, load
+import pytest
+
+from charvar.preset_loader import ListPreset, MatrixPreset, PresetError, load, load_file
 
 # 文本基准 sha256（= 与原工作流 JSON 逐字比对通过版本的 preset 文本）
 Q21_DEFAULT_30_DIGEST = "847afccf764b43e55af82d8c80d2e5fc816aa82eaf3500f6852d18a8b599ae13"
@@ -252,3 +254,116 @@ def test_expressions_v1_24_structure_and_caption():
     assert "A calm neutral expression." in item.prompt
     assert "The background is " in item.prompt
     assert "The lighting is " in item.prompt
+
+
+# ---------- chat_replies_v1_12（带字聊天表情包：schema 2，仅新预设启用） ----------
+
+CHAT_REPLIES_V1_12_DIGEST = "39a394efd7c0bb85b9f2718fe98e06ac7bda1fd68384e26de771211f9bba188f"
+
+CHAT_REPLIES_CONTENTS = (
+    "收到！", "来啦来啦", "啊？", "让我看看", "包的", "我尽量",
+    "不想动", "我先躺会", "你最好是", "求夸夸", "抱一下", "好耶！",
+)
+
+CHAT_REPLIES_IDS = (
+    "sticker_received", "sticker_coming", "sticker_huh", "sticker_let_me_see",
+    "sticker_count_on_me", "sticker_ill_try", "sticker_dont_wanna_move",
+    "sticker_lie_down", "sticker_youd_better", "sticker_praise_me",
+    "sticker_hug", "sticker_yay",
+)
+
+
+def test_chat_replies_v1_12_digest_locked():
+    preset = load("chat_replies_v1_12")
+    assert isinstance(preset, ListPreset)
+    assert len(preset.variants) == 12
+    assert {v.id for v in preset.variants} == set(CHAT_REPLIES_IDS)
+    assert _texts_digest("chat_replies_v1_12") == CHAT_REPLIES_V1_12_DIGEST, (
+        "chat_replies_v1_12 的变体文本偏离 V1 基准；如确需修改，请显式重算并更新基准"
+    )
+
+
+def test_chat_replies_v1_12_contents_exact():
+    preset = load("chat_replies_v1_12")
+    contents = [v.display_text.content for v in preset.variants]
+    assert tuple(contents) == CHAT_REPLIES_CONTENTS
+    layouts = {v.id: v.display_text.layout for v in preset.variants}
+    assert layouts["sticker_received"] == "voice"
+    assert layouts["sticker_dont_wanna_move"] == "state"
+    assert layouts["sticker_hug"] == "interaction"
+
+
+def test_chat_replies_v1_12_sticker_contract():
+    from charvar.preset_loader import MatrixPreset
+
+    preset = load("chat_replies_v1_12")
+    assert preset.schema_version == 2 and preset.purpose == "sticker"
+    assert preset.text_policy == "required_label"
+    assert preset.composition_policy == "variant"
+    assert preset.preferred_aspect_ratio == "1:1"
+    assert preset.lettering is not None and preset.lettering.language == "zh-Hans"
+    assert preset.reference_order == ["front"]
+    for spec in preset.variants:
+        assert spec.framing is None and spec.angle is None  # 构图以 text 为准
+    # caption 仍是图像描述；caption_background_suffix=false
+    assert preset.caption_background_suffix is False
+
+
+def test_chat_replies_loader_rejects_bad_configs(tmp_path):
+    """未知 schema、未知根字段、sticker 合同缺失都报可读错误（明确配置错误而非“找不到预设”）。"""
+    import yaml as _yaml
+
+    lettering = {"language": "zh-Hans", "style": "s", "fill": "f", "outline": "o",
+                 "accent": "a", "rules": "r", "safe_margin": 0.06}
+
+    def _base(**extra):
+        base = {
+            "name": "bad", "type": "list", "version": 1,
+            "master_template": "m", "suffix_template": "s",
+            "backgrounds": ["b"], "lighting": ["l"],
+            "purpose": "sticker", "text_policy": "required_label",
+            "composition_policy": "variant", "preferred_aspect_ratio": "1:1",
+            "schema_version": 2, "lettering": lettering,
+            "variants": [_variant()],
+        }
+        base.update(extra)
+        return base
+
+    def _variant(display=None, framing=None):
+        v = {
+            "id": "sticker_a", "text": "Pose.", "tags": [],
+            "framing": framing, "angle": None, "expression": "smile",
+            "display_text": display or {"content": "收到！", "layout": "voice",
+                                        "placement": "beside", "flow": "upright", "emphasis": "！"},
+        }
+        return {k: val for k, val in v.items() if val is not None or k in ("framing", "angle")}
+
+    def _expect_error(data: dict, needle: str):
+        p = tmp_path / "bad.yaml"
+        p.write_text(_yaml.safe_dump(data), encoding="utf-8")
+        with pytest.raises(PresetError) as e:
+            load_file(p)
+        assert needle in str(e.value)
+
+    _expect_error({**_base(), "schema_version": 3}, "schema_version")   # 未知版本显式报错
+    _expect_error({**_base(), "master_templates": "typo"}, "master_templates")  # 未知根字段
+    # 变体级未知字段（拼写错误）同样拒绝，不静默丢弃
+    _expect_error({**_base(), "variants": [{"id": "a", "text": "t", "framnig": None}]}, "framnig")
+    _expect_error(_base(variants=[_variant(framing="head")]), "framing")  # 合同：framing 必须为空
+    _expect_error(_base(lettering=None), "lettering")                     # 合同：需要 lettering
+    _expect_error(
+        _base(variants=[{"id": "a", "text": "t"}]),  # 合同：每条必须有 display_text
+        "display_text",
+    )
+    # display_text：content 空白 / 未知 layout → 校验失败
+    _expect_error(_base(variants=[_variant({"content": "  ", "layout": "voice",
+                                            "placement": "b", "flow": "f", "emphasis": ""})]),
+                  "content")
+    _expect_error(_base(variants=[_variant({"content": "收到了", "layout": "banner",
+                                            "placement": "b", "flow": "f", "emphasis": ""})]),
+                  "layout")
+    # schema 1 文件携带 schema 2 字段 → 要求显式升级
+    _expect_error({k: val for k, val in _base().items()
+                   if k not in ("purpose", "text_policy", "composition_policy",
+                                "preferred_aspect_ratio", "schema_version")},
+                  "schema_version")

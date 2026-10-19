@@ -37,6 +37,7 @@ from charvar.preset_loader import (
     load_file,
     list_presets,
 )
+from charvar import sticker_policy
 from charvar import video as video_service
 
 EXPORT_FORMATS = ("txt", "jsonl", "captions_zip", "captions")
@@ -110,7 +111,8 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         try:
             return load(name)
         except PresetError as exc:
-            raise HTTPException(404, str(exc)) from exc
+            # 预设缺失 = 404；配置/格式错误（如无效 schema 2）= 明确的 400 配置错误
+            raise HTTPException(getattr(exc, "status", 400), str(exc)) from exc
 
     # ---- 页面 ----
     if static_dir is not None and Path(static_dir).exists():
@@ -140,6 +142,12 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             "caption_tags": preset.caption_tags,
             "caption_background_suffix": preset.caption_background_suffix,
             "reference_order": preset.reference_order,
+            "schema_version": preset.schema_version,
+            "purpose": preset.purpose,
+            "text_policy": preset.text_policy,
+            "composition_policy": preset.composition_policy,
+            "preferred_aspect_ratio": preset.preferred_aspect_ratio,
+            "lettering": preset.lettering.model_dump() if preset.lettering is not None else None,
         }
         if isinstance(preset, ListPreset):
             detail["variants"] = [v.model_dump() for v in preset.variants]
@@ -440,17 +448,31 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     def api_generate(req: GenerateRequest) -> GenerateResult:
         subject = _resolve_subject(req)
         preset = _preset(req.preset)
+        sticker_warnings: list[str] = []
+        if sticker_policy.is_sticker_preset(preset):
+            # 生成期冲突检查：主体档案锁定项为阻断错误；模板条款作用域无法机械
+            # 判断 → 不阻断，作为 run 声明返回给前端提示人工确认。classic 不强制模板，
+            # 有就顺带查一次。
+            with _db() as conn:
+                template = storage.get_subject_template(conn, subject.id)
+            issues = sticker_policy.validate_sticker_conflicts(subject, template)
+            if issues["errors"]:
+                raise HTTPException(400, "\n".join(issues["errors"]))
+            sticker_warnings = issues["warnings"]
         if req.mode == "llm":
-            return _generate_llm_mode(subject, req, preset)
+            return _generate_llm_mode(subject, req, preset, sticker_warnings)
         try:
             result = compose_generate(subject, preset, req)
         except (ValueError, PresetError) as exc:
             raise HTTPException(400, str(exc)) from exc
+        result.warnings = sticker_warnings
         with _db() as conn:
             storage.save_run(conn, result)
         return result
 
-    def _generate_llm_mode(subject: SubjectProfile, req: GenerateRequest, preset) -> GenerateResult:
+    def _generate_llm_mode(
+        subject: SubjectProfile, req: GenerateRequest, preset, sticker_warnings: list[str] | None = None
+    ) -> GenerateResult:
         if not req.subject_id:
             raise HTTPException(400, "LLM 模式需要 subject_id：参考图来自主体档案的图片槽位")
         kinds: list[str] = []
@@ -469,6 +491,13 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             template = storage.get_subject_template(conn, subject.id)
             if not template:
                 raise HTTPException(400, f"主体 {subject.id} 还没有上传「角色全场景通用提示词模板」")
+            if sticker_warnings:
+                result_warnings = list(sticker_warnings)
+            else:
+                issues = sticker_policy.validate_sticker_conflicts(subject, template) if sticker_policy.is_sticker_preset(preset) else {"errors": [], "warnings": []}
+                if issues["errors"]:
+                    raise HTTPException(400, "\n".join(issues["errors"]))
+                result_warnings = issues["warnings"]
             try:
                 result = generate_llm(
                     subject,
@@ -482,6 +511,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                 raise HTTPException(502, f"LLM 改写提示词失败：{exc}") from exc
             except (ValueError, PresetError) as exc:
                 raise HTTPException(400, str(exc)) from exc
+            result.warnings = result_warnings
             storage.save_run(conn, result)
         return result
 
@@ -563,6 +593,38 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         overrides = dict(req.overrides)
         if req.negative_prompt is not None:
             overrides["negative_prompt"] = req.negative_prompt
+
+        if any((item.meta or {}).get("purpose") == "sticker" for item in result.items):
+            # 带字预设（按生成时 meta 快照识别；老记录无快照 → legacy，不走此预检）：
+            # 校验最终生效的负向词；mapping 无注入字段且 workflow 自带禁字默认 → 阻断。
+            negative_entry = next(
+                (e for e in mapping.get("mappings", [])
+                 if isinstance(e, dict) and str(e.get("field")) == "negative_prompt"),
+                None,
+            )
+            default_bans = sticker_policy.workflow_default_negative_bans(workflow, mapping)
+            if negative_entry is None:
+                if default_bans:
+                    raise HTTPException(400, (
+                        "带字预设入队阻断：workflow 自带禁字默认（"
+                        + "、".join(f"「{b}」" for b in default_bans[:4])
+                        + "），而 mapping.json 没有 negative_prompt 注入字段，无法在提交时清空。"
+                        "请给 mapping.json 补上实际负向节点的 negative_prompt 字段，"
+                        "或去掉 workflow 里的禁字默认（不要硬编码节点 id）"
+                    ))
+            else:
+                existing = overrides.get("negative_prompt")
+                effective = existing if existing is not None else ""
+                # 空串 = 明确清空内置禁字默认；None/缺失 = 继承（sticker 场景下按空串处理）
+                bans = sticker_policy.find_negative_bans(effective)
+                if bans:
+                    raise HTTPException(400, (
+                        "负向提示词与带字预设冲突（禁字 token："
+                        + "、".join(f"「{b}」" for b in bans)
+                        + "）。如只想禁止多余文字请写成 no extra text / no unrelated writing，"
+                        "或清空负向输入（继承默认会注入空负向以清掉 workflow 内置禁字默认）"
+                    ))
+                overrides["negative_prompt"] = effective
         if req.reference_kinds:
             # LLM 模式：把选定的主体档案图上传到 ComfyUI input，按序注入 image/image2/…
             # 按选择顺序对应 <image1>..<image4>；未选中的槽位由 mapping on_missing 从 payload 摘除

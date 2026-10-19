@@ -5,6 +5,7 @@ import io
 import json
 import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -219,3 +220,68 @@ def test_workflows_dir_pair_loading(tmp_path):
         comfyui.load_workflow_pair("OnlyWorkflow", workflows_dir=tmp_path)
     with pytest.raises(FileNotFoundError):
         comfyui.load_workflow_pair("NoSuchWorkflow", workflows_dir=tmp_path)
+
+
+# ---------- 负向词三态（显式空串 ≠ 缺失） ----------
+
+def test_submit_negative_prompt_states(silver_witch, monkeypatch) -> None:
+    """继承(None/缺失) → 景别回退；显式值含空串生效；显式值永远优先于回退。"""
+    import httpx as httpx_mod
+
+    from charvar.exporters import comfyui as ce
+
+    from charvar.models import PromptItem
+
+    captured: list[dict] = []
+
+    def handler(request: httpx_mod.Request) -> httpx_mod.Response:
+        if request.url.path == "/prompt":
+            captured.append(json.loads(request.content.decode()))
+            return httpx_mod.Response(200, json={"prompt_id": "p"})
+        return httpx_mod.Response(404)
+
+    class FakeClient:
+        def __init__(self, **kw):
+            self._inner = httpx_mod.Client(transport=httpx_mod.MockTransport(handler))
+
+        def __enter__(self):
+            return self._inner
+
+        def __exit__(self, *args):
+            self._inner.close()
+
+    monkeypatch.setattr(ce, "_httpx_client", lambda **kw: FakeClient(**kw))
+
+    closeup_item = PromptItem(
+        index=0, variant_id="chest_front", prompt="p", master="", variant_text="v",
+        background=None, lighting=None, caption="c", meta={"framing": "chest"},
+    )
+    full_item = PromptItem(
+        index=1, variant_id="full_front", prompt="p", master="", variant_text="v",
+        background=None, lighting=None, caption="c", meta={"framing": "full"},
+    )
+    result = SimpleNamespace(seed=42, subject_id="demo", items=[closeup_item, full_item])
+
+    wf = _workflow()
+    mapping = _mapping()  # negative_prompt 字段 default "blurry, ugly"
+    closeup_default = "full body, lower body, hips, waist, shorts, socks, shoes, legs, feet, knees, thighs, floor, ground"
+
+    def _negative_of(payload: dict, item_index_key: int) -> str:
+        return payload["prompt"]["12"]["inputs"]["text"]
+
+    # 1) overrides 缺失 → 继承：chest → closeup 句；full → 空串
+    ce.submit(result, wf, mapping, wait=False)
+    assert _negative_of(captured[0], 0) == closeup_default
+    assert _negative_of(captured[1], 1) == ""
+
+    # 2) 显式空串 → 明确不用（不被 closeup 回退覆盖）
+    captured.clear()
+    ce.submit(result, wf, mapping, wait=False, overrides={"negative_prompt": ""})
+    assert _negative_of(captured[0], 0) == ""
+    assert _negative_of(captured[1], 1) == ""
+
+    # 3) 显式自定义值（含对 chest 优先于回退）
+    captured.clear()
+    ce.submit(result, wf, mapping, wait=False, overrides={"negative_prompt": "custom neg"})
+    assert _negative_of(captured[0], 0) == "custom neg"
+    assert _negative_of(captured[1], 1) == "custom neg"

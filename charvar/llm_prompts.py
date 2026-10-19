@@ -163,6 +163,15 @@ REFERENCE_TAIL_SENTENCE: str = (
     "camera angle, background, and lighting. One character only, no text."
 )
 
+# required_label（带字表情包）专用尾句：中文文案由程序按原文追加，这里只禁「额外」文字。
+# 不要全局替换旧尾句——旧预设仍逐字使用 REFERENCE_TAIL_SENTENCE。
+REFERENCE_TAIL_SENTENCE_REQUIRED_LABEL: str = (
+    "Take only the character's identity from the reference images and create a new pose, "
+    "camera angle, background, and lighting. One character only. The prescribed Chinese "
+    "lettering is appended verbatim after this description and is the only text allowed "
+    "in the image; render no other text, captions, logos, or watermarks."
+)
+
 
 # ---- structured outputs（response_format: json_schema） ----
 # 只用 type/properties/required/additionalProperties 兼容 strict 模式（OpenAI/OpenRouter
@@ -195,8 +204,12 @@ DRAFT_SCHEMA: dict = {
 }
 
 
-def reference_anchor_sentence(refs: list[dict]) -> str:
-    """按勾选的参考图顺序生成逐图分工锚定句；无参考图 → 空串（改写省略锚定句）。"""
+def reference_anchor_sentence(refs: list[dict], *, text_policy: str = "forbid") -> str:
+    """按勾选的参考图顺序生成逐图分工锚定句；无参考图 → 空串（改写省略锚定句）。
+
+    text_policy 旧默认 forbid → 旧尾句（One character only, no text）；
+    required_label（sticker）→ 尾句换成「唯一允许的文字是程序附加的指定文案」。
+    """
     clauses = []
     for ref in refs or []:
         clause = REFERENCE_ROLE_CLAUSES.get(str(ref.get("kind") or ""))
@@ -205,11 +218,12 @@ def reference_anchor_sentence(refs: list[dict]) -> str:
         clauses.append(clause.format(tag=ref.get("tag") or "<image1>"))
     if not clauses:
         return ""
+    tail = REFERENCE_TAIL_SENTENCE if text_policy != "required_label" else REFERENCE_TAIL_SENTENCE_REQUIRED_LABEL
     body = "; ".join(clauses)
     body = body[0].upper() + body[1:]
     return (
         "Use the same art style, medium, and rendering as the reference images. "
-        f"{body}. {REFERENCE_TAIL_SENTENCE}"
+        f"{body}. {tail}"
     )
 
 
@@ -271,57 +285,102 @@ def build_rewrite_messages(
     refs: list[dict],
     intents: list[dict],
     instructions: str | None = None,
+    *,
+    text_policy: str = "forbid",
+    composition_policy: str = "legacy",
 ) -> list[dict]:
     """批量改写变体提示词的 messages（chat_json → {"variants": [{"id","prompt"}...]}）。
 
     refs: [{"kind": ..., "tag": "<imageN>"}, ...]（tag 按顺序分配）；
-    intents: collect_intent 的输出（id/text/framing/angle/expression/background/lighting/framing_guard）。
+    intents: collect_intent 的输出（id/text/framing/angle/expression/background/lighting/framing_guard；
+    sticker 时另有 purpose/text_policy/composition_policy 与各条 display_text）。
+
+    policy=forbid（默认）：旧行为逐字不变——英文且不含中文，尾句 One character only, no text。
+    policy=required_label（sticker）：LLM 只写英文画面描述（身份/动作/构图/绘字留白），
+    最终中文文案由程序按 display_text 原文附加，因此意图里的 display_text/content 不进 LLM 输入；
+    composition_policy=variant 时不注入全身站姿/固定正面头身同步等通用规范（构图以各条 text 为准）。
     """
+    sticker = text_policy == "required_label"
     ref_lines = "\n".join(
         f"- {r['tag']}：{KIND_LABELS.get(r['kind'], r['kind'])}（{r['kind']}）"
         for r in refs
     )
-    system = (
-        "你是角色图像提示词改写器。输入：角色档案、角色全场景通用提示词模板（权威人设依据）、"
-        "若干参考图说明（每张有 <imageN> 标签与用途），以及一批变体的结构化意图。\n"
-        "为每条变体重写一条完整英文提示词，句子顺序固定：\n"
-        "1) 参考图锚定：逐字采用给定的【参考图分工锚定句】整句，不得改写、增删分句；"
-        "没有参考图时省略该句；该锚定句在本批所有变体中逐字相同；\n"
-        "2) 目标景别：采用意图 text 的景别/构图描述（full=全身 / chest=胸部以上 / head=头部特写）；\n"
-        "3) 躯干/头部/视线：按【视角规范】里对应 angle 的英文语句写身体朝向、头部朝向与视线；"
-        "意图 text 中的朝向与姿态语义必须保留，不得削弱或反转；\n"
-        "4) 目标表情：按意图 expression 写；angle 为 back 时省略表情句；l135/r135 只保留面部部分可见"
-        "的说明，不细写眉眼嘴；\n"
-        "5) 背景/光照：逐字采用给定的 background 与 lighting，不改写。\n"
-        "硬性规则：\n"
-        "- 不在每条提示词里复述模板的整段角色设定，身份细节交给参考图；不混合模板的多个版本"
-        "（正常/精简、多套服装）或双主体分段；\n"
-        "- framing=full 时必须包含【视角规范】中的全身完整入镜句；framing 为 chest/head 时必须纳入"
-        "给定的 framing_guard 句子以阻断下半身；\n"
-        "- 被遮挡的细节按视角自然隐藏，不强行转体/错开肢体展示；不对称细节（痣、挑染、纹样）在"
-        "左右朝向互换时保持贴身位置，不镜像；\n"
-        "- 每条 prompt 为一个英文字符串，不出现中文、【】小节标题或 {{}} 占位符；只输出提示词本身；\n"
-        "- 必须为输入列表中的每个 id 各输出一条，不得增删。\n"
-        '只输出 JSON：{"variants": [{"id": "<variant_id>", "prompt": "<english prompt>"}]}'
-    )
+    if sticker:
+        system = (
+            "你是角色图像提示词改写器（带字表情包预设）。输入：角色档案、角色全场景通用提示词模板（权威人设依据）、"
+            "若干参考图说明（每张有 <imageN> 标签与用途），以及一批变体的结构化意图。\n"
+            "为每条变体重写一条完整英文提示词，句子顺序固定：\n"
+            "1) 参考图锚定：逐字采用给定的【参考图分工锚定句】整句，不得改写、增删分句；"
+            "该锚定句在本批所有变体中逐字相同；\n"
+            "2) 姿态与构图：意图 text 是本条构图的唯一权威（趴倒/探头/跳跃等都照写），"
+            "按它写身体动作与范围、遮挡、视线与绘字留白，不要套用全身站姿、"
+            "正面平视、头身同步或完整入镜等通用构图规范；\n"
+            "3) 目标表情：按意图 expression 写；\n"
+            "4) 背景/光照：逐字采用给定的 background 与 lighting，不改写。\n"
+            "硬性规则：\n"
+            "- 中文绘字由程序统一追加：不要输出任何中文字符，不要描述文字内容，"
+            "不要写绘字指令（如 render the text…），也不要添加 no text / no writing 之类的"
+            "文字禁句（程序负责追加指定文案与对应的禁令）；\n"
+            "- 不在每条提示词里复述模板的整段角色设定，身份细节交给参考图；不混合模板的多个版本"
+            "（正常/精简、多套服装）或双主体分段；\n"
+            "- 保留自然解剖与身份一致性：被遮挡的细节按视角自然隐藏，不强行转体/错开肢体展示；"
+            "不对称细节（痣、挑染、纹样）在左右朝向互换时保持贴身位置，不镜像；\n"
+            "- 每条 prompt 为一个英文字符串，不出现【】小节标题或 {{}} 占位符；只输出提示词本身；\n"
+            "- 必须为输入列表中的每个 id 各输出一条，不得增删。\n"
+            '只输出 JSON：{"variants": [{"id": "<variant_id>", "prompt": "<english prompt>"}]}'
+        )
+    else:
+        system = (
+            "你是角色图像提示词改写器。输入：角色档案、角色全场景通用提示词模板（权威人设依据）、"
+            "若干参考图说明（每张有 <imageN> 标签与用途），以及一批变体的结构化意图。\n"
+            "为每条变体重写一条完整英文提示词，句子顺序固定：\n"
+            "1) 参考图锚定：逐字采用给定的【参考图分工锚定句】整句，不得改写、增删分句；"
+            "没有参考图时省略该句；该锚定句在本批所有变体中逐字相同；\n"
+            "2) 目标景别：采用意图 text 的景别/构图描述（full=全身 / chest=胸部以上 / head=头部特写）；\n"
+            "3) 躯干/头部/视线：按【视角规范】里对应 angle 的英文语句写身体朝向、头部朝向与视线；"
+            "意图 text 中的朝向与姿态语义必须保留，不得削弱或反转；\n"
+            "4) 目标表情：按意图 expression 写；angle 为 back 时省略表情句；l135/r135 只保留面部部分可见"
+            "的说明，不细写眉眼嘴；\n"
+            "5) 背景/光照：逐字采用给定的 background 与 lighting，不改写。\n"
+            "硬性规则：\n"
+            "- 不在每条提示词里复述模板的整段角色设定，身份细节交给参考图；不混合模板的多个版本"
+            "（正常/精简、多套服装）或双主体分段；\n"
+            "- framing=full 时必须包含【视角规范】中的全身完整入镜句；framing 为 chest/head 时必须纳入"
+            "给定的 framing_guard 句子以阻断下半身；\n"
+            "- 被遮挡的细节按视角自然隐藏，不强行转体/错开肢体展示；不对称细节（痣、挑染、纹样）在"
+            "左右朝向互换时保持贴身位置，不镜像；\n"
+            "- 每条 prompt 为一个英文字符串，不出现中文、【】小节标题或 {{}} 占位符；只输出提示词本身；\n"
+            "- 必须为输入列表中的每个 id 各输出一条，不得增删。\n"
+            '只输出 JSON：{"variants": [{"id": "<variant_id>", "prompt": "<english prompt>"}]}'
+        )
     user_parts = [
         f"【角色档案】\n{_profile_payload(subject)}",
         f"【角色全场景通用提示词模板】\n{_clip_template(template_md) or '（未提供模板）'}",
         f"【参考图说明】\n{ref_lines or '（无参考图）'}",
     ]
-    anchor = reference_anchor_sentence(refs)
+    anchor = reference_anchor_sentence(refs, text_policy=text_policy)
     if anchor:
         user_parts.append(f"【参考图分工锚定句】（逐字采用，全批相同）\n{anchor}")
-    norms = _angle_norm_lines(intents)
-    spec_lines = ["- full framing: " + FULL_BODY_CAMERA_SENTENCE]
-    if norms:
-        spec_lines.append(norms)
-    spec_lines.append("- any view: " + OCCLUSION_SENTENCE)
-    user_parts.append("【视角规范】（顺序固定的第 3) 句按对应 angle 采用；不改变朝向语义）\n" + "\n".join(spec_lines))
+    # display_text / lettering 是绘字段来源，不进 LLM 输入（防止改写或复制中文文案）
+    shown = intents if not sticker else [
+        {k: v for k, v in intent.items() if k not in ("display_text", "lettering")}
+        for intent in intents
+    ]
+    if sticker:
+        user_parts.append(
+            "【一致性规范】（构图按各条意图 text；不套用通用站姿规范）\n- any view: " + OCCLUSION_SENTENCE
+        )
+    else:
+        norms = _angle_norm_lines(intents)
+        spec_lines = ["- full framing: " + FULL_BODY_CAMERA_SENTENCE]
+        if norms:
+            spec_lines.append(norms)
+        spec_lines.append("- any view: " + OCCLUSION_SENTENCE)
+        user_parts.append("【视角规范】（顺序固定的第 3) 句按对应 angle 采用；不改变朝向语义）\n" + "\n".join(spec_lines))
     if instructions and instructions.strip():
         user_parts.append(f"【用户附加要求】\n{instructions.strip()}")
     user_parts.append(
-        "【变体列表】\n" + json.dumps(intents, ensure_ascii=False, indent=1)
+        "【变体列表】\n" + json.dumps(shown, ensure_ascii=False, indent=1)
     )
     return [
         {"role": "system", "content": system},

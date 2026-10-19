@@ -1,0 +1,250 @@
+# charvar 聊天表情包：12 张，主体由角色档案和参考图决定。
+# 本文件是待开发的 schema_version=2 预设，需先完成配套开发文档中的适配。
+# 当前未修改版本可能静默丢弃新增字段；不要直接导入旧版本后声称已支持带字表情包。
+# display_text.content 是图片中文字的唯一真源，不是训练 caption。
+# classic 与 llm 都必须由共享编译器追加 lettering block；不要让 LLM 改写中文文案。
+# framing / angle 为 null 是刻意设计：具体姿态与构图以 text 为准，不套用头肩裁切或正面站姿。
+# 单项内联背景/光照，不依赖外部 wildcard；生产顺序稳定，ID 不随文案调整而重命名。
+# 参考图仅 front，一张图：图像编辑时实际标签通常为 <image1>；与 subject.reference_tag 对齐。
+# 平台适配：ComfyUI 保留工作流标签；抖音使用 素材1，视频号使用 #图1，不混用。
+# 字体、排版与身份稳定性需出图验证；本文件不是已经验证成功的图像能力承诺。
+
+schema_version: 2
+name: chat_replies_v1_12
+type: list
+version: 1
+purpose: sticker
+text_policy: required_label
+composition_policy: variant
+preferred_aspect_ratio: '1:1'
+reference_order:
+- front
+master_template: |-
+  {style_lock_sentence}{identity_lock_sentence}{outfit_lock_sentence}{extra}
+  Create one expressive chat sticker featuring the same single character as {reference_tag}. Preserve the character's recognizable identity, species, natural anatomy, hairstyle or fur markings, distinctive features, visible outfit version, art style, medium, and rendering. Use the reference for appearance only; replace its pose, facial expression, crop, background, and lighting with this sticker's instructions. Adapt hand gestures to the character's existing hands or forepaws, without adding human hands to an animal or changing its species. Use one consistent character design throughout the set; do not invent a fixed cat, dog, or human identity.
+  Use a square composition with a large readable character silhouette and generous clean negative space for the prescribed Chinese lettering. The character and lettering together form one balanced sticker, not a character portrait with a repeated bottom caption bar. Each variant's pose, visible body range, gaze and lettering layout take precedence over generic frontal portrait conventions. Keep all intended visible body parts, props, and lettering within the image with a safe outer margin. Small decorative motion strokes are allowed only where requested. Render a single sticker per image, not a grid or contact sheet. No watermark, brand logo, unrelated writing, or extra characters.
+suffix_template: The background is {background}. The lighting is {lighting}.
+backgrounds:
+- a plain clean white background with no scenery, border, or caption panel
+lighting:
+- soft neutral diffused light, evenly revealing the face, pose, and materials without dramatic contrast or overexposure
+caption_background_suffix: false
+lettering:
+  language: zh-Hans
+  style: Playful bold rounded hand-lettered Chinese characters with full readable strokes; preserve the same font
+    personality throughout the set.
+  fill: deep charcoal
+  outline: a thin clean warm-white outline separating the lettering from the subject
+  accent: restrained warm coral accents on the specified emphasis only, where useful; keep the main text charcoal
+  safe_margin: 0.06
+  rules: Render only the exact display_text.content, preserving every Chinese character and punctuation mark. Do not
+    translate, romanize, paraphrase, add quotation marks, or invent extra words. Keep the face unobstructed. Distort
+    the overall rhythm gently without damaging individual character strokes. No fixed caption bar. Lettering remains
+    crisp even if the character has painterly texture.
+caption_tags:
+  expression:
+    smile: smile expression
+    excited: excited expression
+    surprised: surprised expression
+    curious: curious expression
+    confident: confident expression
+    uneasy: uneasy expression
+    unimpressed: unimpressed expression
+    sleepy: sleepy expression
+    skeptical: skeptical expression
+    hopeful: hopeful expression
+    affectionate: affectionate expression
+    joyful: joyful expression
+variants:
+- id: sticker_received
+  text: The character sits or stands upright with a bright attentive expression and raises one hand or forepaw beside
+    the head in a small acknowledgement gesture. Keep the face and the raised limb clear. Leave a clean area beside
+    the raised limb for lettering.
+  framing: null
+  angle: null
+  expression: smile
+  tags:
+  - sticker
+  - received
+  display_text:
+    content: 收到！
+    layout: voice
+    placement: beside the raised hand or forepaw, above shoulder height
+    flow: slightly rising toward the upper right
+    emphasis: ！
+- id: sticker_coming
+  text: The character hurries toward the right side of the image with a slight forward lean, an eager open-eyed smile,
+    and short energetic steps. Show the complete moving silhouette. Leave space above and behind the direction of
+    travel. Use only a few simple motion strokes, not extra characters.
+  framing: null
+  angle: null
+  expression: excited
+  tags:
+  - sticker
+  - coming
+  display_text:
+    content: 来啦来啦
+    layout: voice
+    placement: above the character, trailing slightly behind the rightward movement
+    flow: 'two clearly separated groups: 来啦 and 来啦; the second group slightly larger'
+    emphasis: second 来啦
+- id: sticker_huh
+  text: The character freezes in place, with eyes widened, eyebrows or the brow area raised, and a small open mouth.
+    The body stays compact and still. Leave a large uncluttered area beside the head; the contrast between a still
+    body and a surprised face is the joke.
+  framing: null
+  angle: null
+  expression: surprised
+  tags:
+  - sticker
+  - huh
+  display_text:
+    content: 啊？
+    layout: reaction
+    placement: upper side of the head, separated from the face
+    flow: large and nearly upright, with the question mark slightly higher
+    emphasis: ？
+- id: sticker_let_me_see
+  text: The character peeks upward from the lower edge of the composition, with a curious focused gaze and the head
+    and upper body visible. Hands or forepaws may rest on the lower image edge without a visible frame or signboard.
+    Leave generous blank space above the head.
+  framing: null
+  angle: null
+  expression: curious
+  tags:
+  - sticker
+  - let_me_see
+  display_text:
+    content: 让我看看
+    layout: interaction
+    placement: in the open space above the peeking head
+    flow: a gentle shallow arch, with naturally varied character heights
+    emphasis: 看看
+- id: sticker_count_on_me
+  text: The character adopts a proud confident pose, chest lifted, chin only slightly raised, and one hand or forepaw
+    touching its own chest. The smile is self-assured. Keep the head and torso large enough to read clearly and leave
+    open space above one shoulder.
+  framing: null
+  angle: null
+  expression: confident
+  tags:
+  - sticker
+  - count_on_me
+  display_text:
+    content: 包的
+    layout: reaction
+    placement: above the shoulder, beside rather than across the head
+    flow: two bold solid characters on a very shallow upward arch
+    emphasis: 包
+- id: sticker_ill_try
+  text: The character makes itself smaller with slightly hunched shoulders, a tentative raised hand or forepaw, lifted
+    inner brows or an equivalent worried brow, and a tight uncertain smile. Contrast the small hesitant pose with
+    the confident count_on_me sticker; keep the face visible.
+  framing: null
+  angle: null
+  expression: uneasy
+  tags:
+  - sticker
+  - ill_try
+  display_text:
+    content: 我尽量
+    layout: reaction
+    placement: beside the tentatively raised limb in generous empty space
+    flow: compact and slightly uneven, modest in size but clearly legible
+    emphasis: 尽量
+- id: sticker_dont_wanna_move
+  text: The character lies flattened across the lower middle of the image, body relaxed and spread horizontally, cheek
+    resting on the ground, eyes half open, mouth neutral. Keep the whole silhouette visible. Use an almost invisible
+    soft contact shadow, not a detailed floor or scene.
+  framing: null
+  angle: null
+  expression: unimpressed
+  tags:
+  - sticker
+  - dont_wanna_move
+  display_text:
+    content: 不想动
+    layout: state
+    placement: in the clean lower margin beneath the horizontal body
+    flow: wide, thick and slightly flattened, with a gently sagging baseline
+    emphasis: 不
+- id: sticker_lie_down
+  text: The character lies comfortably on its side hugging one small plain pillow, with heavy eyelids and a relaxed
+    mouth. The pillow is the only prop. Keep the complete relaxed silhouette and leave a clear lettering area above
+    and beside the body.
+  framing: null
+  angle: null
+  expression: sleepy
+  tags:
+  - sticker
+  - lie_down
+  display_text:
+    content: 我先躺会
+    layout: state
+    placement: in the open space above the reclining body
+    flow: two loose lines, 我先 on the first line and 躺会 on the second, with a slight downward settling rhythm
+    emphasis: 躺会
+- id: sticker_youd_better
+  text: The character leans its upper body slightly backward while maintaining a skeptical narrowed gaze toward the
+    viewer, one eyebrow or side of the brow slightly raised, lips closed. Keep the face unobstructed and leave a vertical
+    strip of blank space beside it.
+  framing: null
+  angle: null
+  expression: skeptical
+  tags:
+  - sticker
+  - youd_better
+  display_text:
+    content: 你最好是
+    layout: reaction
+    placement: in the vertical blank area beside the head and upper body
+    flow: one character per line in reading order from top to bottom, slightly staggered but aligned enough to read
+    emphasis: 最好
+- id: sticker_praise_me
+  text: The character proudly presents one small plain five-pointed paper star held carefully in front of its torso,
+    with wide expectant eyes and a small hopeful smile. The star has no writing or symbols inside it. Keep the face
+    visible above the star and leave space around it for lettering.
+  framing: null
+  angle: null
+  expression: hopeful
+  tags:
+  - sticker
+  - praise_me
+  display_text:
+    content: 求夸夸
+    layout: interaction
+    placement: above the paper star but below or beside the face, without covering either
+    flow: a shallow embracing arch around the achievement prop
+    emphasis: 夸夸
+- id: sticker_hug
+  text: The character faces the viewer and opens both arms or forelegs in an inviting hug, leaning forward slightly
+    with a gentle warm smile. Only this one character is visible. Keep the full open-arm silhouette and reserve blank
+    space above the embrace.
+  framing: null
+  angle: null
+  expression: affectionate
+  tags:
+  - sticker
+  - hug
+  display_text:
+    content: 抱一下
+    layout: interaction
+    placement: above the open arms, not across the face
+    flow: slightly spread out horizontally, following the openness of the hug
+    emphasis: 抱
+- id: sticker_yay
+  text: The character jumps upward with an exuberant smile, arms or forelegs lifted outward and legs or hind legs
+    lifted clear of the ground. Show the complete airborne silhouette and a small soft oval shadow below. Reserve
+    space above and to the side of the head for celebratory lettering.
+  framing: null
+  angle: null
+  expression: joyful
+  tags:
+  - sticker
+  - yay
+  display_text:
+    content: 好耶！
+    layout: voice
+    placement: above and beside the jumping figure, clear of the head and raised limbs
+    flow: rising diagonally toward the upper right, with the exclamation mark bouncing a little higher
+    emphasis: ！

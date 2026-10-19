@@ -214,7 +214,21 @@ async function fillPresetOptions(name) {
   $("#bg-options").innerHTML = detail.backgrounds.map((v) => `<option value="${v}"></option>`).join("");
   $("#light-options").innerHTML = detail.lighting.map((v) => `<option value="${v}"></option>`).join("");
   $("#gen-count").placeholder = `留空 = 全部 ${detail.count} 条`;
+  // schema 2 带字预设：显式提示；数量即本预设条数（不再硬编码 30）
+  const stickerHint = $("#gen-sticker-hint");
+  if (stickerHint) {
+    const isSticker = detail.purpose === "sticker";
+    stickerHint.hidden = !isSticker;
+    if (isSticker) {
+      const refNames = (detail.reference_order || ["front"]).map((k) => (SLOT_LABELS[k] || k));
+      stickerHint.querySelector("span.hint").textContent =
+        `含指定中文文字：模型原生出字、须人工验字；出图按预设 ${detail.preferred_aspect_ratio || "1:1"} 方图`
+        + `（推送面板"继承默认"会注入空负向，确保无内置禁字默认）；本预设 ${detail.count} 条，`
+        + `参考图建议${refNames.join("、")}一张。`;
+    }
+  }
   renderRefPickers().catch(() => {}); // 预设切换：按 reference_order 重新默认勾选
+  updateComfyDimensionPreview(); // sticker 预设切换后 auto 预览要跟着变（1:1 快照）
 }
 
 /* ---------- 生成 ---------- */
@@ -246,7 +260,11 @@ $("#btn-generate").addEventListener("click", async () => {
   try {
     setStatus($("#gen-status"), "生成中…");
     state.lastRun = await api("/generate", { method: "POST", body: JSON.stringify(payload) });
-    setStatus($("#gen-status"), `完成：${state.lastRun.items.length} 条（run_id: ${state.lastRun.run_id}）`);
+    let msg = `完成：${state.lastRun.items.length} 条（run_id: ${state.lastRun.run_id}）`;
+    if ((state.lastRun.warnings || []).length) {
+      msg += `　⚠ 生成声明：${state.lastRun.warnings.join("；")}`;
+    }
+    setStatus($("#gen-status"), msg);
     renderResult(state.lastRun);
     Media.setView("images");
     Media.loadImages(state.lastRun.run_id)
@@ -272,12 +290,19 @@ function renderResult(result) {
   for (const item of result.items) {
     const tr = document.createElement("tr");
     const m = item.meta || {};
+    const dt = m.display_text || null; // sticker 快照为 meta 扁平字段（display_text/placement/flow/emphasis）
+    const dtTitle = dt
+      ? `layout: ${dt.layout} · 位置：${dt.placement} · 排布：${dt.flow} · 重音：${dt.emphasis}（点击复制）`
+      : "";
+    const dtCell = dt
+      ? `<td class="copy-cell" data-dt="1" title="${escapeHtml(dtTitle)}"><span class="caption">${escapeHtml(dt.content)}</span></td>`
+      : `<td><span class="caption">—</span></td>`;
     const promptCell = `<td class="copy-cell" title="点击复制">${escapeHtml(item.prompt)}</td>`;
     const capCell = `<td class="copy-cell" title="点击复制" data-caption="1"><span class="caption">${escapeHtml(item.caption)}</span></td>`;
     tr.innerHTML = `<td>${item.index}</td><td>${escapeHtml(item.variant_id)}</td>
       <td>${escapeHtml(m.framing || "-")}</td><td>${escapeHtml(m.angle || "-")}</td><td>${escapeHtml(m.expression || "-")}</td>
       <td>${escapeHtml(item.background || "—")}</td><td>${escapeHtml(item.lighting || "—")}</td>
-      ${promptCell}${capCell}`;
+      ${promptCell}${dtCell}${capCell}`;
     tbody.appendChild(tr);
   }
   // 点击复制
@@ -357,8 +382,11 @@ const TIER_TO_SIDE = { "1k": 1024, "2k": 2048, "4k": 4096 };
 function updateComfyDimensionPreview() {
   const ratio = ASPECT_RATIO;
   const longSide = TIER_TO_SIDE[$("#comfy-resolution").value];
+  const stickerRatio = (currentPresetMeta() || {}).preferred_aspect_ratio;
   if (ratio === "auto") {
-    DIM_PREVIEW.textContent = "智能：全身 2:3，胸像/头像/表情 3:4。以上按长边档位计算。";
+    DIM_PREVIEW.textContent = stickerRatio
+      ? `智能（带字表情包预设）：${stickerRatio} —— 自动采用预设快照比例；手动选择其他比例不被无声覆盖`
+      : "智能：全身 2:3，胸像/头像/表情 3:4。以上按长边档位计算。";
     return;
   }
   const parts = ratio.split(":").map((n) => Number(n.trim()));
@@ -382,6 +410,16 @@ ASPECT_BUTTONS.forEach((btn) => {
   btn.addEventListener("click", () => setAspect(btn.dataset.ratio || "auto"));
 });
 $("#comfy-resolution").addEventListener("change", updateComfyDimensionPreview);
+
+/* 负向词三态：继承默认（input 禁用、请求传 null）/ 自定义（input 可编辑、原样提交，空串 = 明确不用） */
+$("#comfy-negative-mode").addEventListener("change", () => {
+  const custom = $("#comfy-negative-mode").value === "custom";
+  const input = $("#comfy-negative");
+  input.disabled = !custom;
+  input.placeholder = custom
+    ? "自定义负向提示词；留空 = 明确注入空负向"
+    : "继承默认（workflow 内置 / 景别回退）";
+});
 setAspect("auto");
 Media.setView("images");
 
@@ -407,7 +445,8 @@ $("#btn-comfy-queue").addEventListener("click", async () => {
   try {
     const body = {
       workload,
-      negative_prompt: $("#comfy-negative").value.trim() || null,
+      // 负向词三态：继承默认(null) / 自定义(允许空串=明确不用)。不再 trim()||null。
+      negative_prompt: $("#comfy-negative-mode").value === "custom" ? $("#comfy-negative").value.trim() : null,
       wait: $("#comfy-wait").checked,
       comfy_url: $("#comfy-url").value.trim(),
       aspect_ratio: ASPECT_RATIO,

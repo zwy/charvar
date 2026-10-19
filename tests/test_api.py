@@ -356,3 +356,108 @@ def test_video_preset_endpoint_and_render(tmp_path, monkeypatch, client):
     assert b"ftyp" in video_resp.content[:64]
     again = client.post(f"/runs/{run_id}/video", json={"preset": "tiny"})
     assert again.status_code == 200  # 同名重跑覆盖
+
+
+# ---------- 带字表情包（schema 2 sticker）API 链路 ----------
+
+def _sticker_workflows_dir(base: pathlib.Path) -> None:
+    nodes = {
+        "11": {"class_type": "CLIPTextEncode", "inputs": {"text": "x"}},
+        "12": {"class_type": "CLIPTextEncode", "inputs": {"text": "old negative"}},
+        "55": {"class_type": "EmptyLatentImage", "inputs": {"width": 1024, "height": 1024}},
+        "470": {"class_type": "LoadImage", "inputs": {"image": "ref.png"}},
+        "47": {"class_type": "SaveImage", "inputs": {"filename_prefix": "p"}},
+    }
+    base.mkdir(parents=True, exist_ok=True)
+    (base / "StickerWF.json").write_text(json.dumps(nodes), encoding="utf-8")
+    (base / "StickerWF.mapping.json").write_text(
+        json.dumps(
+            {
+                "output_nodes": ["47"],
+                "mappings": [
+                    {"field": "prompt", "node_id": "11", "input_key": "text", "required": True},
+                    {"field": "negative_prompt", "node_id": "12", "input_key": "text"},
+                    {"field": "width", "node_id": "55", "input_key": "width", "default": 1024},
+                    {"field": "height", "node_id": "55", "input_key": "height", "default": 1024},
+                    {"field": "image", "node_id": "470", "input_key": "image", "required": False},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_sticker_api_end_to_end(tmp_path, monkeypatch, client):
+    """classic sticker：meta 快照 → 详情/列表根字段 → 入队 auto=1:1、空负向清内置默认；
+    负向冲突可读报错；显式自定义负向照常注入；手动比例生效；TXT/JSONL 导出保留中文与快照。"""
+    workflows = tmp_path / "sticker_workflows"
+    _sticker_workflows_dir(workflows)
+    monkeypatch.setenv("COMFYUI_WORKFLOWS_DIR", str(workflows))
+    queued = _mock_comfy(monkeypatch, workflows)
+    client.post("/subjects", json={"id": "demo_cat", "name": "Demo Cat"})
+    resp = client.post(
+        "/generate", json={"subject_id": "demo_cat", "preset": "chat_replies_v1_12", "seed": 42}
+    )
+    assert resp.status_code == 200, resp.text
+    result = resp.json()
+    assert len(result["items"]) == 12
+    item = result["items"][0]
+    assert item["meta"]["display_text"]["content"] == "收到！"
+    assert item["meta"]["text_policy"] == "required_label"
+    assert result["warnings"] == []
+
+    detail = client.get("/presets/chat_replies_v1_12").json()
+    assert detail["schema_version"] == 2 and detail["purpose"] == "sticker"
+    assert detail["preferred_aspect_ratio"] == "1:1"
+    assert detail["lettering"]["language"] == "zh-Hans"
+    assert detail["variants"][0]["display_text"]["content"] == "收到！"
+    listing = client.get("/presets").json()
+    entry = next(p for p in listing if p["name"] == "chat_replies_v1_12")
+    assert entry["purpose"] == "sticker" and entry["text_policy"] == "required_label"
+
+    run_id = result["run_id"]
+    payload = client.post(f"/runs/{run_id}/comfyui", json={"workload": "StickerWF"}).json()
+    assert payload["succeeded"] == 12
+    first = queued[0]["prompt"]
+    assert first["55"]["inputs"]["width"] == 1024 and first["55"]["inputs"]["height"] == 1024
+    assert first["12"]["inputs"]["text"] == ""  # 空负向注入清掉 workflow 内置默认 "old negative"
+    assert "收到！" in first["11"]["inputs"]["text"]
+
+    # 手动比例 3:4 → 768×1024（显式优先于快照）
+    run2 = client.post(
+        "/generate", json={"subject_id": "demo_cat", "preset": "chat_replies_v1_12", "seed": 43}
+    ).json()["run_id"]
+    client.post(f"/runs/{run2}/comfyui", json={"workload": "StickerWF", "aspect_ratio": "3:4"})
+    assert queued[12]["prompt"]["55"]["inputs"]["width"] == 768
+
+    # 负向冲突 → 400 可读报错；显式自定义（无禁字 token）→ 注入原值
+    run3 = client.post(
+        "/generate", json={"subject_id": "demo_cat", "preset": "chat_replies_v1_12", "seed": 44}
+    ).json()["run_id"]
+    bad = client.post(f"/runs/{run3}/comfyui", json={"workload": "StickerWF", "negative_prompt": "text, blurry"})
+    assert bad.status_code == 400
+    assert "text" in bad.json()["detail"]
+    ok = client.post(f"/runs/{run3}/comfyui", json={"workload": "StickerWF", "negative_prompt": "blurry"})
+    assert ok.status_code == 200
+    assert queued[25]["prompt"]["12"]["inputs"]["text"] == "blurry"
+
+    # TXT 逐行含中文；JSONL 含 display_text 快照
+    export = client.get(f"/runs/{run_id}/export?format=txt").text
+    assert "收到！" in export
+    export_item = json.loads(client.get(f"/runs/{run_id}/export?format=jsonl").text.splitlines()[0])
+    assert export_item["meta"]["display_text"]["placement"] == "beside the raised hand or forepaw, above shoulder height"
+
+
+def test_sticker_generate_subject_conflict_blocks(tmp_path, monkeypatch, client):
+    """主体档案含明确禁字条款 → 400；模板疑似条款不阻断但随结果返回（warnings）。"""
+    client.post("/subjects", json={"id": "ban_cat", "name": "Ban"})
+    client.put("/subjects/ban_cat", json={"id": "ban_cat", "name": "Ban", "identity_lock": ["no text, clean look"]})
+    resp = client.post("/generate", json={"subject_id": "ban_cat", "preset": "chat_replies_v1_12", "seed": 1})
+    assert resp.status_code == 400
+    assert "no text" in resp.json()["detail"]
+
+    client.post("/subjects", json={"id": "warn_cat", "name": "Warn"})
+    client.put("/subjects/warn_cat/template", json={"template_md": "## 场景：无文字条款（仅局部）"})
+    resp = client.post("/generate", json={"subject_id": "warn_cat", "preset": "chat_replies_v1_12", "seed": 1})
+    assert resp.status_code == 200
+    assert resp.json()["warnings"] and "无文字" in resp.json()["warnings"][0]

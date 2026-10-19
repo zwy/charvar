@@ -66,3 +66,23 @@ def test_payload_injects_width_height() -> None:
     )
     assert payload["11"]["inputs"]["width"] == 2048
     assert payload["11"]["inputs"]["height"] == 1152
+
+
+def test_auto_uses_sticker_meta_preferred_ratio() -> None:
+    """sticker 快照：auto 时读 item.meta.preferred_aspect_ratio（1:1），旧条目照旧按景别。"""
+    item = SimpleNamespace(index=0, variant_id="sticker_received", meta={"preferred_aspect_ratio": "1:1"})
+    assert comfyui.dimensions_for_item("auto", "1k", item) == (1024, 1024)
+    legacy = SimpleNamespace(index=1, variant_id="full_front", meta={"framing": "full"})
+    assert comfyui.dimensions_for_item("auto", "1k", legacy) == (704, 1024)
+    # 显式比例永远优先于快照（dimensions_for 不走 auto 分支）
+    assert comfyui.dimensions_for_item("3:4", "1k", item) == (768, 1024)
+
+
+def test_promptitem_meta_ratio_needs_no_namespace() -> None:
+    """真实 PromptItem（meta=sticker snapshot）同样生效。"""
+    item = PromptItem(
+        index=0, variant_id="sticker_received", prompt="p", master="m", variant_text="v",
+        background=None, lighting=None, caption="c",
+        meta={"preferred_aspect_ratio": "1:1", "purpose": "sticker"},
+    )
+    assert comfyui.dimensions_for_item("auto", "2k", item) == (2048, 2048)

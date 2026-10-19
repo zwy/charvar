@@ -123,7 +123,15 @@ def parse_aspect_ratio(value: str | None) -> tuple[int, int] | None:
 
 
 def _smart_ratio(item: PromptItem) -> str:
-    """按景别自动选比例：全身 2:3，近景/头像/表情 3:4。"""
+    """按景别自动选比例：全身 2:3，近景/头像/表情 3:4。
+
+    带字表情包（schema 2）在生成时把 preferred_aspect_ratio（如 1:1）快照进
+    item.meta——auto 时优先采用快照，不被景别规则覆盖。显式比例由调用方传入，
+    永远优先于快照（在 submit 里判断，不经此处）。
+    """
+    preferred = str((item.meta or {}).get("preferred_aspect_ratio") or "").strip().lower()
+    if preferred and preferred != "auto":
+        return preferred
     framing = str((item.meta or {}).get("framing") or (item.meta or {}).get("tags", [None])[0] or "")
     return "2:3" if framing == "full" else "3:4"
 
@@ -297,13 +305,20 @@ def submit(
             }
             try:
                 item_overrides = dict(overrides or {})
-                if not item_overrides.get("negative_prompt"):
+                # 负向词三态：显式值（含空串）生效；None/缺失才继承默认来源。
+                # （旧实现 if not get 会把显式空串当作缺失——显式空 = 明确不用负向。）
+                if "negative_prompt" not in item_overrides or item_overrides["negative_prompt"] is None:
                     item_overrides["negative_prompt"] = item.meta.get(
                         "negative_prompt",
                         "full body, lower body, hips, waist, shorts, socks, shoes, legs, feet, knees, thighs, floor, ground"
                     ) if item.meta.get("framing") in ("chest", "head") else ""
-                if aspect_ratio:
-                    width, height = dimensions_for_item(aspect_ratio, resolution, item)
+                effective_ratio = aspect_ratio
+                if not effective_ratio:
+                    # sticker 快照：生成时写入 meta.preferred_aspect_ratio（如 1:1）；
+                    # 未指定比例时按快照注入，旧预设 meta 无此键 → 行为不变。
+                    effective_ratio = str((item.meta or {}).get("preferred_aspect_ratio") or "")
+                if effective_ratio:
+                    width, height = dimensions_for_item(effective_ratio, resolution, item)
                     item_overrides["width"] = width
                     item_overrides["height"] = height
                 payload = {

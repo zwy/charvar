@@ -24,6 +24,12 @@ from charvar.composer import (
 from charvar.llm_prompts import REWRITE_SCHEMA, build_rewrite_messages
 from charvar.models import GenerateRequest, GenerateResult, PromptItem, SubjectProfile
 from charvar.preset_loader import ListPreset, MatrixPreset, Preset, PresetError
+from charvar.sticker_policy import (
+    is_sticker_preset,
+    llm_response_bans,
+    render_lettering_block,
+    sticker_meta,
+)
 from charvar.wildcard import expand_inline, rng_for, seed_for
 
 _REWRITE_MAX_TOKENS: int | None = None
@@ -56,18 +62,23 @@ def collect_intent(subject: SubjectProfile, preset: Preset, req: GenerateRequest
         )
         variant_raw = render(spec.text, {"subject_noun": subject.subject_noun, "name": subject.name})
         variant_text, _ = expand_inline(variant_raw, rng)
-        intents.append(
-            {
-                "id": spec.id,
-                "text": variant_text,
-                "framing": spec.framing,
-                "angle": spec.angle,
-                "expression": spec.expression,
-                "background": background,
-                "lighting": lighting,
-                "framing_guard": closeup_framing_guard(spec.framing) or None,
-            }
-        )
+        intent = {
+            "id": spec.id,
+            "text": variant_text,
+            "framing": spec.framing,
+            "angle": spec.angle,
+            "expression": spec.expression,
+            "background": background,
+            "lighting": lighting,
+            "framing_guard": closeup_framing_guard(spec.framing) or None,
+        }
+        if is_sticker_preset(preset):
+            # 只带策略标签（英文）进 LLM 输入；display_text/lettering 由程序按原文附加，
+            # 不进 intents（LLM 不翻译、不改写、不复制中文文案）
+            intent["purpose"] = preset.purpose
+            intent["text_policy"] = preset.text_policy
+            intent["composition_policy"] = preset.composition_policy
+        intents.append(intent)
     return intents
 
 
@@ -103,9 +114,20 @@ def _rewrite_once(
     chunk: list[dict],
     rewritten: dict[str, str],
     config: dict | None,
+    *,
+    text_policy: str = "forbid",
+    composition_policy: str = "legacy",
+    rejected: dict[str, list[str]] | None = None,
 ) -> None:
-    """改写一批 intent 并把 {id: prompt} 并入 rewritten；截断时先抢救半截 JSON。"""
-    messages = build_rewrite_messages(subject, template_md, refs, chunk, instructions)
+    """改写一批 intent 并把 {id: prompt} 并入 rewritten；截断时先抢救半截 JSON。
+
+    required_label（sticker）：LLM 输出若自带绘字相关内容（禁字句/中文/绘字指令），
+    该条不被收录并记入 rejected → 视同缺失交补调重试；不能全局替换后蒙混过关。
+    """
+    messages = build_rewrite_messages(
+        subject, template_md, refs, chunk, instructions,
+        text_policy=text_policy, composition_policy=composition_policy,
+    )
     try:
         data = llm.chat_json(
             messages,
@@ -125,8 +147,15 @@ def _rewrite_once(
             continue
         variant_id = str(entry.get("id") or "")
         prompt = str(entry.get("prompt") or "").strip()
-        if variant_id and prompt:
-            rewritten[variant_id] = prompt
+        if not (variant_id and prompt):
+            continue
+        if text_policy == "required_label":
+            bans = llm_response_bans(prompt)
+            if bans:
+                if rejected is not None:
+                    rejected[variant_id] = bans
+                continue
+        rewritten[variant_id] = prompt
 
 
 def rewrite_prompts(
@@ -138,12 +167,15 @@ def rewrite_prompts(
     *,
     config: dict | None = None,
     max_per_call: int = 30,
+    text_policy: str = "forbid",
+    composition_policy: str = "legacy",
 ) -> dict[str, str]:
     """一次（或分批）chat_json 调用，返回 {variant_id: prompt}。
 
     请求 json_schema（strict）结构化输出，供应商不支持时 chat() 自动降级
     json_object；max_tokens 不设上限，避免 30 条全批被截断。
-    单批有缺失/截断时，用缺失的 id 缩批补调一次；仍缺失 → LLMError。
+    单批有缺失/截断/被拒（sticker 禁字句）时，用缺失的 id 缩批补调一次；
+    仍缺失 → LLMError（附被拒原因，可定位）。
     校验：每个 intent 的 id 都必须出现且 prompt 非空。
     ref_kinds 按顺序分配 <image1>、<image2>… 标签。
     """
@@ -151,18 +183,29 @@ def rewrite_prompts(
         raise llm.LLMError("没有可改写的变体")
     refs = [{"kind": kind, "tag": f"<image{i + 1}>"} for i, kind in enumerate(ref_kinds)]
     rewritten: dict[str, str] = {}
+    rejected: dict[str, list[str]] = {}
     chunks = [intents[i : i + max_per_call] for i in range(0, len(intents), max_per_call)]
     for chunk in chunks:
-        _rewrite_once(subject, template_md, refs, instructions, chunk, rewritten, config)
+        common = {
+            "text_policy": text_policy,
+            "composition_policy": composition_policy,
+            "rejected": rejected,
+        }
+        _rewrite_once(subject, template_md, refs, instructions, chunk, rewritten, config, **common)
         missing = [item for item in chunk if not rewritten.get(item["id"])]
         if not missing:
             continue
         # 缺条补调一次：只带缺失条目再调用（批次更小，输出更短，命中率高）
-        _rewrite_once(subject, template_md, refs, instructions, missing, rewritten, config)
+        _rewrite_once(subject, template_md, refs, instructions, missing, rewritten, config, **common)
         still_missing = [item["id"] for item in missing if not rewritten.get(item["id"])]
         if still_missing:
+            detail = ""
+            if rejected:
+                detail = "；被拒原因：" + "；".join(
+                    f"{vid}（{('、'.join(bans))[:80]}）" for vid, bans in sorted(rejected.items()) if vid in still_missing
+                )
             raise llm.LLMError(
-                f"LLM 输出缺少变体提示词：{still_missing[:5]}（共缺 {len(still_missing)} 条）"
+                f"LLM 输出缺少变体提示词：{still_missing[:5]}（共缺 {len(still_missing)} 条）{detail}"
             )
     return rewritten
 
@@ -176,7 +219,12 @@ def generate_llm(
     *,
     config: dict | None = None,
 ) -> GenerateResult:
-    """LLM 模式入口：改写 30 条提示词并组装标准 GenerateResult（落 runs 表）。"""
+    """LLM 模式入口：改写提示词并组装标准 GenerateResult（落 runs 表）。
+
+    sticker（required_label）：改写结果先 normalize，再由共享编译器按 spec 的
+    display_text 原文追加唯一 lettering block（与 classic 相同，中文不改写）。
+    """
+    sticker = is_sticker_preset(preset)
     intents = collect_intent(subject, preset, req)
     rewritten = rewrite_prompts(
         subject,
@@ -185,11 +233,22 @@ def generate_llm(
         reference_kinds,
         req.llm_instructions,
         config=config,
+        text_policy=getattr(preset, "text_policy", "forbid"),
+        composition_policy=getattr(preset, "composition_policy", "legacy"),
     )
     items: list[PromptItem] = []
     for i, intent in enumerate(intents):
         spec = _spec_by_id(preset, intent["id"])
         prompt = normalize(rewritten[intent["id"]])
+        if sticker:
+            prompt = req.separator.join(
+                part
+                for part in (
+                    prompt,
+                    render_lettering_block(spec.display_text, preset.lettering),
+                )
+                if part.strip()
+            )
         caption = build_caption(
             subject, spec, intent["background"], intent["lighting"], preset.caption_tags,
             background_suffix=preset.caption_background_suffix,
@@ -215,6 +274,7 @@ def generate_llm(
                     "preset_type": preset.type,
                     "mode": "llm",
                     "reference_kinds": list(reference_kinds),
+                    **sticker_meta(preset, spec),
                 },
             )
         )

@@ -24,6 +24,7 @@ from charvar.models import (
     VariantSpec,
 )
 from charvar.preset_loader import ListPreset, MatrixPreset, Preset, PresetError
+from charvar.sticker_policy import is_sticker_preset, render_lettering_block, sticker_meta
 from charvar.wildcard import expand_inline, rng_for, seed_for
 
 logger = logging.getLogger(__name__)
@@ -222,6 +223,7 @@ def generate(subject: SubjectProfile, preset: Preset, req: GenerateRequest) -> G
         raise PresetError(f"预设 {preset.name} 没有任何变体")
     specs = _apply_sampling(specs, req)
 
+    sticker_mode = is_sticker_preset(preset)
     master_raw = render(preset.master_template, subject_mapping(subject))
     items: list[PromptItem] = []
 
@@ -243,11 +245,24 @@ def generate(subject: SubjectProfile, preset: Preset, req: GenerateRequest) -> G
             suffix = expand_inline(suffix, rng)[0]
 
         framing_guard = closeup_framing_guard(spec.framing)
-        prompt = normalize(
-            req.separator.join(
-                part for part in (master, variant_text, framing_guard, suffix) if part.strip()
+        if sticker_mode:
+            # sticker 新路径：主模板/动作先 normalize，再拼共享 lettering block 与 suffix；
+            # lettering block 不再过 normalize（保持 content 逐字原样）。
+            core = normalize(
+                req.separator.join(
+                    part for part in (master, variant_text, framing_guard) if part.strip()
+                )
             )
-        )
+            tail = [render_lettering_block(spec.display_text, preset.lettering)]
+            if suffix.strip():
+                tail.append(suffix.strip())
+            prompt = req.separator.join(part for part in (core, *tail) if part.strip())
+        else:
+            prompt = normalize(
+                req.separator.join(
+                    part for part in (master, variant_text, framing_guard, suffix) if part.strip()
+                )
+            )
         caption = build_caption(
             subject, spec, background, lighting, preset.caption_tags,
             background_suffix=preset.caption_background_suffix,
@@ -272,6 +287,7 @@ def generate(subject: SubjectProfile, preset: Preset, req: GenerateRequest) -> G
                     "sampling": req.sampling,
                     "preset_type": preset.type,
                     "rear_angle": spec.angle in REAR_ANGLES if spec.angle else False,
+                    **sticker_meta(preset, spec),
                 },
             )
         )

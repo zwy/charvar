@@ -20,6 +20,7 @@
 <label>固定背景（留空随机）<input type="text" id="gen-fixed-bg" list="bg-options"><datalist id="bg-options"></datalist></label>
 <label>固定光照（留空随机）<input type="text" id="gen-fixed-light" list="light-options"><datalist id="light-options"></datalist></label>
 </div>
+<div id="gen-sticker-hint" class="comfy-panel" hidden><span class="hint">含指定中文文字：模型原生出字、须人工验字；出图按预设 1:1 方图（推送面板“继承默认”会注入空负向，确保无内置禁字默认）；参考图建议「全身正面」一张。</span></div>
 <div id="gen-refs-panel" class="comfy-panel" hidden>
 <div class="form-field"><div class="field-label">参考图（最多 4 张，来自所选主体的档案图片）</div><div id="gen-refs" class="ref-grid"></div><span class="hint">灰掉的类型还没有就绪的图片：去「主体档案」生成或上传。</span></div>
 <span id="gen-refs-hint" class="hint"></span>
@@ -52,7 +53,9 @@
 <label>分辨率档位<select id="comfy-resolution">
 <option value="1k">1K（长边 1024）</option><option value="2k">2K（长边 2048）</option><option value="4k">4K（长边 4096）</option></select></label>
 <span id="comfy-dim-preview" class="hint"></span>
-<label class="span2">负向提示词（可选，mapping 需配 field=negative_prompt）<input type="text" id="comfy-negative"></label>
+<label class="span2">负向提示词（mapping 需配 field=negative_prompt）
+<select id="comfy-negative-mode"><option value="inherit">继承默认（workflow 内置 / 景别回退）</option><option value="custom">自定义（可清空 = 明确不用负向）</option></select>
+<input type="text" id="comfy-negative" placeholder="自定义负向提示词；留空 = 明确注入空负向" disabled></label>
 <label class="check"><input type="checkbox" id="comfy-wait"> 等待完成并记录输出文件名</label>
 </div><div class="actions"><button id="btn-comfy-status">检查连接</button><button id="btn-comfy-queue" class="primary">逐条入队</button><span class="hint">workflow 必须是 ComfyUI「导出 (API)」格式 + 同名 mapping.json。</span></div><pre id="comfy-result" class="log"></pre></div>
 <div class="media-toolbar">
@@ -64,7 +67,7 @@
       <span id="image-status" class="status"></span>
     </div>
     <div id="result-images" class="image-grid"></div>
-<div class="table-wrap" id="result-table-wrap"><table id="result-table"><thead><tr><th>#</th><th>变体</th><th>景别</th><th>角度</th><th>表情</th><th>背景</th><th>光照</th><th>最终提示词</th><th>caption</th></tr></thead><tbody></tbody></table></div></div></section>
+<div class="table-wrap" id="result-table-wrap"><table id="result-table"><thead><tr><th>#</th><th>变体</th><th>景别</th><th>角度</th><th>表情</th><th>背景</th><th>光照</th><th>最终提示词</th><th>图片文案</th><th>caption</th></tr></thead><tbody></tbody></table></div></div></section>
 <section id="tab-subjects" class="tab-page"><div class="card"><h2>主体档案</h2><ul id="subject-list" class="subject-list"></ul><div class="actions"><button id="btn-subject-new">+ 新建</button></div></div><div class="card"><h2 id="subject-form-title">档案详情</h2><div class="form-grid">
 <label>ID（slug）<input type="text" id="s-id" placeholder="silver_witch"></label>
 <label>显示名<input type="text" id="s-name"></label>

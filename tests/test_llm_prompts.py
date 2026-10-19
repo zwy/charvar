@@ -105,3 +105,43 @@ def test_rewrite_messages_carry_role_anchor():
     system = msgs[0]["content"]
     # 锚定句改为逐字采用生成的分工句（旧例句已移除）
     assert "逐字采用给定的" in system and "参考图分工锚定句" in system
+
+
+# ---------- policy 分支（旧默认逐字不变；sticker 不套通用构图规范） ----------
+
+def test_rewrite_messages_policy_branches(silver_witch):
+    from charvar.llm_prompts import (
+        ANGLE_VIEW_SENTENCES,
+        FULL_BODY_CAMERA_SENTENCE,
+        build_rewrite_messages,
+    )
+
+    legacy_intent = {"id": "full_front", "text": "front facing full body", "framing": "full",
+                     "angle": "front", "expression": None, "background": "bg",
+                     "lighting": "light", "framing_guard": None}
+    legacy = build_rewrite_messages(silver_witch, "# 模板", [{"kind": "front", "tag": "<image1>"}], [legacy_intent])
+    legacy_user = legacy[1]["content"]
+    # 旧系统词与规范注入逐字保持：全身句 + 视角规范 + 遮挡 + no text 尾句
+    assert "One character only, no text." in legacy_user
+    assert FULL_BODY_CAMERA_SENTENCE in legacy_user
+    assert ANGLE_VIEW_SENTENCES["front"] in legacy_user
+    assert "不出现中文" in legacy[0]["content"]
+
+    sticker_intent = {"id": "sticker_received", "text": "raises one forepaw beside the head",
+                      "framing": None, "angle": None, "expression": "smile",
+                      "background": "white", "lighting": "soft", "framing_guard": None,
+                      "purpose": "sticker", "text_policy": "required_label",
+                      "composition_policy": "variant"}
+    sticker = build_rewrite_messages(silver_witch, "# 模板",
+                                     [{"kind": "front", "tag": "<image1>"}], [sticker_intent],
+                                     text_policy="required_label", composition_policy="variant")
+    sticker_user = sticker[1]["content"]
+    # variant 构图：不注入全身句与角度规范；保留身份一致性（遮挡/镜像）条款
+    assert FULL_BODY_CAMERA_SENTENCE not in sticker_user
+    assert ANGLE_VIEW_SENTENCES["front"] not in sticker_user
+    assert "asymmetric details" in sticker_user or OCCLUSION_SENTENCE in sticker_user
+    # 锚定句换成 required_label 版；中文由程序附加的规则在 system 里
+    assert "prescribed Chinese lettering" in sticker_user
+    assert "One character only, no text." not in sticker_user
+    assert "不要输出任何中文字符" in sticker[0]["content"]
+    assert "no text / no writing" in sticker[0]["content"]
