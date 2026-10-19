@@ -108,6 +108,14 @@ async function renderRefPickers() {
         el.classList.add("active");
       }
     });
+    const img = el.querySelector("img");
+    if (img) {
+      img.title = "预览大图（卡片其余区域为选择/取消）";
+      img.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        Media.showImageModal(slot.original_url, slot.label);
+      });
+    }
     box.appendChild(el);
   }
 }
@@ -568,6 +576,16 @@ function renderSubjectImageSlots() {
         </div>
         <span class="slot-status status"></span>
       </div>`;
+    const thumbImg = card.querySelector(".slot-thumb img");
+    if (thumbImg) {
+      thumbImg.title = "点击预览大图";
+      thumbImg.addEventListener("click", () =>
+        Media.showImageModal(slot.original_url, `${SLOT_LABELS[slot.kind] || slot.kind} · ${slotStatusText(slot)}`));
+      // 横比例图占两列，避免右侧内容被挤窄
+      const fitCard = () => card.classList.toggle("slot-wide", thumbImg.naturalWidth / thumbImg.naturalHeight >= 1);
+      if (thumbImg.complete && thumbImg.naturalWidth) fitCard();
+      else thumbImg.addEventListener("load", fitCard);
+    }
     wrap.appendChild(card);
   }
 }
