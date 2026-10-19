@@ -10,6 +10,9 @@ suffix_template: The background is {background}. The lighting is {lighting}.
 backgrounds_ref: wildcards/backgrounds_v2.yaml
 lighting_ref: wildcards/lighting_v2.yaml
 caption_background_suffix: false
+# 参考图顺序与原工作流一致：<image1>=Headshot（脸/发型/头饰）、<image2>=Front（服装/身体）、
+# <image3>=Side（朝向）、<image4>=Behind（背部）——前端按此默认勾选并提示
+reference_order: [headshot, front, side, behind]
 caption_tags:
   angle:
     high: high-angle view

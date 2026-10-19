@@ -6,7 +6,7 @@
 <section id="tab-gen" class="tab-page active"><div class="card"><h2>生成参数</h2>
 <div class="form-field gen-mode-row"><div class="field-label">生成模式</div><div class="chip-row">
 <button id="gen-mode-classic" class="chip active" data-mode="classic" type="button">经典模板</button>
-<button id="gen-mode-llm" class="chip" data-mode="llm" type="button">LLM 优化（参考图）</button>
+<button id="gen-mode-llm" class="chip" data-mode="llm" type="button">LLM 优化</button>
 </div></div>
 <div class="form-grid">
 <label>主体档案<select id="gen-subject"></select></label>
@@ -20,8 +20,11 @@
 <label>固定背景（留空随机）<input type="text" id="gen-fixed-bg" list="bg-options"><datalist id="bg-options"></datalist></label>
 <label>固定光照（留空随机）<input type="text" id="gen-fixed-light" list="light-options"><datalist id="light-options"></datalist></label>
 </div>
-<div id="gen-llm-panel" class="comfy-panel" hidden>
+<div id="gen-refs-panel" class="comfy-panel" hidden>
 <div class="form-field"><div class="field-label">参考图（最多 4 张，来自所选主体的档案图片）</div><div id="gen-refs" class="ref-grid"></div><span class="hint">灰掉的类型还没有就绪的图片：去「主体档案」生成或上传。</span></div>
+<span id="gen-refs-hint" class="hint"></span>
+</div>
+<div id="gen-llm-panel" class="comfy-panel" hidden>
 <label class="span2">附加要求（可选，拼进 LLM 改写指令）<input type="text" id="gen-llm-instructions" placeholder="例如：保持浅景深，避免出现文字"></label>
 <span class="hint">LLM 模式要求：主体已上传「通用提示词模板」，且所选参考图已就绪；出图走图片编辑 workflow。</span>
 </div>

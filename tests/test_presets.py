@@ -151,6 +151,9 @@ def test_q21_v2_30_structured_fields_and_caption_settings():
     assert preset.caption_tags["expression"]["shocked"] == "shocked expression"
     assert preset.caption_tags["expression"]["laugh"] == "laughing"
 
+    # 参考图顺序声明：<image1>=headshot … <image4>=behind（推送 ComfyUI 时按此勾选/上传）
+    assert preset.reference_order == ["headshot", "front", "side", "behind"]
+
 
 def test_q21_v2_30_wildcards():
     preset = load("q21_v2_30")

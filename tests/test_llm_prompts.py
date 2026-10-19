@@ -67,4 +67,41 @@ def test_rewrite_system_rules():
     assert "逐字相同" in system
     assert "angle 为 back 时省略表情句" in system
     assert "framing_guard" in system
-    assert "<image1>" in system
+    assert "参考图分工锚定句" in system
+
+def test_reference_anchor_sentence_per_kind():
+    from charvar.llm_prompts import REFERENCE_TAIL_SENTENCE, reference_anchor_sentence
+
+    refs = [
+        {"kind": "headshot", "tag": "<image1>"},
+        {"kind": "front", "tag": "<image2>"},
+        {"kind": "side", "tag": "<image3>"},
+        {"kind": "behind", "tag": "<image4>"},
+    ]
+    s = reference_anchor_sentence(refs)
+    # 逐图分工与 q21_v2_30 的映射一致：脸→<image1>、服装→<image2>、朝向→<image3>、背面→<image4>
+    assert "Copy the face" in s and "appear in <image1>" in s
+    assert "complete outfit, and footwear" in s and "<image2>" in s
+    assert "true side profile" in s and "<image3>" in s
+    assert "back of the head" in s and "<image4>" in s
+    assert REFERENCE_TAIL_SENTENCE in s
+
+    # 单张：只有该类型的分工条款；未提供的 tag 不悬空
+    s1 = reference_anchor_sentence([{"kind": "front", "tag": "<image1>"}])
+    assert "from <image1>" in s1 and "<image2>" not in s1
+    assert reference_anchor_sentence([]) == ""
+
+
+def test_rewrite_messages_carry_role_anchor():
+    from charvar.llm_prompts import reference_anchor_sentence
+
+    refs = [{"kind": "headshot", "tag": "<image1>"}, {"kind": "front", "tag": "<image2>"}]
+    msgs = build_rewrite_messages(
+        _subject(), "# 模板", refs, [{"id": "full_front", "angle": "front", "framing": "full"}]
+    )
+    user = msgs[1]["content"]
+    assert "【参考图分工锚定句】" in user
+    assert reference_anchor_sentence(refs) in user
+    system = msgs[0]["content"]
+    # 锚定句改为逐字采用生成的分工句（旧例句已移除）
+    assert "逐字采用给定的" in system and "参考图分工锚定句" in system

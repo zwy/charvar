@@ -137,6 +137,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             "lighting": preset.lighting,
             "caption_tags": preset.caption_tags,
             "caption_background_suffix": preset.caption_background_suffix,
+            "reference_order": preset.reference_order,
         }
         if isinstance(preset, ListPreset):
             detail["variants"] = [v.model_dump() for v in preset.variants]

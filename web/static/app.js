@@ -55,7 +55,7 @@ $$(".tab").forEach((btn) => {
     $$(".tab-page").forEach((p) => p.classList.toggle("active", p.id === `tab-${btn.dataset.tab}`));
     if (btn.dataset.tab === "runs") loadRuns();
     if (btn.dataset.tab === "settings") loadSettings();
-    if (btn.dataset.tab === "gen" && state.genMode === "llm") renderRefPickers();
+    if (btn.dataset.tab === "gen") renderRefPickers();
   });
 });
 
@@ -65,7 +65,7 @@ function setGenMode(mode) {
   $$("#gen-mode-classic, #gen-mode-llm").forEach((btn) =>
     btn.classList.toggle("active", btn.dataset.mode === mode));
   $("#gen-llm-panel").hidden = mode !== "llm";
-  if (mode === "llm") renderRefPickers();
+  renderRefPickers(); // 参考图网格两模式共用（经典模式用于推送 ComfyUI 时上传参考图）
   updateComfyWorkflowHint(); // 面板开着时同步提示（参考图数随模式变化）
 }
 
@@ -77,6 +77,8 @@ function selectedRefKinds() {
 }
 
 async function renderRefPickers() {
+  const panel = $("#gen-refs-panel");
+  if (panel) panel.hidden = false; // 参考图面板经典/LLM 两模式共用
   const sid = $("#gen-subject").value;
   const box = $("#gen-refs");
   if (!sid) {
@@ -109,6 +111,7 @@ async function renderRefPickers() {
         el.classList.add("active");
       }
       updateComfyWorkflowHint();
+      updateRefsHint();
     });
     const img = el.querySelector("img");
     if (img) {
@@ -120,6 +123,45 @@ async function renderRefPickers() {
     }
     box.appendChild(el);
   }
+  // 预设声明了 reference_order 时默认按顺序勾上就绪槽位（用户可随时调整）
+  const order = (currentPresetMeta() || {}).reference_order || [];
+  if (order.length) {
+    for (const el of box.querySelectorAll(".ref-pick")) {
+      if (!el.disabled && order.includes(el.dataset.kind)) el.classList.add("active");
+    }
+  }
+  updateRefsHint();
+  updateComfyWorkflowHint();
+}
+
+/* 预设元信息（/presets 列表项，含 reference_order） */
+function currentPresetMeta() {
+  const name =$("#gen-preset").value;
+  return (state.presets || []).find((p) => p.name === name) || null;
+}
+
+/* 参考图面板提示：模式用途 + 与预设 reference_order 对齐状态 */
+function updateRefsHint() {
+  const hint = $("#gen-refs-hint");
+  if (!hint) return;
+  const presetMeta = currentPresetMeta();
+  const order = (presetMeta && presetMeta.reference_order) || [];
+  const parts = [];
+  if (state.genMode === "llm") {
+    parts.push("LLM 模式：已选参考图按勾选顺序作为 <image1>…<imageN> 注入提示词与出图。");
+  } else {
+    parts.push("经典模式：参考图在「推送 ComfyUI」时按勾选顺序作为 <image1>…<imageN> 上传（图片编辑 workflow）；选空则走文生图 workflow。");
+  }
+  if (order.length) {
+    const selected = selectedRefKinds();
+    const aligned = order.length === selected.length && order.every((k, i) => selected.includes(k));
+    parts.push(
+      aligned
+        ? `当前预设文本按 ${order.length} 张参考图描述（${order.join(" → ")}），已对齐。`
+        : `当前预设文本按 ${order.length} 张参考图描述（建议勾选：${order.join(" → ")}）`,
+    );
+  }
+  hint.textContent = parts.join(" ");
 }
 
 /* ---------- 初始加载 ---------- */
@@ -129,8 +171,9 @@ async function init() {
     $("#gen-subject").value = state.subjects[0].id;
   }
   $("#gen-subject").addEventListener("change", () => {
-    if (state.genMode === "llm") renderRefPickers();
+    renderRefPickers(); // 主体切换影响参考图网格（两模式都需要）
   });
+  renderRefPickers().catch(() => {}); // 首次进入：立即渲染参考图面板
 }
 
 async function loadSubjects() {
@@ -171,6 +214,7 @@ async function fillPresetOptions(name) {
   $("#bg-options").innerHTML = detail.backgrounds.map((v) => `<option value="${v}"></option>`).join("");
   $("#light-options").innerHTML = detail.lighting.map((v) => `<option value="${v}"></option>`).join("");
   $("#gen-count").placeholder = `留空 = 全部 ${detail.count} 条`;
+  renderRefPickers().catch(() => {}); // 预设切换：按 reference_order 重新默认勾选
 }
 
 /* ---------- 生成 ---------- */
@@ -278,7 +322,7 @@ $("#btn-toggle-comfy").addEventListener("click", async () => {
 /* workflow 自动选择：LLM 模式勾了参考图 → 图片编辑 workflow；否则文生图（同主体图逻辑）。 */
 function autoWorkload() {
   const s = state.comfySettings || {};
-  const refs = state.genMode === "llm" ? selectedRefKinds().length : 0;
+  const refs = selectedRefKinds().length; // 两模式一致：有参考图走编辑 workflow
   return refs ? s.comfy_edit_workflow : s.comfy_t2i_workflow;
 }
 
@@ -355,6 +399,8 @@ $("#btn-comfy-status").addEventListener("click", async () => {
 
 $("#btn-comfy-queue").addEventListener("click", async () => {
   if (!state.lastRun) return;
+  const run = state.lastRun.run_id;
+  const refs = selectedRefKinds(); // 经典/LLM 一致：勾了参考图就按序上传（<image1>..<imageN>）
   const workload = autoWorkload();
   if (!workload) return setStatus($("#comfy-result"), "未配置 workflow：先在「设置」页选好（文生图 / 图片编辑）workflow", true);
   setStatus($("#comfy-result"), "提交中…");
@@ -367,8 +413,8 @@ $("#btn-comfy-queue").addEventListener("click", async () => {
       aspect_ratio: ASPECT_RATIO,
       resolution: $("#comfy-resolution").value,
     };
-    if (state.genMode === "llm") body.reference_kinds = selectedRefKinds();
-    const out = await api(`/runs/${encodeURIComponent(state.lastRun.run_id)}/comfyui`, {
+    if (refs.length) body.reference_kinds = refs;
+    const out = await api(`/runs/${run}/comfyui`, {
       method: "POST",
       body: JSON.stringify(body),
     });

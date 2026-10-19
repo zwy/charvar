@@ -133,6 +133,55 @@ _KIND_BRIEFS: dict[str, str] = {
 }
 
 
+# ---- 参考图分工锚定句（逐图分工，语义对齐新版 Q21 工作流） ----
+# <imageN> 按勾选顺序各管一摊：headshot=脸/发型/头饰、front=体型/服装/鞋、
+# side=侧面朝向与贴身细节、behind=后脑/背部、character_sheet=整套设定图。
+# 句子由勾选组合动态生成：选几张生成几条分工，未选的类型不会悬空。
+REFERENCE_ROLE_CLAUSES: dict[str, str] = {
+    "character_sheet": (
+        "keep the whole identity, outfit version, and art style exactly as shown in {tag}"
+    ),
+    "headshot": (
+        "copy the face, feature proportions, hair, skin tone, and headwear exactly as "
+        "they appear in {tag}"
+    ),
+    "front": (
+        "copy the body shape, proportions, complete outfit, and footwear, including "
+        "their colors, materials, and details, from {tag}"
+    ),
+    "side": (
+        "use {tag} as the direction reference for the true side profile and for "
+        "side-of-body details such as hair flow and one-sided markings"
+    ),
+    "behind": (
+        "use {tag} for the back of the head and the rear outfit details"
+    ),
+}
+
+REFERENCE_TAIL_SENTENCE: str = (
+    "Take only the character's identity from the reference images and create a new pose, "
+    "camera angle, background, and lighting. One character only, no text."
+)
+
+
+def reference_anchor_sentence(refs: list[dict]) -> str:
+    """按勾选的参考图顺序生成逐图分工锚定句；无参考图 → 空串（改写省略锚定句）。"""
+    clauses = []
+    for ref in refs or []:
+        clause = REFERENCE_ROLE_CLAUSES.get(str(ref.get("kind") or ""))
+        if not clause:
+            continue
+        clauses.append(clause.format(tag=ref.get("tag") or "<image1>"))
+    if not clauses:
+        return ""
+    body = "; ".join(clauses)
+    body = body[0].upper() + body[1:]
+    return (
+        "Use the same art style, medium, and rendering as the reference images. "
+        f"{body}. {REFERENCE_TAIL_SENTENCE}"
+    )
+
+
 def _clip_template(template_md: str) -> str:
     text = (template_md or "").strip()
     if len(text) > _TEMPLATE_MAX_CHARS:
@@ -198,19 +247,15 @@ def build_rewrite_messages(
     intents: collect_intent 的输出（id/text/framing/angle/expression/background/lighting/framing_guard）。
     """
     ref_lines = "\n".join(
-        f"- {r['tag']}：{KIND_LABELS.get(r['kind'], r['kind'])}（{r['kind']}），是角色身份、服饰与画风的权威依据"
+        f"- {r['tag']}：{KIND_LABELS.get(r['kind'], r['kind'])}（{r['kind']}）"
         for r in refs
     )
     system = (
         "你是角色图像提示词改写器。输入：角色档案、角色全场景通用提示词模板（权威人设依据）、"
         "若干参考图说明（每张有 <imageN> 标签与用途），以及一批变体的结构化意图。\n"
         "为每条变体重写一条完整英文提示词，句子顺序固定：\n"
-        "1) 参考图锚定：用对应 <imageN> 标签声明各图用途，并声明外观以参考图为准、"
-        "只改变动作/镜头/背景（如 \"Use <image1> as the identity and outfit reference: keep the same "
-        "face structure, feature proportions, hairstyle, body proportions and outfit version as shown; "
-        "only the pose, camera and background change.\"）。该锚定句在本批所有变体中逐字相同；"
-        "如需在文字里点名模板中的辨识度锁定项（发色、主服装剪裁、画风），用一句 ≤25 词的短锚定句，"
-        "同样全批逐字相同；\n"
+        "1) 参考图锚定：逐字采用给定的【参考图分工锚定句】整句，不得改写、增删分句；"
+        "没有参考图时省略该句；该锚定句在本批所有变体中逐字相同；\n"
         "2) 目标景别：采用意图 text 的景别/构图描述（full=全身 / chest=胸部以上 / head=头部特写）；\n"
         "3) 躯干/头部/视线：按【视角规范】里对应 angle 的英文语句写身体朝向、头部朝向与视线；"
         "意图 text 中的朝向与姿态语义必须保留，不得削弱或反转；\n"
@@ -233,6 +278,9 @@ def build_rewrite_messages(
         f"【角色全场景通用提示词模板】\n{_clip_template(template_md) or '（未提供模板）'}",
         f"【参考图说明】\n{ref_lines or '（无参考图）'}",
     ]
+    anchor = reference_anchor_sentence(refs)
+    if anchor:
+        user_parts.append(f"【参考图分工锚定句】（逐字采用，全批相同）\n{anchor}")
     norms = _angle_norm_lines(intents)
     spec_lines = ["- full framing: " + FULL_BODY_CAMERA_SENTENCE]
     if norms:

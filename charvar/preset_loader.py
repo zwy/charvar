@@ -31,6 +31,8 @@ class CommonPreset(BaseModel):
     caption_tags: dict[str, dict[str, str]] | None = None
     # caption 里背景 token 是否拼 " background" 后缀（新预设为完整描述句式时关掉）
     caption_background_suffix: bool = True
+    # 预设文本若按固定参考图顺序逐字描述（如 <image1>=headshot…），声明推荐顺序供前端默认勾选与提示
+    reference_order: list[str] = Field(default_factory=list)
 
 
 class ListPreset(CommonPreset):
@@ -106,6 +108,7 @@ def load_file(path: Path) -> ListPreset | MatrixPreset:
         "suffix_template": raw.get("suffix_template"),
         "caption_tags": raw.get("caption_tags"),
         "caption_background_suffix": raw.get("caption_background_suffix", True),
+        "reference_order": [str(v).strip() for v in (raw.get("reference_order") or [])],
     }
     # 背景/光照：内联优先，其次 _ref 相对路径
     for key, ref_key in (("backgrounds", "backgrounds_ref"), ("lighting", "lighting_ref")):
@@ -169,6 +172,12 @@ def list_presets() -> list[dict[str, Any]]:
         else:
             count = count_matrix_variants(preset)
         result.append(
-            {"name": preset.name, "type": preset.type, "version": preset.version, "count": count}
+            {
+                "name": preset.name,
+                "type": preset.type,
+                "version": preset.version,
+                "count": count,
+                "reference_order": preset.reference_order,
+            }
         )
     return result
