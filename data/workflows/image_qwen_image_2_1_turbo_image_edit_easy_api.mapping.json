@@ -1,14 +1,56 @@
 {
-  "description": "Qwen Image 2.1 Turbo 图像编辑 API workflow；正向提示词直接注入 TextEncodeQwenImage21，负向提示词也注入该节点，SaveImageAdvanced 保留输出前缀。宽高注入到 EmptyLatentImage，便于在无参考图分支控制画幅；有参考图时若走 encoding latent，宽高会被参考图尺寸覆盖。",
+  "description": "Qwen Image 2.1 Turbo 图像编辑 API workflow；正向提示词直接注入 TextEncodeQwenImage21，负向提示词也注入该节点，SaveImageAdvanced 保留输出前缀。宽高注入到 EmptyLatentImage，便于在无参考图分支控制画幅；有参考图时若走 encoding latent，宽高会被参考图尺寸覆盖。支持 1–4 个参考图（LoadImage 514–517 → 459:474 的 images.image_1..4，按注入顺序对应提示词里的 <image1>..<image4> 标签）；未提供的槽位按 on_missing 断开 459:474 的对应输入并移除 LoadImage 节点，绝不让 workflow 内置的默认图混进参考。",
   "output_nodes": [
     "461"
   ],
   "mappings": [
     {
       "field": "image",
-      "node_id": "470",
+      "node_id": "514",
       "input_key": "image",
-      "required": false
+      "required": false,
+      "on_missing": {
+        "remove_node": true,
+        "unlink": [
+          {"node_id": "459:474", "input_key": "images.image_1"}
+        ]
+      }
+    },
+    {
+      "field": "image2",
+      "node_id": "515",
+      "input_key": "image",
+      "required": false,
+      "on_missing": {
+        "remove_node": true,
+        "unlink": [
+          {"node_id": "459:474", "input_key": "images.image_2"}
+        ]
+      }
+    },
+    {
+      "field": "image3",
+      "node_id": "516",
+      "input_key": "image",
+      "required": false,
+      "on_missing": {
+        "remove_node": true,
+        "unlink": [
+          {"node_id": "459:474", "input_key": "images.image_3"}
+        ]
+      }
+    },
+    {
+      "field": "image4",
+      "node_id": "517",
+      "input_key": "image",
+      "required": false,
+      "on_missing": {
+        "remove_node": true,
+        "unlink": [
+          {"node_id": "459:474", "input_key": "images.image_4"}
+        ]
+      }
     },
     {
       "field": "prompt",

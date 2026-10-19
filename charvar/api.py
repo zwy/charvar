@@ -12,13 +12,13 @@ from typing import Any, Literal
 
 from contextlib import closing
 
-from fastapi import FastAPI, HTTPException, Query
+import httpx
+from fastapi import FastAPI, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from charvar import __version__, assets, paths, storage
-from charvar import __version__, assets, paths, storage
+from charvar import __version__, assets, llm, paths, settings_service, storage, subject_images
 from charvar.assets import ensure_thumb, resolve_run_asset, sheet_path, thumb_path
 
 from charvar.composer import expand_matrix, generate as compose_generate
@@ -26,6 +26,8 @@ from charvar.exporters import captions as captions_exporter
 from charvar.exporters import comfyui as comfyui_exporter
 from charvar.exporters import jsonl as jsonl_exporter
 from charvar.exporters import txt as txt_exporter
+from charvar.llm_compose import generate_llm
+from charvar.llm_prompts import draft_subject_image_prompt_messages
 from charvar.models import GenerateRequest, GenerateResult, SubjectProfile
 from charvar.preset_loader import (
     ListPreset,
@@ -38,6 +40,8 @@ from charvar.preset_loader import (
 
 EXPORT_FORMATS = ("txt", "jsonl", "captions_zip", "captions")
 
+_TEMPLATE_MAX_BYTES = 200_000
+
 
 class ComfyQueueRequest(BaseModel):
     workload: str = Field(description="workflows 目录里的 workflow 名称，或 workflow JSON 路径")
@@ -47,6 +51,7 @@ class ComfyQueueRequest(BaseModel):
     aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
     resolution: Literal["1k", "2k", "4k"] | None = None
     overrides: dict[str, Any] = Field(default_factory=dict)
+    reference_kinds: list[str] = Field(default_factory=list, description="主体图参考（LLM 模式），按序注入 image/image2/…")
 
 
 class SyncOutputsRequest(BaseModel):
@@ -55,6 +60,26 @@ class SyncOutputsRequest(BaseModel):
 
 class ContactSheetRequest(BaseModel):
     mode: Literal["contact", "face"] = "contact"
+
+
+class SubjectImageGenerateRequest(BaseModel):
+    prompt: str | None = None
+    seed: int = 0
+    aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
+    resolution: Literal["1k", "2k", "4k"] | None = None
+    comfy_url: str | None = None
+    wait: bool = True
+
+
+class SubjectImageBatchRequest(BaseModel):
+    kinds: list[str]
+    seed: int = 0
+    comfy_url: str | None = None
+    wait: bool = True
+
+
+class TemplatePutRequest(BaseModel):
+    template_md: str
 
 
 class Message(BaseModel):
@@ -178,9 +203,190 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     def api_subject_delete(subject_id: str) -> dict[str, Any]:
         with _db() as conn:
             ok = storage.delete_subject(conn, subject_id)
+            if ok:
+                storage.delete_subject_images(conn, subject_id)
+                storage.delete_subject_template(conn, subject_id)
         if not ok:
             raise HTTPException(404, f"主体档案不存在：{subject_id}")
+        subject_images.delete_subject_tree(subject_id)
         return {"ok": True, "deleted": subject_id}
+
+    # ---- 主体档案图片（5 种固定槽位） ----
+    def _require_subject(subject_id: str) -> SubjectProfile:
+        with _db() as conn:
+            subject = storage.get_subject(conn, subject_id)
+        if subject is None:
+            raise HTTPException(404, f"主体档案不存在：{subject_id}")
+        return subject
+
+    @app.get("/subjects/{subject_id}/images")
+    def api_subject_images(subject_id: str) -> dict[str, Any]:
+        _require_subject(subject_id)
+        with _db() as conn:
+            settings = settings_service.get_settings(conn)
+            slots = subject_images.list_slots(conn, subject_id, settings)
+        return {
+            "subject_id": subject_id,
+            "kinds": list(subject_images.IMAGE_KINDS),
+            "slots": [slot.model_dump() for slot in slots],
+        }
+
+    @app.post("/subjects/{subject_id}/images/{kind}/suggest-prompt")
+    def api_subject_suggest_prompt(subject_id: str, kind: str) -> dict[str, str]:
+        subject = _require_subject(subject_id)
+        try:
+            subject_images._validate_kind(kind)
+        except subject_images.SubjectImageError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        with _db() as conn:
+            template = storage.get_subject_template(conn, subject_id) or ""
+            config = settings_service.llm_overrides(conn)
+        messages = draft_subject_image_prompt_messages(subject, kind, template)
+        try:
+            data = llm.chat_json(messages, config=config)
+        except llm.LLMError as exc:
+            raise HTTPException(502, f"LLM 起草提示词失败：{exc}") from exc
+        prompt = str(data.get("prompt") or "").strip()
+        if not prompt:
+            raise HTTPException(502, "LLM 未返回提示词")
+        return {"kind": kind, "prompt": prompt}
+
+    @app.post("/subjects/{subject_id}/images/{kind}/generate")
+    def api_subject_image_generate(subject_id: str, kind: str, req: SubjectImageGenerateRequest) -> dict[str, Any]:
+        subject = _require_subject(subject_id)
+        with _db() as conn:
+            settings = settings_service.get_settings(conn)
+            previous = storage.get_subject_image(conn, subject_id, kind) or {}
+            prompt = (req.prompt if req.prompt is not None else previous.get("prompt", "")) or ""
+            try:
+                slot = subject_images.generate_subject_image(
+                    conn,
+                    subject,
+                    kind,
+                    prompt=prompt,
+                    seed=req.seed,
+                    aspect_ratio=req.aspect_ratio,
+                    resolution=req.resolution,
+                    comfy_url=req.comfy_url,
+                    wait=req.wait,
+                    settings=settings,
+                )
+            except subject_images.SubjectImageError as exc:
+                raise HTTPException(exc.status, str(exc)) from exc
+        return slot.model_dump()
+
+    @app.post("/subjects/{subject_id}/images/{kind}/sync")
+    def api_subject_image_sync(subject_id: str, kind: str, comfy_url: str = Query("")) -> dict[str, Any]:
+        _require_subject(subject_id)
+        with _db() as conn:
+            try:
+                slot = subject_images.sync_subject_image(conn, subject_id, kind, comfy_url or None)
+            except subject_images.SubjectImageError as exc:
+                raise HTTPException(400, str(exc)) from exc
+        return slot.model_dump()
+
+    @app.post("/subjects/{subject_id}/images/{kind}/upload")
+    def api_subject_image_upload(subject_id: str, kind: str, file: UploadFile) -> dict[str, Any]:
+        _require_subject(subject_id)
+        data = file.file.read()
+        with _db() as conn:
+            try:
+                slot = subject_images.save_uploaded_image(conn, subject_id, kind, file.filename or "", data)
+            except subject_images.SubjectImageError as exc:
+                raise HTTPException(400, str(exc)) from exc
+        return slot.model_dump()
+
+    @app.delete("/subjects/{subject_id}/images/{kind}")
+    def api_subject_image_delete(subject_id: str, kind: str) -> dict[str, Any]:
+        _require_subject(subject_id)
+        with _db() as conn:
+            try:
+                removed = subject_images.delete_subject_image_files(conn, subject_id, kind)
+            except subject_images.SubjectImageError as exc:
+                raise HTTPException(400, str(exc)) from exc
+        return {"ok": True, "removed": removed, "kind": kind}
+
+    @app.get("/subjects/{subject_id}/images/{kind}/file")
+    def api_subject_image_file(subject_id: str, kind: str) -> FileResponse:
+        _require_subject(subject_id)
+        try:
+            subject_images._validate_kind(kind)
+        except subject_images.SubjectImageError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        for suffix in (".png", ".jpg", ".jpeg", ".webp"):
+            candidate = subject_images.subject_dir(subject_id) / f"{kind}{suffix}"
+            if candidate.exists():
+                return FileResponse(candidate)
+        raise HTTPException(404, f"该类型还没有图片：{kind}")
+
+    @app.get("/subjects/{subject_id}/images/{kind}/thumb")
+    def api_subject_image_thumb(subject_id: str, kind: str) -> FileResponse:
+        _require_subject(subject_id)
+        try:
+            subject_images._validate_kind(kind)
+        except subject_images.SubjectImageError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        thumb = subject_images.thumb_file(subject_id, kind)
+        if not thumb.exists():
+            raise HTTPException(404, f"该类型还没有缩略图：{kind}")
+        return FileResponse(thumb, media_type="image/webp")
+
+    @app.post("/subjects/{subject_id}/images/generate-batch")
+    def api_subject_image_batch(subject_id: str, req: SubjectImageBatchRequest) -> dict[str, Any]:
+        subject = _require_subject(subject_id)
+        with _db() as conn:
+            settings = settings_service.get_settings(conn)
+            try:
+                slots = subject_images.generate_subject_images_batch(
+                    conn,
+                    subject,
+                    req.kinds,
+                    seed=req.seed,
+                    comfy_url=req.comfy_url,
+                    wait=req.wait,
+                    settings=settings,
+                )
+            except subject_images.SubjectImageError as exc:
+                raise HTTPException(exc.status, str(exc)) from exc
+        return {"subject_id": subject_id, "slots": [slot.model_dump() for slot in slots]}
+
+    # ---- 主体通用模板（角色全场景通用提示词模板 markdown） ----
+    @app.get("/subjects/{subject_id}/template")
+    def api_subject_template_get(subject_id: str) -> PlainTextResponse:
+        _require_subject(subject_id)
+        with _db() as conn:
+            template = storage.get_subject_template(conn, subject_id)
+        if template is None:
+            raise HTTPException(404, "该主体还没有上传通用提示词模板")
+        return PlainTextResponse(template, media_type="text/markdown; charset=utf-8")
+
+    @app.put("/subjects/{subject_id}/template")
+    def api_subject_template_put(subject_id: str, req: TemplatePutRequest) -> dict[str, Any]:
+        _require_subject(subject_id)
+        if len(req.template_md.encode("utf-8")) > _TEMPLATE_MAX_BYTES:
+            raise HTTPException(413, f"模板过大（上限 {_TEMPLATE_MAX_BYTES // 1024}KB）")
+        with _db() as conn:
+            storage.save_subject_template(conn, subject_id, req.template_md)
+        return {"ok": True, "subject_id": subject_id, "bytes": len(req.template_md.encode("utf-8"))}
+
+    # ---- 全局设置 ----
+    @app.get("/settings")
+    def api_settings_get() -> dict[str, Any]:
+        with _db() as conn:
+            settings = settings_service.get_settings(conn)
+        data = settings.model_dump()
+        data["llm"]["api_key"] = ""
+        data["llm_configured"] = bool(settings.llm.api_key) or bool(llm.get_llm_config().get("api_key"))
+        return data
+
+    @app.put("/settings")
+    def api_settings_put(patch: dict[str, Any]) -> dict[str, Any]:
+        with _db() as conn:
+            settings = settings_service.save_settings(conn, patch)
+        data = settings.model_dump()
+        data["llm"]["api_key"] = ""
+        data["llm_configured"] = bool(settings.llm.api_key) or bool(llm.get_llm_config().get("api_key"))
+        return data
 
     # ---- 生成 ----
     def _resolve_subject(req: GenerateRequest) -> SubjectProfile:
@@ -202,11 +408,48 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     def api_generate(req: GenerateRequest) -> GenerateResult:
         subject = _resolve_subject(req)
         preset = _preset(req.preset)
+        if req.mode == "llm":
+            return _generate_llm_mode(subject, req, preset)
         try:
             result = compose_generate(subject, preset, req)
         except (ValueError, PresetError) as exc:
             raise HTTPException(400, str(exc)) from exc
         with _db() as conn:
+            storage.save_run(conn, result)
+        return result
+
+    def _generate_llm_mode(subject: SubjectProfile, req: GenerateRequest, preset) -> GenerateResult:
+        if not req.subject_id:
+            raise HTTPException(400, "LLM 模式需要 subject_id：参考图来自主体档案的图片槽位")
+        kinds: list[str] = []
+        for kind in req.reference_kinds:
+            if kind not in subject_images.IMAGE_KINDS:
+                raise HTTPException(400, f"未知参考图类型：{kind}（支持 {'/'.join(subject_images.IMAGE_KINDS)}）")
+            if kind not in kinds:
+                kinds.append(kind)
+        if not 1 <= len(kinds) <= 4:
+            raise HTTPException(400, "LLM 模式需要 1–4 个参考图类型（reference_kinds）")
+        with _db() as conn:
+            for kind in kinds:
+                slot = subject_images.get_slot(conn, subject.id, kind, settings_service.get_settings(conn))
+                if not slot.is_ready:
+                    raise HTTPException(400, f"参考图未就绪：{kind}（请先在主体档案里生成或上传）")
+            template = storage.get_subject_template(conn, subject.id)
+            if not template:
+                raise HTTPException(400, f"主体 {subject.id} 还没有上传「角色全场景通用提示词模板」")
+            try:
+                result = generate_llm(
+                    subject,
+                    preset,
+                    req,
+                    template,
+                    kinds,
+                    config=settings_service.llm_overrides(conn),
+                )
+            except llm.LLMError as exc:
+                raise HTTPException(502, f"LLM 改写提示词失败：{exc}") from exc
+            except (ValueError, PresetError) as exc:
+                raise HTTPException(400, str(exc)) from exc
             storage.save_run(conn, result)
         return result
 
@@ -276,6 +519,28 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         overrides = dict(req.overrides)
         if req.negative_prompt is not None:
             overrides["negative_prompt"] = req.negative_prompt
+        if req.reference_kinds:
+            # LLM 模式：把选定的主体档案图上传到 ComfyUI input，按序注入 image/image2/…
+            # 按选择顺序对应 <image1>..<image4>；未选中的槽位由 mapping on_missing 从 payload 摘除
+            base = paths.comfy_base_url(req.comfy_url)
+            seen: list[str] = []
+            for kind in req.reference_kinds:
+                if kind not in subject_images.IMAGE_KINDS or kind in seen:
+                    continue
+                seen.append(kind)
+                for suffix in (".png", ".jpg", ".jpeg", ".webp"):
+                    local = subject_images.subject_dir(result.subject_id) / f"{kind}{suffix}"
+                    if local.exists():
+                        break
+                else:
+                    raise HTTPException(400, f"参考图不存在：{kind}（请先在主体档案里生成或上传）")
+                try:
+                    remote = comfyui_exporter.upload_image(
+                        base, local, remote_name=f"{result.subject_id}_{kind}{local.suffix}"
+                    )
+                except (httpx.HTTPError, ValueError) as exc:
+                    raise HTTPException(502, f"上传参考图到 ComfyUI 失败：{exc}") from exc
+                overrides["image" if len(seen) == 1 else f"image{len(seen)}"] = remote
         try:
             submissions = comfyui_exporter.submit(
                 result,

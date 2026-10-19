@@ -186,12 +186,17 @@ def build_payload(
     - mode 只对 seed 生效：increment → result.seed + index；fixed → result.seed；
     - template 存在时优先用模板渲染（变量见 _injected_values）；-1 保留由
       ComfyUI 侧随机（与 shared/comfy_client 语义一致）；
-    - field 不在 values 且无 default → None，按 required 决定跳过或报错。
+    - field 不在 values 且无 default → None，按 required 决定跳过或报错；跳过时若
+      entry 带 on_missing，先完成全部注入再执行清理：remove_node=true 删掉该节点，
+      unlink 断开消费者对它的连接（如多参考图槽位未选用时，避免消费者带着
+      workflow 内置默认图参与运行）。
     """
     wf = copy.deepcopy(workflow)
     values = _injected_values(result, item, overrides or {})
+    skipped: list[dict[str, Any]] = []
 
-    for entry in mapping.get("mappings", []):
+    for raw_entry in mapping.get("mappings", []):
+        entry: dict[str, Any] = dict(raw_entry) if isinstance(raw_entry, dict) else {}
         field = str(entry.get("field"))
         node_id = str(entry.get("node_id"))
         input_key = str(entry.get("input_key"))
@@ -216,10 +221,20 @@ def build_payload(
         if value is None:
             if entry.get("required"):
                 raise ValueError(f"required 字段缺失：{field}（无 default）")
-            continue  # optional 且无值 → 保留 workflow 内置默认
+            skipped.append(entry)  # optional 且无值 → 不注入
+            continue
         if field == "seed" and value == -1:
             continue  # 交给 ComfyUI 侧随机
         node.setdefault("inputs", {})[input_key] = value
+
+    for entry in skipped:  # 未注入槽位的清理（injection 全部完成后再动图）
+        on_missing = entry.get("on_missing") or {}
+        if on_missing.get("remove_node"):
+            wf.pop(str(entry.get("node_id")), None)
+        for link in on_missing.get("unlink") or []:
+            consumer = wf.get(str(link.get("node_id")))
+            if consumer is not None:
+                consumer.setdefault("inputs", {}).pop(str(link.get("input_key")), None)
     return wf
 
 
@@ -316,6 +331,30 @@ def submit(
                 submission["error"] = f"{type(exc).__name__}: {exc}"
             submissions.append(submission)
     return submissions
+
+
+def upload_image(base: str, path: Path, *, remote_name: str | None = None) -> str:
+    """上传本地图片到 ComfyUI input 目录（POST /upload/image，multipart）。
+
+    返回 ComfyUI 侧文件名，可直接喂给 LoadImage 类节点的 mapping field（如 image）。
+    remote_name 默认取文件名；传入固定名字（如 {subject_id}_{kind}{ext}）可让
+    重复上传覆盖而不是堆积。请求走 _httpx_client（trust_env=False，内网直连）。
+    """
+    if not path.exists():
+        raise FileNotFoundError(f"本地图片不存在：{path}")
+    name = remote_name or path.name
+    with _httpx_client(timeout=httpx.Timeout(30.0, write=60.0)) as client:
+        resp = client.post(
+            f"{base.rstrip('/')}/upload/image",
+            data={"overwrite": "true", "type": "input"},
+            files={"image": (name, path.read_bytes())},
+            timeout=30,
+        )
+    resp.raise_for_status()
+    data = resp.json()
+    if not data.get("name"):
+        raise ValueError(f"ComfyUI upload 未返回文件名：{data}")
+    return str(data["name"])
 
 
 def _poll_entry(

@@ -50,6 +50,10 @@ class GenerateRequest(BaseModel):
     fixed_background: str | None = None
     fixed_lighting: str | None = None
     separator: str = " "
+    # LLM 优化模式（需求 §生成优化）：LLM 结果完全替代 master_template 拼接
+    mode: Literal["classic", "llm"] = "classic"
+    reference_kinds: list[str] = Field(default_factory=list)  # 1–4 个主体图类型
+    llm_instructions: str | None = None
 
 
 class PromptItem(BaseModel):

@@ -176,3 +176,40 @@ td .caption { color: var(--muted); }
 .image-modal { max-width: min(1000px, 90vw); max-height: 90vh; overflow: auto; background: #fff; border-radius: 12px; padding: 16px; }
 .image-modal img { display: block; width: 100%; max-height: min(65vh, 720px); object-fit: contain; margin-top: 12px; }
 .modal-open { overflow: hidden; }
+
+/* 主体档案图片槽位 */
+.slot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; margin-top: 12px; }
+.subject-image-slot { display: flex; gap: 12px; border: 1px solid var(--line); border-radius: 10px; padding: 12px; background: #fafbfd; }
+.slot-thumb { flex: 0 0 96px; }
+.slot-thumb img { width: 96px; height: 128px; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); display: block; background: #f4f6f9; cursor: zoom-in; }
+.slot-thumb .slot-placeholder { min-height: 128px; width: 96px; border-radius: 8px; border: 1px dashed var(--line); color: var(--muted); }
+.slot-body { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.slot-head { display: flex; align-items: center; gap: 8px; }
+.slot-head strong { font-size: 13px; }
+.slot-prompt { width: 100%; font: inherit; font-size: 12px; color: var(--text); padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; resize: vertical; }
+.slot-row label { flex-direction: row; align-items: center; gap: 6px; }
+.slot-row input { width: 90px !important; }
+.slot-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.slot-actions button, .slot-actions .btn { padding: 4px 10px; font-size: 12px; }
+.slot-status { font-size: 12px; min-height: 16px; }
+.badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; border: 1px solid var(--line); color: var(--muted); background: #fff; }
+.badge-ready { background: #e7f6ec; border-color: #bfe8cd; color: #15803d; }
+.badge-queued { background: var(--accent-soft); border-color: #d7e4ff; color: var(--accent); }
+.badge-error { background: #fdecec; border-color: #f3c7c7; color: var(--danger); }
+.file-btn { position: relative; display: inline-flex; align-items: center; cursor: pointer; }
+.file-btn input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+/* LLM 模式参考图选择 */
+.gen-mode-row { margin-bottom: 12px; }
+.ref-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.ref-pick { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px; border: 1px solid var(--line); border-radius: 10px; background: #fff; cursor: pointer; min-width: 92px; }
+.ref-pick img { width: 72px; height: 96px; object-fit: cover; border-radius: 6px; background: #f4f6f9; }
+.ref-pick .ref-thumb-empty { width: 72px; height: 96px; border-radius: 6px; background: #f4f6f9; border: 1px dashed var(--line); }
+.ref-pick .ref-name { font-size: 12px; color: var(--text); }
+.ref-pick:hover:not(:disabled) { border-color: var(--accent); }
+.ref-pick.active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.ref-pick:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* 设置页 */
+.size-row { display: flex; gap: 6px; }
+.size-row select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; width: auto; flex: 1; }

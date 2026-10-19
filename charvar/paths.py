@@ -44,6 +44,11 @@ def out_dir() -> Path:
     return ROOT / "out"
 
 
+def subjects_dir() -> Path:
+    """主体档案图片根目录：<data>/subjects/{subject_id}/。"""
+    return data_dir() / "subjects"
+
+
 # ---------- ComfyUI ----------
 
 def comfy_host() -> str:

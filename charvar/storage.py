@@ -43,6 +43,29 @@ CREATE TABLE IF NOT EXISTS comfy_prompts (
     output_files TEXT,
     PRIMARY KEY (run_id, item_index)
 );
+CREATE TABLE IF NOT EXISTS subject_images (
+    subject_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'empty',
+    source TEXT,
+    prompt TEXT NOT NULL DEFAULT '',
+    file_path TEXT,
+    prompt_id TEXT,
+    error TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (subject_id, kind)
+);
+CREATE TABLE IF NOT EXISTS subject_templates (
+    subject_id TEXT PRIMARY KEY,
+    template_md TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS settings (
+    key TEXT PRIMARY KEY,
+    value_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 # 已存在的旧库补列（SQLite 无静默 ALTER，逐一尝试即可）
@@ -203,3 +226,122 @@ def list_comfy_submissions(conn: sqlite3.Connection, run_id: str) -> list[dict[s
         data["output_files"] = json.loads(data["output_files"]) if data["output_files"] else []
         result.append(data)
     return result
+
+
+# ---------- 主体档案图片 ----------
+
+def get_subject_image(conn: sqlite3.Connection, subject_id: str, kind: str) -> dict[str, Any] | None:
+    row = conn.execute(
+        "SELECT * FROM subject_images WHERE subject_id = ? AND kind = ?",
+        (subject_id, kind),
+    ).fetchone()
+    return dict(row) if row is not None else None
+
+
+def upsert_subject_image(conn: sqlite3.Connection, entry: dict[str, Any]) -> None:
+    """全量 upsert 一行主体图片记录（entry 需含 subject_id/kind 及各字段）。"""
+    now = utcnow()
+    conn.execute(
+        """INSERT INTO subject_images
+           (subject_id, kind, status, source, prompt, file_path, prompt_id, error, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(subject_id, kind) DO UPDATE SET
+             status=excluded.status, source=excluded.source, prompt=excluded.prompt,
+             file_path=excluded.file_path, prompt_id=excluded.prompt_id, error=excluded.error,
+             updated_at=excluded.updated_at""",
+        (
+            entry["subject_id"],
+            entry["kind"],
+            entry.get("status", "empty"),
+            entry.get("source"),
+            entry.get("prompt", ""),
+            entry.get("file_path"),
+            entry.get("prompt_id"),
+            entry.get("error", ""),
+            entry.get("created_at") or now,
+            now,
+        ),
+    )
+    conn.commit()
+
+
+def list_subject_images(conn: sqlite3.Connection, subject_id: str) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        "SELECT * FROM subject_images WHERE subject_id = ? ORDER BY kind",
+        (subject_id,),
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def delete_subject_image(conn: sqlite3.Connection, subject_id: str, kind: str) -> bool:
+    cur = conn.execute(
+        "DELETE FROM subject_images WHERE subject_id = ? AND kind = ?",
+        (subject_id, kind),
+    )
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def delete_subject_images(conn: sqlite3.Connection, subject_id: str) -> None:
+    conn.execute("DELETE FROM subject_images WHERE subject_id = ?", (subject_id,))
+    conn.commit()
+
+
+# ---------- 主体通用模板 ----------
+
+def get_subject_template(conn: sqlite3.Connection, subject_id: str) -> str | None:
+    row = conn.execute(
+        "SELECT template_md FROM subject_templates WHERE subject_id = ?",
+        (subject_id,),
+    ).fetchone()
+    return row["template_md"] if row is not None else None
+
+
+def save_subject_template(conn: sqlite3.Connection, subject_id: str, template_md: str) -> None:
+    conn.execute(
+        """INSERT INTO subject_templates (subject_id, template_md, updated_at)
+           VALUES (?, ?, ?)
+           ON CONFLICT(subject_id) DO UPDATE SET
+             template_md=excluded.template_md, updated_at=excluded.updated_at""",
+        (subject_id, template_md, utcnow()),
+    )
+    conn.commit()
+
+
+def delete_subject_template(conn: sqlite3.Connection, subject_id: str) -> None:
+    conn.execute("DELETE FROM subject_templates WHERE subject_id = ?", (subject_id,))
+    conn.commit()
+
+
+# ---------- 设置 ----------
+
+def get_setting(conn: sqlite3.Connection, key: str) -> Any | None:
+    row = conn.execute("SELECT value_json FROM settings WHERE key = ?", (key,)).fetchone()
+    if row is None:
+        return None
+    try:
+        return json.loads(row["value_json"])
+    except json.JSONDecodeError:
+        return None
+
+
+def set_setting(conn: sqlite3.Connection, key: str, value: Any) -> None:
+    conn.execute(
+        """INSERT INTO settings (key, value_json, updated_at)
+           VALUES (?, ?, ?)
+           ON CONFLICT(key) DO UPDATE SET
+             value_json=excluded.value_json, updated_at=excluded.updated_at""",
+        (key, json.dumps(value, ensure_ascii=False), utcnow()),
+    )
+    conn.commit()
+
+
+def list_settings(conn: sqlite3.Connection) -> dict[str, Any]:
+    rows = conn.execute("SELECT key, value_json FROM settings").fetchall()
+    out: dict[str, Any] = {}
+    for row in rows:
+        try:
+            out[row["key"]] = json.loads(row["value_json"])
+        except json.JSONDecodeError:
+            continue
+    return out

@@ -1,0 +1,124 @@
+"""LLM 客户端（OpenAI 规范 chat completions，兼容任意 provider）。
+
+移植自 spellforge/styles/llm.py（与 riban-ranking 同骨架），改动：
+- requests → httpx，且 trust_env=False 直连（项目红线：所有出网请求 bypass 代理）；
+- 配置优先级：显式 override 参数（调用方传 DB 设置）> 环境变量 / .env
+  （.env 已由 charvar.paths 在 import 时载入 os.environ）。
+环境变量：LLM_BASE_URL / LLM_API_KEY / LLM_MODEL。
+"""
+from __future__ import annotations
+
+import json
+import os
+import re
+import time
+from typing import Any
+
+import httpx
+
+DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
+DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash"
+_TIMEOUT = 180.0
+
+_CONFIG_KEYS = ("base_url", "api_key", "model")
+
+
+class LLMError(RuntimeError):
+    pass
+
+
+def _http_client(**kw: Any) -> httpx.Client:
+    # trust_env=False：忽略 shell 的 ALL_PROXY 等环境代理（与 comfyui_exporter 同策略）
+    return httpx.Client(trust_env=False, **kw)
+
+
+def get_llm_config(override: dict | None = None) -> dict:
+    """解析当前生效的 LLM 配置。
+
+    override：调用方传入的 {base_url, api_key, model}（通常来自 DB 设置，
+    见 settings_service.llm_overrides），非空键覆盖环境变量。
+    """
+    cfg = {
+        "base_url": (os.environ.get("LLM_BASE_URL") or DEFAULT_BASE_URL).rstrip("/"),
+        "api_key": os.environ.get("LLM_API_KEY") or "",
+        "model": os.environ.get("LLM_MODEL") or DEFAULT_MODEL,
+    }
+    for key in _CONFIG_KEYS:
+        value = (override or {}).get(key)
+        if value and str(value).strip():
+            cfg[key] = str(value).strip()
+    return cfg
+
+
+def chat(
+    messages: list[dict],
+    model: str | None = None,
+    max_tokens: int = 4000,
+    json_mode: bool = True,
+    retries: int = 3,
+    config: dict | None = None,
+) -> str:
+    """调用一次 chat completion，返回 assistant 文本。
+
+    json_mode=True 时请求 JSON 输出并关闭 reasoning 回显；带指数退避重试。
+    """
+    cfg = get_llm_config(config)
+    api_key = cfg["api_key"]
+    if not api_key:
+        raise LLMError(
+            "缺少 API Key：请在设置页配置 LLM，或设置环境变量 LLM_API_KEY / .env 文件"
+        )
+    url = cfg["base_url"] + "/chat/completions"
+
+    body: dict = {
+        "model": model or cfg["model"],
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "reasoning": {"exclude": True},
+    }
+    if json_mode:
+        body["response_format"] = {"type": "json_object"}
+
+    last_err: Exception | None = None
+    for attempt in range(retries):
+        try:
+            with _http_client(timeout=httpx.Timeout(_TIMEOUT, write=60.0)) as client:
+                resp = client.post(
+                    url,
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=body,
+                    timeout=_TIMEOUT,
+                )
+            if resp.status_code == 429:
+                time.sleep(2**attempt * 3)
+                last_err = LLMError("rate limited")
+                continue
+            resp.raise_for_status()
+            data = resp.json()
+            content = data["choices"][0]["message"].get("content")
+            if not content:
+                raise LLMError(f"empty content: {json.dumps(data.get('usage', {}), ensure_ascii=False)}")
+            return content
+        except (httpx.HTTPError, KeyError, LLMError) as e:  # noqa: PERF203
+            last_err = e
+            if attempt < retries - 1:
+                time.sleep(2**attempt * 2)
+    raise LLMError(f"LLM call failed after {retries} attempts: {last_err}")
+
+
+def chat_json(messages: list[dict], **kw: Any) -> dict:
+    """调用并解析 JSON 输出；解析失败时尝试从文本中截取第一个 JSON 对象。"""
+    text = chat(messages, json_mode=True, **kw)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find("{")
+        if start >= 0:
+            try:
+                return json.loads(text[start : text.rfind("}") + 1])
+            except json.JSONDecodeError:
+                pass
+        raise LLMError(f"invalid JSON response: {text[:200]}") from None

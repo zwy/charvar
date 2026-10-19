@@ -8,6 +8,8 @@ const state = {
   presetDetails: {},
   currentSubject: null,
   lastRun: null, // GenerateResult
+  genMode: "classic",
+  subjectImages: [], // 主体档案图片槽位（当前主体）
 };
 
 async function api(path, options = {}) {
@@ -15,6 +17,21 @@ async function api(path, options = {}) {
     headers: { "Content-Type": "application/json" },
     ...options,
   });
+  if (!resp.ok) {
+    let detail = resp.statusText;
+    try {
+      const data = await resp.json();
+      detail = data.detail || JSON.stringify(data);
+    } catch {}
+    throw new Error(`${resp.status}: ${detail}`);
+  }
+  return resp.json();
+}
+
+async function apiUpload(path, file) {
+  const form = new FormData();
+  form.append("file", file);
+  const resp = await fetch(path, { method: "POST", body: form });
   if (!resp.ok) {
     let detail = resp.statusText;
     try {
@@ -37,8 +54,63 @@ $$(".tab").forEach((btn) => {
     $$(".tab").forEach((b) => b.classList.toggle("active", b === btn));
     $$(".tab-page").forEach((p) => p.classList.toggle("active", p.id === `tab-${btn.dataset.tab}`));
     if (btn.dataset.tab === "runs") loadRuns();
+    if (btn.dataset.tab === "settings") loadSettings();
+    if (btn.dataset.tab === "gen" && state.genMode === "llm") renderRefPickers();
   });
 });
+
+/* ---------- 生成模式（经典 / LLM 优化） ---------- */
+function setGenMode(mode) {
+  state.genMode = mode;
+  $$("#gen-mode-classic, #gen-mode-llm").forEach((btn) =>
+    btn.classList.toggle("active", btn.dataset.mode === mode));
+  $("#gen-llm-panel").hidden = mode !== "llm";
+  if (mode === "llm") renderRefPickers();
+}
+
+$("#gen-mode-classic").addEventListener("click", () => setGenMode("classic"));
+$("#gen-mode-llm").addEventListener("click", () => setGenMode("llm"));
+
+function selectedRefKinds() {
+  return $$("#gen-refs .ref-pick.active").map((el) => el.dataset.kind);
+}
+
+async function renderRefPickers() {
+  const sid = $("#gen-subject").value;
+  const box = $("#gen-refs");
+  if (!sid) {
+    box.innerHTML = `<span class="hint">先选择主体档案</span>`;
+    return;
+  }
+  try {
+    const data = await api(`/subjects/${encodeURIComponent(sid)}/images`);
+    state.refImages = data.slots;
+  } catch {
+    box.innerHTML = `<span class="hint">参考图加载失败</span>`;
+    return;
+  }
+  box.innerHTML = "";
+  for (const slot of state.refImages) {
+    const el = document.createElement("button");
+    el.type = "button";
+    el.className = "ref-pick";
+    el.dataset.kind = slot.kind;
+    el.disabled = !slot.is_ready;
+    const thumb = slot.thumb_url || slot.original_url;
+    el.innerHTML = `${thumb ? `<img src="${thumb}" alt="">` : `<span class="ref-thumb-empty"></span>`}
+      <span class="ref-name">${slot.label}</span>
+      <span class="badge badge-${slot.status}">${slot.is_ready ? "就绪" : slot.status === "empty" ? "空" : slot.status}</span>`;
+    el.addEventListener("click", () => {
+      if (el.classList.contains("active")) {
+        el.classList.remove("active");
+      } else {
+        if (selectedRefKinds().length >= 4) return; // 最多 4 张参考图
+        el.classList.add("active");
+      }
+    });
+    box.appendChild(el);
+  }
+}
 
 /* ---------- 初始加载 ---------- */
 async function init() {
@@ -46,6 +118,9 @@ async function init() {
   if (state.subjects.length) {
     $("#gen-subject").value = state.subjects[0].id;
   }
+  $("#gen-subject").addEventListener("change", () => {
+    if (state.genMode === "llm") renderRefPickers();
+  });
 }
 
 async function loadSubjects() {
@@ -104,6 +179,16 @@ $("#btn-generate").addEventListener("click", async () => {
   if ($("#gen-fixed-light").value.trim()) payload.fixed_lighting = $("#gen-fixed-light").value.trim();
   const sep = $("#gen-separator").value;
   if (sep !== " ") payload.separator = sep;
+  payload.mode = state.genMode;
+  if (state.genMode === "llm") {
+    payload.reference_kinds = selectedRefKinds();
+    if (!payload.reference_kinds.length) {
+      return setStatus($("#gen-status"), "LLM 模式需要选择 1–4 张参考图", true);
+    }
+    if ($("#gen-llm-instructions").value.trim()) {
+      payload.llm_instructions = $("#gen-llm-instructions").value.trim();
+    }
+  }
   try {
     setStatus($("#gen-status"), "生成中…");
     state.lastRun = await api("/generate", { method: "POST", body: JSON.stringify(payload) });
@@ -174,6 +259,13 @@ $("#btn-copy-captions").addEventListener("click", () => {
 $("#btn-toggle-comfy").addEventListener("click", async () => {
   $("#comfy-panel").hidden = !$("#comfy-panel").hidden;
   if (!$("#comfy-panel").hidden && !state.comfyLoaded) await refreshComfyWorkflows().catch(() => {});
+  // LLM 模式默认选图片编辑 workflow
+  if (!$("#comfy-panel").hidden && state.genMode === "llm") {
+    try {
+      const settings = await api("/settings");
+      if (settings.comfy_edit_workflow) $("#comfy-workflow").value = settings.comfy_edit_workflow;
+    } catch {}
+  }
 });
 
 async function refreshComfyWorkflows() {
@@ -248,16 +340,18 @@ $("#btn-comfy-queue").addEventListener("click", async () => {
   if (!workload) return setStatus($("#comfy-result"), "先在 data/workflows/ 放入 workflow + mapping.json 成对文件", true);
   setStatus($("#comfy-result"), "提交中…");
   try {
+    const body = {
+      workload,
+      negative_prompt: $("#comfy-negative").value.trim() || null,
+      wait: $("#comfy-wait").checked,
+      comfy_url: $("#comfy-url").value.trim(),
+      aspect_ratio: ASPECT_RATIO,
+      resolution: $("#comfy-resolution").value,
+    };
+    if (state.genMode === "llm") body.reference_kinds = selectedRefKinds();
     const out = await api(`/runs/${encodeURIComponent(state.lastRun.run_id)}/comfyui`, {
       method: "POST",
-      body: JSON.stringify({
-        workload,
-        negative_prompt: $("#comfy-negative").value.trim() || null,
-        wait: $("#comfy-wait").checked,
-        comfy_url: $("#comfy-url").value.trim(),
-        aspect_ratio: ASPECT_RATIO,
-        resolution: $("#comfy-resolution").value,
-      }),
+      body: JSON.stringify(body),
     });
     $("#comfy-result").textContent =
       `成功 ${out.succeeded} / 失败 ${out.failed}\n` +
@@ -301,6 +395,8 @@ function fillSubjectForm(s) {
   $("#s-identity").value = (s.identity_lock || []).join("\n");
   $("#s-outfit").value = (s.outfit_lock || []).join("\n");
   $("#s-extra").value = s.extra || "";
+  loadSubjectImages();
+  loadSubjectTemplate();
 }
 
 function clearSubjectForm() {
@@ -310,6 +406,8 @@ function clearSubjectForm() {
   ["s-id", "s-name", "s-trigger", "s-style", "s-identity", "s-outfit", "s-extra"].forEach((id) => ($(id).value = ""));
   $("#s-noun").value = "person";
   $("#s-ref").value = "<image1>";
+  $("#subject-images-card").hidden = true;
+  $("#template-card").hidden = true;
 }
 
 function collectSubjectFromForm() {
@@ -405,6 +503,240 @@ $("#btn-subject-import").addEventListener("click", async () => {
     setStatus($("#gen-status"), `已导入档案：${data.id}`);
   } catch (err) {
     setStatus($("#gen-status"), `导入失败：${err.message}`, true);
+  }
+});
+
+/* ---------- 主体档案图片（5 种槽位） ---------- */
+const SLOT_LABELS = {
+  character_sheet: "人物半身像＋三视图",
+  headshot: "人物半身像",
+  front: "全身正面",
+  side: "全身侧面",
+  behind: "全身背面",
+};
+const SLOT_HINTS = {
+  character_sheet: "文生图，第一步",
+  headshot: "基于三视图编辑",
+  front: "基于三视图编辑",
+  side: "基于三视图编辑",
+  behind: "基于三视图编辑",
+};
+
+async function loadSubjectImages() {
+  const sid = state.currentSubject;
+  if (!sid) return;
+  $("#subject-images-card").hidden = false;
+  $("#subject-image-slots").innerHTML = `<span class="hint">加载中…</span>`;
+  try {
+    state.subjectImages = (await api(`/subjects/${encodeURIComponent(sid)}/images`)).slots;
+  } catch (err) {
+    $("#subject-image-slots").innerHTML = `<span class="status error">加载失败：${escapeHtml(err.message)}</span>`;
+    return;
+  }
+  if (state.currentSubject !== sid) return; // 期间切了主体
+  renderSubjectImageSlots();
+}
+
+function slotStatusText(slot) {
+  if (slot.status === "ready") return slot.source === "uploaded" ? "已上传" : "已生成";
+  if (slot.status === "queued") return "生成中（可点同步）";
+  if (slot.status === "error") return slot.error || "出错";
+  return "空";
+}
+
+function renderSubjectImageSlots() {
+  const wrap = $("#subject-image-slots");
+  wrap.innerHTML = "";
+  for (const slot of state.subjectImages) {
+    const card = document.createElement("div");
+    card.className = "subject-image-slot";
+    const thumb = slot.thumb_url || slot.original_url;
+    card.innerHTML = `
+      <div class="slot-thumb">${thumb ? `<img src="${thumb}?t=${Date.now()}" alt="${slot.kind}" loading="lazy">` : `<div class="image-placeholder slot-placeholder"><span>空</span></div>`}</div>
+      <div class="slot-body">
+        <div class="slot-head"><strong>${SLOT_LABELS[slot.kind] || slot.kind}</strong>
+          <span class="badge badge-${slot.status}">${slotStatusText(slot)}</span></div>
+        <span class="hint">${SLOT_HINTS[slot.kind] || ""} · 默认 ${slot.aspect_ratio} / ${slot.resolution}</span>
+        <textarea class="slot-prompt" rows="3" placeholder="提示词（生成 / 编辑指令）">${escapeHtml(slot.prompt || "")}</textarea>
+        <div class="slot-row"><label>种子<input type="number" class="slot-seed" value="0"></label></div>
+        <div class="slot-actions">
+          <button data-act="suggest" data-kind="${slot.kind}">AI 起草</button>
+          <button data-act="generate" data-kind="${slot.kind}" class="primary">${slot.is_ready ? "重新生成" : "生成"}</button>
+          <label class="btn file-btn">上传<input type="file" data-upload="${slot.kind}" accept=".png,.jpg,.jpeg,.webp" hidden></label>
+          ${slot.is_ready ? `<button data-act="delete" data-kind="${slot.kind}" class="danger">删除</button>` : ""}
+          ${slot.status === "queued" ? `<button data-act="sync" data-kind="${slot.kind}">同步</button>` : ""}
+        </div>
+        <span class="slot-status status"></span>
+      </div>`;
+    wrap.appendChild(card);
+  }
+}
+
+$("#subject-image-slots").addEventListener("click", async (ev) => {
+  const btn = ev.target.closest("button[data-act]");
+  if (!btn) return;
+  const kind = btn.dataset.kind;
+  const card = btn.closest(".subject-image-slot");
+  const statusEl = card.querySelector(".slot-status");
+  const sid = state.currentSubject;
+  if (!sid) return;
+  const slot = state.subjectImages.find((s) => s.kind === kind);
+  const promptEl = card.querySelector(".slot-prompt");
+  const act = btn.dataset.act;
+  try {
+    if (act === "suggest") {
+      setStatus(statusEl, "AI 起草中…");
+      const data = await api(`/subjects/${encodeURIComponent(sid)}/images/${kind}/suggest-prompt`, { method: "POST" });
+      promptEl.value = data.prompt;
+      setStatus(statusEl, "已起草，可修改后点生成");
+    } else if (act === "generate") {
+      btn.disabled = true;
+      setStatus(statusEl, "提交 ComfyUI…");
+      const updated = await api(`/subjects/${encodeURIComponent(sid)}/images/${kind}/generate`, {
+        method: "POST",
+        body: JSON.stringify({
+          prompt: promptEl.value.trim() || null,
+          seed: Number(card.querySelector(".slot-seed").value || 0),
+        }),
+      });
+      setStatus(statusEl, updated.status === "queued" ? "已提交，稍后点「同步」取图" : "完成");
+      await loadSubjectImages();
+    } else if (act === "sync") {
+      btn.disabled = true;
+      setStatus(statusEl, "同步中…");
+      await api(`/subjects/${encodeURIComponent(sid)}/images/${kind}/sync`, { method: "POST" });
+      await loadSubjectImages();
+    } else if (act === "delete") {
+      if (!confirm(`删除 ${SLOT_LABELS[kind]} 的图片？`)) return;
+      await api(`/subjects/${encodeURIComponent(sid)}/images/${kind}`, { method: "DELETE" });
+      await loadSubjectImages();
+    }
+  } catch (err) {
+    setStatus(statusEl, `失败：${err.message}`, true);
+    btn.disabled = false;
+  }
+});
+
+$("#subject-image-slots").addEventListener("change", async (ev) => {
+  const input = ev.target.closest("input[data-upload]");
+  if (!input || !input.files.length) return;
+  const kind = input.dataset.upload;
+  const sid = state.currentSubject;
+  if (!sid) return;
+  const card = input.closest(".subject-image-slot");
+  const statusEl = card.querySelector(".slot-status");
+  try {
+    setStatus(statusEl, "上传中…");
+    await apiUpload(`/subjects/${encodeURIComponent(sid)}/images/${kind}/upload`, input.files[0]);
+    await loadSubjectImages();
+  } catch (err) {
+    setStatus(statusEl, `上传失败：${err.message}`, true);
+  }
+});
+
+/* ---------- 通用提示词模板 ---------- */
+async function loadSubjectTemplate() {
+  const sid = state.currentSubject;
+  if (!sid) return;
+  $("#template-card").hidden = false;
+  $("#template-status").textContent = "";
+  try {
+    const resp = await fetch(`/subjects/${encodeURIComponent(sid)}/template`);
+    $("#s-template").value = resp.ok ? await resp.text() : "";
+    if (!resp.ok && resp.status !== 404) throw new Error(resp.statusText);
+  } catch (err) {
+    setStatus($("#template-status"), `读取失败：${err.message}`, true);
+  }
+}
+
+$("#btn-template-save").addEventListener("click", async () => {
+  const sid = state.currentSubject;
+  if (!sid) return;
+  try {
+    await api(`/subjects/${encodeURIComponent(sid)}/template`, {
+      method: "PUT",
+      body: JSON.stringify({ template_md: $("#s-template").value }),
+    });
+    setStatus($("#template-status"), "模板已保存");
+  } catch (err) {
+    setStatus($("#template-status"), `保存失败：${err.message}`, true);
+  }
+});
+
+$("#template-file").addEventListener("change", (ev) => {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    $("#s-template").value = String(reader.result || "");
+    setStatus($("#template-status"), `已载入 ${file.name}，记得点「保存模板」`);
+  };
+  reader.readAsText(file);
+  ev.target.value = "";
+});
+
+/* ---------- 设置 ---------- */
+const ASPECT_OPTIONS = ["3:4", "1:1", "16:9", "4:3", "9:16", "2:3", "3:2", "21:9"];
+
+async function loadSettings() {
+  try {
+    const [settings, comfy] = await Promise.all([api("/settings"), api("/comfy/workflows")]);
+    const names = (comfy.workflows || []).filter((w) => w.has_workflow && w.has_mapping).map((w) => w.name);
+    for (const [sel, value] of [["#set-t2i", settings.comfy_t2i_workflow], ["#set-edit", settings.comfy_edit_workflow]]) {
+      const el = $(sel);
+      el.innerHTML = names.map((n) => `<option value="${n}">${n}</option>`).join("") ||
+        `<option value="">（data/workflows 没有成对 workflow）</option>`;
+      if (value && names.includes(value)) el.value = value;
+    }
+    $("#set-llm-base").value = settings.llm.base_url || "";
+    $("#set-llm-model").value = settings.llm.model || "";
+    $("#set-llm-key").value = "";
+    $("#set-llm-key").placeholder = settings.llm_configured ? "已配置（留空保持不变）" : "留空 = 环境变量 LLM_API_KEY";
+    $("#set-negative").value = settings.default_negative_prompt || "";
+    const sizes = $("#settings-sizes");
+    sizes.innerHTML = "";
+    for (const [kind, size] of Object.entries(settings.image_sizes)) {
+      const label = SLOT_LABELS[kind] || kind;
+      const div = document.createElement("label");
+      div.innerHTML = `${label}
+        <div class="size-row">
+          <select data-size-aspect="${kind}">${ASPECT_OPTIONS.map((r) => `<option value="${r}" ${r === size.aspect_ratio ? "selected" : ""}>${r}</option>`).join("")}</select>
+          <select data-size-res="${kind}">${["1k", "2k", "4k"].map((r) => `<option value="${r}" ${r === size.resolution ? "selected" : ""}>${r}</option>`).join("")}</select>
+        </div>`;
+      sizes.appendChild(div);
+    }
+  } catch (err) {
+    setStatus($("#settings-status"), `加载失败：${err.message}`, true);
+  }
+}
+
+$("#btn-settings-save").addEventListener("click", async () => {
+  const image_sizes = {};
+  $$("#settings-sizes [data-size-aspect]").forEach((el) => {
+    const kind = el.dataset.sizeAspect;
+    image_sizes[kind] = {
+      aspect_ratio: el.value,
+      resolution: $(`[data-size-res="${kind}"]`).value,
+    };
+  });
+  const patch = {
+    comfy_t2i_workflow: $("#set-t2i").value,
+    comfy_edit_workflow: $("#set-edit").value,
+    image_sizes,
+    default_negative_prompt: $("#set-negative").value.trim(),
+  };
+  // llm 三项整行发送（清空的 base_url/model 要能落库）；api_key 空串 = 后端保留已存值
+  patch.llm = {
+    api_key: $("#set-llm-key").value.trim(),
+    base_url: $("#set-llm-base").value.trim(),
+    model: $("#set-llm-model").value.trim(),
+  };
+  try {
+    await api("/settings", { method: "PUT", body: JSON.stringify(patch) });
+    setStatus($("#settings-status"), "设置已保存");
+    await loadSettings();
+  } catch (err) {
+    setStatus($("#settings-status"), `保存失败：${err.message}`, true);
   }
 });
 

@@ -134,6 +134,65 @@ def test_comfy_payload_missing_node(silver_witch):
     assert "999" in str(exc_info.value)
 
 
+def test_comfy_payload_on_missing_clears_unused_reference_slots(silver_witch):
+    """可选参考图槽位未注入时：按 on_missing 断开消费者引用并移除 LoadImage 节点。"""
+    result = _result(silver_witch, count=1)
+    wf = {
+        "11": {"class_type": "CLIPTextEncode", "inputs": {"text": "old"}},
+        "514": {"class_type": "LoadImage", "inputs": {"image": "stale.png"}},
+        "515": {"class_type": "LoadImage", "inputs": {"image": "stale.png"}},
+        "459:474": {
+            "class_type": "TextEncodeQwenImage21",
+            "inputs": {
+                "prompt": ["459:480", 0],
+                "images.image_1": ["514", 0],
+                "images.image_2": ["515", 0],
+            },
+        },
+        "47": {"class_type": "SaveImage", "inputs": {"filename_prefix": "ComfyUI"}},
+    }
+    mapping = {
+        "output_nodes": ["47"],
+        "mappings": [
+            {"field": "prompt", "node_id": "459:474", "input_key": "prompt", "required": True},
+            {
+                "field": "image",
+                "node_id": "514",
+                "input_key": "image",
+                "required": False,
+                "on_missing": {"remove_node": True, "unlink": [{"node_id": "459:474", "input_key": "images.image_1"}]},
+            },
+            {
+                "field": "image2",
+                "node_id": "515",
+                "input_key": "image",
+                "required": False,
+                "on_missing": {"remove_node": True, "unlink": [{"node_id": "459:474", "input_key": "images.image_2"}]},
+            },
+        ],
+    }
+
+    # 两个都提供：注入 + 保留节点/引用
+    payload = comfyui.build_payload(wf, mapping, result, result.items[0], overrides={"image": "a.png", "image2": "b.png"})
+    assert payload["514"]["inputs"]["image"] == "a.png"
+    assert payload["515"]["inputs"]["image"] == "b.png"
+    assert payload["459:474"]["inputs"]["prompt"] == result.items[0].prompt
+    assert payload["459:474"]["inputs"]["images.image_1"] == ["514", 0]
+    assert payload["459:474"]["inputs"]["images.image_2"] == ["515", 0]
+
+    # 只提供第一个：image2 槽位被摘除，绝不带 workflow 内置默认图
+    payload = comfyui.build_payload(wf, mapping, result, result.items[0], overrides={"image": "a.png"})
+    assert "515" not in payload
+    assert payload["459:474"]["inputs"]["images.image_1"] == ["514", 0]
+    assert "images.image_2" not in payload["459:474"]["inputs"]
+
+    # 一个都不提供：两个槽位全部摘除
+    payload = comfyui.build_payload(wf, mapping, result, result.items[0], overrides={})
+    assert "514" not in payload and "515" not in payload
+    assert "images.image_1" not in payload["459:474"]["inputs"]
+    assert "images.image_2" not in payload["459:474"]["inputs"]
+
+
 def test_comfy_payload_missing_required(silver_witch):
     result = _result(silver_witch, count=1)
     mapping = _mapping()
