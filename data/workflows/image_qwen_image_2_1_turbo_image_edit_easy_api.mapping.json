@@ -5,6 +5,12 @@
   ],
   "mappings": [
     {
+      "field": "image",
+      "node_id": "470",
+      "input_key": "image",
+      "required": false
+    },
+    {
       "field": "prompt",
       "node_id": "459:474",
       "input_key": "prompt",
