@@ -66,6 +66,7 @@ function setGenMode(mode) {
     btn.classList.toggle("active", btn.dataset.mode === mode));
   $("#gen-llm-panel").hidden = mode !== "llm";
   if (mode === "llm") renderRefPickers();
+  updateComfyWorkflowHint(); // 面板开着时同步提示（参考图数随模式变化）
 }
 
 $("#gen-mode-classic").addEventListener("click", () => setGenMode("classic"));
@@ -107,6 +108,7 @@ async function renderRefPickers() {
         if (selectedRefKinds().length >= 4) return; // 最多 4 张参考图
         el.classList.add("active");
       }
+      updateComfyWorkflowHint();
     });
     const img = el.querySelector("img");
     if (img) {
@@ -266,32 +268,41 @@ $("#btn-copy-captions").addEventListener("click", () => {
 /* ---------- ComfyUI ---------- */
 $("#btn-toggle-comfy").addEventListener("click", async () => {
   $("#comfy-panel").hidden = !$("#comfy-panel").hidden;
-  if (!$("#comfy-panel").hidden && !state.comfyLoaded) await refreshComfyWorkflows().catch(() => {});
-  // LLM 模式默认选图片编辑 workflow
-  if (!$("#comfy-panel").hidden && state.genMode === "llm") {
-    try {
-      const settings = await api("/settings");
-      if (settings.comfy_edit_workflow) $("#comfy-workflow").value = settings.comfy_edit_workflow;
-    } catch {}
+  if (!$("#comfy-panel").hidden) {
+    if (!state.comfyLoaded) await refreshComfyWorkflows().catch(() => {});
+    await loadComfyWorkflowSettings().catch(() => {});
+    updateComfyWorkflowHint();
   }
 });
+
+/* workflow 自动选择：LLM 模式勾了参考图 → 图片编辑 workflow；否则文生图（同主体图逻辑）。 */
+function autoWorkload() {
+  const s = state.comfySettings || {};
+  const refs = state.genMode === "llm" ? selectedRefKinds().length : 0;
+  return refs ? s.comfy_edit_workflow : s.comfy_t2i_workflow;
+}
+
+function updateComfyWorkflowHint() {
+  const el = $("#comfy-workflow-hint");
+  if (!el) return;
+  const count = selectedRefKinds().length;
+  const workload = autoWorkload();
+  el.textContent = workload
+    ? count
+      ? `已选 ${count} 张参考图 → 图片编辑 workflow：${workload}`
+      : `未选参考图 → 文生图 workflow：${workload}`
+    : "未配置 workflow：先在「设置」页选好（文生图 / 图片编辑）workflow";
+}
+
+async function loadComfyWorkflowSettings() {
+  state.comfySettings = await api("/settings");
+}
 
 async function refreshComfyWorkflows() {
   const info = await api("/comfy/workflows");
   state.comfyLoaded = true;
   $("#comfy-url").value = info.base_url || $("#comfy-url").value;
-  const sel = $("#comfy-workflow");
-  sel.innerHTML = "";
   state.comfyWorkflows = (info.workflows || []).filter((w) => w.has_workflow && w.has_mapping);
-  for (const w of state.comfyWorkflows) {
-    const opt = document.createElement("option");
-    opt.value = w.name;
-    opt.textContent = w.name;
-    sel.appendChild(opt);
-  }
-  if (!state.comfyWorkflows.length) {
-    sel.innerHTML = `<option value="">（${info.workflows_dir} 没有可用的成对 workflow）</option>`;
-  }
 }
 
 let ASPECT_RATIO = "auto";
@@ -344,8 +355,8 @@ $("#btn-comfy-status").addEventListener("click", async () => {
 
 $("#btn-comfy-queue").addEventListener("click", async () => {
   if (!state.lastRun) return;
-  const workload = $("#comfy-workflow").value;
-  if (!workload) return setStatus($("#comfy-result"), "先在 data/workflows/ 放入 workflow + mapping.json 成对文件", true);
+  const workload = autoWorkload();
+  if (!workload) return setStatus($("#comfy-result"), "未配置 workflow：先在「设置」页选好（文生图 / 图片编辑）workflow", true);
   setStatus($("#comfy-result"), "提交中…");
   try {
     const body = {

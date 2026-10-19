@@ -44,7 +44,10 @@ _TEMPLATE_MAX_BYTES = 200_000
 
 
 class ComfyQueueRequest(BaseModel):
-    workload: str = Field(description="workflows 目录里的 workflow 名称，或 workflow JSON 路径")
+    workload: str | None = Field(
+        default=None,
+        description="workflows 目录里的 workflow 名称；缺省时按参考图自动选（有→图片编辑，无→文生图）",
+    )
     negative_prompt: str | None = None
     wait: bool = False
     comfy_url: str | None = None
@@ -527,8 +530,20 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             result = storage.get_run(conn, run_id)
         if result is None:
             raise HTTPException(404, f"生成记录不存在：{run_id}")
+        workload_name = req.workload
+        if not workload_name:
+            # 自动选择：入了参考图 = 图片编辑；否则文生图（选型依据统一在「设置」页）
+            with _db() as conn:
+                settings = settings_service.get_settings(conn)
+            workload_name = (
+                settings.comfy_edit_workflow if req.reference_kinds else settings.comfy_t2i_workflow
+            )
+            if not workload_name:
+                raise HTTPException(
+                    400, "未指定 workflow：请先在「设置」里配置（文生图 / 图片编辑）workflow"
+                )
         try:
-            workflow, mapping = comfyui_exporter.load_workflow_pair(req.workload)
+            workflow, mapping = comfyui_exporter.load_workflow_pair(workload_name)
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
         except (json.JSONDecodeError, ValueError) as exc:
@@ -580,7 +595,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         return {
             "run_id": run_id,
             "comfy_url": paths.comfy_base_url(req.comfy_url),
-            "workload": req.workload,
+            "workload": workload_name,
             "wait": req.wait,
             "succeeded": ok_count,
             "failed": len(submissions) - ok_count,

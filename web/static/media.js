@@ -161,12 +161,30 @@ const Media = {
       const card = document.createElement("div");
       card.className = "image-card";
       const imageSrc = item.thumb_url || item.primary_url;
+      const promptText = String(item.text || "").trim();
+      // 查看提示词 / 复制（与档案图片槽位同一套弹层：可滚动 pre + 复制全文）
+      const actionsHtml = promptText
+        ? `<button class="chip" data-prompt-view>查看提示词</button><button class="chip" data-prompt-copy>复制</button>`
+        : `<span class="hint">（无提示词记录）</span>`;
       if (imageSrc) {
-        card.innerHTML = `<img src="${imageSrc}" alt="${item.variant_id || `图片 ${item.item_index}`}" loading="lazy"><div class="image-meta"><strong>#${String(item.item_index).padStart(3, "0")}</strong><span>${item.variant_id}</span></div>`;
+        card.innerHTML = `<img src="${imageSrc}" alt="${item.variant_id || `图片 ${item.item_index}`}" loading="lazy"><div class="image-meta"><strong>#${String(item.item_index).padStart(3, "0")}</strong><span>${item.variant_id}</span></div><div class="image-actions">${actionsHtml}</div>`;
         card.querySelector("img").addEventListener("click", () =>
           this.showImageModal(item.original_url || item.primary_url, item.variant_id));
       } else {
-        card.innerHTML = `<div class="image-placeholder"><strong>#${String(item.item_index).padStart(3, "0")}</strong><span>${item.variant_id}</span><span>${item.status}</span></div>`;
+        card.innerHTML = `<div class="image-placeholder"><strong>#${String(item.item_index).padStart(3, "0")}</strong><span>${item.variant_id}</span><span>${item.status}</span></div><div class="image-actions">${actionsHtml}</div>`;
+      }
+      const viewBtn = card.querySelector("[data-prompt-view]");
+      if (viewBtn) {
+        viewBtn.addEventListener("click", () =>
+          this.showTextModal(`#${String(item.item_index).padStart(3, "0")} ${item.variant_id} · 提示词`, promptText, { copyable: true }));
+      }
+      const copyBtn = card.querySelector("[data-prompt-copy]");
+      if (copyBtn) {
+        copyBtn.addEventListener("click", async () => {
+          const ok = await copyText(promptText);
+          copyBtn.textContent = ok ? "已复制 ✓" : "复制失败";
+          setTimeout(() => { copyBtn.textContent = "复制"; }, 1500);
+        });
       }
       grid.appendChild(card);
     }

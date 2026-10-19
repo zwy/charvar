@@ -85,12 +85,18 @@ def test_generate_with_inline_subject_and_fixed_parts(client):
 
 
 def _mock_comfy(monkeypatch, workflows_dir: pathlib.Path):
-    """把 exporter._httpx_client 替换为 mock server（/prompt + /history）。"""
+    """把 exporter._httpx_client 替换为 mock server（/upload/image + /prompt + /history）。"""
     from charvar.exporters import comfyui as comfyui_exporter
 
     queued: list = []
 
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/upload/image":
+            import re
+
+            m = re.search(rb'filename="([^"]+)"', request.content)
+            name = m.group(1).decode() if m else "uploaded.png"
+            return httpx.Response(200, json={"name": name, "subfolder": "", "type": "input"})
         if request.url.path == "/prompt":
             body = json.loads(request.content.decode())
             pid = f"pid-{len(queued)}"
@@ -221,3 +227,60 @@ def test_comfy_wait_records_output_files(tmp_path, monkeypatch, client):
     assert files == [{"filename": "pid-0.png", "subfolder": "", "type": "output"}]
     record = client.get(f"/runs/{run_id}/comfyui").json()[0]
     assert record["output_files"] == [{"filename": "pid-0.png", "subfolder": "", "type": "output"}]
+
+
+def test_comfy_auto_workload(tmp_path, monkeypatch, client):
+    """不传 workload 时按参考图自动选：有参考图=edit，没参考图=t2i。"""
+    import io
+
+    from PIL import Image
+
+    def _pair(name: str, with_image: bool = False) -> None:
+        nodes = {
+            "11": {"class_type": "CLIPTextEncode", "inputs": {"text": "x"}},
+            "47": {"class_type": "SaveImage", "inputs": {"filename_prefix": "p"}},
+        }
+        mappings = [
+            {"field": "prompt", "node_id": "11", "input_key": "text", "required": True},
+            {"field": "filename_prefix", "node_id": "47", "input_key": "filename_prefix"},
+        ]
+        if with_image:
+            nodes["470"] = {"class_type": "LoadImage", "inputs": {"image": "ref.png"}}
+            mappings.insert(0, {"field": "image", "node_id": "470", "input_key": "image", "required": False})
+        (workflows_dir / f"{name}.json").write_text(json.dumps(nodes), encoding="utf-8")
+        (workflows_dir / f"{name}.mapping.json").write_text(
+            json.dumps({"output_nodes": ["47"], "mappings": mappings}),
+            encoding="utf-8",
+        )
+
+    workflows_dir = tmp_path / "workflows"
+    workflows_dir.mkdir()
+    _pair("T2I")
+    _pair("Edit", with_image=True)
+    monkeypatch.setenv("COMFYUI_WORKFLOWS_DIR", str(workflows_dir))
+    _mock_comfy(monkeypatch, workflows_dir)
+
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+    buf = io.BytesIO()
+    Image.new("RGB", (64, 96), (10, 20, 30)).save(buf, format="PNG")
+    client.post(
+        "/subjects/demo_witch/images/front/upload",
+        files={"file": ("front.png", buf.getvalue(), "image/png")},
+    )
+    assert client.put(
+        "/settings", json={"comfy_t2i_workflow": "T2I", "comfy_edit_workflow": "Edit"}
+    ).status_code == 200
+    run_id = client.post(
+        "/generate",
+        json={"subject_id": "demo_witch", "preset": "q21_default_30", "seed": 42, "count": 2},
+    ).json()["run_id"]
+
+    no_refs = client.post(f"/runs/{run_id}/comfyui", json={"wait": False}).json()
+    assert no_refs["workload"] == "T2I"
+
+    with_refs = client.post(
+        f"/runs/{run_id}/comfyui", json={"wait": False, "reference_kinds": ["front"]}
+    ).json()
+    assert with_refs["workload"] == "Edit"
+    # 注：设置页清空 workflow 名时 get_settings 回退内置默认名（成对文件缺失 → 404 找不到），
+    # 所以「未指定 workflow」分支只出现在显式 workload 为空且默认名也解析失败的情形，不在此展开。

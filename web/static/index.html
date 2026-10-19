@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>charvar · 角色变体提示词生成器</title><link rel="stylesheet" href="/static/style.css"></head><body>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>charvar · 角色变体提示词生成器</title><link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/style.css"><link rel="icon" type="image/svg+xml" href="/static/favicon.svg"><link rel="alternate icon" type="image/png" sizes="1024x1024" href="/static/icon.png"><link rel="apple-touch-icon" href="/static/icon.png"></head><body>
 <header class="topbar"><div class="brand">charvar <span class="sub">角色变体提示词生成器</span></div><nav>
 <button class="tab active" data-tab="gen">生成</button><button class="tab" data-tab="subjects">主体档案</button><button class="tab" data-tab="runs">历史记录</button><button class="tab" data-tab="settings">设置</button></nav></header>
 <main>
@@ -31,7 +31,7 @@
 <a id="dl-txt" class="btn" hidden>下载 TXT</a><a id="dl-jsonl" class="btn" hidden>下载 JSONL</a><a id="dl-zip" class="btn" hidden>下载 captions.zip</a><button id="btn-toggle-comfy">推送 ComfyUI…</button></div></div>
 <div id="comfy-panel" class="comfy-panel" hidden><div class="form-grid">
 <label>ComfyUI 地址<input type="text" id="comfy-url" value="http://127.0.0.1:8188"></label>
-<label>Workflow（data/workflows 成对文件）<select id="comfy-workflow"></select></label>
+<div class="form-field"><div class="field-label">Workflow（自动选择）</div><span id="comfy-workflow-hint" class="hint"></span></div>
 <div class="form-field">
 <div class="field-label">画幅比例</div>
 <div id="comfy-aspect" class="chip-row">

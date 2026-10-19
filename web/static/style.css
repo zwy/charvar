@@ -163,15 +163,20 @@ td .caption { color: var(--muted); }
 }
 
 .media-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 16px; }
-.image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+/* 图片墙：网格布局，阅读顺序 = DOM 顺序（contact sheet、#000 起，编号递增）；
+   整图按真实比例展示（不裁切），同行高度差异由 align-items: start 顶部对齐消化 */
+.image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; align-items: start; }
 .image-card { display: flex; flex-direction: column; gap: 6px; background: #fff; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; cursor: pointer; transition: border-color .18s ease; }
 .image-card:hover, .image-card:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.image-card img { display: block; width: 100%; height: 220px; object-fit: cover; background: #f4f6f9; }
+.image-card img { display: block; width: 100%; height: auto; object-fit: contain; background: #f4f6f9; }
+.image-card .image-meta, .image-card .image-actions { padding: 0 10px; }
+.image-card .image-actions { display: flex; gap: 6px; padding-bottom: 10px; flex-wrap: wrap; }
+.image-card .image-actions button { padding: 3px 8px; font-size: 12px; }
 .image-card p { margin: 0 10px 10px; font-size: 12px; color: var(--muted); text-align: left; }
 .image-card .image-meta, .image-placeholder { padding: 0 10px 8px; font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; align-items: center; gap: 6px; min-height: 26px; }
 .image-placeholder { display: grid; place-items: center; min-height: 240px; text-align: center; background: #f4f6f9; }
-.sheet-card { min-height: 260px; }
-.sheet-card img { height: 180px; object-fit: contain; }
+.sheet-card { min-height: 0; }
+.sheet-card img { height: auto; object-fit: contain; }
 .image-overlay { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(14,19,26,0.62); padding: 20px; z-index: 100; overflow: auto; }
 .image-modal { max-width: min(1000px, 90vw); max-height: 90vh; overflow: auto; background: #fff; border-radius: 12px; padding: 16px; }
 .image-modal img { display: block; width: 100%; max-height: min(65vh, 720px); object-fit: contain; margin-top: 12px; }
