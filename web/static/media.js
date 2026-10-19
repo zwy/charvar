@@ -406,6 +406,7 @@ document.addEventListener("DOMContentLoaded", () => {
       actions.appendChild(status);
       body.appendChild(actions);
       const resultBox = document.createElement("div");
+      resultBox.className = "video-result"; // 视频 + 下载按钮纵向排列（带间距，按钮不拉伸）
       body.appendChild(resultBox);
       btn.addEventListener("click", async () => {
         btn.disabled = true;

@@ -426,9 +426,15 @@ $("#btn-comfy-queue").addEventListener("click", async () => {
         const files = (s.files || []).map((f) => f.filename).join(", ");
         return `${head} → prompt_id ${s.prompt_id}${files ? ` → ${files}` : ""}`;
       }).join("\n");
-    Media.syncImages(state.lastRun.run_id).then((data) => {
-      Media.setStatus(`图片 ${data.completed}/${data.items.length} 完成${data.errors ? `，失败 ${data.errors}` : ""}`);
-    }).catch((error) => Media.setStatus(`同步失败：${error.message}`, true));
+    // 不在入队后立即同步图片：未勾「等待完成」时刚入队必然还没有成品图，同步只会报「没有可用图片」。
+    // 勾了「等待完成」说明出图已结束、输出文件名已记录，此时可以放心同步取图。
+    if ($("#comfy-wait").checked) {
+      Media.syncImages(state.lastRun.run_id).then((data) => {
+        Media.setStatus(`图片 ${data.completed}/${data.items.length} 完成${data.errors ? `，失败 ${data.errors}` : ""}`);
+      }).catch((error) => Media.setStatus(`同步失败：${error.message}`, true));
+    } else {
+      $("#comfy-result").textContent += "\n提示：ComfyUI 出图完成后，点上方「同步图片」取图。";
+    }
   } catch (err) {
     setStatus($("#comfy-result"), `失败：${err.message}`, true);
   }
@@ -945,8 +951,8 @@ async function loadRuns() {
     tr.innerHTML = `<td class="prompt">${escapeHtml(r.run_id)}</td><td>${escapeHtml(r.subject_id)}</td>
       <td>${escapeHtml(r.preset)}</td><td>${r.seed}</td><td>${r.item_count}</td>
       <td>${r.comfy_count}</td><td>${escapeHtml(r.created_at)}</td>
-      <td><button data-run="${escapeHtml(r.run_id)}">查看</button>
-          <button class="danger" data-del="${escapeHtml(r.run_id)}">删除</button></td>`;
+      <td><div class="row-actions"><button data-run="${escapeHtml(r.run_id)}">查看</button>
+          <button class="danger" data-del="${escapeHtml(r.run_id)}">删除</button></div></td>`;
     tbody.appendChild(tr);
   }
   tbody.querySelectorAll("button[data-run]").forEach((btn) =>
@@ -954,10 +960,10 @@ async function loadRuns() {
       try {
         state.lastRun = await api(`/runs/${encodeURIComponent(btn.dataset.run)}`);
         renderResult(state.lastRun);
-    Media.setView("images");
-    Media.loadImages(state.lastRun.run_id)
-      .then((data) => Media.setStatus(`图片 ${data.completed}/${data.items.length} 完成${data.errors ? `，失败 ${data.errors}` : ""}`))
-      .catch(() => Media.setStatus("图片加载失败", true));
+        Media.setView("images");
+        Media.loadImages(state.lastRun.run_id)
+          .then((data) => Media.setStatus(`图片 ${data.completed}/${data.items.length} 完成${data.errors ? `，失败 ${data.errors}` : ""}`))
+          .catch(() => Media.setStatus("图片加载失败", true));
         $$(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === "gen"));
         $$(".tab-page").forEach((p) => p.classList.toggle("active", p.id === "tab-gen"));
       } catch (err) {
