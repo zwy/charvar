@@ -37,6 +37,7 @@ from charvar.preset_loader import (
     load_file,
     list_presets,
 )
+from charvar import video as video_service
 
 EXPORT_FORMATS = ("txt", "jsonl", "captions_zip", "captions")
 
@@ -63,6 +64,10 @@ class SyncOutputsRequest(BaseModel):
 
 class ContactSheetRequest(BaseModel):
     mode: Literal["contact", "face"] = "contact"
+
+
+class VideoRenderRequest(BaseModel):
+    preset: str = "q21_turnaround"
 
 
 class SubjectImageGenerateRequest(BaseModel):
@@ -654,6 +659,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             "errors": sum(1 for entry in items if entry["status"] == "error"),
             "contact_sheet": contact_sheet.name if contact_sheet.exists() else None,
             "face_sheet": face_sheet.name if face_sheet.exists() else None,
+            "videos": video_service.list_videos(run_id),
             "items": items,
         }
 
@@ -725,6 +731,51 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             except Exception as exc:
                 raise HTTPException(400, f"生成 contact sheet 失败：{exc}") from exc
         return {"ok": True, "mode": req.mode, "path": str(path)}
+
+    # ---- 视频合成：预设文件（presets/video/*.yaml）+ 本地 ffmpeg ----
+
+    @app.get("/video-presets")
+    def api_video_presets() -> list[dict[str, Any]]:
+        presets = []
+        for preset in video_service.list_video_presets():
+            presets.append(
+                {
+                    "name": preset.name,
+                    "description": preset.description,
+                    "aspect": preset.aspect,
+                    "resolution": preset.resolution,
+                    "size": list(video_service.resolution_size(preset.aspect, preset.resolution)),
+                    "fps": preset.fps,
+                    "seconds_per_image": preset.seconds_per_image,
+                    "include_contact_sheet": preset.include_contact_sheet,
+                    "contact_sheet_seconds": preset.contact_sheet_seconds,
+                    "order_mode": preset.order_mode,
+                    "direction": preset.direction,
+                    "fit": preset.fit,
+                }
+            )
+        return presets
+
+    @app.post("/runs/{run_id}/video")
+    def api_run_video(run_id: str, req: VideoRenderRequest) -> dict[str, Any]:
+        with _db() as conn:
+            result = storage.get_run(conn, run_id)
+            if result is None:
+                raise HTTPException(404, f"生成记录不存在：{run_id}")
+            records = storage.list_comfy_submissions(conn, run_id)
+            try:
+                preset = video_service.load_video_preset(req.preset)
+            except video_service.VideoPresetError as exc:
+                raise HTTPException(400, str(exc)) from exc
+            try:
+                info = video_service.render_video(run_id, result, records, preset)
+            except video_service.VideoPresetError as exc:
+                raise HTTPException(400, str(exc)) from exc
+            except Exception as exc:  # noqa: BLE001
+                raise HTTPException(500, f"合成视频失败：{exc}") from exc
+        info["run_id"] = run_id
+        info["url"] = f"/runs/{run_id}/assets/videos/{info['name']}"
+        return info
 
     @app.get("/api/version")
     def api_version() -> dict[str, str]:

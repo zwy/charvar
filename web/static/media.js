@@ -188,6 +188,12 @@ const Media = {
       }
       grid.appendChild(card);
     }
+    for (const vid of data.videos || []) {
+      const card = document.createElement("div");
+      card.className = "image-card video-card";
+      card.innerHTML = `<video controls preload="metadata" src="${vid.url}"></video><div class="image-meta"><strong>合成视频</strong><span>${vid.name}</span></div><div class="image-actions"><a class="btn" href="${vid.url}" download>下载 MP4</a></div>`;
+      grid.appendChild(card);
+    }
   },
 
   /* 通用弹层：标题 + 自定义内容（Esc / 点遮罩 / 关闭按钮退出）。build(body, close)。 */
@@ -278,7 +284,6 @@ const Media = {
     el.classList.toggle("error", isError);
   },
 };
-
 document.addEventListener("DOMContentLoaded", () => {
   $("#btn-view-images").addEventListener("click", () => Media.setView("images"));
   $("#btn-view-table").addEventListener("click", () => Media.setView("table"));
@@ -308,5 +313,99 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (error) {
       Media.setStatus(`同步失败：${error.message}`, true);
     }
+  });
+  $("#btn-video").addEventListener("click", () => {
+    const runId = Media.currentRunId;
+    if (!runId) return;
+    Media.showPanelModal("合成视频", async (body, close) => {
+      let presets = [];
+      try {
+        presets = await api("/video-presets");
+      } catch (_err) {
+        presets = [];
+      }
+      if (!presets.length) {
+        const empty = document.createElement("p");
+        empty.className = "hint";
+        empty.textContent = "还没有视频预设：在 presets/video/ 放一个 YAML（如 q21_turnaround.yaml）后再试。";
+        body.appendChild(empty);
+        return;
+      }
+      const label = document.createElement("label");
+      label.innerHTML = `视频预设<select id="video-preset-select"></select>`;
+      const select = label.querySelector("select");
+      for (const p of presets) {
+        const opt = document.createElement("option");
+        opt.value = p.name;
+        opt.textContent = p.name;
+        select.appendChild(opt);
+      }
+      body.appendChild(label);
+      const hint = document.createElement("div");
+      hint.className = "hint";
+      body.appendChild(hint);
+      const updateHint = () => {
+        const preset = presets.find((x) => x.name === select.value);
+        if (!preset) return;
+        const count = Media.currentData ? Media.currentData.completed : 0;
+        const total = (preset.include_contact_sheet ? preset.contact_sheet_seconds : 0) + count * preset.seconds_per_image;
+        hint.textContent = [
+          `${preset.size[0]}×${preset.size[1]} · ${preset.fps}fps`,
+          `每张 ${preset.seconds_per_image}s`,
+          preset.include_contact_sheet ? `封面 contact sheet ${preset.contact_sheet_seconds}s` : null,
+          `预计约 ${Math.round(total)} 秒（按已生成 ${count} 张）`,
+        ].filter((part) => part).join(" · ");
+      };
+      select.addEventListener("change", updateHint);
+      updateHint();
+      const actions = document.createElement("div");
+      actions.className = "actions";
+      const btn = document.createElement("button");
+      btn.className = "primary";
+      btn.textContent = "开始合成";
+      const status = document.createElement("span");
+      status.className = "status";
+      actions.appendChild(btn);
+      actions.appendChild(status);
+      body.appendChild(actions);
+      const resultBox = document.createElement("div");
+      body.appendChild(resultBox);
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        status.classList.remove("error");
+        status.textContent = "ffmpeg 合成中…（30 张图大约十几秒到一分钟）";
+        try {
+          const info = await api(`/runs/${encodeURIComponent(runId)}/video`, {
+            method: "POST",
+            body: JSON.stringify({ preset: select.value }),
+          });
+          status.classList.remove("error");
+          status.textContent = "完成：" + [
+            info.size[0] + "×" + info.size[1],
+            Math.round(info.duration) + "s",
+            info.skipped && info.skipped.length ? "跳过未生成 " + info.skipped.length + " 张" : null,
+          ].filter(Boolean).join(" · ");
+          resultBox.innerHTML = "";
+          const vid = document.createElement("video");
+          vid.controls = true;
+          vid.autoplay = true;
+          vid.muted = true;
+          vid.preload = "metadata";
+          vid.src = info.url;
+          resultBox.appendChild(vid);
+          const dl = document.createElement("a");
+          dl.className = "btn";
+          dl.href = info.url;
+          dl.download = info.name;
+          dl.textContent = "下载 MP4";
+          resultBox.appendChild(dl);
+          await Media.loadImages(runId);
+        } catch (error) {
+          status.classList.add("error");
+          status.textContent = "合成失败：" + error.message;
+          btn.disabled = false;
+        }
+      });
+    });
   });
 });

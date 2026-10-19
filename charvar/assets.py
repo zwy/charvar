@@ -64,7 +64,7 @@ def sheet_path(run_id: str, kind: str) -> Path:
 
 
 def resolve_run_asset(run_id: str, scene: str, filename: str) -> Path:
-    if scene not in {"original", "thumbs", "sheets"}:
+    if scene not in {"original", "thumbs", "sheets", "videos"}:
         raise ValueError("非法资产目录")
     path = run_assets_dir(run_id) / scene / safe_filename(filename)
     if not path.exists():

@@ -284,3 +284,75 @@ def test_comfy_auto_workload(tmp_path, monkeypatch, client):
     assert with_refs["workload"] == "Edit"
     # 注：设置页清空 workflow 名时 get_settings 回退内置默认名（成对文件缺失 → 404 找不到），
     # 所以「未指定 workflow」分支只出现在显式 workload 为空且默认名也解析失败的情形，不在此展开。
+
+
+def test_video_preset_endpoint_and_render(tmp_path, monkeypatch, client):
+    """GET /video-presets 列出预设；POST /runs/{id}/video 用真 ffmpeg 渲染小样。"""
+    import io
+    import shutil as _shutil
+
+    from PIL import Image
+
+    if _shutil.which("ffmpeg") is None:
+        pytest.skip("需要 ffmpeg")
+
+    # 视频/提示词预设都指到 tmp：拷贝真预设保证 /generate 可用，另加一个小预设
+    presets_root = tmp_path / "presets"
+    presets_root.mkdir()
+    src_presets = pathlib.Path(__file__).resolve().parent.parent / "presets"
+    for src in src_presets.glob("*.yaml"):
+        _shutil.copy(src, presets_root / src.name)
+    _shutil.copytree(src_presets / "wildcards", presets_root / "wildcards")
+    (presets_root / "video").mkdir()
+    (presets_root / "video" / "tiny.yaml").write_text(
+        "\n".join(
+            [
+                "name: tiny",
+                'type: video',
+                "aspect: '9:16'",
+                "resolution: 720p",
+                "fps: 8",
+                "seconds_per_image: 0.25",
+                "include_contact_sheet: false",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("CHARVAR_PRESETS_DIR", str(presets_root))
+
+    names = {p["name"]: p for p in client.get("/video-presets").json()}
+    assert "tiny" in names
+    assert names["tiny"]["size"] == [720, 1280]
+
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+    run_id = client.post(
+        "/generate", json={"subject_id": "demo_witch", "preset": "q21_default_30", "seed": 42}
+    ).json()["run_id"]
+
+    # 手工放 3 张小图（模拟 ComfyUI 已同步）
+    gen_dir = tmp_path / "generated" / run_id
+    for index in range(3):
+        buf = io.BytesIO()
+        Image.new("RGB", (64, 64), (30, 60, 90)).save(buf, format="PNG")
+        (gen_dir / "original").mkdir(parents=True, exist_ok=True)
+        (gen_dir / "original" / f"{index:06d}.png").write_bytes(buf.getvalue())
+
+    resp = client.post("/runs/demo_witch-x/video", json={"preset": "tiny"})
+    assert resp.status_code == 404  # run 不存在
+
+    resp = client.post(f"/runs/{run_id}/video", json={"preset": "nope"}).json()
+    assert resp.status_code == 400 if hasattr(resp, "status_code") else client.post(
+        f"/runs/{run_id}/video", json={"preset": "nope"}
+    ).status_code == 400
+
+    done = client.post(f"/runs/{run_id}/video", json={"preset": "tiny"}).json()
+    assert done["size"] == [720, 1280]
+    assert done["images_used"] == 3
+    assert 0 < done["duration"] < 5
+    listing = client.get(f"/runs/{run_id}/images").json()
+    assert [v["name"] for v in listing["videos"]] == ["tiny.mp4"]
+    video_resp = client.get(f"/runs/{run_id}/assets/videos/tiny.mp4")
+    assert video_resp.status_code == 200
+    assert b"ftyp" in video_resp.content[:64]
+    again = client.post(f"/runs/{run_id}/video", json={"preset": "tiny"})
+    assert again.status_code == 200  # 同名重跑覆盖

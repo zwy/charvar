@@ -169,6 +169,9 @@ td .caption { color: var(--muted); }
 .image-card { display: flex; flex-direction: column; gap: 6px; background: #fff; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; cursor: pointer; transition: border-color .18s ease; }
 .image-card:hover, .image-card:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .image-card img { display: block; width: 100%; height: auto; object-fit: contain; background: #f4f6f9; }
+.image-card video { display: block; width: 100%; background: #000; border-bottom: 1px solid var(--line); }
+.modal-body video { display: block; width: 100%; max-height: 62vh; border-radius: 10px; background: #000; }
+.modal-body .actions a.btn { margin-left: 8px; }
 .image-card .image-meta, .image-card .image-actions { padding: 0 10px; }
 .image-card .image-actions { display: flex; gap: 6px; padding-bottom: 10px; flex-wrap: wrap; }
 .image-card .image-actions button { padding: 3px 8px; font-size: 12px; }
