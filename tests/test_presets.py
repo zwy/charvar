@@ -187,3 +187,68 @@ def test_q21_v2_30_prompt_and_caption():
     )
     item3 = composer.generate(subject, preset, req3).items[0]
     assert item3.prompt.endswith("no text.")
+
+
+# ---------- expressions_v1_24（纯表情预设 V1：24 种，独立于 q21 场景预设） ----------
+
+EXPRESSIONS_V1_24_DIGEST = "15ea68460a071c9cdde27214aafed37dd304e958edc1e8d1972c95f47496fdd5"
+
+EXPRESSION_IDS = (
+    "neutral", "soft_smile", "toothy_smile", "laugh", "sad", "tearful", "crying", "angry",
+    "furious", "surprised", "afraid", "disgusted", "confused", "skeptical", "aggrieved",
+    "annoyed", "unimpressed", "smug", "embarrassed", "sleepy", "pout", "puffed_cheeks",
+    "wink", "tongue_out",
+)
+
+
+def test_expressions_v1_24_digest_locked():
+    """红线：expressions_v1_24 的 24 条 variants 文本逐字不变（V1 基准 sha256）。"""
+    preset = load("expressions_v1_24")
+    assert isinstance(preset, ListPreset)
+    assert len(preset.variants) == 24
+    assert {v.id for v in preset.variants} == {f"expr_{e}" for e in EXPRESSION_IDS}
+    assert _texts_digest("expressions_v1_24") == EXPRESSIONS_V1_24_DIGEST, (
+        "expressions_v1_24 的变体文本偏离 V1 基准；如确需修改，请显式重算并更新基准"
+    )
+
+
+def test_expressions_v1_24_structure_and_caption():
+    from charvar import composer
+    from charvar.caption import build_caption
+    from charvar.models import GenerateRequest, SubjectProfile
+
+    preset = load("expressions_v1_24")
+    # 全部为头肩正面；expression 字段与 caption 标签一一对应
+    for spec in preset.variants:
+        assert spec.framing == "head"
+        assert spec.angle == "front"
+        assert spec.expression == spec.id[len("expr_"):]
+    # 单项背景/光照池（固定值），caption 不加 " background" 后缀
+    assert preset.caption_background_suffix is False
+    assert len(preset.backgrounds) == 1
+    assert len(preset.lighting) == 1
+    assert "headshot" in load("expressions_v1_24").reference_order
+    assert set(preset.caption_tags["expression"]) == set(EXPRESSION_IDS)
+
+    subject = SubjectProfile(id="demo", name="演示", subject_noun="woman", reference_tag="<image1>")
+    subject.style_lock = ["2D hand-drawn illustration"]
+    spec = preset.variants[0]
+    caption = build_caption(
+        subject, spec, preset.backgrounds[0], preset.lighting[0],
+        preset.caption_tags, background_suffix=preset.caption_background_suffix,
+    )
+    assert "neutral expression" in caption
+    assert "a seamless neutral light gray studio backdrop, plain and uncluttered" in caption
+    assert "backdrop background" not in caption
+
+    req = GenerateRequest(subject_id="demo", preset="expressions_v1_24", seed=42,
+                          randomize_background=True, randomize_lighting=True)
+    result = composer.generate(subject, preset, req)
+    assert len(result.items) == 24
+    item = result.items[0]
+    # master（含参考标签与表情覆盖声明）+ 变体文本 + 背景/光照句
+    assert "<image1>" in item.prompt
+    assert "Create one straight-on head-and-shoulders portrait" in item.prompt
+    assert "A calm neutral expression." in item.prompt
+    assert "The background is " in item.prompt
+    assert "The lighting is " in item.prompt

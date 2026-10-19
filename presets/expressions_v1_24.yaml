@@ -1,0 +1,357 @@
+# charvar 纯表情预设 V1：24 种；新增文件，不修改 Q21 原始预设。
+# 放入项目 presets 目录；建议文件名 expressions_v1_24.yaml。
+# 参考图：仅 headshot，一张图。经典模式 reference_tag 应与实际参考图标签一致，默认 <image1>。
+# 为兼容现有 ComfyUI 工作流保留 <image1> 引用机制；抖音部署时改用 素材1。
+# 推荐先使用 classic 模式；现有 LLM 改写可能弱化 text 中的面部动作。
+# 主体档案请移除固定微笑、固定半闭眼等默认神情，只保留静态身份特征。
+# 背景和光照使用内联单项池，不需要 backgrounds_ref / lighting_ref 或新 wildcard 文件。
+# UI 保持背景/光照随机开关开启，单项池仍输出固定值；清空旧的固定背景/光照覆盖值。
+# 若关闭随机开关，须在 UI 同时指定固定背景/光照，否则现有 composer 会省略对应后缀。
+# 中等可辨强度；暴怒/大笑按各条定义。含泪/哭泣包含真实泪水，不含装饰符号。
+# 这是待出图验证的提示词预设，不承诺跨模型、跨人物完全一致。
+# 表情清单：
+# 01. expr_neutral: 平静
+# 02. expr_soft_smile: 闭嘴微笑
+# 03. expr_toothy_smile: 露齿笑
+# 04. expr_laugh: 开怀大笑
+# 05. expr_sad: 悲伤
+# 06. expr_tearful: 含泪欲哭
+# 07. expr_crying: 哭泣
+# 08. expr_angry: 生气
+# 09. expr_furious: 暴怒
+# 10. expr_surprised: 惊讶
+# 11. expr_afraid: 害怕
+# 12. expr_disgusted: 厌恶
+# 13. expr_confused: 疑惑
+# 14. expr_skeptical: 怀疑
+# 15. expr_aggrieved: 委屈
+# 16. expr_annoyed: 不耐烦
+# 17. expr_unimpressed: 无语／不为所动
+# 18. expr_smug: 得意
+# 19. expr_embarrassed: 尴尬
+# 20. expr_sleepy: 困倦
+# 21. expr_pout: 嘟嘴
+# 22. expr_puffed_cheeks: 鼓腮
+# 23. expr_wink: 单眼眨眼
+# 24. expr_tongue_out: 吐舌
+
+name: expressions_v1_24
+type: list
+version: 1
+master_template: |-
+  {style_lock_sentence}{identity_lock_sentence}{outfit_lock_sentence}{extra}
+  Use {reference_tag} as the reference for the character's identity, art style, medium, and rendering. Preserve the underlying facial proportions, distinctive features, natural eye and lip shapes, skin tone, hairstyle, hair color, headwear, and visible upper clothing. Replace the reference expression with the target expression described below: eyebrow position, eyelid opening, cheek shape, lip pose, and jaw opening may change naturally while the character remains recognizable. The target expression takes precedence over any default expression in the reference or subject description.
+  Create one straight-on head-and-shoulders portrait of this character. The camera is at eye level, directly in front of the face, with natural portrait perspective. The complete head, chin, hair, and headwear fit inside the frame with a small margin above, and only the neck and upper shoulders appear below. The face is large and centered; preserve this framing across variants. Keep the head upright and level with no turn, tilt, nod, or backward lean. The shoulders face the camera and stay level and relaxed. Preserve natural facial asymmetry and allow the expression-specific asymmetry requested below. The eyes look toward the camera unless the target facial action explicitly closes or narrows them. Use the reference only for identity and appearance, not its expression, head pose, crop, background, or lighting. One character only, one image, no grid, no hands, props, text, symbols, or watermark.
+suffix_template: The background is {background}. The lighting is {lighting}.
+backgrounds:
+- a seamless neutral light gray studio backdrop, plain and uncluttered
+lighting:
+- soft neutral diffused frontal studio light, evenly illuminating both sides of the face with gentle natural shadows
+  and balanced exposure
+caption_background_suffix: false
+reference_order:
+- headshot
+caption_tags:
+  expression:
+    neutral: neutral expression
+    soft_smile: gentle closed-mouth smile
+    toothy_smile: toothy smile
+    laugh: laughing
+    sad: sad expression
+    tearful: tearful expression
+    crying: crying with tears
+    angry: angry expression
+    furious: furious expression
+    surprised: surprised expression
+    afraid: afraid expression
+    disgusted: disgusted expression
+    confused: confused expression
+    skeptical: skeptical expression
+    aggrieved: aggrieved expression
+    annoyed: annoyed expression
+    unimpressed: unimpressed expression
+    smug: smug expression
+    embarrassed: embarrassed expression
+    sleepy: sleepy expression
+    pout: pouting lips
+    puffed_cheeks: puffed cheeks
+    wink: winking
+    tongue_out: tongue out
+variants:
+- id: expr_neutral
+  text: A calm neutral expression. The eyebrows rest in their natural position, the eyelids are relaxed, and the
+    eyes look into the camera. The lips rest gently together with level mouth corners, the cheeks are relaxed, and
+    the jaw is at rest.
+  framing: head
+  angle: front
+  expression: neutral
+  tags:
+  - head
+  - front
+  - neutral
+- id: expr_soft_smile
+  text: A gentle closed-mouth smile. Both mouth corners lift slightly and evenly, the cheeks lift subtly, and the
+    lower eyelids rise a little. The eyebrows remain relaxed. The lips stay together with no teeth visible; the
+    eyes remain open and look into the camera.
+  framing: head
+  angle: front
+  expression: soft_smile
+  tags:
+  - head
+  - front
+  - soft_smile
+- id: expr_toothy_smile
+  text: A clear friendly toothy smile. Both mouth corners pull upward and outward, the lips part enough to show
+    the upper teeth, and the cheeks lift. The eyes remain visibly open with a gentle narrowing of the lower eyelids.
+    The jaw opens only slightly, distinguishing this smile from open-mouth laughter.
+  framing: head
+  angle: front
+  expression: toothy_smile
+  tags:
+  - head
+  - front
+  - toothy_smile
+- id: expr_laugh
+  text: An open-mouth joyful laugh. The jaw drops moderately, both mouth corners pull upward and outward, and the
+    upper teeth are visible. The cheeks lift strongly and push the lower eyelids upward so both eyes narrow noticeably.
+    The eyebrows remain relaxed; the head stays upright rather than tilting back.
+  framing: head
+  angle: front
+  expression: laugh
+  tags:
+  - head
+  - front
+  - laugh
+- id: expr_sad
+  text: A clearly sad expression. The inner ends of both eyebrows lift and draw slightly together while their outer
+    ends remain lower. The upper eyelids lower slightly, both mouth corners turn downward, and the lips remain gently
+    closed. The eyes stay directed toward the camera. The eyes and cheeks are dry, with no tears.
+  framing: head
+  angle: front
+  expression: sad
+  tags:
+  - head
+  - front
+  - sad
+- id: expr_tearful
+  text: A tearful expression just before crying. The inner ends of both eyebrows lift and draw together, the lower
+    eyelids tighten slightly, and a visible clear tear meniscus gathers along the lower eyelid rims. Both mouth
+    corners turn downward and the lips press gently together. The eyes remain open toward the camera; tears are
+    pooled in the eyes, not running down the cheeks.
+  framing: head
+  angle: front
+  expression: tearful
+  tags:
+  - head
+  - front
+  - tearful
+- id: expr_crying
+  text: A clearly crying expression. The inner ends of both eyebrows lift and draw together, the eyelids tighten
+    and narrow slightly, and clear tears run from the lower eyelids down both cheeks. Both mouth corners turn downward
+    and the lips part slightly in distress. The head remains level and the hands stay outside the image.
+  framing: head
+  angle: front
+  expression: crying
+  tags:
+  - head
+  - front
+  - crying
+- id: expr_angry
+  text: A controlled angry expression. Both eyebrows lower and draw inward, creating tension between them. The eyelids
+    tighten around a direct gaze into the camera. The lips press firmly together with level or slightly lowered
+    mouth corners, and the jaw is tense. The mouth stays closed and no teeth are visible.
+  framing: head
+  angle: front
+  expression: angry
+  tags:
+  - head
+  - front
+  - angry
+- id: expr_furious
+  text: A furious open-mouth expression. Both eyebrows pull strongly downward and inward, the upper eyelids are
+    tense, and the eyes stare toward the camera. The mouth opens moderately in an angry shout with the upper teeth
+    visible; the lips are tense and the mouth corners pull outward rather than upward into a smile. The cheeks do
+    not lift into smiling curves. The head stays level.
+  framing: head
+  angle: front
+  expression: furious
+  tags:
+  - head
+  - front
+  - furious
+- id: expr_surprised
+  text: A clear surprised expression. Both eyebrows rise in rounded arches, the upper eyelids lift so both eyes
+    widen, and the lips part into a small rounded opening. The jaw drops slightly. The eyebrows remain separated
+    rather than drawing together, and the mouth corners stay relaxed rather than stretching sideways in fear. Keep
+    the original iris size and facial proportions.
+  framing: head
+  angle: front
+  expression: surprised
+  tags:
+  - head
+  - front
+  - surprised
+- id: expr_afraid
+  text: A visibly afraid expression. Both eyebrows lift and draw inward, the upper eyelids rise, and the lower eyelids
+    tense beneath widened eyes. The lips part slightly while stretching horizontally, creating a tense flattened
+    mouth opening rather than a round O. The mouth corners do not rise into a smile. The gaze stays toward the camera.
+  framing: head
+  angle: front
+  expression: afraid
+  tags:
+  - head
+  - front
+  - afraid
+- id: expr_disgusted
+  text: A clear disgusted expression. The nose bridge wrinkles subtly, the upper lip lifts to expose a little of
+    the upper teeth, and the nostril area rises. The eyes narrow slightly and the lower lip remains comparatively
+    relaxed. Keep the mouth only slightly open; the main distinguishing actions are the wrinkled nose and raised
+    upper lip, not a broad angry shout.
+  framing: head
+  angle: front
+  expression: disgusted
+  tags:
+  - head
+  - front
+  - disgusted
+- id: expr_confused
+  text: A puzzled confused expression. The inner ends of the eyebrows draw slightly together, with the character's
+    left eyebrow a little higher than the right. Both eyes stay normally open and look into the camera. The lips
+    part slightly with relaxed mouth corners, as if silently wondering what happened. Keep the head level; do not
+    use a head tilt to communicate confusion.
+  framing: head
+  angle: front
+  expression: confused
+  tags:
+  - head
+  - front
+  - confused
+- id: expr_skeptical
+  text: A skeptical expression. The character's left eyebrow lifts clearly while the right eyebrow stays near its
+    resting position. Both eyes remain open but the eyelids narrow slightly. The lips stay closed with level mouth
+    corners. Keep a direct gaze and a level head; the raised single eyebrow and restrained eyes carry the expression,
+    without a smile.
+  framing: head
+  angle: front
+  expression: skeptical
+  tags:
+  - head
+  - front
+  - skeptical
+- id: expr_aggrieved
+  text: An aggrieved, hurt expression. The inner ends of both eyebrows lift and move slightly together. The lower
+    lip projects a little beyond the upper lip, and both mouth corners turn gently downward. The eyes remain open
+    toward the camera, with dry cheeks and no tears. Keep the cheeks uninflated and avoid pushing both lips forward
+    into a kiss shape.
+  framing: head
+  angle: front
+  expression: aggrieved
+  tags:
+  - head
+  - front
+  - aggrieved
+- id: expr_annoyed
+  text: An irritated impatient expression. Both eyebrows lower slightly and draw a little inward. The upper eyelids
+    lower mildly while the lower eyelids remain tense, producing a restrained direct stare. The lips press into
+    a thin closed line with slightly downturned corners. Keep the mouth closed, the cheeks relaxed, and the expression
+    less intense than anger.
+  framing: head
+  angle: front
+  expression: annoyed
+  tags:
+  - head
+  - front
+  - annoyed
+- id: expr_unimpressed
+  text: A flat unimpressed expression. Both upper eyelids lower to a clear half-lidded position. The eyebrows stay
+    near their natural level with no strong inward frown. The lips remain closed in a straight relaxed line, the
+    cheeks stay still, and the jaw remains relaxed. The visible eyes look toward the camera. Avoid a smile or a
+    pronounced angry brow.
+  framing: head
+  angle: front
+  expression: unimpressed
+  tags:
+  - head
+  - front
+  - unimpressed
+- id: expr_smug
+  text: A smug one-sided smirk. The character's left mouth corner lifts distinctly while the right mouth corner
+    stays near neutral. The lips remain closed, the eyelids lower slightly, and the eyebrows remain relaxed. Keep
+    the head level and the gaze toward the camera. Preserve the original facial structure while allowing the expression
+    itself to be asymmetric.
+  framing: head
+  angle: front
+  expression: smug
+  tags:
+  - head
+  - front
+  - smug
+- id: expr_embarrassed
+  text: An awkward embarrassed expression. The inner ends of the eyebrows lift slightly. The closed lips stretch
+    sideways into a small tight uneasy smile, with the corners only minimally raised and the cheeks barely lifted.
+    The eyes remain open and look into the camera. Keep the natural skin tone unchanged, without added blush, sweat
+    symbols, or decorative marks.
+  framing: head
+  angle: front
+  expression: embarrassed
+  tags:
+  - head
+  - front
+  - embarrassed
+- id: expr_sleepy
+  text: A sleepy expression. Both upper eyelids droop heavily so the eyes are only partly open. The eyebrows, lower
+    eyelids, cheeks, and jaw stay relaxed. The lips rest gently together with neutral mouth corners. Keep the head
+    upright and level, without yawning or lowering the chin; the heavy eyelids carry the expression.
+  framing: head
+  angle: front
+  expression: sleepy
+  tags:
+  - head
+  - front
+  - sleepy
+- id: expr_pout
+  text: A clear closed-mouth lip pout. Both lips gently press together and project forward, with the lower lip slightly
+    more prominent. The eyebrows remain relaxed, the eyes stay naturally open toward the camera, and the cheeks
+    retain their normal uninflated shape. The lips, not puffed cheeks or an angry frown, carry this facial action.
+  framing: head
+  angle: front
+  expression: pout
+  tags:
+  - head
+  - front
+  - pout
+- id: expr_puffed_cheeks
+  text: Both cheeks are visibly inflated with air in a balanced rounded shape. The lips seal firmly at the center
+    without protruding into a kiss shape. The eyebrows remain relaxed and both eyes stay naturally open toward the
+    camera. Preserve the nose, chin, and underlying facial proportions; only the soft cheeks expand.
+  framing: head
+  angle: front
+  expression: puffed_cheeks
+  tags:
+  - head
+  - front
+  - puffed_cheeks
+- id: expr_wink
+  text: A clear single-eye wink. The character's own left eye, on the viewer's right in this frontal portrait, is
+    fully closed; the character's own right eye remains open and looks into the camera. Both mouth corners lift
+    slightly in a closed-mouth smile. Keep the head level and both eyebrows relaxed. Close exactly one eye, without
+    adding a hand gesture.
+  framing: head
+  angle: front
+  expression: wink
+  tags:
+  - head
+  - front
+  - wink
+- id: expr_tongue_out
+  text: A playful tongue-out facial action. The mouth opens slightly and a short visible tongue tip extends straight
+    forward over the lower lip, centered in the mouth. Both eyes stay naturally open toward the camera and the eyebrows
+    remain relaxed. Keep the head level, the tongue anatomically modest, and the cheeks uninflated; no wink or hand
+    gesture.
+  framing: head
+  angle: front
+  expression: tongue_out
+  tags:
+  - head
+  - front
+  - tongue_out
