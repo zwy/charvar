@@ -27,43 +27,37 @@ def _png_bytes(color=(200, 100, 50), size=(64, 96)) -> bytes:
     return buf.getvalue()
 
 
-def _setup_workflows(tmp_path, monkeypatch) -> pathlib.Path:
+def _setup_workflows(tmp_path, monkeypatch, with_latent: bool = False) -> pathlib.Path:
     workflows_dir = tmp_path / "workflows"
     workflows_dir.mkdir()
-    workflows = {
-        "nodes": {
-            "11": {"class_type": "CLIPTextEncode", "inputs": {"text": "x"}},
-            "470": {"class_type": "LoadImage", "inputs": {"image": "ref.png"}},
-            "47": {"class_type": "SaveImage", "inputs": {"filename_prefix": "p"}},
-        }
-    }["nodes"]
+    workflows: dict[str, dict] = {
+        "11": {"class_type": "CLIPTextEncode", "inputs": {"text": "x"}},
+        "470": {"class_type": "LoadImage", "inputs": {"image": "ref.png"}},
+        "47": {"class_type": "SaveImage", "inputs": {"filename_prefix": "p"}},
+    }
+    if with_latent:
+        workflows["55"] = {"class_type": "EmptyLatentImage", "inputs": {"width": 1024, "height": 1024, "batch_size": 1}}
     (workflows_dir / "TestT2I.json").write_text(json.dumps(workflows), encoding="utf-8")
-    (workflows_dir / "TestT2I.mapping.json").write_text(
-        json.dumps(
-            {
-                "output_nodes": ["47"],
-                "mappings": [
-                    {"field": "prompt", "node_id": "11", "input_key": "text", "required": True},
-                    {"field": "filename_prefix", "node_id": "47", "input_key": "filename_prefix"},
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
+    t2i_mappings = [
+        {"field": "prompt", "node_id": "11", "input_key": "text", "required": True},
+        {"field": "filename_prefix", "node_id": "47", "input_key": "filename_prefix"},
+    ]
+    edit_mappings = [
+        {"field": "image", "node_id": "470", "input_key": "image", "required": False},
+        {"field": "prompt", "node_id": "11", "input_key": "text", "required": True},
+        {"field": "filename_prefix", "node_id": "47", "input_key": "filename_prefix"},
+    ]
+    if with_latent:
+        # 注入 target：EmptyLatentImage 的 width/height（真实 edit workflow 的出图尺寸入口）
+        latent_mappings = [
+            {"field": "width", "node_id": "55", "input_key": "width", "default": 1024},
+            {"field": "height", "node_id": "55", "input_key": "height", "default": 1024},
+        ]
+        t2i_mappings += latent_mappings
+        edit_mappings += latent_mappings
+    (workflows_dir / "TestT2I.mapping.json").write_text(json.dumps({"output_nodes": ["47"], "mappings": t2i_mappings}), encoding="utf-8")
     (workflows_dir / "TestEdit.json").write_text(json.dumps(workflows), encoding="utf-8")
-    (workflows_dir / "TestEdit.mapping.json").write_text(
-        json.dumps(
-            {
-                "output_nodes": ["47"],
-                "mappings": [
-                    {"field": "image", "node_id": "470", "input_key": "image", "required": False},
-                    {"field": "prompt", "node_id": "11", "input_key": "text", "required": True},
-                    {"field": "filename_prefix", "node_id": "47", "input_key": "filename_prefix"},
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
+    (workflows_dir / "TestEdit.mapping.json").write_text(json.dumps({"output_nodes": ["47"], "mappings": edit_mappings}), encoding="utf-8")
     monkeypatch.setenv("COMFYUI_WORKFLOWS_DIR", str(workflows_dir))
     client_settings = {"comfy_t2i_workflow": "TestT2I", "comfy_edit_workflow": "TestEdit"}
     return client_settings
@@ -367,3 +361,64 @@ def test_prompt_put_upsert_and_preserve(client, tmp_path):
 
     assert client.put("/subjects/demo_witch/images/other/prompt", json={"prompt": "x"}).status_code == 400
     assert client.put("/subjects/missing/images/front/prompt", json={"prompt": "x"}).status_code == 404
+
+
+def test_generate_edit_injects_slot_size(client, tmp_path, monkeypatch):
+    """回归：edit 槽位生成必须注入「主体图默认尺寸」里的画幅——
+    edit workflow 的出图 latent 是 EmptyLatentImage（不随参考图尺寸），
+    不注入就落到 workflow 内置 1024×1024（1:1）。请求显式画幅优先于设置。"""
+    settings = _setup_workflows(tmp_path, monkeypatch, with_latent=True)
+    client.put("/settings", json=settings)
+    queued = _mock_comfy(monkeypatch, [], [])
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+    client.post(
+        "/subjects/demo_witch/images/character_sheet/upload",
+        files={"file": ("sheet.png", _png_bytes(), "image/png")},
+    )
+
+    resp = client.post(
+        "/subjects/demo_witch/images/headshot/generate",
+        json={"prompt": "chest-up portrait of the same character", "seed": 3},
+    )
+    assert resp.status_code == 200, resp.text
+    payload = queued[0]["prompt"]
+    # headshot 默认 3:4/1k → 768×1024（长边 1024，短边取 64 倍数）
+    assert payload["55"]["inputs"]["width"] == 768
+    assert payload["55"]["inputs"]["height"] == 1024
+
+    # 请求显式画幅优先于设置
+    resp = client.post(
+        "/subjects/demo_witch/images/headshot/generate",
+        json={"prompt": "p", "seed": 4, "aspect_ratio": "1:1"},
+    )
+    assert resp.status_code == 200
+    payload = queued[1]["prompt"]
+    assert payload["55"]["inputs"]["width"] == 1024
+    assert payload["55"]["inputs"]["height"] == 1024
+
+
+def test_generate_batch_injects_per_kind_size(client, tmp_path, monkeypatch):
+    """批量生成按各槽位自己的画幅注入 width/height（3:4 headshot → 768×1024，
+    2:3 front → 704×1024），参考图只上传一次，种子跨槽位递增。"""
+    settings = _setup_workflows(tmp_path, monkeypatch, with_latent=True)
+    client.put("/settings", json=settings)
+    uploads: list[str] = []
+    queued = _mock_comfy(monkeypatch, uploads, [])
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+    client.post(
+        "/subjects/demo_witch/images/character_sheet/upload",
+        files={"file": ("sheet.png", _png_bytes(), "image/png")},
+    )
+    conn = storage.connect(pathlib.Path(tmp_path) / "test.db")
+    storage.upsert_subject_image(conn, {"subject_id": "demo_witch", "kind": "headshot", "prompt": "p-head"})
+    storage.upsert_subject_image(conn, {"subject_id": "demo_witch", "kind": "front", "prompt": "p-front"})
+
+    resp = client.post("/subjects/demo_witch/images/generate-batch", json={"kinds": ["headshot", "front"], "seed": 5})
+    assert resp.status_code == 200, resp.text
+    assert uploads == ["demo_witch_character_sheet.png"]
+    head, front = queued[0]["prompt"], queued[1]["prompt"]
+    assert head["55"]["inputs"]["width"] == 768 and head["55"]["inputs"]["height"] == 1024
+    assert front["55"]["inputs"]["width"] == 704 and front["55"]["inputs"]["height"] == 1024
+    # 逐槽位提交 + index 递增 → 前缀序号与旧的单次提交一致
+    assert head["47"]["inputs"]["filename_prefix"] == "demo_witch_000_headshot"
+    assert front["47"]["inputs"]["filename_prefix"] == "demo_witch_001_front"

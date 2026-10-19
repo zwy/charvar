@@ -287,8 +287,14 @@ def generate_subject_image(
     )
     workflow, mapping = comfyui_exporter.load_workflow_pair(workflow_name)
 
+    # 槽位默认画幅对两类 workflow 都生效：edit workflow 的出图 latent 是
+    # EmptyLatentImage（switch 恒选它，不随参考图尺寸），不注入 width/height
+    # 就会落到 mapping 默认 1024×1024（1:1）。请求显式传参时优先于设置。
     size = settings.image_sizes.get(kind)
     overrides: dict[str, Any] = {}
+    if aspect_ratio is None and size is not None:
+        aspect_ratio = size.aspect_ratio
+        resolution = resolution or size.resolution
     sheet_file = _require_ready_sheet(conn, subject.id) if kind in SHEET_DEPENDENT_KINDS else None
     if sheet_file is not None:
         remote = comfyui_exporter.upload_image(
@@ -297,9 +303,6 @@ def generate_subject_image(
             remote_name=f"{subject.id}_character_sheet{sheet_file.suffix}",
         )
         overrides["image"] = remote
-    elif aspect_ratio is None and size is not None:
-        aspect_ratio = size.aspect_ratio
-        resolution = resolution or size.resolution
     if settings.default_negative_prompt:
         overrides["negative_prompt"] = settings.default_negative_prompt
 
@@ -388,42 +391,39 @@ def generate_subject_images_batch(
     if settings.default_negative_prompt:
         overrides["negative_prompt"] = settings.default_negative_prompt
 
-    result = _synthetic_result(subject.id, seed, prompts)
-    for kind, prompt in prompts:
-        _save_row(conn, SubjectImageSlot(subject_id=subject.id, kind=kind, status="queued", source="generated", prompt=prompt, label=KIND_LABELS.get(kind, kind)))
-    prompt_ids: dict[str, str] = {}
-
-    def _on_submitted(item: PromptItem, prompt_id: str, prefix: str) -> None:
-        prompt_ids[item.variant_id] = prompt_id
-        row = storage.get_subject_image(conn, subject.id, item.variant_id) or {}
-        _save_row(conn, SubjectImageSlot(
-            subject_id=subject.id,
-            kind=item.variant_id,
-            status="queued",
-            source="generated",
-            prompt=row.get("prompt", ""),
-            prompt_id=prompt_id,
-        ))
-
-    try:
-        submissions = comfyui_exporter.submit(
-            result,
-            workflow,
-            mapping,
-            comfy_url=comfy_url,
-            overrides=overrides,
-            wait=wait,
-            on_submitted=_on_submitted,
-        )
-    except TimeoutError:
-        return [get_slot(conn, subject.id, k, settings.image_sizes) for k in kinds]
-    except FileNotFoundError as exc:
-        raise SubjectImageError(str(exc)) from exc
-
+    # 逐槽位提交：不同槽位可配不同画幅（单次 submit 的 aspect 全局统一），
+    # 参考图只上传一次共享；item.index 用全局序号，保持旧实现的 seed 递增。
     base = paths.comfy_base_url(comfy_url)
     slots: list[SubjectImageSlot] = []
-    for entry in submissions:
-        kind = str(entry["variant_id"])
+    for position, (kind, kind_prompt) in enumerate(prompts):
+        size = settings.image_sizes.get(kind)
+        kind_aspect = aspect_ratio if aspect_ratio is not None else getattr(size, "aspect_ratio", None)
+        kind_resolution = resolution if resolution is not None else getattr(size, "resolution", None)
+        _save_row(conn, SubjectImageSlot(
+            subject_id=subject.id, kind=kind, status="queued", source="generated", prompt=kind_prompt,
+            label=KIND_LABELS.get(kind, kind),
+        ))
+        result = _synthetic_result(subject.id, seed, [(kind, kind_prompt)])
+        result.items[0].index = position
+        try:
+            submissions = comfyui_exporter.submit(
+                result,
+                workflow,
+                mapping,
+                comfy_url=comfy_url,
+                overrides=overrides,
+                wait=wait,
+                aspect_ratio=kind_aspect,
+                resolution=kind_resolution,
+            )
+        except TimeoutError:
+            # 已入队的保持 queued（prompt_id 已落库），稍后 /sync 补拉；本轮不再提交后续槽位
+            slots.append(get_slot(conn, subject.id, kind, settings.image_sizes))
+            return slots
+        except FileNotFoundError as exc:
+            raise SubjectImageError(str(exc)) from exc
+
+        entry = submissions[0]
         if not entry.get("ok"):
             row = storage.get_subject_image(conn, subject.id, kind) or {}
             _save_row(conn, SubjectImageSlot(
@@ -433,6 +433,11 @@ def generate_subject_images_batch(
             slots.append(get_slot(conn, subject.id, kind, settings.image_sizes))
             continue
         if not wait:
+            row = storage.get_subject_image(conn, subject.id, kind) or {}
+            _save_row(conn, SubjectImageSlot(
+                subject_id=subject.id, kind=kind, status="queued", source="generated",
+                prompt=row.get("prompt", ""), prompt_id=str(entry.get("prompt_id") or ""),
+            ))
             slots.append(get_slot(conn, subject.id, kind, settings.image_sizes))  # 已入队，稍后 /sync
             continue
         slots.append(_download_and_finalize(conn, subject.id, kind, base, entry.get("files") or []))

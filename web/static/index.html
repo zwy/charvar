@@ -96,7 +96,7 @@
 <div class="card"><h2>生图 Workflow</h2><div class="form-grid">
 <label>文生图 workflow（主体图：三视图）<select id="set-t2i"></select></label>
 <label>图片编辑 workflow（LLM 模式变体 / 档案单图）<select id="set-edit"></select></label>
-<p class="form-note">提示：图片编辑 workflow 的参考图分支会以参考图尺寸出图；下面的画幅设置主要作用于文生图（三视图）。</p>
+<p class="form-note">提示：主体图各槽位一律按「主体图默认尺寸」的画幅 × 分辨率注入宽高出图，文生图（三视图）与图片编辑（其余 4 槽）都生效；参考图只提供外观，不决定画幅。</p>
 </div></div>
 <div class="card"><h2>主体图默认尺寸</h2><div id="settings-sizes" class="form-grid"></div></div>
 <div class="card"><h2>LLM</h2><div class="form-grid">
