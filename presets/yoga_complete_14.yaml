@@ -78,18 +78,18 @@ caption_tags:
 variants:
 - id: yoga_tree
   text: >-
-    Perform Tree Pose in a clear full-body front view. Left and right refer to the character's own body. The left
-    leg supports the body, with the whole left sole firmly contacting the ground. The standing leg extends naturally
-    without locking the knee backward. Bend the right knee and open it toward the character's right side. Place
-    the right sole against the inner left calf below the knee, with the right toes pointing downward; do not place
-    the foot against the knee joint. Keep the right foot-to-calf contact clear and the right knee, lower leg,
-    and foot naturally connected. Keep the pelvis approximately level, the torso upright, and the body weight
-    balanced above the standing left foot. Bring both palms together in front of the chest with fingertips pointing
-    upward and elbows opening comfortably outward. Keep the shoulders relaxed, the head upright, and the gaze
-    level ahead. Observe from directly in front at eye level, keeping the head, hands, open right knee, raised
-    right foot, and standing left foot fully inside the frame with a small margin.
+    Perform Tree Pose in a clear full-body front view. Left and right refer to the character's own body. The
+    left leg supports the body, with the whole left sole firmly contacting the ground. The standing leg extends
+    naturally without locking the knee backward. Bend the right knee and open it toward the character's right
+    side. Place the right sole against the inner left calf below the knee, with the right toes pointing
+    downward; do not place the foot against the knee joint. Keep the right foot-to-calf contact clear and the
+    right knee, lower leg, and foot naturally connected. Keep the pelvis approximately level, the torso upright,
+    and the body weight balanced above the standing left foot. Bring both palms together in front of the chest
+    with fingertips pointing upward and elbows opening comfortably outward. Keep the shoulders relaxed, the head
+    upright, and the gaze level ahead. Observe from directly in front at eye level, keeping the head, hands,
+    open right knee, raised right foot, and standing left foot fully inside the frame with a small margin.
   framing: full
-  angle: null
+  angle: front
   expression: null
   pose: tree
   tags:
@@ -100,17 +100,17 @@ variants:
   text: >-
     Perform Warrior II Pose with the character's right leg forward. Left and right refer to the character's own
     body. Place the right foot toward the left edge of the image and the left foot farther toward the right edge
-    in a wide stance. Turn the right toes toward the left edge and angle the rear left foot slightly inward, keeping
-    both feet firmly grounded. Bend the right knee over the right ankle, tracking in the same direction as the
-    right toes. Keep the rear left leg extended without bending it into a second lunge. Keep the torso upright
-    rather than leaning over the front thigh, with the chest open toward the camera. Extend the right arm toward
-    the left edge above the right leg and the left arm toward the right edge above the rear leg, forming one long
-    horizontal line at shoulder height, palms down. Turn the head toward the right fingertips without twisting
-    the torso to follow it. Observe near the front of the chest at natural torso height, with both arms and the
-    full wide-legged stance clearly readable. Keep the entire figure from fingertips and head to both feet inside
-    the frame with generous lateral margins.
+    in a wide stance. Turn the right toes toward the left edge and angle the rear left foot slightly inward,
+    keeping both feet firmly grounded. Bend the right knee over the right ankle, tracking in the same direction
+    as the right toes. Keep the rear left leg extended without bending it into a second lunge. Keep the torso
+    upright rather than leaning over the front thigh, with the chest open toward the camera. Extend the right
+    arm toward the left edge above the right leg and the left arm toward the right edge above the rear leg,
+    forming one long horizontal line at shoulder height, palms down. Turn the head toward the right fingertips
+    without twisting the torso to follow it. Observe from directly in front at natural torso height, with both
+    arms and the full wide-legged stance clearly readable. Keep the entire figure from fingertips and head to
+    both feet inside the frame with generous lateral margins.
   framing: full
-  angle: null
+  angle: front
   expression: null
   pose: warrior_ii
   tags:
@@ -120,18 +120,18 @@ variants:
 - id: yoga_triangle
   text: >-
     Perform Extended Triangle Pose toward the character's right leg. Left and right refer to the character's own
-    body. Spread the feet widely, placing the right foot toward the left edge of the image and the left foot toward
-    the right edge. Turn the right toes toward the left edge and the left toes slightly inward. Keep both legs
-    extended without locking the knees backward. Lengthen the torso over the right leg and then incline it sideways
-    toward that leg, rather than rounding the back into a forward fold. Rest the right hand lightly on the right
-    shin below the knee, not on the knee joint; do not force the hand to the floor. Extend the left arm upward
-    from the shoulder, with the shoulders approximately stacked and the chest open toward the viewer. Keep the
-    neck aligned comfortably and the gaze directed forward from the face rather than forcing a look into the lens
-    or up at the hand. Observe from the open-chest side with a slight oblique angle so the hand-to-shin contact
-    is visible. Keep the head, both hands, both straight legs, and both feet fully inside the frame. The straight
-    front knee distinguishes this pose from Extended Side Angle.
+    body. Spread the feet widely, placing the right foot toward the left edge of the image and the left foot
+    toward the right edge. Turn the right toes toward the left edge and the left toes slightly inward. Keep both
+    legs extended without locking the knees backward. Lengthen the torso over the right leg and then incline it
+    sideways toward that leg, rather than rounding the back into a forward fold. Rest the right hand lightly on
+    the right shin below the knee, not on the knee joint; do not force the hand to the floor. Extend the left
+    arm upward from the shoulder, with the shoulders approximately stacked and the chest open toward the viewer.
+    Keep the neck aligned comfortably and the gaze directed forward from the face rather than forcing a look
+    into the lens or up at the hand. Observe from directly in front so the hand-to-shin contact is visible. Keep
+    the head, both hands, both straight legs, and both feet fully inside the frame. The straight front knee
+    distinguishes this pose from Extended Side Angle.
   framing: full
-  angle: null
+  angle: front
   expression: null
   pose: triangle
   tags:
@@ -141,17 +141,18 @@ variants:
 - id: yoga_low_lunge
   text: >-
     Perform a kneeling Low Crescent Lunge with the character's right leg forward. Left and right refer to the
-    character's own body. Direct the body toward the left side of the image. Plant the right foot flat in front
-    and bend the right knee approximately above the right ankle. Extend the left leg behind toward the right side
-    of the image, with the left knee and the top of the left foot resting on the ground. Keep the pelvis facing
-    the same direction as the front leg, and maintain clear contact at the front foot and rear knee. Lift the
-    torso upright above the pelvis. Raise both arms overhead at about shoulder width, with open hands facing inward,
-    and keep the shoulders away from the ears. Use a long lifted torso with only a mild natural upper-chest opening,
-    not an extreme backbend. Keep the head aligned with the torso and look ahead. Observe from a side-front three-quarter
-    angle at torso height, showing the front-foot contact, the rear knee on the ground, and the overhead arms
-    clearly. Keep the complete figure from fingertips to both feet inside the frame.
+    character's own body. Direct the body toward the left edge of the image, with the character in a true side
+    profile. Plant the right foot flat in front and bend the right knee approximately above the right ankle.
+    Extend the left leg behind toward the right side of the image, with the left knee and the top of the left
+    foot resting on the ground. Keep the pelvis facing the same direction as the front leg, and maintain clear
+    contact at the front foot and rear knee. Lift the torso upright above the pelvis. Raise both arms overhead
+    at about shoulder width, with open hands facing inward, and keep the shoulders away from the ears. Use a
+    long lifted torso with only a mild natural upper-chest opening, not an extreme backbend. Keep the head
+    aligned with the torso and look ahead. Observe from the character's left side at torso height, showing the
+    front-foot contact, the rear knee on the ground, and the overhead arms clearly. Keep the complete figure
+    from fingertips to both feet inside the frame.
   framing: full
-  angle: null
+  angle: l90
   expression: null
   pose: low_lunge
   tags:
@@ -160,19 +161,19 @@ variants:
   - low_lunge
 - id: yoga_warrior_iii
   text: >-
-    Perform Warrior III Pose with the character's left leg supporting the body. Left and right refer to the character's
-    own body. Place the entire left sole firmly on the ground, with the standing knee naturally extended and not
-    locked backward. Hinge forward from the hips while extending the right leg straight behind. Bring the torso
-    and lifted right leg approximately into one long horizontal line, with the lifted right foot staying off the
-    ground. Keep the pelvis facing downward rather than opening sideways. Extend both arms forward beyond the
-    head at shoulder width, palms facing inward. Keep the arms, torso, and lifted leg reaching in opposing directions
-    without arching the lower back. Keep the neck in line with the spine and the gaze down toward the ground rather
-    than looking into the camera. Orient the hands and head toward the left edge of the image and the lifted right
-    foot toward the right edge. Observe from a slight side-front angle so the two reaching arms can be distinguished
-    naturally. Keep the fingertips, supporting left foot, and raised right foot fully inside a sufficiently wide
-    frame.
+    Perform Warrior III Pose with the character's left leg supporting the body. Left and right refer to the
+    character's own body. Place the entire left sole firmly on the ground, with the standing knee naturally
+    extended and not locked backward. Hinge forward from the hips while extending the right leg straight behind.
+    Bring the torso and lifted right leg approximately into one long horizontal line, with the lifted right foot
+    staying off the ground. Keep the pelvis facing downward rather than opening sideways. Extend both arms
+    forward beyond the head at shoulder width, palms facing inward. Keep the arms, torso, and lifted leg
+    reaching in opposing directions without arching the lower back. Keep the neck in line with the spine and the
+    gaze down toward the ground rather than looking into the camera. Orient the hands and head toward the left
+    edge of the image and the lifted right foot toward the right edge. Observe from the character's left side so
+    the two reaching arms can be distinguished naturally. Keep the fingertips, supporting left foot, and raised
+    right foot fully inside a sufficiently wide frame.
   framing: full
-  angle: null
+  angle: l90
   expression: null
   pose: warrior_iii
   tags:
@@ -182,19 +183,20 @@ variants:
 - id: yoga_dancer
   text: >-
     Perform the basic one-handed Dancer Pose, not an overhead-grip king-dancer variation. Left and right refer
-    to the character's own body. Stand on the left leg with the whole left sole firmly grounded and the knee naturally
-    extended. Bend the right knee so the right lower leg rises behind the body. Reach the right hand backward
-    and grip the right ankle, keeping this same-side hand-to-ankle connection clear and anatomically continuous.
-    Lift the right thigh backward and moderately upward, with the bent right knee pointing down and back rather
-    than opening sideways. Incline the torso slightly forward while lifting through the chest. Extend the left
-    arm forward at approximately shoulder height, with relaxed fingers. Keep the pelvis approximately facing forward,
-    the head aligned with the torso, and the gaze ahead along the forward-reaching arm. Orient the face and reaching
-    left hand toward the left edge of the image and the bent lifted right leg toward the right edge. Observe from
-    the character's right side with a slight frontward offset, so the right hand's grip on the right ankle remains
-    visible. Keep the full body, reaching hand, lifted foot, and standing foot in frame. Use a recognizable moderate
+    to the character's own body. Stand on the left leg with the whole left sole firmly grounded and the knee
+    naturally extended. Bend the right knee so the right lower leg rises behind the body. Reach the right hand
+    backward and grip the right ankle, keeping this same-side hand-to-ankle connection clear and anatomically
+    continuous. Lift the right thigh backward and moderately upward, with the bent right knee pointing down and
+    back rather than opening sideways. Incline the torso slightly forward while lifting through the chest.
+    Extend the left arm forward at approximately shoulder height, with relaxed fingers. Keep the pelvis
+    approximately facing forward, the head aligned with the torso, and the gaze ahead along the forward-reaching
+    arm. Keep the face and the reaching left hand toward the camera and the bent lifted right leg opening to the
+    character's right side, so the whole bow-shaped silhouette reads in one plane. Observe from directly in
+    front, so the right hand's grip on the right ankle and the lifted right leg both stay clearly visible. Keep
+    the full body, reaching hand, lifted foot, and standing foot in frame. Use a recognizable moderate
     bow-shaped silhouette rather than an extreme backbend.
   framing: full
-  angle: null
+  angle: front
   expression: null
   pose: dancer
   tags:
@@ -203,20 +205,20 @@ variants:
   - dancer
 - id: yoga_half_moon
   text: >-
-    Perform Half Moon Pose with the character's left leg as the standing leg. Left and right refer to the character's
-    own body. Ground the left foot and extend the standing left leg naturally without locking the knee backward.
-    Place the left fingertips on the ground a short distance forward of and slightly outside the left foot, with
-    the left wrist approximately below the left shoulder. Extend the right leg behind at approximately hip height,
-    keeping the lifted right foot off the ground. Rotate the pelvis and chest open to the side, with the right
-    hip above the left hip, rather than keeping the pelvis facing downward as in Warrior III. Reach the right
-    arm upward toward the ceiling so the shoulders and arms form a clear vertical line. Keep the neck comfortable
-    and the gaze forward from the face rather than forcing the head to turn toward the raised hand or the camera.
-    Orient the head and grounded left hand toward the left edge of the image and the raised right leg toward the
-    right edge. Observe from the open-chest side at a slight frontward angle, showing the left fingertip contact,
-    standing left foot, and lifted right leg as separate structures. Keep the entire figure and both contact points
-    fully inside the frame.
+    Perform Half Moon Pose with the character's left leg as the standing leg. Left and right refer to the
+    character's own body. Ground the left foot and extend the standing left leg naturally without locking the
+    knee backward. Place the left fingertips on the ground a short distance forward of and slightly outside the
+    left foot, with the left wrist approximately below the left shoulder. Extend the right leg behind at
+    approximately hip height, keeping the lifted right foot off the ground. Rotate the pelvis and chest open to
+    the side, with the right hip above the left hip, rather than keeping the pelvis facing downward as in
+    Warrior III. Reach the right arm upward toward the ceiling so the shoulders and arms form a clear vertical
+    line. Keep the neck comfortable and the gaze forward from the face rather than forcing the head to turn
+    toward the raised hand or the camera. Orient the head and grounded left hand toward the left edge of the
+    image and the raised right leg toward the right edge. Observe from the character's left side, showing the
+    left fingertip contact, standing left foot, and lifted right leg as separate structures. Keep the entire
+    figure and both contact points fully inside the frame.
   framing: full
-  angle: null
+  angle: l90
   expression: null
   pose: half_moon
   tags:
@@ -229,19 +231,18 @@ variants:
     and right refer to the character's own body. Kneel with both knees about hip-width apart, both shins and the
     tops of both feet resting on the ground, and the thighs rising vertically above the knees. Place the palms
     against the back of the pelvis with the fingers pointing downward and the elbows drawing toward one another.
-    Then arc the torso strongly backward: the chest lifts up and then leans well behind the vertical line of
-    the hips, the spine forming a deep continuous curve, the shoulders drawn back and down, and the collarbone
+    Then arc the torso strongly backward: the chest lifts up and then leans well behind the vertical line of the
+    hips, the spine forming a deep continuous curve, the shoulders drawn back and down, and the collarbone
     opened wide. The upper back forms a tall pronounced arch rather than a straight upright torso. Keep the
     thighs vertical and the knees planted so the curve comes from the spine, not from sitting back onto the
     heels. Keep the head in line with the curving spine, dropped back with the chest, the face turned upward
     toward the ceiling, and the throat lengthened; the backbend is the dominant, unmistakable feature of the
     pose. Keep the pelvis above the kneeling base without collapsing the lower back. The hands stay on the
     pelvis and neither hand reaches for a foot or heel. Orient the knees and the front of the body toward the
-    left side of the image. Observe from a side-front three-quarter angle at kneeling torso height so the deep
-    curve of the spine and the back of the head are both clearly readable, and keep the complete figure inside
-    the frame.
+    left side of the image. Observe from the character's left side at kneeling torso height so the deep curve of
+    the spine and the back of the head are both clearly readable, and keep the complete figure inside the frame.
   framing: full
-  angle: null
+  angle: l90
   expression: null
   pose: camel
   tags:
@@ -253,20 +254,21 @@ variants:
     Perform a deep Bow Pose starting from a prone position with the abdomen facing the ground. Left and right
     refer to the character's own body. Bend both knees and reach both hands backward: the left hand grips the
     left ankle and the right hand grips the right ankle. Keep these two same-side grips separate without
-    crossing the arms or swapping the feet. Pull the ankles firmly upward and back toward the head while
-    lifting the chest and both thighs high off the ground, so the whole front of the body arches up into a
-    strong bow shape. Only the abdomen and the lower belly stay in contact with the ground; the chest, the
-    hips, the thighs, and the knees all rise clear of the floor, and the body forms a tall dramatic curve
-    balanced on the abdomen. The bent lower legs rise steeply behind and above the hips, the feet close
-    together and pointing toward the ceiling, well clear of the head. The arms pull back taut along the
-    bow-shaped silhouette, and the head is drawn back with the chest so the face lifts and the gaze angles
-    forward and slightly upward. The arch is deep and unmistakable rather than a shallow lift. Orient the
-    head toward the left edge of the image and the raised feet toward the right edge. Observe from a low
-    side-front three-quarter angle so the near-side grip is clear and the far-side grip is visible as far as
-    natural occlusion allows. Do not twist the body or artificially separate the limbs to expose hidden parts.
-    Keep the head, hands, knees, and raised feet inside the frame.
+    crossing the arms or swapping the feet. Pull the ankles firmly upward and back toward the head while lifting
+    the chest and both thighs high off the ground, so the whole front of the body arches up into a strong bow
+    shape. Only the abdomen and the lower belly stay in contact with the ground; the chest, the hips, the
+    thighs, and the knees all rise clear of the floor, and the body forms a tall dramatic curve balanced on the
+    abdomen. The bent lower legs rise steeply behind and above the hips, the feet close together and pointing
+    toward the ceiling, well clear of the head. The arms pull back taut along the bow-shaped silhouette, and the
+    head is drawn back with the chest so the face lifts and the gaze angles forward and slightly upward. The
+    arch is deep and unmistakable rather than a shallow lift. Orient the head toward the left edge of the image
+    and the raised feet toward the right edge. Observe from a low camera position at the character's left side,
+    near floor level and looking slightly upward, so the near-side grip is clear, the far-side grip is visible
+    as far as natural occlusion allows, and the arch reads as a clear side silhouette rather than a top-down
+    view. Do not twist the body or artificially separate the limbs to expose hidden parts. Keep the head, hands,
+    knees, and raised feet inside the frame.
   framing: full
-  angle: null
+  angle: l90
   expression: null
   pose: bow
   tags:
@@ -275,18 +277,21 @@ variants:
   - bow
 - id: yoga_handstand
   text: >-
-    Perform a straight-leg Handstand held as one static pose. Both palms are planted flat on the ground approximately
-    shoulder-width apart, fingers naturally spread. Both elbows are extended and the shoulders support the inverted
-    torso above the hands. The head and both forearms remain clear of the ground; the hands are the only ground
-    contacts. Keep the torso long, the pelvis approximately above the shoulders, and both legs extended upward
-    together, with the feet close together. The overall silhouette is a long inverted line without split legs,
-    bent knees, or a pronounced backbend. Keep the neck aligned naturally and the gaze toward the ground between
-    or slightly ahead of the hands, not toward the camera. Observe from a slightly oblique side-front view with
-    a level camera and no wide-angle exaggeration. Fit the entire inverted figure from the grounded palms to the
-    highest toes inside the frame, with clear ground contact and sufficient space above the feet. Do not rotate
-    an upright portrait upside down: the hands contact the ground below the head and the feet point upward.
+    Perform a straight-leg Handstand held as one static pose. Both palms are planted flat on the ground
+    approximately shoulder-width apart, fingers naturally spread. Both elbows are extended and the shoulders
+    support the inverted torso above the hands. The head and both forearms remain clear of the ground; the hands
+    are the only ground contacts. Keep the torso long, the pelvis approximately above the shoulders, and both
+    legs extended upward together, with the feet close together. The overall silhouette is a long inverted line
+    without split legs, bent knees, or a pronounced backbend. Keep the neck aligned naturally and the gaze
+    toward the ground between or slightly ahead of the hands, never toward the camera. Observe from directly
+    behind the character with a level camera and no wide-angle exaggeration, so the back of the head, the nape,
+    the back, and the backs of the legs all turn toward the camera. The head hangs upside down between the arms
+    with the crown toward the camera, the face turned down toward the ground and completely hidden, with no part
+    of the face, chin, or cheek visible. Fit the entire inverted figure from the grounded palms to the highest
+    toes inside the frame, with clear ground contact and sufficient space above the feet. Do not rotate an
+    upright portrait upside down: the hands contact the ground below the head and the feet point upward.
   framing: full
-  angle: null
+  angle: back
   expression: null
   pose: handstand
   tags:
@@ -297,17 +302,17 @@ variants:
   text: >-
     Perform Downward-Facing Dog as a clear inverted-V silhouette. Place both palms flat on the ground in front
     of the body approximately shoulder-width apart, with the fingers naturally spread. Place both feet on the
-    ground behind the body approximately hip-width apart. Lift the pelvis upward and backward to form the highest
-    point of the pose. Extend both arms and lengthen the back so the hands, arms, and torso form one continuous
-    sloping side of the inverted V. Keep both legs naturally extended with only a slight knee bend if needed;
-    do not turn this into a deeply crouched pose. Both front feet remain grounded, while the heels may lift slightly
-    rather than being forced flat. Keep the head between the upper arms with the neck following the spine, and
-    direct the gaze naturally toward the legs or ground rather than toward the camera. Neither the head, elbows,
-    knees, nor abdomen touches the ground. Observe mainly from the side with a small frontward offset, allowing
-    the near and far hands and feet to remain naturally distinguishable without artificially spreading the limbs.
-    Keep the whole figure, both hands, and both feet inside the frame.
+    ground behind the body approximately hip-width apart. Lift the pelvis upward and backward to form the
+    highest point of the pose. Extend both arms and lengthen the back so the hands, arms, and torso form one
+    continuous sloping side of the inverted V. Keep both legs naturally extended with only a slight knee bend if
+    needed; do not turn this into a deeply crouched pose. Both front feet remain grounded, while the heels may
+    lift slightly rather than being forced flat. Keep the head between the upper arms with the neck following
+    the spine, and direct the gaze naturally toward the legs or ground rather than toward the camera. Neither
+    the head, elbows, knees, nor abdomen touches the ground. Observe from the character's left side with a small
+    frontward offset, allowing the near and far hands and feet to remain naturally distinguishable without
+    artificially spreading the limbs. Keep the whole figure, both hands, and both feet inside the frame.
   framing: full
-  angle: null
+  angle: l90
   expression: null
   pose: downward_dog
   tags:
@@ -318,18 +323,19 @@ variants:
   text: >-
     Perform a basic Side Plank with the character's own left side closer to the ground. Left and right always
     refer to the character's body. Plant the left palm flat on the ground, with the left arm extended and the
-    left shoulder approximately above the wrist. Extend both legs and stack the right foot directly over the left
-    foot, with the outer edge of the left foot contacting the ground. Lift the pelvis so the head, torso, hips,
-    and legs form one long diagonal line between the supporting left hand and the feet; do not let the hips sag
-    or fold into a seated position. Rotate the chest open to the side. Extend the right arm vertically upward
-    above the right shoulder, with the hand open and relaxed, so the two arms form a readable near-vertical line
-    through the shoulders. Keep the neck aligned with the torso and the gaze forward from the face, without turning
-    sharply to look at the raised hand or the camera. Keep both legs together: neither knee folds inward, the
-    upper leg does not lift, and neither hand grasps a foot. Observe from the open-chest side at a slight oblique
-    angle and a natural torso-level camera height. Orient the head toward the left side of the image and the feet
-    toward the right. Keep the supporting hand, raised hand, full torso, and both feet within the frame.
+    left shoulder approximately above the wrist. Extend both legs and stack the right foot directly over the
+    left foot, with the outer edge of the left foot contacting the ground. Lift the pelvis so the head, torso,
+    hips, and legs form one long diagonal line between the supporting left hand and the feet; do not let the
+    hips sag or fold into a seated position. Rotate the chest open to the side. Extend the right arm vertically
+    upward above the right shoulder, with the hand open and relaxed, so the two arms form a readable
+    near-vertical line through the shoulders. Keep the neck aligned with the torso and the gaze forward from the
+    face, without turning sharply to look at the raised hand or the camera. Keep both legs together: neither
+    knee folds inward, the upper leg does not lift, and neither hand grasps a foot. Observe from the character's
+    right side at a natural torso-level camera height, so the open chest and the raised right arm read clearly.
+    Orient the head toward the right edge of the image and the feet toward the left edge. Keep the supporting
+    hand, raised hand, full torso, and both feet within the frame.
   framing: full
-  angle: null
+  angle: r90
   expression: null
   pose: side_plank
   tags:
@@ -341,17 +347,17 @@ variants:
     Perform a straight-leg Boat Pose in a clear seated V-shaped balance. The buttocks and sitting area contact
     the ground while the torso inclines backward as a long lifted shape; the back, shoulders, and head stay off
     the ground. Lift both legs forward and upward with the knees naturally extended and the feet close together.
-    Keep the legs approximately parallel to each other, with both feet visibly off the ground, forming a clear
-    V with the raised torso. Extend both arms forward at about shoulder width and approximately parallel to the
-    ground, palms facing inward. Keep the arms beside the legs rather than wrapped around them, and leave a small
-    visible separation between the hands and legs. Neither hand supports the body on the ground or grasps the
-    thighs, ankles, or feet. Keep the chest lifted, the neck in line with the torso, and the gaze forward toward
-    the feet rather than forcing a turn toward the lens. This is an upright seated balance, not a lying leg raise,
-    a forward fold, or a bent-knee variation. Orient the face and feet generally toward the left side of the image.
-    Observe from a side-front three-quarter angle that makes the V silhouette and both forward-reaching arms readable.
-    Keep the head, hands, sitting contact, and both raised feet fully inside the frame.
+    Keep the legs approximately parallel to each other, with both feet visibly off the ground, forming a clear V
+    with the raised torso. Extend both arms forward at about shoulder width and approximately parallel to the
+    ground, palms facing inward. Keep the arms beside the legs rather than wrapped around them, and leave a
+    small visible separation between the hands and legs. Neither hand supports the body on the ground or grasps
+    the thighs, ankles, or feet. Keep the chest lifted, the neck in line with the torso, and the gaze forward
+    toward the feet rather than forcing a turn toward the lens. This is an upright seated balance, not a lying
+    leg raise, a forward fold, or a bent-knee variation. Orient the face and feet generally toward the left side
+    of the image. Observe from the character's left side, so the V silhouette and both forward-reaching arms are
+    readable. Keep the head, hands, sitting contact, and both raised feet fully inside the frame.
   framing: full
-  angle: null
+  angle: l90
   expression: null
   pose: boat
   tags:
@@ -363,24 +369,25 @@ variants:
     Perform a Supported Headstand with both knees bent and opened wide apart, shown as one static inverted pose
     viewed from directly behind the character. Both elbows and forearms contact the ground in a clear supporting
     base. Interlace the fingers near the back of the head, with the crown positioned on the ground between the
-    forearms and the hands cradling the back of the head. Do not replace this base with two flat palms beside the
-    head, and do not lift the head into a forearm balance. The torso rises upward in an inverted position, with the
-    pelvis above the shoulders. From the pelvis, both thighs spread outward and upward into a wide open V, and both
-    knees bend sharply and point out to the sides, away from each other and away from the chest, so the knees become
-    the widest points of the figure. From the bent knees, both lower legs angle upward and back inward, and both
-    feet rise high above the hips, clearly separated from one another with the soles turned toward the ceiling and
-    the toes relaxed and spread. The two bent legs form an open diamond shape above the body, not a closed ball, not
-    legs held together, and not a lotus; the ankles never cross and the feet never touch. Keep the hips wide and
-    level so the whole open V reads clearly from behind. Use a long torso without a pronounced backbend. The camera
-    looks at the character's back: the back of the head and the nape rest on the ground between the forearms, while
-    the back, the shoulders, and the backs of the legs all turn toward the camera. The face points away from the
-    camera toward the far side of the frame and stays completely hidden, with no part of the face, chin, or cheek
-    visible. Keep the neck aligned with the inverted torso. Observe from directly behind the character at a level
-    camera height, so the two forearms, the rising back, the wide apart knees, and the two separated raised feet
-    read as a balanced symmetrical back view. Allow natural occlusion without twisting limbs merely to show them.
-    Keep the complete figure from the ground-contact base to the highest feet inside the frame with a small margin.
+    forearms and the hands cradling the back of the head. Do not replace this base with two flat palms beside
+    the head, and do not lift the head into a forearm balance. The torso rises upward in an inverted position,
+    with the pelvis above the shoulders. From the pelvis, both thighs spread outward and upward into a wide open
+    V, and both knees bend sharply and point out to the sides, away from each other and away from the chest, so
+    the knees become the widest points of the figure. From the bent knees, both lower legs angle upward and back
+    inward, and both feet rise high above the hips, clearly separated from one another with the soles turned
+    toward the ceiling and the toes relaxed and spread. The two bent legs form an open diamond shape above the
+    body, not a closed ball, not legs held together, and not a lotus; the ankles never cross and the feet never
+    touch. Keep the hips wide and level so the whole open V reads clearly from behind. Use a long torso without
+    a pronounced backbend. The camera looks at the character's back: the back of the head and the nape rest on
+    the ground between the forearms, while the back, the shoulders, and the backs of the legs all turn toward
+    the camera. The face points away from the camera toward the far side of the frame and stays completely
+    hidden, with no part of the face, chin, or cheek visible. Keep the neck aligned with the inverted torso.
+    Observe from directly behind the character at a level camera height, so the two forearms, the rising back,
+    the wide apart knees, and the two separated raised feet read as a balanced symmetrical back view. Allow
+    natural occlusion without twisting limbs merely to show them. Keep the complete figure from the
+    ground-contact base to the highest feet inside the frame with a small margin.
   framing: full
-  angle: null
+  angle: back
   expression: null
   pose: headstand_bent_knees
   tags:

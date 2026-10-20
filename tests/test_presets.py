@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 
 import pytest
 
@@ -258,9 +259,12 @@ def test_expressions_v1_24_structure_and_caption():
 
 # ---------- yoga_basic_9（瑜伽动作预设：9 个体式，schema 1 list） ----------
 
-# V2 基准：yoga_camel / yoga_bow 已改用「深弧」措辞（出图对比后由原版替换而来），
-# 其余 7 条沿用 V1 原文。V1 基准 eedd9b21… 对应替换前的版本，保留在此备查。
-YOGA_BASIC_9_DIGEST = "bfbac4e943e8e888a09145c6d418cd48bb04472d2fecbc862dc3f0aedf871694"
+# V3 基准（2026-10-20）：9 条变体补上 angle 字段，并把 text 里「朝向画面左/右边缘」
+# 改写成侧视语义（前方/后方），使 text 与 angle、caption 视角标签三者一致。
+# V2 基准 bfbac4e9… 对应「angle 留空 + 画面边缘描述」的版本，保留备查。
+# V1 基准 eedd9b21… 对应更早的替换前版本。
+YOGA_BASIC_9_DIGEST = "d508507828c417e9e5509c73fbe651db4f149b9e7db986149318ff99bac4e953"
+YOGA_BASIC_9_V2_DIGEST = "bfbac4e943e8e888a09145c6d418cd48bb04472d2fecbc862dc3f0aedf871694"
 YOGA_BASIC_9_V1_DIGEST = "eedd9b2167bdd1f5613370079a1e75c0ca5a1d4e390058afbb3ed0882dd0e385"
 
 YOGA_BASIC_9_IDS = (
@@ -281,13 +285,13 @@ def test_yoga_basic_9_digest_locked():
 
 
 def test_yoga_basic_9_structure():
-    """动作预设：全身景别 + 空 angle（观察方向由各条 text 自述，不套用视角标签）。"""
+    """动作预设：全身景别 + 每个体式有明确 angle（决定 caption 视角标签与 LLM 模式的视角句）。"""
     preset = load("yoga_basic_9")
     assert preset.schema_version == 1
     assert preset.purpose == "dataset" and preset.text_policy == "forbid"
     for spec in preset.variants:
         assert spec.framing == "full"
-        assert spec.angle is None      # 刻意留空：各条 text 自带观察方向
+        assert spec.angle is not None     # 不再留空：视角由 angle 字段统一声明
         assert spec.expression is None
         assert spec.tags[:2] == ["full", "yoga"]
         assert spec.pose                  # 体式标签：独立于 expression
@@ -298,6 +302,43 @@ def test_yoga_basic_9_structure():
     assert len(preset.lighting) == 7
     # 横向动作（战士二/三角/半月/弓）需要横向画幅
     assert preset.preferred_aspect_ratio == "4:3"
+
+
+def test_yoga_basic_9_angles_follow_left_right_convention():
+    """angle 与 text 的朝向必须一致：仓库约定 l90=面朝画面左，r90=面朝画面右。
+
+    分配依据「关键细节落在近端才看得清」：
+    - l90 → 相机看到角色【左】侧面（角色右侧是远端）
+    - r90 → 相机看到角色【右】侧面
+    正面三式（树/战士二/三角）用 front，其余按近端关键细节选 l90/r90。
+    """
+    preset = load("yoga_basic_9")
+    by_id = {v.id: v for v in preset.variants}
+    expected = {
+        "yoga_tree": "front",
+        "yoga_warrior_ii": "front",
+        "yoga_triangle": "front",
+        "yoga_low_lunge": "l90",
+        "yoga_warrior_iii": "l90",
+        "yoga_dancer": "front",     # 侧视会左右镜像出错的抓脚腿 → 用正面
+        "yoga_half_moon": "l90",    # 左手撑地在近端
+        "yoga_camel": "l90",
+        "yoga_bow": "l90",          # 左脚踝抓握在近端
+    }
+    assert {vid: spec.angle for vid, spec in by_id.items()} == expected
+
+    # 侧视条目：text 里的观察方向必须与 angle 同侧
+    for vid, spec in by_id.items():
+        text = " ".join(spec.text.split())
+        if spec.angle == "l90":
+            assert re.search(r"character's left side", text), vid
+        elif spec.angle == "r90":
+            assert re.search(r"character's right side", text), vid
+        elif spec.angle == "front":
+            assert "from directly in front" in text, vid
+
+    # 弓式趴着：必须低机位侧视，否则出图会变成俯视、弓形读不出来
+    assert "low camera position" in " ".join(by_id["yoga_bow"].text.split())
 
 
 def test_yoga_basic_9_deep_backbend_wording():
@@ -327,10 +368,11 @@ def test_yoga_basic_9_prompt_and_caption():
     assert "Perform Tree Pose" in item.prompt
     assert "The background is " in item.prompt
     assert "The lighting is " in item.prompt
-    # caption：trigger + 景别 + 体式（angle 为空 → 不写视角；expression 为空 → 不写表情）
-    assert item.caption.startswith("sw1tch, full body, tree pose, ")
+    # caption：trigger + 景别 + 视角 + 体式（expression 为空 → 不写表情）
+    assert item.caption.startswith("sw1tch, full body, front view, tree pose, ")
     assert "backdrop background" not in item.caption  # caption_background_suffix=false
-    assert "view" not in item.caption.split(", ")[1]  # angle 为空 → 不写视角标签
+    assert item.caption.split(", ")[1] == "full body"
+    assert item.caption.split(", ")[2] == "front view"  # angle=front → 写视角标签
     # meta 快照：pose + 画幅
     assert item.meta["pose"] == "tree"
     assert item.meta["preferred_aspect_ratio"] == "4:3"
@@ -388,7 +430,7 @@ def test_yoga_presets_carry_single_person_guard(preset_name):
 
 # 基准：原九式逐字沿用 yoga_basic_9（其前 9 条 digest 应等于 YOGA_BASIC_9_DIGEST），
 # 新增五式见下。yoga_complete_14 的完整 14 条 digest 一并锁定。
-YOGA_COMPLETE_14_DIGEST = "a552d502fb26ba2bda4b41e95c5ac1ed42e02f4be396cd75161561e2294f7426"
+YOGA_COMPLETE_14_DIGEST = "c32bcf9a6d94fd21239bd82fe85be61e228e13ba063edcccb1778795cf607350"
 
 YOGA_COMPLETE_14_IDS = (
     "yoga_tree", "yoga_warrior_ii", "yoga_triangle", "yoga_low_lunge",
@@ -435,12 +477,40 @@ def test_yoga_complete_14_structure():
     assert preset.preferred_aspect_ratio == "4:3"
     for spec in preset.variants:
         assert spec.framing == "full"
-        assert spec.angle is None
+        assert spec.angle is not None     # 不再留空：视角由 angle 字段统一声明
         assert spec.expression is None
         assert spec.tags[:2] == ["full", "yoga"]
         assert spec.pose
         # 变体文本本身不夹中文（caption 标签另算）
         assert not any("一" <= ch <= "鿿" for ch in spec.text)
+
+
+def test_yoga_complete_14_angles_follow_left_right_convention():
+    """新增五式的 angle 与 text 朝向必须一致（l90=面朝画面左，r90=面朝画面右）。
+
+    手倒立改背面：只露后脑勺、脸完全隐藏（用户反馈正面露脸很诡异）。
+    """
+    preset = load("yoga_complete_14")
+    by_id = {v.id: v for v in preset.variants}
+    expected = {
+        "yoga_handstand": "back",              # 背面：只露后脑勺，不露脸
+        "yoga_downward_dog": "l90",            # 侧视看倒 V 形
+        "yoga_side_plank": "r90",              # 相机在角色右侧 → 看到打开的胸口
+        "yoga_boat": "l90",                    # 侧视看 V 形
+        "yoga_headstand_bent_knees": "back",   # 原本就是正后方视角
+    }
+    for vid, angle in expected.items():
+        assert by_id[vid].angle == angle, vid
+
+    # 侧视条目：观察方向与 angle 同侧
+    assert "from the character's left side" in " ".join(by_id["yoga_downward_dog"].text.split())
+    assert "from the character's right side" in " ".join(by_id["yoga_side_plank"].text.split())
+
+    # 手倒立背面：不露脸
+    handstand = " ".join(by_id["yoga_handstand"].text.split())
+    assert "directly behind the character" in handstand
+    assert "face turned down toward the ground and completely hidden" in handstand
+    assert "no part of the face, chin, or cheek visible" in handstand
 
 
 def test_yoga_complete_14_caption_tags_are_english():
@@ -465,13 +535,20 @@ def test_yoga_complete_14_prompt_and_caption():
     captions = {it.variant_id: it.caption for it in result.items}
     # 14 条 caption 互不相同（pose 标签要能区分动作）
     assert len(set(captions.values())) == 14
-    assert captions["yoga_tree"].startswith("sw1tch, full body, tree pose, ")
-    assert captions["yoga_handstand"].startswith("sw1tch, full body, straight-leg handstand, ")
-    assert captions["yoga_downward_dog"].startswith("sw1tch, full body, downward-facing dog pose, ")
-    assert captions["yoga_side_plank"].startswith("sw1tch, full body, side plank pose, ")
-    assert captions["yoga_boat"].startswith("sw1tch, full body, boat pose, ")
+    # caption：trigger + 景别 + 视角 + 体式
+    assert captions["yoga_tree"].startswith("sw1tch, full body, front view, tree pose, ")
+    assert captions["yoga_handstand"].startswith(
+        "sw1tch, full body, view from behind, straight-leg handstand, "
+    )
+    assert captions["yoga_downward_dog"].startswith(
+        "sw1tch, full body, side view from left, downward-facing dog pose, "
+    )
+    assert captions["yoga_side_plank"].startswith(
+        "sw1tch, full body, side view from right, side plank pose, "
+    )
+    assert captions["yoga_boat"].startswith("sw1tch, full body, side view from left, boat pose, ")
     assert captions["yoga_headstand_bent_knees"].startswith(
-        "sw1tch, full body, supported headstand pose with bent knees, "
+        "sw1tch, full body, view from behind, supported headstand pose with bent knees, "
     )
     # meta 快照：pose + 画幅
     assert result.items[0].meta["pose"] == "tree"
