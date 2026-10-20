@@ -87,6 +87,44 @@ def test_subject_presets_avoid_multiview_layout_wording():
                 assert word not in low, f"{subject_id} 的锁定项含多视角措辞「{word}」：{blob}"
 
 
+def test_subject_presets_do_not_lock_background_or_lighting():
+    """锁定项不写背景/布光——那是预设 suffix_template 的活，写两遍会自相矛盾。
+
+    背景：yoga_teacher 档案的 style_lock 里写过 "neutral seamless light grey studio
+    backdrop, soft large key light from the front left and gentle fill light from the
+    right"，而预设 suffix 会写 "The background is {background}. The lighting is
+    {lighting}."。两处背景/布光同时出现，模型收到互相冲突的指令（实测出图
+    背景与要求不符）。档案的 style_lock 只管人物与画风。
+    """
+    backdrop_words = ("backdrop", "background", "lighting", "key light", "fill light", "studio")
+    for subject_id in SUBJECT_IDS:
+        data = yaml.safe_load(_subject_path(subject_id).read_text(encoding="utf-8"))
+        subject = SubjectProfile.model_validate(data)
+        for blob in list(subject.style_lock) + list(subject.identity_lock) + list(subject.outfit_lock):
+            low = blob.lower()
+            for word in backdrop_words:
+                assert word not in low, f"{subject_id} 的锁定项不该写背景/布光「{word}」：{blob}"
+
+
+def test_subject_presets_stay_lean():
+    """档案要瘦：锁定项越长，动作文本在最终提示词里占比越低。
+
+    classic 模式把 master（档案锁定项）与动作文本拼成一条提示词，动作只有
+    1/3 篇幅时模型会优先服从身份描述、弱化动作细节。yoga_teacher 精简前
+    2839 字符 → 动作占比 29%；精简后 1611 → 40%。这里给一个宽松上限防回退。
+    """
+    from charvar.composer import lock_sentence
+
+    for subject_id in SUBJECT_IDS:
+        data = yaml.safe_load(_subject_path(subject_id).read_text(encoding="utf-8"))
+        subject = SubjectProfile.model_validate(data)
+        total = sum(
+            len(lock_sentence(getattr(subject, group) or []))
+            for group in ("style_lock", "identity_lock", "outfit_lock")
+        ) + len(subject.extra)
+        assert total <= 1900, f"{subject_id} 的锁定项过长（{total} 字符），会稀释动作文本"
+
+
 def test_v2_wildcards_extended_with_subject_scenes():
     """V2 通配符池追加了三个新主体的场景背景/光照，原有条目不变。"""
     from charvar.preset_loader import load

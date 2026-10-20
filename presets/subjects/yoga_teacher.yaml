@@ -4,42 +4,27 @@ subject_noun: woman
 trigger_word: yogateacher
 reference_tag: <image1>
 style_lock:
-- realistic photographic portrayal of a single performer in finished costume, like a fashion
-  magazine editorial shot in a studio
-- natural facial features, bone structure, body proportions and perspective without exaggerated
-  stylization
-- fine natural skin texture, natural skin-tone variation, real hair strands and restrained
-  retouching
-- neutral seamless light grey studio backdrop, soft large key light from the front left and gentle
-  fill light from the right, with a faint natural contact shadow under the feet
+- realistic photographic portrait of a single performer in finished costume, like a fashion
+  magazine editorial shot
+- natural facial features, body proportions and perspective without exaggerated stylization
+- fine natural skin texture, real hair strands and restrained retouching
 - no illustration lines or brush strokes, no 3D rendering and no wax-like plastic skin
 identity_lock:
-- adult woman in her twenties with a trainer-style healthy full build, medium-tall stature and
-  relaxed open shoulder line
+- adult woman in her twenties with a trainer-style healthy full build and relaxed open shoulder
+  line
 - soft oval face with a full forehead, flat cheekbones, a round narrowing jaw and a small chin
   that is not pointed
-- soft natural eyebrows with no pronounced arch, almond eyes with a soft rounded shape, a straight
-  nose bridge that is not high and small nose wings, soft full lips with a gentle smile
+- soft natural eyebrows, almond eyes, a straight low nose bridge, and soft full lips with a
+  gentle smile
 - fair warm-toned skin with light pink blush and soft rose lips, light makeup
-- very dark brown hair tied in a high ponytail with a thin matching hair tie at the upper back of
-  the head, the crown softly voluminous, a side part exposing most of the forehead and a few
-  loose strands falling along the temples and cheeks, the ends reaching below the shoulder
-  blades
-- a very large bust, full and rounded in outline, hanging with natural weight under gravity, a
-  clearly defined waist that still keeps real anatomical thickness rather than a cinched ultra-thin
-  waist, full rounded hips and buttocks with a clear hip line, and firm legs with both muscle
-  definition and soft fat layer
+- very dark brown hair tied in a high ponytail, the crown softly voluminous, a side part
+  exposing most of the forehead and a few loose strands at the temples
+- a very large bust, full rounded hips and buttocks with a clear hip line, and firm legs
 outfit_lock:
-- bright purple single-colour sleeveless one-piece athletic bodysuit with a closed high round neck
-  sitting about one finger-width below the collarbone, enclosing the whole neck root, with the
-  fabric fully covering and closing the area between the breasts
-- a narrow cream-white piping about one centimetre wide at the neckline, the armhole edges and the
-  pant hems
-- a vertical same-colour panel and fine vertical seam on each side of the front waist, running from
-  below the armpit inward to the waist and then straight down to the hip
-- matching purple stretch knit fabric continuing into the leggings, the legs narrowing continuously
-  to just above the ankle, with cream-white piping around the pant hems
-- white mid-calf cotton socks reaching the middle of the calf, with a ribbed cuff
+- bright purple single-colour sleeveless one-piece athletic bodysuit with a closed high round
+  neck, fully covering the chest
+- a narrow cream-white piping at the neckline, the armhole edges and the pant hems
+- matching purple stretch knit leggings narrowing to just above the ankle
+- white mid-calf cotton socks with a ribbed cuff
 extra: Keep the same face, high ponytail, trainer-style full build, bright purple one-piece
-  bodysuit with the closed high round neck, cream-white piping, white mid-calf socks and the same
-  studio photographic look, in every pose.
+  bodysuit, cream-white piping and white mid-calf socks, in every pose.

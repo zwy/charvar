@@ -366,8 +366,7 @@ def test_yoga_presets_carry_single_person_guard(preset_name):
     """
     preset = load(preset_name)
     master = preset.master_template
-    assert "Exactly one person in the image" in master
-    assert "no other people" in master
+    assert "One character only" in master
     assert "no duplicated or repeated figure" in master
     # 明确排除「照抄角色卡分栏」这一失败模式
     assert "no character sheet layout" in master
@@ -381,7 +380,7 @@ def test_yoga_presets_carry_single_person_guard(preset_name):
     result = composer.generate(subject, preset, GenerateRequest(subject_id="demo", preset=preset_name, seed=42))
     assert result.items
     for item in result.items:
-        assert "Exactly one person in the image" in item.prompt
+        assert "One character only" in item.prompt
 
 
 
