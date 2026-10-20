@@ -64,8 +64,9 @@ def test_image_entry_reads_local_assets(tmp_path, monkeypatch, client):
     assert response.status_code == 200
     data = response.json()
     assert data["completed"] == 1
-    assert data["items"][0]["primary_url"].endswith("/comfy-image/0")
-    assert "/assets/thumbs/000000.webp" in data["items"][0]["thumb_url"]
+    # 缓存穿透：URL 挂 prompt_id（重新生成换记录后参数变化 → 浏览器重新拉图）
+    assert data["items"][0]["primary_url"].endswith("/comfy-image/0?v=prompt-1")
+    assert data["items"][0]["thumb_url"].endswith("/assets/thumbs/000000.webp?v=prompt-1")
     assert (assets_dir / "thumbs" / "000000.webp").exists()
 
 

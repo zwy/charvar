@@ -461,3 +461,270 @@ def test_sticker_generate_subject_conflict_blocks(tmp_path, monkeypatch, client)
     resp = client.post("/generate", json={"subject_id": "warn_cat", "preset": "chat_replies_v1_12", "seed": 1})
     assert resp.status_code == 200
     assert resp.json()["warnings"] and "无文字" in resp.json()["warnings"][0]
+
+
+# ---------- 图片墙单条重新生成（换种子） ----------
+
+def _seeded_wf(workflows_dir: pathlib.Path, name: str = "RegenWF", with_size: bool = False) -> None:
+    """带 seed / negative（+ 可选 width/height）注入字段的测试 workflow。"""
+    nodes = {
+        "11": {"class_type": "CLIPTextEncode", "inputs": {"text": "x"}},
+        "12": {"class_type": "CLIPTextEncode", "inputs": {"text": "n"}},
+        "70": {"class_type": "KSampler", "inputs": {"seed": 0}},
+        "47": {"class_type": "SaveImage", "inputs": {"filename_prefix": "p"}},
+    }
+    mappings = [
+        {"field": "prompt", "node_id": "11", "input_key": "text", "required": True},
+        {"field": "negative_prompt", "node_id": "12", "input_key": "text"},
+        {"field": "seed", "node_id": "70", "input_key": "seed"},
+        {"field": "filename_prefix", "node_id": "47", "input_key": "filename_prefix"},
+    ]
+    if with_size:
+        nodes["5"] = {"class_type": "EmptyLatentImage", "inputs": {"width": 512, "height": 512}}
+        mappings.insert(0, {"field": "width", "node_id": "5", "input_key": "width"})
+        mappings.insert(1, {"field": "height", "node_id": "5", "input_key": "height"})
+    (workflows_dir / f"{name}.json").write_text(json.dumps(nodes), encoding="utf-8")
+    (workflows_dir / f"{name}.mapping.json").write_text(
+        json.dumps({"output_nodes": ["47"], "mappings": mappings}), encoding="utf-8"
+    )
+
+
+def _png_bytes(color: tuple[int, int, int]) -> bytes:
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (32, 32), color).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _mock_comfy_with_view(monkeypatch):
+    """同 _mock_comfy，外补 GET /view：按 prompt_id 序号返回不同颜色 PNG（同步覆盖测试用）。"""
+    from charvar.exporters import comfyui as comfyui_exporter
+
+    queued: list = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/upload/image":
+            return httpx.Response(200, json={"name": "uploaded.png", "subfolder": "", "type": "input"})
+        if request.url.path == "/prompt":
+            body = json.loads(request.content.decode())
+            pid = f"pid-{len(queued)}"
+            queued.append(body)
+            return httpx.Response(200, json={"prompt_id": pid})
+        if request.url.path.startswith("/history/"):
+            pid = request.url.path.rsplit("/", 1)[-1]
+            return httpx.Response(
+                200,
+                json={
+                    pid: {
+                        "status": {"completed": True},
+                        "outputs": {
+                            "47": {"images": [{"filename": f"{pid}.png", "subfolder": "", "type": "output"}]}
+                        },
+                    }
+                },
+            )
+        if request.url.path == "/view":
+            # filename 形如 pid-5.png：序号决定颜色 → 重新生成前后的图内容必然不同
+            pid = str(request.url.params["filename"]).removesuffix(".png")
+            ordinal = pid.split("-")[1]
+            return httpx.Response(200, content=_png_bytes((int(ordinal) * 40 % 256, 40, 96)))
+        return httpx.Response(404)
+
+    class FakeClient:
+        def __init__(self, **kw):
+            self._inner = httpx.Client(transport=httpx.MockTransport(handler))
+
+        def __enter__(self):
+            return self._inner
+
+        def __exit__(self, *args):
+            self._inner.close()
+
+    monkeypatch.setattr(comfyui_exporter, "_httpx_client", lambda **kw: FakeClient(**kw))
+    return queued
+
+
+def test_run_regenerate_single_item_new_seed(tmp_path, monkeypatch, client):
+    """单条重新生成：只补推这一条，seed 换新，prompt / filename_prefix 原样。"""
+    workflows_dir = tmp_path / "workflows"
+    workflows_dir.mkdir()
+    _seeded_wf(workflows_dir)
+    monkeypatch.setenv("COMFYUI_WORKFLOWS_DIR", str(workflows_dir))
+    queued = _mock_comfy(monkeypatch, workflows_dir)
+
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+    run_id = client.post(
+        "/generate", json={"subject_id": "demo_witch", "preset": "q21_default_30", "seed": 42, "count": 2}
+    ).json()["run_id"]
+    original = client.get(f"/runs/{run_id}").json()
+
+    batch = client.post(f"/runs/{run_id}/comfyui", json={"workload": "RegenWF", "wait": False}).json()
+    assert batch["succeeded"] == 2
+    assert len(queued) == 2  # 批量：种子 = run.seed + index（increment 默认）
+    assert queued[0]["prompt"]["70"]["inputs"]["seed"] == 42
+    assert queued[1]["prompt"]["70"]["inputs"]["seed"] == 43
+    prefix_before = queued[1]["prompt"]["47"]["inputs"]["filename_prefix"]
+
+    resp = client.post(
+        f"/runs/{run_id}/regenerate", json={"item_index": 1, "seed": 777, "wait": False}
+    ).json()
+    assert resp["ok"] is True
+    assert resp["seed"] == 777
+    assert resp["variant_id"] == original["items"][1]["variant_id"]
+    assert len(queued) == 3  # 只提交了这一条
+    injected = queued[2]["prompt"]
+    assert injected["70"]["inputs"]["seed"] == 778  # 新种子 + 原 index（increment）
+    assert injected["11"]["inputs"]["text"] == original["items"][1]["prompt"]  # 提示词逐字不变
+    assert injected["47"]["inputs"]["filename_prefix"] == prefix_before
+
+    # 记录：index1 被替换成新 prompt_id，index0 不动
+    records = client.get(f"/runs/{run_id}/comfyui").json()
+    assert [r["prompt_id"] for r in records] == ["pid-0", "pid-2"]
+
+    # provenance 戳写回 run JSON
+    stamped = client.get(f"/runs/{run_id}").json()["items"][1]["meta"]["regen"]
+    assert stamped["seed"] == 777
+    assert stamped["prompt_id"] == "pid-2"
+
+    # 条目不存在 → 404
+    assert client.post(f"/runs/{run_id}/regenerate", json={"item_index": 9, "seed": 1}).status_code == 404
+
+
+def test_run_regenerate_replays_queue_settings(tmp_path, monkeypatch, client):
+    """重新生成重放批量入队快照：画幅/分辨率/负向词不依赖当前面板状态。"""
+    workflows_dir = tmp_path / "workflows"
+    workflows_dir.mkdir()
+    _seeded_wf(workflows_dir, with_size=True)
+    monkeypatch.setenv("COMFYUI_WORKFLOWS_DIR", str(workflows_dir))
+    queued = _mock_comfy(monkeypatch, workflows_dir)
+
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+    run_id = client.post(
+        "/generate", json={"subject_id": "demo_witch", "preset": "q21_default_30", "seed": 42, "count": 2}
+    ).json()["run_id"]
+    client.post(
+        f"/runs/{run_id}/comfyui",
+        json={"workload": "RegenWF", "wait": False, "aspect_ratio": "9:16", "resolution": "2k",
+              "negative_prompt": "blurry"},
+    ).json()
+
+    # 请求不携带任何出图参数 → 全部来自快照
+    client.post(f"/runs/{run_id}/regenerate", json={"item_index": 0, "seed": 9}).raise_for_status()
+    injected = queued[2]["prompt"]
+    assert injected["5"]["inputs"]["width"] == 1152   # 9:16 @ 2K：短边 = 2048*9/16 → 1152
+    assert injected["5"]["inputs"]["height"] == 2048
+    assert injected["12"]["inputs"]["text"] == "blurry"  # 负向词也按快照重放
+
+    # 不传 seed → 沿用原 run.seed
+    client.post(f"/runs/{run_id}/regenerate", json={"item_index": 0, "wait": False}).raise_for_status()
+    assert queued[3]["prompt"]["70"]["inputs"]["seed"] == 42  # seed + index 0
+
+    # 不传 seed → 沿用原 run.seed
+    client.post(f"/runs/{run_id}/regenerate", json={"item_index": 0, "wait": False}).raise_for_status()
+    assert queued[3]["prompt"]["70"]["inputs"]["seed"] == 42  # seed + index 0
+
+
+def test_run_regenerate_wait_timeout_keeps_record(tmp_path, monkeypatch, client):
+    """wait 出图超时：已入队记录不丢（on_submitted 提交即落库），响应提示稍后同步。"""
+    from charvar.exporters import comfyui as comfyui_exporter
+
+    def _timeout(*_args, **_kw):
+        raise TimeoutError("mock: 出图超时")
+
+    workflows_dir = tmp_path / "workflows"
+    workflows_dir.mkdir()
+    _seeded_wf(workflows_dir)
+    monkeypatch.setenv("COMFYUI_WORKFLOWS_DIR", str(workflows_dir))
+    queued = _mock_comfy(monkeypatch, workflows_dir)
+    monkeypatch.setattr(comfyui_exporter, "_poll_entry", _timeout)  # /prompt 已提交、等待阶段超时
+
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+    run_id = client.post(
+        "/generate", json={"subject_id": "demo_witch", "preset": "q21_default_30", "seed": 42, "count": 1}
+    ).json()["run_id"]
+    # 先批量入队一次：让 run 有入队参数快照与可用 workflow
+    client.post(f"/runs/{run_id}/comfyui", json={"workload": "RegenWF", "wait": False})
+
+    resp = client.post(f"/runs/{run_id}/regenerate", json={"item_index": 0, "seed": 555, "wait": True}).json()
+    assert resp["ok"] is False
+    assert resp["timed_out"] is True
+    assert resp["prompt_id"] == "pid-1"  # 批量 pid-0，重新提交是 pid-1
+    records = client.get(f"/runs/{run_id}/comfyui").json()
+    assert records[0]["prompt_id"] == "pid-1"
+    assert records[0]["output_files"] == []  # 未完成：稍后 sync 凭 history 补拉
+
+
+def test_sync_outputs_refresh_after_regenerate(tmp_path, monkeypatch, client):
+    """同步刷新：重新提交的条目覆盖下载旧原图 + 重建缩略图；下次同步不再重下。"""
+    import os
+
+    workflows_dir = tmp_path / "workflows"
+    workflows_dir.mkdir()
+    _seeded_wf(workflows_dir)
+    monkeypatch.setenv("COMFYUI_WORKFLOWS_DIR", str(workflows_dir))
+    _mock_comfy_with_view(monkeypatch)
+
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+    run_id = client.post(
+        "/generate", json={"subject_id": "demo_witch", "preset": "q21_default_30", "seed": 42, "count": 2}
+    ).json()["run_id"]
+    client.post(f"/runs/{run_id}/comfyui", json={"workload": "RegenWF", "wait": False})
+
+    data = client.post(f"/runs/{run_id}/sync-outputs", json={}).json()
+    assert data["completed"] == 2
+    old_bytes_1 = (tmp_path / "generated" / run_id / "original" / "000001.png").read_bytes()
+    entry = client.get(f"/runs/{run_id}/images").json()["items"][1]
+    assert entry["thumb_url"].endswith("?v=pid-1")  # 缓存穿透：URL 带 prompt_id
+
+    # 重新生成 index 1 → 记录换成 pid-2（旧图在重新下载前保留）
+    client.post(f"/runs/{run_id}/regenerate", json={"item_index": 1, "seed": 777, "wait": True})
+    # 把旧文件 mtime 压到 submitted_at 之前，避免同秒比较的整数秒抖动
+    path_1 = tmp_path / "generated" / run_id / "original" / "000001.png"
+    old_stat = path_1.stat()
+    os.utime(path_1, (old_stat.st_mtime - 10, old_stat.st_mtime - 10))
+    thumb_before = (tmp_path / "generated" / run_id / "thumbs" / "000001.webp").read_bytes()
+
+    data = client.post(f"/runs/{run_id}/sync-outputs", json={}).json()
+    new_bytes_1 = path_1.read_bytes()
+    assert new_bytes_1 != old_bytes_1  # 被新图覆盖
+    assert (tmp_path / "generated" / run_id / "thumbs" / "000001.webp").read_bytes() != thumb_before
+
+    entry = client.get(f"/runs/{run_id}/images").json()["items"][1]
+    assert entry["thumb_url"].endswith("?v=pid-2")  # 新 prompt_id → 浏览器会重新拉图
+
+    # 再同步一次：不再重复下载（mtime ≥ submitted_at）
+    before = path_1.stat().st_mtime
+    data = client.post(f"/runs/{run_id}/sync-outputs", json={}).json()
+    assert data["summary"]["downloaded"] == 0
+    assert path_1.stat().st_mtime == before
+
+
+def test_delete_run_cleans_queue_settings(tmp_path, monkeypatch, client):
+    """删除 run 时连带清 run_queue_settings 快照。"""
+    from contextlib import closing
+
+    from charvar import storage
+
+    workflows_dir = tmp_path / "workflows"
+    workflows_dir.mkdir()
+    _seeded_wf(workflows_dir)
+    monkeypatch.setenv("COMFYUI_WORKFLOWS_DIR", str(workflows_dir))
+    _mock_comfy(monkeypatch, workflows_dir)
+
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+    run_id = client.post(
+        "/generate", json={"subject_id": "demo_witch", "preset": "q21_default_30", "seed": 42, "count": 1}
+    ).json()["run_id"]
+    client.post(f"/runs/{run_id}/comfyui", json={"workload": "RegenWF", "wait": False})
+
+    db = pathlib.Path(tmp_path) / "test.db"
+    with closing(storage.connect(db)) as conn:
+        saved = storage.get_queue_settings(conn, run_id)
+    assert saved is not None and saved["workload"] == "RegenWF"
+
+    client.delete(f"/runs/{run_id}")
+    with closing(storage.connect(db)) as conn:
+        assert storage.get_queue_settings(conn, run_id) is None

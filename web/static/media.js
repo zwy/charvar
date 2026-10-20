@@ -162,9 +162,9 @@ const Media = {
       card.className = "image-card";
       const imageSrc = item.thumb_url || item.primary_url;
       const promptText = String(item.text || "").trim();
-      // 查看提示词 / 复制（与档案图片槽位同一套弹层：可滚动 pre + 复制全文）
+      // 查看提示词 / 复制 / 重新生成（与档案图片槽位同一套弹层：可滚动 pre + 复制全文）
       const actionsHtml = promptText
-        ? `<button class="chip" data-prompt-view>查看提示词</button><button class="chip" data-prompt-copy>复制</button>`
+        ? `<button class="chip" data-prompt-view>查看提示词</button><button class="chip" data-prompt-copy>复制</button><button class="chip" data-regen title="同一提示词换个随机种子，按原出图设置重推 ComfyUI 出一张新图">重新生成</button>`
         : `<span class="hint">（无提示词记录）</span>`;
       if (imageSrc) {
         card.innerHTML = `<img src="${imageSrc}" alt="${item.variant_id || `图片 ${item.item_index}`}" loading="lazy"><div class="image-meta"><strong>#${String(item.item_index).padStart(3, "0")}</strong><span>${item.variant_id}</span></div><div class="image-actions">${actionsHtml}</div>`;
@@ -184,6 +184,45 @@ const Media = {
           const ok = await copyText(promptText);
           copyBtn.textContent = ok ? "已复制 ✓" : "复制失败";
           setTimeout(() => { copyBtn.textContent = "复制"; }, 1500);
+        });
+      }
+      const regenBtn = card.querySelector("[data-regen]");
+      if (regenBtn) {
+        regenBtn.addEventListener("click", async () => {
+          const label = `#${String(item.item_index).padStart(3, "0")}`;
+          // 与「生成」按钮同一约定：点按钮时随机取一个采样种子（0–100000）；
+          // 提示词/出图设置不变，由后端重放上批入队快照。
+          const seed = Math.floor(Math.random() * 100001);
+          regenBtn.disabled = true;
+          regenBtn.textContent = "生成中…";
+          Media.setStatus(`${label} 重新生成中…（种子 ${seed}）`);
+          const runId = data.run_id;
+          let out;
+          try {
+            out = await api(`/runs/${encodeURIComponent(runId)}/regenerate`, {
+              method: "POST",
+              body: JSON.stringify({ item_index: item.item_index, seed }),
+            });
+          } catch (err) {
+            Media.setStatus(`${label} 重新生成失败：${err.message}`, true);
+            regenBtn.disabled = false;
+            regenBtn.textContent = "重新生成";
+            return;
+          }
+          if (!out.ok) {
+            // 已入队但等待超时：稍后同步取图，按钮恢复可点
+            Media.setStatus(`${label} ${out.error || "已入队但出图超时"}`, true);
+            regenBtn.disabled = false;
+            regenBtn.textContent = "重新生成";
+            return;
+          }
+          try {
+            // wait=true 时服务端已等到该条出图；同步覆盖下载新图 + 重建 contact sheet + 刷墙
+            await Media.syncImages(runId);
+            Media.setStatus(`${label} 已重新生成（种子 ${out.seed}）`);
+          } catch (err) {
+            Media.setStatus(`${label} 已入队，同步失败：${err.message}（稍后点「同步图片」）`, true);
+          }
         });
       }
       grid.appendChild(card);

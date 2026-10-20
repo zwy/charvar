@@ -59,6 +59,16 @@ class ComfyQueueRequest(BaseModel):
     reference_kinds: list[str] = Field(default_factory=list, description="主体图参考（LLM 模式），按序注入 image/image2/…")
 
 
+class RunRegenerateRequest(BaseModel):
+    """单条重新生成（图片墙卡片按钮）：同一 prompt、原出图设置，只换采样种子。"""
+
+    item_index: int
+    # None = 沿用原 run.seed（等价重推）；前端点按钮时传随机新种子（0–100000）
+    seed: int | None = None
+    comfy_url: str | None = None
+    wait: bool = True
+
+
 class SyncOutputsRequest(BaseModel):
     build_sheets: bool = True
 
@@ -569,19 +579,32 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                 raise HTTPException(404, f"生成记录不存在：{run_id}")
             return storage.list_comfy_submissions(conn, run_id)
 
-    @app.post("/runs/{run_id}/comfyui")
-    def api_run_comfyui(run_id: str, req: ComfyQueueRequest) -> dict[str, Any]:
-        with _db() as conn:
-            result = storage.get_run(conn, run_id)
-        if result is None:
-            raise HTTPException(404, f"生成记录不存在：{run_id}")
-        workload_name = req.workload
+    def _submit_to_comfy(
+        conn,
+        result: GenerateResult,
+        *,
+        workload: str | None,
+        negative_prompt: str | None,
+        reference_kinds: list[str],
+        aspect_ratio: str | None,
+        resolution: str | None,
+        comfy_url: str | None,
+        wait: bool,
+        overrides_extra: dict[str, Any] | None = None,
+    ) -> tuple[str, list[dict[str, Any]]]:
+        """批量入队 / 单条重新生成共用的提交流水线。
+
+        workflow 解析（显式名 > 按参考图自动选，未配置 → 400）→ sticker 负向预检 →
+        参考图上传注入 image1..N → submit → 记录落库。submit 的 on_submitted 回调
+        提交即落库单条记录（prompt_id + 空 output_files）：批量 wait 遇到超时/中断
+        时记录不丢，凭 prompt_id 可补拉。返回（解析后 workload 名, submissions）。
+        """
+        workload_name = workload
         if not workload_name:
             # 自动选择：入了参考图 = 图片编辑；否则文生图（选型依据统一在「设置」页）
-            with _db() as conn:
-                settings = settings_service.get_settings(conn)
+            settings = settings_service.get_settings(conn)
             workload_name = (
-                settings.comfy_edit_workflow if req.reference_kinds else settings.comfy_t2i_workflow
+                settings.comfy_edit_workflow if reference_kinds else settings.comfy_t2i_workflow
             )
             if not workload_name:
                 raise HTTPException(
@@ -594,9 +617,9 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         except (json.JSONDecodeError, ValueError) as exc:
             raise HTTPException(400, f"workflow/mapping 无效：{exc}") from exc
 
-        overrides = dict(req.overrides)
-        if req.negative_prompt is not None:
-            overrides["negative_prompt"] = req.negative_prompt
+        overrides = dict(overrides_extra or {})
+        if negative_prompt is not None:
+            overrides["negative_prompt"] = negative_prompt
 
         if any((item.meta or {}).get("purpose") == "sticker" for item in result.items):
             # 带字预设（按生成时 meta 快照识别；老记录无快照 → legacy，不走此预检）：
@@ -629,12 +652,12 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                         "或清空负向输入（继承默认会注入空负向以清掉 workflow 内置禁字默认）"
                     ))
                 overrides["negative_prompt"] = effective
-        if req.reference_kinds:
+        if reference_kinds:
             # LLM 模式：把选定的主体档案图上传到 ComfyUI input，按序注入 image/image2/…
             # 按选择顺序对应 <image1>..<image4>；未选中的槽位由 mapping on_missing 从 payload 摘除
-            base = paths.comfy_base_url(req.comfy_url)
+            base = paths.comfy_base_url(comfy_url)
             seen: list[str] = []
-            for kind in req.reference_kinds:
+            for kind in reference_kinds:
                 if kind not in subject_images.IMAGE_KINDS or kind in seen:
                     continue
                 seen.append(kind)
@@ -651,23 +674,59 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                 except (httpx.HTTPError, ValueError) as exc:
                     raise HTTPException(502, f"上传参考图到 ComfyUI 失败：{exc}") from exc
                 overrides["image" if len(seen) == 1 else f"image{len(seen)}"] = remote
+
+        def _on_submitted(item, prompt_id: str, prefix: str) -> None:
+            storage.save_comfy_submission(
+                conn, result.run_id, item.index, item.variant_id, prompt_id, prefix, []
+            )
+            conn.commit()  # 落库要当场生效（超时/中断后凭 prompt_id 补拉）
+
         try:
             submissions = comfyui_exporter.submit(
                 result,
                 workflow,
                 mapping,
-                comfy_url=req.comfy_url,
+                comfy_url=comfy_url,
                 overrides=overrides,
-                wait=req.wait,
-                aspect_ratio=req.aspect_ratio,
-                resolution=req.resolution,
+                wait=wait,
+                aspect_ratio=aspect_ratio,
+                resolution=resolution,
+                on_submitted=_on_submitted,
             )
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(400, f"mapping 注入失败：{exc}") from exc
+        storage.save_comfy_submissions(conn, result.run_id, submissions)
+        return workload_name, submissions
+
+    @app.post("/runs/{run_id}/comfyui")
+    def api_run_comfyui(run_id: str, req: ComfyQueueRequest) -> dict[str, Any]:
         with _db() as conn:
-            storage.save_comfy_submissions(conn, run_id, submissions)
+            result = storage.get_run(conn, run_id)
+            if result is None:
+                raise HTTPException(404, f"生成记录不存在：{run_id}")
+            workload_name, submissions = _submit_to_comfy(
+                conn,
+                result,
+                workload=req.workload,
+                negative_prompt=req.negative_prompt,
+                reference_kinds=req.reference_kinds,
+                aspect_ratio=req.aspect_ratio,
+                resolution=req.resolution,
+                comfy_url=req.comfy_url,
+                wait=req.wait,
+                overrides_extra=dict(req.overrides),
+            )
+            # 快照本次最终生效的入队参数：图片墙单条「重新生成」原样重放（种子除外）
+            storage.save_queue_settings(conn, run_id, {
+                "workload": workload_name,
+                "negative_prompt": req.negative_prompt,
+                "aspect_ratio": req.aspect_ratio,
+                "resolution": req.resolution,
+                "reference_kinds": list(req.reference_kinds),
+                "comfy_url": req.comfy_url,
+            })
         ok_count = sum(1 for s in submissions if s.get("ok"))
         return {
             "run_id": run_id,
@@ -677,6 +736,78 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             "succeeded": ok_count,
             "failed": len(submissions) - ok_count,
             "submissions": submissions,
+        }
+
+    @app.post("/runs/{run_id}/regenerate")
+    def api_run_regenerate(run_id: str, req: RunRegenerateRequest) -> dict[str, Any]:
+        """单条重新生成：同一 prompt / 出图设置（重放上批入队快照），只换采样种子。
+
+        filename_prefix 只由 subject/index/variant_id 组成，单条视图不变 → ComfyUI
+        产物命名不漂移，同步仍按 item_index 归位；换种子经由单条视图的 result.seed
+        （_injected_values → mapping fixed/increment/template 三种模式全部生效）。
+        新图未落盘前旧原图照常显示（sync 的 mtime 刷新规则负责覆盖）。
+        """
+        with _db() as conn:
+            result = storage.get_run(conn, run_id)
+            if result is None:
+                raise HTTPException(404, f"生成记录不存在：{run_id}")
+            item = next((it for it in result.items if it.index == req.item_index), None)
+            if item is None:
+                raise HTTPException(404, f"生成记录没有条目：#{req.item_index}")
+            seed = req.seed if req.seed is not None else result.seed
+            single = result.model_copy(update={"seed": seed, "items": [item]})
+            queued = storage.get_queue_settings(conn, run_id) or {}
+            meta = item.meta or {}
+            # 快照缺失（老 run）回退：LLM 模式生成时 meta 已带 reference_kinds
+            reference_kinds = list(queued.get("reference_kinds") or []) or list(meta.get("reference_kinds") or [])
+            try:
+                workload_name, submissions = _submit_to_comfy(
+                    conn,
+                    single,
+                    workload=queued.get("workload"),
+                    negative_prompt=queued.get("negative_prompt"),
+                    reference_kinds=reference_kinds,
+                    aspect_ratio=queued.get("aspect_ratio"),
+                    resolution=queued.get("resolution"),
+                    comfy_url=req.comfy_url,
+                    wait=req.wait,
+                )
+            except TimeoutError as exc:
+                # 已入队（on_submitted 已落库），只是等待出图超时：凭 prompt_id 可补拉
+                records = storage.list_comfy_submissions(conn, run_id)
+                record = next((r for r in records if r["item_index"] == req.item_index), {})
+                return {
+                    "ok": False,
+                    "timed_out": True,
+                    "run_id": run_id,
+                    "item_index": req.item_index,
+                    "variant_id": item.variant_id,
+                    "seed": seed,
+                    "prompt_id": record.get("prompt_id"),
+                    "error": f"已入队但等待出图超时：{exc}。稍后点「同步图片」取图。",
+                }
+            submission = submissions[0] if submissions else {}
+            if not submission.get("ok"):
+                # 提交失败（旧记录/旧图未动）：原样返回提交错误
+                raise HTTPException(502, f"重新提交失败：{submission.get('error') or '未知错误'}")
+            # provenance：把本次种子与 prompt_id 打回 item.meta（历史可查）
+            item.meta = {
+                **meta,
+                "regen": {
+                    "seed": seed,
+                    "prompt_id": submission.get("prompt_id"),
+                    "submitted_at": storage.utcnow(),
+                },
+            }
+            storage.save_run(conn, result)
+        return {
+            "ok": True,
+            "run_id": run_id,
+            "item_index": req.item_index,
+            "variant_id": item.variant_id,
+            "seed": seed,
+            "workload": workload_name,
+            "prompt_id": submission.get("prompt_id"),
         }
 
     # ---- 图片资产：历史回看 + contact sheet ----

@@ -208,20 +208,30 @@ def sync_run_outputs(
                         str(record.get("filename_prefix") or ""),
                         files,
                     )
+                    conn.commit()  # 补拉结果当场生效（close() 不落 commit 会回滚）
         files = record.get("output_files") or []
         if files and prompt_id:
             output_file = files[0]
             destination = _original_path(result.run_id, item_index, output_file)
+            # 重新生成场景：记录是最近一次提交（submitted_at 比已落盘文件新）→ 覆盖下载
+            # 刷新；同一条正常首次同步/重复同步（submitted_at ≤ 文件 mtime）仍走缓存不重下。
+            submitted = _utc_epoch(record.get("submitted_at"))
+            stale = (
+                destination.exists()
+                and submitted is not None
+                and submitted > destination.stat().st_mtime
+            )
             downloaded_new_file = False
-            if not destination.exists():
+            if not destination.exists() or stale:
                 with comfyui_exporter._httpx_client(timeout=15) as client:
                     destination = _download_output(client, base, output_file, destination)
                 downloaded += 1
                 downloaded_new_file = True
             thumbnail = thumb_dir(result.run_id) / f"{item_index:06d}.webp"
-            if not thumbnail.exists():
+            if not thumbnail.exists() or downloaded_new_file:
                 make_thumb(destination, thumbnail)
-                downloaded += int(not downloaded_new_file)
+                if not downloaded_new_file:
+                    downloaded += 1
     if build_sheets:
         make_contact_sheet(result.run_id, result, records)
     return {
@@ -234,6 +244,15 @@ def history_entry(client, base: str, prompt_id: str, timeout: float = 15.0) -> d
     response = client.get(f"{base.rstrip('/')}/history/{prompt_id}", timeout=timeout)
     response.raise_for_status()
     return (response.json() or {}).get(prompt_id)
+
+
+def _utc_epoch(value: Any) -> float | None:
+    """解析 storage.utcnow() 格式（"%Y-%m-%d %H:%M:%S"，UTC）→ epoch 秒；失败返回 None。"""
+    try:
+        parsed = datetime.strptime(str(value), "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return None
+    return parsed.timestamp()
 
 
 def image_entry(
@@ -254,6 +273,9 @@ def image_entry(
         if candidate.exists():
             original = candidate
             break
+    # 缓存穿透：URL 挂上 prompt_id——重新生成换记录后同路径参数变化，浏览器会重新拉图
+    version = str((record or {}).get("prompt_id") or "")
+    suffix_qs = f"?v={version}" if version else ""
     return {
         "item_index": item_index,
         "variant_id": variant_id,
@@ -261,9 +283,9 @@ def image_entry(
         "filename_prefix": record.get("filename_prefix") if record else None,
         "status": "done" if (files or original) else "queued",
         "files": files,
-        "primary_url": f"/runs/{safe_run_id(run_id)}/comfy-image/{item_index}" if (files or original) else None,
-        "thumb_url": f"/runs/{safe_run_id(run_id)}/assets/thumbs/{item_index:06d}.webp" if (thumb_dir(run_id) / f"{item_index:06d}.webp").exists() else None,
-        "original_url": f"/runs/{safe_run_id(run_id)}/assets/original/{original.name}" if original else None,
+        "primary_url": f"/runs/{safe_run_id(run_id)}/comfy-image/{item_index}{suffix_qs}" if (files or original) else None,
+        "thumb_url": f"/runs/{safe_run_id(run_id)}/assets/thumbs/{item_index:06d}.webp{suffix_qs}" if (thumb_dir(run_id) / f"{item_index:06d}.webp").exists() else None,
+        "original_url": f"/runs/{safe_run_id(run_id)}/assets/original/{original.name}{suffix_qs}" if original else None,
         "text": fallback_text,
         "record": record,
     }

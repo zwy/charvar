@@ -43,6 +43,11 @@ CREATE TABLE IF NOT EXISTS comfy_prompts (
     output_files TEXT,
     PRIMARY KEY (run_id, item_index)
 );
+CREATE TABLE IF NOT EXISTS run_queue_settings (
+    run_id TEXT PRIMARY KEY,
+    params_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS subject_images (
     subject_id TEXT NOT NULL,
     kind TEXT NOT NULL,
@@ -175,6 +180,7 @@ def list_runs(conn: sqlite3.Connection, limit: int = 50) -> list[dict[str, Any]]
 def delete_run(conn: sqlite3.Connection, run_id: str) -> bool:
     cur = conn.execute("DELETE FROM runs WHERE run_id = ?", (run_id,))
     conn.execute("DELETE FROM comfy_prompts WHERE run_id = ?", (run_id,))
+    conn.execute("DELETE FROM run_queue_settings WHERE run_id = ?", (run_id,))
     conn.commit()
     return cur.rowcount > 0
 
@@ -226,6 +232,27 @@ def list_comfy_submissions(conn: sqlite3.Connection, run_id: str) -> list[dict[s
         data["output_files"] = json.loads(data["output_files"]) if data["output_files"] else []
         result.append(data)
     return result
+
+
+# ---------- 入队参数快照（重新生成时原样重放） ----------
+
+def save_queue_settings(conn: sqlite3.Connection, run_id: str, params: dict[str, Any]) -> None:
+    """批量入队时快照最终生效参数（请求级值，重放时再走同一预检路径）；单条重新提交不必更新。"""
+    conn.execute(
+        """INSERT OR REPLACE INTO run_queue_settings (run_id, params_json, updated_at)
+           VALUES (?, ?, ?)""",
+        (run_id, json.dumps(params, ensure_ascii=False), utcnow()),
+    )
+    conn.commit()
+
+
+def get_queue_settings(conn: sqlite3.Connection, run_id: str) -> dict[str, Any] | None:
+    row = conn.execute(
+        "SELECT params_json FROM run_queue_settings WHERE run_id = ?", (run_id,)
+    ).fetchone()
+    if row is None:
+        return None
+    return json.loads(row["params_json"])
 
 
 # ---------- 主体档案图片 ----------
