@@ -383,8 +383,12 @@ document.addEventListener("DOMContentLoaded", () => {
         refreshDefaultOpt();
         const count = Media.currentData ? Media.currentData.completed : 0;
         const total = (preset.include_contact_sheet ? preset.contact_sheet_seconds : 0) + count * preset.seconds_per_image;
+        // size 为 null = aspect auto：渲染时按本组图片实际比例就近选画幅
+        const sizeText = preset.size
+          ? `${preset.size[0]}×${preset.size[1]}`
+          : "比例自适应（按本组图片就近选画幅，黑边补底）";
         hint.textContent = [
-          `${preset.size[0]}×${preset.size[1]} · ${preset.fps}fps`,
+          `${sizeText} · ${preset.fps}fps`,
           `每张 ${preset.seconds_per_image}s`,
           preset.include_contact_sheet ? `封面 contact sheet ${preset.contact_sheet_seconds}s` : null,
           `背景音乐：${musicName() || "无"}`,

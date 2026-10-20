@@ -81,6 +81,68 @@ def test_resolution_size_table():
     assert video.resolution_size("16:9", "4k") == (3840, 2160)
 
 
+# ---------- reel_adaptive（表情/表情包轮播：无封面 · 黑底 contain · 比例自适应） ----------
+
+def test_reel_adaptive_preset():
+    preset = video.load_video_preset("reel_adaptive")
+    assert preset.aspect == "auto"
+    assert preset.include_contact_sheet is False
+    assert preset.fit == "contain"
+    assert preset.background == "black"
+    assert preset.order_mode == "sequential"
+    assert preset.music is None
+
+
+def test_choose_auto_aspect():
+    # 同比例 → 命中同画幅（表情包 1:1 / 表情 3:4），精确到不会触发黑边
+    assert video.choose_auto_aspect([(1024, 1024)] * 12) == "1:1"
+    assert video.choose_auto_aspect([(1024, 1024)] * 11 + [(64, 64)]) == "1:1"
+    assert video.choose_auto_aspect([(768, 1024)] * 24) == "3:4"
+    # 没有精确比例 → 就近（2:3 图 → 3:4 画幅，差 |ln(2/3)-ln(3/4)| 小于到 9:16 的距离）
+    assert video.choose_auto_aspect([(1024, 1536)] * 5) == "3:4"
+    # 混合比例 → 多数票（11 张方图压过 1 张横图）
+    assert video.choose_auto_aspect([(1024, 1024)] * 11 + [(1920, 1080)]) == "1:1"
+    assert video.choose_auto_aspect([(1920, 1080)] * 3) == "16:9"
+    assert video.choose_auto_aspect([(2160, 3840)]) == "9:16"
+    # 全部读不出 → 默认 9:16
+    assert video.choose_auto_aspect([]) == "9:16"
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="需要 ffmpeg")
+@pytest.mark.parametrize(
+    "png_size,want_aspect,want_size",
+    [((64, 64), "1:1", (720, 720)), ((680, 1020), "3:4", (720, 960))],  # 3:4 短边是宽
+)
+def test_render_video_auto_aspect(tmp_path, monkeypatch, png_size, want_aspect, want_size):
+    """aspect: auto → 按图片实际比例选画幅渲染；contain + 黑底不裁切。"""
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    run_id = f"auto_run_{png_size[0]}x{png_size[1]}"
+    result_items = _q21_items(shuffled=False)[:2]
+    for item in result_items:
+        _write_png(tmp_path / "generated" / run_id / "original" / f"{item.index:06d}.png", size=png_size)
+    preset = _preset(
+        aspect="auto", fit="contain", background="black",
+        include_contact_sheet=False, fps=8, seconds_per_image=0.25, resolution="720p",
+    )
+    info = video.render_video(run_id, _result(result_items), [], preset, timeout=120)
+    assert info["aspect"] == want_aspect
+    assert info["size"] == list(want_size)
+    assert info["contact_sheet_open"] is False
+    data = open(str(info["path"]), "rb").read(64)
+    assert b"ftyp" in data[:32]
+    ffprobe = shutil.which("ffprobe")
+    if ffprobe:
+        import subprocess as sp
+
+        out = sp.run(
+            [ffprobe, "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
+             "-of", "json", str(info["path"])],
+            capture_output=True, text=True, check=True,
+        )
+        stream = json.loads(out.stdout)["streams"][0]
+        assert (stream["width"], stream["height"]) == want_size
+
+
 def test_resolve_order_turnaround_clockwise():
     preset = _preset(direction="clockwise")
     result_items = _q21_items(shuffled=True)
@@ -313,6 +375,18 @@ def _classic_run(client) -> str:
 def test_api_video_music_list(client):
     data = client.get("/video-music").json()
     assert "1.mp3" in data["files"]
+
+
+def test_api_video_presets_auto_aspect(client):
+    """auto 预设在列表里 size 为 null（渲染时才按图片比例定），其余预设照旧给具体尺寸。"""
+    data = client.get("/video-presets").json()
+    by_name = {p["name"]: p for p in data}
+    assert by_name["reel_adaptive"]["aspect"] == "auto"
+    assert by_name["reel_adaptive"]["size"] is None
+    assert by_name["reel_adaptive"]["fit"] == "contain"
+    assert by_name["reel_adaptive"]["include_contact_sheet"] is False
+    assert by_name["q21_turnaround"]["aspect"] == "9:16"
+    assert by_name["q21_turnaround"]["size"] == [1080, 1920]
 
 
 def test_api_video_music_bad_name_400(client):

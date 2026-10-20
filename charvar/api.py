@@ -806,13 +806,19 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     def api_video_presets() -> list[dict[str, Any]]:
         presets = []
         for preset in video_service.list_video_presets():
+            # aspect: auto 的尺寸取决于渲染时本组图片的实际比例 → size 置 None，前端显示"自适应"
+            size = (
+                list(video_service.resolution_size(preset.aspect, preset.resolution))
+                if preset.aspect != "auto"
+                else None
+            )
             presets.append(
                 {
                     "name": preset.name,
                     "description": preset.description,
                     "aspect": preset.aspect,
                     "resolution": preset.resolution,
-                    "size": list(video_service.resolution_size(preset.aspect, preset.resolution)),
+                    "size": size,
                     "fps": preset.fps,
                     "seconds_per_image": preset.seconds_per_image,
                     "include_contact_sheet": preset.include_contact_sheet,

@@ -1,0 +1,21 @@
+# 视频合成预设：表情（expressions）/ 表情包（chat_replies）类 run 的顺序轮播模板。
+# 与 q21_turnaround 的区别：
+# - 无开头 contact sheet 封面（本组就是同类型图，直接轮播）；
+# - fit=contain + 黑底：不用模糊背景填满，整图完整展示、空缺处补黑边；
+# - aspect: auto：按本组图片实际比例选最近预设画幅（1:1 / 3:4 / 16:9 / 9:16 / 4:3），
+#   同比例直接用（如表情包 1:1、表情 3:4 → 无黑边）；没有精确比例就近（如 2:3 → 3:4）
+#   并由 contain 补黑边，不强行对齐两边比例。每张图投票，多数比例胜出。
+name: reel_adaptive
+type: video
+version: 1
+description: 比例自适应（按本组图片比例就近选画幅，黑边补底）· 生成顺序轮播 · 无 contact sheet 封面 · 无背景音乐
+aspect: auto              # auto = 按组内图片比例选 16:9 / 9:16 / 4:3 / 3:4 / 1:1 中最近的
+resolution: 1080p         # 720p / 1080p / 4k（短边 720 / 1080 / 2160）
+fps: 24
+seconds_per_image: 1.5    # 表情包带中文文案，放慢一点便于读完
+include_contact_sheet: false
+contact_sheet_seconds: 2.0
+transition: cut
+fit: contain              # 纯色留边（不用 blur 模糊背景）
+background: black
+order_mode: sequential    # 按生成顺序轮播（表情/表情包没有景别转圈概念）

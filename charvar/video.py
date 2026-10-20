@@ -2,9 +2,12 @@
 
 与 contact sheet 同一思路（assets.py），区别是排序规则做成预设文件（presets/video/*.yaml）：
 景别组内按朝向转一整圈（顺时针/逆时针），表情组顺序播放，首帧可放 contact sheet 当封面。
+aspect: auto（表情/表情包类预设）= 按本组图片实际比例选最近的预设画幅（同比例直接用，
+没有则就近），fit=contain 保证整图完整展示、空缺处补 background 色边。
 """
 from __future__ import annotations
 
+import math
 import re
 import shutil
 import subprocess
@@ -12,6 +15,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
+from PIL import Image
 from pydantic import BaseModel, Field
 
 from charvar import assets, paths
@@ -31,7 +35,9 @@ class VideoPreset(BaseModel):
     name: str
     version: int = 1
     description: str = ""
-    aspect: Literal["16:9", "9:16", "4:3", "3:4", "1:1"] = "9:16"
+    # auto = 渲染时按本组图片实际比例选最近画幅（choose_auto_aspect）；
+    # 具体值 = 整条视频固定画幅。现有预设不受影响。
+    aspect: Literal["auto", "16:9", "9:16", "4:3", "3:4", "1:1"] = "9:16"
     resolution: Literal["720p", "1080p", "4k"] = "1080p"
     fps: int = Field(default=24, ge=1, le=120)
     seconds_per_image: float = Field(default=1.0, gt=0, le=30)
@@ -149,6 +155,45 @@ def resolution_size(aspect: str, resolution: str) -> tuple[int, int]:
     width += width % 2
     height += height % 2
     return width, height
+
+
+def _log_ratio(aspect: str) -> float:
+    width, height = _ASPECTS[aspect]
+    return math.log(width / height)
+
+
+def choose_auto_aspect(sizes: list[tuple[int, int]]) -> str:
+    """一组图片尺寸 → 最近预设画幅（aspect: auto 的实现）。
+
+    每张图按等比 log 距离投给最近的画幅（同比例图片必然命中同一画幅，
+    没有 ≥1:1/3:4 等精确比例时就近，如 2:3 → 3:4）；得多数票的画幅胜出，
+    平票看全部图片到该画幅的距离和，仍平按 _ASPECTS 固定顺序。
+    无尺寸（都读不出）→ 9:16（本模块原有默认画幅）。
+    """
+    if not sizes:
+        return "9:16"
+    aspects = list(_ASPECTS)
+    votes: dict[str, int] = dict.fromkeys(aspects, 0)
+    total_dist: dict[str, float] = dict.fromkeys(aspects, 0.0)
+    for width, height in sizes:
+        ratio = math.log(width / height) if width > 0 and height > 0 else 0.0
+        nearest = min(aspects, key=lambda a: abs(ratio - _log_ratio(a)))  # min 稳定 → 平票取列表序
+        votes[nearest] += 1
+        for aspect in aspects:
+            total_dist[aspect] += abs(ratio - _log_ratio(aspect))
+    return max(aspects, key=lambda a: (votes[a], -total_dist[a]))
+
+
+def _image_sizes(paths) -> list[tuple[int, int]]:
+    """读取图片尺寸（参与 auto 画幅投票）；读不出的图跳过（渲染阶段自会报错）。"""
+    sizes: list[tuple[int, int]] = []
+    for path in paths:
+        try:
+            with Image.open(path) as image:
+                sizes.append(image.size)
+        except Exception:  # noqa: BLE001
+            continue
+    return sizes
 
 
 def resolve_order(items: list, preset: VideoPreset) -> list[int]:
@@ -275,7 +320,6 @@ def render_video(
     timeout: float = 900.0,
 ) -> dict[str, Any]:
     """把 run 里已有原图按预设顺序合成 MP4，返回产物信息。"""
-    width, height = resolution_size(preset.aspect, preset.resolution)
     fps = preset.fps
     frames_per_image = max(1, round(preset.seconds_per_image * fps))
     seconds_per_image = frames_per_image / fps
@@ -303,6 +347,16 @@ def render_video(
         used_images += 1
     if not clips:
         raise VideoPresetError("run 里还没有可用的成品图（先推送 ComfyUI 并同步输出）")
+
+    # 画幅解析放在 clips 收集之后：aspect: auto 要读本组图片实际比例投票
+    # （contact sheet 是拼合封面不参与投票；极端情况无图片可读 → 兜底 9:16）。
+    if preset.aspect == "auto":
+        aspect = choose_auto_aspect(
+            _image_sizes(path for path, _sec, label in clips if label != "contact sheet")
+        )
+    else:
+        aspect = preset.aspect
+    width, height = resolution_size(aspect, preset.resolution)
 
     graph_parts = [
         _clip_filter(i, preset, width, height, fps) + ";" for i in range(len(clips))
@@ -365,7 +419,7 @@ def render_video(
         "path": out,
         "name": out.name,
         "preset": preset.name,
-        "aspect": preset.aspect,
+        "aspect": aspect,  # auto 预设 → 实际选用的画幅
         "resolution": preset.resolution,
         "size": [width, height],
         "fps": fps,
