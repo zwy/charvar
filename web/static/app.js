@@ -307,6 +307,7 @@ function renderResult(result) {
     const capCell = `<td class="copy-cell" title="点击复制" data-caption="1"><span class="caption">${escapeHtml(item.caption)}</span></td>`;
     tr.innerHTML = `<td>${item.index}</td><td>${escapeHtml(item.variant_id)}</td>
       <td>${escapeHtml(m.framing || "-")}</td><td>${escapeHtml(m.angle || "-")}</td><td>${escapeHtml(m.expression || "-")}</td>
+      <td>${escapeHtml(m.pose || "-")}</td>
       <td>${escapeHtml(item.background || "—")}</td><td>${escapeHtml(item.lighting || "—")}</td>
       ${promptCell}${dtCell}${capCell}`;
     tbody.appendChild(tr);
@@ -388,10 +389,10 @@ const TIER_TO_SIDE = { "1k": 1024, "2k": 2048, "4k": 4096 };
 function updateComfyDimensionPreview() {
   const ratio = ASPECT_RATIO;
   const longSide = TIER_TO_SIDE[$("#comfy-resolution").value];
-  const stickerRatio = (currentPresetMeta() || {}).preferred_aspect_ratio;
+  const presetRatio = (currentPresetMeta() || {}).preferred_aspect_ratio;
   if (ratio === "auto") {
-    DIM_PREVIEW.textContent = stickerRatio
-      ? `智能（带字表情包预设）：${stickerRatio} —— 自动采用预设快照比例；手动选择其他比例不被无声覆盖`
+    DIM_PREVIEW.textContent = presetRatio
+      ? `智能（当前预设指定 ${presetRatio}）：自动采用预设比例；手动选择其他比例不被无声覆盖`
       : "智能：全身 2:3，胸像/头像/表情 3:4。以上按长边档位计算。";
     return;
   }

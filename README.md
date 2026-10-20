@@ -12,7 +12,7 @@
 - **主体档案 CRUD**：id/称谓/触发词/风格锁定/外貌锁定/服饰锁定/自由补充，支持粘贴 YAML 导入
 - **历史记录**：每次生成存 SQLite，可回看、重新下载
 - **导出**：TXT（每行一条贴 ComfyUI）、JSONL、captions.zip（`000_full_front.txt …` 与图片同名）、ComfyUI API 逐条入队
-- **内置预设**：`q21_default_30`（原工作流 30 条，逐字保留）、`q21_legacy_30`（工作流残留旧版 30 条）、`matrix_basic`（3 景别 × 8 朝向 + 6 表情的矩阵版）
+- **内置预设**：`q21_default_30`（原工作流 30 条，逐字保留）、`q21_legacy_30`（工作流残留旧版 30 条）、`matrix_basic`（3 景别 × 8 朝向 + 6 表情的矩阵版）、`yoga_basic_9`（瑜伽动作 9 式：全身景别，角度/表情留空，由各条 text 自述观察方向）
 
 ## 页面一览
 
@@ -106,6 +106,10 @@ YAML 预设放 `presets/*.yaml`，两种类型：
 
 背景/光照用 `presets/wildcards/backgrounds.yaml` / `lighting.yaml`（`items` 列表），也可在任意变体文本内使用 Impact Pack 风格的 `{a|b|c}` 内联通配符（按条目种子稳定展开）。
 
+变体可带结构化字段：`framing`（full/chest/head）、`angle`、`expression`（表情）、`pose`（体式/动作，独立于表情语义），后两者分别写进 caption。
+
+预设根字段 `preferred_aspect_ratio`（如 `'4:3'`）声明出图画幅：智能画幅按它出图，不按景别推导；UI 手选的比例仍然优先。**画幅值必须加引号**——YAML 会把未加引号的 `4:3` 读成 sexagesimal 数字。
+
 ## 可复现与子种子
 
 - 同一档案 + 同一预设 + 同一种子 → 输出完全一致；
@@ -115,12 +119,13 @@ YAML 预设放 `presets/*.yaml`，两种类型：
 ## caption 规则
 
 ```
-{trigger_word}, {framing_tag}, {angle_tag}[, {expression_tag}], {background} background, {lighting_short}
+{trigger_word}, {framing_tag}, {angle_tag}[, {pose_tag}], {expression_tag}, {background} background, {lighting_short}
 例：sw1tch, full body, three-quarter view from left, gray background, soft natural window light
 ```
 
 - `lighting_short` 取逗号前的短句；
 - angle ∈ {l135, r135, back} 时省略表情标签；
+- `pose`（体式/动作标签）写在角度之后、表情之前，映射取 `caption_tags.pose`；
 - 标签映射可用预设 `caption_tags` 字段覆盖。
 
 ## ComfyUI 集成

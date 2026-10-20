@@ -15,6 +15,7 @@ from charvar import llm
 from charvar.caption import build_caption
 from charvar.composer import (
     _apply_sampling,
+    aspect_meta,
     closeup_framing_guard,
     expand_matrix,
     make_run_id,
@@ -68,6 +69,7 @@ def collect_intent(subject: SubjectProfile, preset: Preset, req: GenerateRequest
             "framing": spec.framing,
             "angle": spec.angle,
             "expression": spec.expression,
+            "pose": spec.pose,
             "background": background,
             "lighting": lighting,
             "framing_guard": closeup_framing_guard(spec.framing) or None,
@@ -269,11 +271,13 @@ def generate_llm(
                     "framing": spec.framing,
                     "angle": spec.angle,
                     "expression": spec.expression,
+                    "pose": spec.pose,
                     "tags": spec.tags,
                     "sampling": req.sampling,
                     "preset_type": preset.type,
                     "mode": "llm",
                     "reference_kinds": list(reference_kinds),
+                    **aspect_meta(preset),
                     **sticker_meta(preset, spec),
                 },
             )

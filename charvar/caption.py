@@ -3,7 +3,8 @@
 格式：{trigger_word}, {framing_tag}, {angle_tag}[, {expression_tag}], {background} background, {lighting_short}
 - angle ∈ {l135, r135, back}（背面/遮挡）时不写表情标签；
 - 背景为空则省略；lighting 取逗号前短句；
-- 预设可用 caption_tags 字段覆盖默认映射。
+- 预设可用 caption_tags 字段覆盖默认映射；
+- pose（体式/动作标签）独立于表情：写在角度之后、表情之前，映射取 caption_tags.pose。
 """
 from __future__ import annotations
 
@@ -35,6 +36,7 @@ DEFAULT_CAPTION_TAGS: dict[str, dict[str, str]] = {
         "cringe": "grimace",
         "silly": "playful expression",
     },
+    "pose": {},
 }
 
 
@@ -52,7 +54,7 @@ def build_caption(
     *,
     background_suffix: bool = True,
 ) -> str:
-    tags = {k: {**v} for k, v in ((k, DEFAULT_CAPTION_TAGS.get(k, {})) for k in ("framing", "angle", "expression"))}
+    tags = {k: {**v} for k, v in ((k, DEFAULT_CAPTION_TAGS.get(k, {})) for k in ("framing", "angle", "expression", "pose"))}
     for group, mapping in (caption_tags or {}).items():
         tags.setdefault(group, {}).update(mapping)
 
@@ -63,6 +65,8 @@ def build_caption(
         parts.append(tags["framing"].get(spec.framing, spec.framing))
     if spec.angle:
         parts.append(tags["angle"].get(spec.angle, spec.angle))
+    if spec.pose:
+        parts.append(tags["pose"].get(spec.pose, spec.pose))
     if spec.expression and spec.angle not in REAR_ANGLES:
         parts.append(tags["expression"].get(spec.expression, spec.expression))
     if background:

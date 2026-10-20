@@ -63,6 +63,7 @@ class VariantSpec(BaseModel):
     """一条变体的结构化描述（组合前）。
 
     framing/angle/expression 为可选结构化字段，caption 与元数据用它；
+    pose 供动作类预设（体式/姿势）标注用，与 expression 分开——不占用表情语义；
     text 是拼进最终提示词的原始片段（list 预设逐字保留，matrix 预设展开产物）。
     display_text 仅 schema 2 sticker 预设携带（图片文案，schema 1 不得出现——
     由 preset_loader 校验，避免静默丢弃）。
@@ -72,6 +73,7 @@ class VariantSpec(BaseModel):
     framing: Literal["full", "chest", "head"] | None = None
     angle: str | None = None
     expression: str | None = None
+    pose: str | None = None
     text: str
     tags: list[str] = Field(default_factory=list)
     display_text: DisplayText | None = None

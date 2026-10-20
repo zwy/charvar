@@ -83,6 +83,16 @@ def closeup_framing_guard(framing: str | None) -> str:
     return CLOSEUP_FRAMING_GUARDS.get(str(framing or ""), "")
 
 
+def aspect_meta(preset) -> dict:
+    """出图画幅快照：预设声明了 preferred_aspect_ratio 就快照进 item.meta。
+
+    与 sticker 合同无关——动作/场景类预设（schema 1）也能声明画幅：auto 画幅时
+    按快照出图（否则按景别推导 2:3/3:4）；UI 手动选了比例则手动优先。
+    """
+    ratio = str(getattr(preset, "preferred_aspect_ratio", "") or "").strip()
+    return {"preferred_aspect_ratio": ratio} if ratio else {}
+
+
 def expand_matrix(preset: MatrixPreset) -> list[VariantSpec]:
     """matrix 预设 → VariantSpec 列表。
 
@@ -283,10 +293,12 @@ def generate(subject: SubjectProfile, preset: Preset, req: GenerateRequest) -> G
                     "framing": spec.framing,
                     "angle": spec.angle,
                     "expression": spec.expression,
+                    "pose": spec.pose,
                     "tags": spec.tags,
                     "sampling": req.sampling,
                     "preset_type": preset.type,
                     "rear_angle": spec.angle in REAR_ANGLES if spec.angle else False,
+                    **aspect_meta(preset),
                     **sticker_meta(preset, spec),
                 },
             )

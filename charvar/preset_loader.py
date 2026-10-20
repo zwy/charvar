@@ -22,6 +22,9 @@ from charvar.models import LetteringStyle, VariantSpec
 
 VALID_FRAMINGS = ("full", "chest", "head")
 
+# 出图画幅白名单：与 exporter 的 SUPPORTED_ASPECT_RATIOS 一致（auto = 按景别推导）
+VALID_ASPECT_RATIOS = ("auto", "1:1", "3:4", "16:9", "4:3", "9:16", "2:3", "3:2", "21:9")
+
 SUPPORTED_SCHEMA_VERSIONS = (1, 2)
 
 # schema 2（sticker）本期合同：list/sticker/required_label/variant/1:1，逐条必带 display_text
@@ -43,7 +46,7 @@ _SCHEMA_2_ROOT_KEYS = frozenset(
 )
 
 _SCHEMA_2_VARIANT_KEYS = frozenset(
-    {"id", "framing", "angle", "expression", "text", "tags", "display_text"}
+    {"id", "framing", "angle", "expression", "pose", "text", "tags", "display_text"}
 )
 
 
@@ -138,9 +141,11 @@ def _check_schema_version(raw: dict[str, Any], path: Path) -> int:
             f"预设 {path.name} 的 schema_version={schema_version} 不受支持"
             f"（本程序只支持 {SUPPORTED_SCHEMA_VERSIONS}；请先升级程序再导入）"
         )
-    # schema 1 文件携带 schema 2 新字段会被静默丢弃——显式报错而不是当作没看见
+    # schema 1 文件携带 schema 2 新字段会被静默丢弃——显式报错而不是当作没看见。
+    # preferred_aspect_ratio 不在此列：它只是画幅声明，与 sticker 合同无关，
+    # schema 1 的动作/场景预设也能用它固定出图画幅。
     new_keys = sorted(set(raw) & {"purpose", "text_policy", "composition_policy",
-                                  "preferred_aspect_ratio", "lettering", "schema_version"})
+                                  "lettering", "schema_version"})
     new_keys = [k for k in new_keys if not (k == "schema_version" and raw[k] == 1)]
     if schema_version == 1 and new_keys:
         raise PresetError(
@@ -175,6 +180,32 @@ def _validate_sticker_contract(preset: ListPreset, schema_version: int, path: Pa
                 f"sticker 预设 {path.name} 的 {spec.id} 应保持 framing/angle 为空"
                 "（构图以 text 为准，不套用景别裁切/正面站姿规范）"
             )
+
+
+def _aspect_ratio_value(value: Any) -> str | None:
+    """画幅值归一成字符串。
+
+    YAML 会把未加引号的 `4:3` 读成 sexagesimal 整数（4*60+3=243），所以这里
+    拒绝数字并给出明确提示——让作者去加引号，而不是把 243 当成画幅。
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, str):
+        raise PresetError(
+            f"preferred_aspect_ratio 必须写成带引号的字符串（如 '4:3'），当前读成 {value!r}"
+            "（YAML 会把未加引号的 w:h 解析成 sexagesimal 数字）"
+        )
+    return value.strip() or None
+
+
+def _validate_aspect_ratio(preset: "ListPreset | MatrixPreset", path: Path) -> None:
+    """preferred_aspect_ratio 必须是白名单里的画幅；非法值显式报错（否则出图时才炸）。"""
+    ratio = str(preset.preferred_aspect_ratio or "").strip().lower()
+    if ratio and ratio not in VALID_ASPECT_RATIOS:
+        raise PresetError(
+            f"预设 {path.name} 的 preferred_aspect_ratio 非法：{preset.preferred_aspect_ratio!r}"
+            f"（只支持 {'/'.join(VALID_ASPECT_RATIOS)}）"
+        )
 
 
 def load_file(path: Path) -> ListPreset | MatrixPreset:
@@ -214,7 +245,7 @@ def load_file(path: Path) -> ListPreset | MatrixPreset:
         "purpose": raw.get("purpose", "dataset"),
         "text_policy": raw.get("text_policy", "forbid"),
         "composition_policy": raw.get("composition_policy", "legacy"),
-        "preferred_aspect_ratio": raw.get("preferred_aspect_ratio"),
+        "preferred_aspect_ratio": _aspect_ratio_value(raw.get("preferred_aspect_ratio")),
         "lettering": raw.get("lettering"),
     }
     # 背景/光照：内联优先，其次 _ref 相对路径
@@ -235,6 +266,7 @@ def load_file(path: Path) -> ListPreset | MatrixPreset:
             common["variants"] = variants
             preset = ListPreset.model_validate(common)
             _validate_sticker_contract(preset, schema_version, path)
+            _validate_aspect_ratio(preset, path)
             return preset
         if kind == "matrix":
             common["dimensions"] = raw.get("dimensions")
@@ -243,6 +275,7 @@ def load_file(path: Path) -> ListPreset | MatrixPreset:
             common["join"] = raw.get("join", ", ")
             common["end"] = raw.get("end", ".")
             preset = MatrixPreset.model_validate(common)
+            _validate_aspect_ratio(preset, path)
             if schema_version == 2:
                 raise PresetError(f"schema 2 sticker 预设 {path.name} 本期只支持 type: list")
             return preset

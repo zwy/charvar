@@ -125,9 +125,9 @@ def parse_aspect_ratio(value: str | None) -> tuple[int, int] | None:
 def _smart_ratio(item: PromptItem) -> str:
     """按景别自动选比例：全身 2:3，近景/头像/表情 3:4。
 
-    带字表情包（schema 2）在生成时把 preferred_aspect_ratio（如 1:1）快照进
-    item.meta——auto 时优先采用快照，不被景别规则覆盖。显式比例由调用方传入，
-    永远优先于快照（在 submit 里判断，不经此处）。
+    预设声明了 preferred_aspect_ratio（带字表情包 1:1、动作预设 4:3 等）时，
+    生成时快照进 item.meta——auto 时优先采用快照，不被景别规则覆盖。
+    显式比例由调用方传入，永远优先于快照（在 submit 里判断，不经此处）。
     """
     preferred = str((item.meta or {}).get("preferred_aspect_ratio") or "").strip().lower()
     if preferred and preferred != "auto":
@@ -314,10 +314,11 @@ def submit(
                     ) if item.meta.get("framing") in ("chest", "head") else ""
                 effective_ratio = aspect_ratio
                 if not effective_ratio:
-                    # sticker 快照：生成时写入 meta.preferred_aspect_ratio（如 1:1）；
-                    # 未指定比例时按快照注入，旧预设 meta 无此键 → 行为不变。
+                    # 预设快照：生成时写入 meta.preferred_aspect_ratio（sticker 1:1、
+                    # 动作预设 4:3 等）；未指定比例时按快照注入，旧预设 meta 无此键 → 行为不变。
                     effective_ratio = str((item.meta or {}).get("preferred_aspect_ratio") or "")
                 if effective_ratio:
+                    # "auto" 由 _smart_ratio 读 meta 快照（无快照才按景别推导）
                     width, height = dimensions_for_item(effective_ratio, resolution, item)
                     item_overrides["width"] = width
                     item_overrides["height"] = height

@@ -256,6 +256,102 @@ def test_expressions_v1_24_structure_and_caption():
     assert "The lighting is " in item.prompt
 
 
+# ---------- yoga_basic_9（瑜伽动作预设：9 个体式，schema 1 list） ----------
+
+# V2 基准：yoga_camel / yoga_bow 已改用「深弧」措辞（出图对比后由原版替换而来），
+# 其余 7 条沿用 V1 原文。V1 基准 eedd9b21… 对应替换前的版本，保留在此备查。
+YOGA_BASIC_9_DIGEST = "bfbac4e943e8e888a09145c6d418cd48bb04472d2fecbc862dc3f0aedf871694"
+YOGA_BASIC_9_V1_DIGEST = "eedd9b2167bdd1f5613370079a1e75c0ca5a1d4e390058afbb3ed0882dd0e385"
+
+YOGA_BASIC_9_IDS = (
+    "yoga_tree", "yoga_warrior_ii", "yoga_triangle", "yoga_low_lunge",
+    "yoga_warrior_iii", "yoga_dancer", "yoga_half_moon", "yoga_camel", "yoga_bow",
+)
+
+
+def test_yoga_basic_9_digest_locked():
+    """红线：yoga_basic_9 的 9 条 variants 文本逐字不变（V2 基准 sha256）。"""
+    preset = load("yoga_basic_9")
+    assert isinstance(preset, ListPreset)
+    assert len(preset.variants) == 9
+    assert {v.id for v in preset.variants} == set(YOGA_BASIC_9_IDS)
+    assert _texts_digest("yoga_basic_9") == YOGA_BASIC_9_DIGEST, (
+        "yoga_basic_9 的变体文本偏离 V2 基准；如确需修改，请显式重算并更新基准"
+    )
+
+
+def test_yoga_basic_9_structure():
+    """动作预设：全身景别 + 空 angle（观察方向由各条 text 自述，不套用视角标签）。"""
+    preset = load("yoga_basic_9")
+    assert preset.schema_version == 1
+    assert preset.purpose == "dataset" and preset.text_policy == "forbid"
+    for spec in preset.variants:
+        assert spec.framing == "full"
+        assert spec.angle is None      # 刻意留空：各条 text 自带观察方向
+        assert spec.expression is None
+        assert spec.tags[:2] == ["full", "yoga"]
+        assert spec.pose                  # 体式标签：独立于 expression
+    assert preset.reference_order == ["front"]
+    assert preset.caption_background_suffix is False
+    # 背景/光照沿用现有 V2 通配符文件，不新建 wildcard
+    assert len(preset.backgrounds) == 20
+    assert len(preset.lighting) == 5
+    # 横向动作（战士二/三角/半月/弓）需要横向画幅
+    assert preset.preferred_aspect_ratio == "4:3"
+
+
+def test_yoga_basic_9_deep_backbend_wording():
+    """骆驼式/弓式用「深弧」措辞：不再有压住弧度的克制说法。"""
+    preset = load("yoga_basic_9")
+    by_id = {v.id: v for v in preset.variants}
+    assert "arc the torso strongly backward" in by_id["yoga_camel"].text
+    assert "moderate" not in by_id["yoga_camel"].text
+    assert "deep and unmistakable" in by_id["yoga_bow"].text
+    assert "moderate bow shape" not in by_id["yoga_bow"].text
+
+
+def test_yoga_basic_9_prompt_and_caption():
+    from charvar import composer
+    from charvar.models import GenerateRequest, SubjectProfile
+
+    preset = load("yoga_basic_9")
+    subject = SubjectProfile(id="demo", name="演示", subject_noun="woman", trigger_word="sw1tch")
+    subject.style_lock = ["2D hand-drawn illustration"]
+
+    req = GenerateRequest(subject_id="demo", preset="yoga_basic_9", seed=42)
+    result = composer.generate(subject, preset, req)
+    assert len(result.items) == 9
+    item = result.items[0]
+    assert item.variant_id == "yoga_tree"
+    assert "<image1>" in item.prompt
+    assert "Perform Tree Pose" in item.prompt
+    assert "The background is " in item.prompt
+    assert "The lighting is " in item.prompt
+    # caption：trigger + 景别 + 体式（angle 为空 → 不写视角；expression 为空 → 不写表情）
+    assert item.caption.startswith("sw1tch, full body, tree pose, ")
+    assert "backdrop background" not in item.caption  # caption_background_suffix=false
+    assert "view" not in item.caption.split(", ")[1]  # angle 为空 → 不写视角标签
+    # meta 快照：pose + 画幅
+    assert item.meta["pose"] == "tree"
+    assert item.meta["preferred_aspect_ratio"] == "4:3"
+
+
+def test_yoga_basic_9_auto_ratio_is_landscape():
+    """auto 画幅走预设声明的 4:3（横向动作不被竖版切手切脚）。"""
+    from charvar import composer
+    from charvar.exporters.comfyui import _smart_ratio, dimensions_for_item
+    from charvar.models import GenerateRequest, SubjectProfile
+
+    preset = load("yoga_basic_9")
+    subject = SubjectProfile(id="demo", name="演示", subject_noun="woman")
+    result = composer.generate(subject, preset, GenerateRequest(subject_id="demo", seed=1))
+    item = result.items[0]
+    assert _smart_ratio(item) == "4:3"
+    assert dimensions_for_item("auto", "1k", item) == (1024, 768)
+    # 手动选比例仍优先于预设声明
+    assert dimensions_for_item("3:4", "1k", item) == (768, 1024)
+
+
 # ---------- chat_replies_v1_12（带字聊天表情包：schema 2，仅新预设启用） ----------
 
 CHAT_REPLIES_V1_12_DIGEST = "39a394efd7c0bb85b9f2718fe98e06ac7bda1fd68384e26de771211f9bba188f"
@@ -367,3 +463,95 @@ def test_chat_replies_loader_rejects_bad_configs(tmp_path):
                    if k not in ("purpose", "text_policy", "composition_policy",
                                 "preferred_aspect_ratio", "schema_version")},
                   "schema_version")
+
+
+# ---------- schema 1 的画幅声明与 pose 标签（动作类预设） ----------
+
+def _schema1_preset(tmp_path, body: str):
+    p = tmp_path / "s1.yaml"
+    p.write_text(body, encoding="utf-8")
+    return p
+
+
+def test_schema1_allows_preferred_aspect_ratio(tmp_path):
+    """schema 1 也能声明画幅（与 sticker 合同无关）：动作预设用它固定横向出图。"""
+    p = _schema1_preset(tmp_path, """
+name: s1
+type: list
+version: 1
+master_template: "m {subject_noun}"
+suffix_template: "s"
+preferred_aspect_ratio: '4:3'
+variants:
+- id: a
+  text: "t"
+""")
+    preset = load_file(p)
+    assert preset.preferred_aspect_ratio == "4:3"
+
+
+def test_schema1_rejects_bad_aspect_ratio(tmp_path):
+    """非法画幅显式报错（不静默带到出图时才炸）。"""
+    p = _schema1_preset(tmp_path, """
+name: s1
+type: list
+version: 1
+master_template: "m {subject_noun}"
+suffix_template: "s"
+preferred_aspect_ratio: '5:2'
+variants:
+- id: a
+  text: "t"
+""")
+    with pytest.raises(PresetError) as e:
+        load_file(p)
+    assert "preferred_aspect_ratio" in str(e.value)
+
+
+def test_schema1_rejects_unquoted_aspect_ratio(tmp_path):
+    """未加引号的 4:3 被 YAML 读成 sexagesimal 数字 → 明确提示加引号。"""
+    p = _schema1_preset(tmp_path, """
+name: s1
+type: list
+version: 1
+master_template: "m {subject_noun}"
+suffix_template: "s"
+preferred_aspect_ratio: 4:3
+variants:
+- id: a
+  text: "t"
+""")
+    with pytest.raises(PresetError) as e:
+        load_file(p)
+    assert "引号" in str(e.value)
+
+
+def test_pose_tag_is_separate_from_expression(tmp_path):
+    """pose 独立于 expression：caption 里两者可并存，pose 映射取 caption_tags.pose。"""
+    from charvar.caption import build_caption
+    from charvar.models import SubjectProfile
+
+    p = _schema1_preset(tmp_path, """
+name: s1
+type: list
+version: 1
+master_template: "m {subject_noun}"
+suffix_template: "s"
+caption_tags:
+  pose:
+    tree: tree pose
+variants:
+- id: a
+  text: "t"
+  framing: full
+  angle: null
+  expression: smile
+  pose: tree
+""")
+    preset = load_file(p)
+    spec = preset.variants[0]
+    assert spec.pose == "tree" and spec.expression == "smile"
+    subject = SubjectProfile(id="demo", name="演示", subject_noun="woman", trigger_word="sw1tch")
+    caption = build_caption(subject, spec, None, None, preset.caption_tags)
+    # 顺序：trigger, 景别, (角度空), 体式, 表情
+    assert caption == "sw1tch, full body, tree pose, smiling"
