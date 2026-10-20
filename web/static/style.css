@@ -204,11 +204,13 @@ td .caption { color: var(--muted); }
 
 /* 主体档案图片槽位：一行一个，避免横图/有图无图时宽度不一 */
 .slot-grid { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 12px; }
-/* 工具栏两行：第一行流程提示，第二行统一种子 + 一键起草 + 状态 */
+/* 工具栏两行：第一行流程提示，第二行统一种子 + 随机种子 + 一键起草 + 状态 */
 .slot-toolbar { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-bottom: 12px; }
-.slot-toolbar .actions { margin: 0; }
+.slot-toolbar .actions { margin: 0; align-items: center; }
 .seed-inline { flex-direction: row; align-items: center; gap: 6px; padding-bottom: 0; }
 .seed-inline input { width: 110px; }
+/* 一键起草按钮改小（与 row-actions 的紧凑规格一致），随机种子用 chip */
+#btn-slots-draft { padding: 4px 10px; font-size: 12px; }
 
 /* 提示词查看 / 模板编辑弹层 */
 .prompt-modal { width: min(900px, 92vw); }

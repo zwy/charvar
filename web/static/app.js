@@ -234,10 +234,16 @@ async function fillPresetOptions(name) {
 /* ---------- 生成 ---------- */
 $("#btn-generate").addEventListener("click", async () => {
   if (!state.subjects.length) return setStatus($("#gen-status"), "先去「主体档案」建一个档案", true);
+  const rawSeed = $("#gen-seed").value.trim();
+  // 种子：留空（默认）= 每次随机 0–100000（用户填了用填的，与固定背景/固定光照
+  // 「留空随机」同一习惯；提示词内容随机仍由后端 seed_for(seed, key) 派生）。
+  const seed = rawSeed !== "" && Number.isFinite(Number(rawSeed))
+    ? Math.floor(Number(rawSeed))
+    : Math.floor(Math.random() * 100001);
   const payload = {
     subject_id: $("#gen-subject").value,
     preset: $("#gen-preset").value,
-    seed: Number($("#gen-seed").value || 0),
+    seed,
     sampling: $("#gen-sampling").value,
     randomize_background: $("#gen-rand-bg").checked,
     randomize_lighting: $("#gen-rand-light").checked,
@@ -748,10 +754,16 @@ $("#subject-image-slots").addEventListener("click", async (ev) => {
   }
 });
 
-/* 工具栏：统一种子 + 一键 AI 起草（只补没有提示词的槽位，逐个串行调用） */
+/* 工具栏：统一种子 + 随机种子 + 一键 AI 起草（只补没有提示词的槽位，逐个串行调用） */
 function slotCard(kind) {
   return $(`#subject-image-slots [data-slot-kind="${kind}"]`);
 }
+
+/* 随机种子按钮：点一下填入 0–100000 的随机数（种子取值助手，不参与提示词内容随机——
+   提示词内容仍由后端 seed_for(seed, key) 派生）。 */
+$("#btn-slot-seed-random").addEventListener("click", () => {
+  $("#slot-seed").value = Math.floor(Math.random() * 100001);
+});
 
 $("#btn-slots-draft").addEventListener("click", async () => {
   const sid = state.currentSubject;

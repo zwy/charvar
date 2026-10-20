@@ -11,7 +11,7 @@
 <div class="form-grid">
 <label>主体档案<select id="gen-subject"></select></label>
 <label>预设<select id="gen-preset"></select></label>
-<label>种子<input type="number" id="gen-seed" value="42"></label>
+<label>种子<input type="number" id="gen-seed" min="0" placeholder="留空 = 随机（0–100000）"></label>
 <label>条数<input type="number" id="gen-count" placeholder="留空 = 预设全部" min="1"></label>
 <label>采样<select id="gen-sampling"><option value="all">all（默认顺序）</option><option value="first">first（取前 N 条）</option><option value="random">random（按种子抽取）</option></select></label>
 <label>拼接分隔符<input type="text" id="gen-separator" value=" "></label>
@@ -84,6 +84,7 @@
 <span class="hint">两步流程：先就绪「人物半身像＋三视图」（生成或上传），再生成 / 上传其余 4 种。</span>
 <div class="actions">
 <label class="check seed-inline">统一种子<input type="number" id="slot-seed" value="0"></label>
+<button id="btn-slot-seed-random" type="button" class="chip" title="随机生成一个种子（0–100000）">随机种子</button>
 <button id="btn-slots-draft">一键 AI 起草（只补空白）</button>
 <span id="slot-toolbar-status" class="status"></span>
 </div>
