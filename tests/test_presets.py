@@ -134,10 +134,10 @@ def test_q21_v2_30_structured_fields_and_caption_settings():
 
 def test_q21_v2_30_wildcards():
     preset = load("q21_v2_30")
-    assert len(preset.backgrounds) == 20
+    assert len(preset.backgrounds) == 24
     assert preset.backgrounds[0] == "a seamless light gray studio backdrop"
     assert "a sandy beach, with calm blue ocean and a clear sky" in preset.backgrounds
-    assert len(preset.lighting) == 5
+    assert len(preset.lighting) == 7
     assert preset.lighting[0] == "soft natural window light, diffused and even"
     assert (
         preset.lighting[3]
@@ -294,8 +294,8 @@ def test_yoga_basic_9_structure():
     assert preset.reference_order == ["front"]
     assert preset.caption_background_suffix is False
     # 背景/光照沿用现有 V2 通配符文件，不新建 wildcard
-    assert len(preset.backgrounds) == 20
-    assert len(preset.lighting) == 5
+    assert len(preset.backgrounds) == 24
+    assert len(preset.lighting) == 7
     # 横向动作（战士二/三角/半月/弓）需要横向画幅
     assert preset.preferred_aspect_ratio == "4:3"
 
@@ -350,6 +350,148 @@ def test_yoga_basic_9_auto_ratio_is_landscape():
     assert dimensions_for_item("auto", "1k", item) == (1024, 768)
     # 手动选比例仍优先于预设声明
     assert dimensions_for_item("3:4", "1k", item) == (768, 1024)
+
+
+# ---------- yoga_complete_14（原九式 + 新增五式：手倒立/下犬/侧板/船式/屈膝头倒立） ----------
+
+# 基准：原九式逐字沿用 yoga_basic_9（其前 9 条 digest 应等于 YOGA_BASIC_9_DIGEST），
+# 新增五式见下。yoga_complete_14 的完整 14 条 digest 一并锁定。
+YOGA_COMPLETE_14_DIGEST = "a552d502fb26ba2bda4b41e95c5ac1ed42e02f4be396cd75161561e2294f7426"
+
+YOGA_COMPLETE_14_IDS = (
+    "yoga_tree", "yoga_warrior_ii", "yoga_triangle", "yoga_low_lunge",
+    "yoga_warrior_iii", "yoga_dancer", "yoga_half_moon", "yoga_camel", "yoga_bow",
+    "yoga_handstand", "yoga_downward_dog", "yoga_side_plank", "yoga_boat",
+    "yoga_headstand_bent_knees",
+)
+
+YOGA_NEW_5_IDS = (
+    "yoga_handstand", "yoga_downward_dog", "yoga_side_plank", "yoga_boat",
+    "yoga_headstand_bent_knees",
+)
+
+
+def test_yoga_complete_14_digest_locked():
+    """红线：yoga_complete_14 的 14 条变体文本逐字不变（sha256 基准）。"""
+    preset = load("yoga_complete_14")
+    assert isinstance(preset, ListPreset)
+    assert len(preset.variants) == 14
+    assert {v.id for v in preset.variants} == set(YOGA_COMPLETE_14_IDS)
+    assert _texts_digest("yoga_complete_14") == YOGA_COMPLETE_14_DIGEST, (
+        "yoga_complete_14 的变体文本偏离基准；如确需修改，请显式重算并更新基准"
+    )
+
+
+def test_yoga_complete_14_keeps_original_nine_verbatim():
+    """原九式逐字沿用 yoga_basic_9：前 9 条 digest 必须等于基础版基准。"""
+    preset = load("yoga_complete_14")
+    head = hashlib.sha256(
+        "\n".join(v.text for v in preset.variants[:9]).encode("utf-8")
+    ).hexdigest()
+    assert head == YOGA_BASIC_9_DIGEST, (
+        "yoga_complete_14 的前 9 条与 yoga_basic_9 不一致（原九式必须逐字保留）"
+    )
+
+
+def test_yoga_complete_14_structure():
+    """合并版：14 条动作预设，字段约定与基础九式一致。"""
+    preset = load("yoga_complete_14")
+    assert preset.schema_version == 1
+    assert preset.purpose == "dataset" and preset.text_policy == "forbid"
+    assert preset.reference_order == ["front"]
+    assert preset.caption_background_suffix is False
+    assert preset.preferred_aspect_ratio == "4:3"
+    for spec in preset.variants:
+        assert spec.framing == "full"
+        assert spec.angle is None
+        assert spec.expression is None
+        assert spec.tags[:2] == ["full", "yoga"]
+        assert spec.pose
+        # 变体文本本身不夹中文（caption 标签另算）
+        assert not any("一" <= ch <= "鿿" for ch in spec.text)
+
+
+def test_yoga_complete_14_caption_tags_are_english():
+    """caption 标签一律英文：训练标签中英夹杂会污染训练信号。"""
+    preset = load("yoga_complete_14")
+    for group, mapping in (preset.caption_tags or {}).items():
+        for key, value in (mapping or {}).items():
+            assert not any("一" <= ch <= "鿿" for ch in value), (
+                f"caption_tags.{group}.{key} 含中文：{value!r}"
+            )
+
+
+def test_yoga_complete_14_prompt_and_caption():
+    from charvar import composer
+    from charvar.models import GenerateRequest, SubjectProfile
+
+    preset = load("yoga_complete_14")
+    subject = SubjectProfile(id="demo", name="演示", subject_noun="woman", trigger_word="sw1tch")
+    req = GenerateRequest(subject_id="demo", preset="yoga_complete_14", seed=42)
+    result = composer.generate(subject, preset, req)
+    assert len(result.items) == 14
+    captions = {it.variant_id: it.caption for it in result.items}
+    # 14 条 caption 互不相同（pose 标签要能区分动作）
+    assert len(set(captions.values())) == 14
+    assert captions["yoga_tree"].startswith("sw1tch, full body, tree pose, ")
+    assert captions["yoga_handstand"].startswith("sw1tch, full body, straight-leg handstand, ")
+    assert captions["yoga_downward_dog"].startswith("sw1tch, full body, downward-facing dog pose, ")
+    assert captions["yoga_side_plank"].startswith("sw1tch, full body, side plank pose, ")
+    assert captions["yoga_boat"].startswith("sw1tch, full body, boat pose, ")
+    assert captions["yoga_headstand_bent_knees"].startswith(
+        "sw1tch, full body, supported headstand pose with bent knees, "
+    )
+    # meta 快照：pose + 画幅
+    assert result.items[0].meta["pose"] == "tree"
+    assert result.items[0].meta["preferred_aspect_ratio"] == "4:3"
+
+
+def test_yoga_complete_14_new_poses_key_requirements():
+    """新增五式的关键支撑/形态要求留在文本里（出图弱化时便于定位）。"""
+    preset = load("yoga_complete_14")
+    by_id = {v.id: v for v in preset.variants}
+    handstand = by_id["yoga_handstand"].text
+    assert "the hands are the only ground contacts" in handstand
+    assert "Do not rotate an upright portrait upside down" in handstand
+    dog = by_id["yoga_downward_dog"].text
+    assert "inverted-V silhouette" in dog
+    # 兽医学语会往四足动物方向拽（仓库有猫/犬档案）
+    assert "forefeet" not in dog
+    assert "Both front feet remain grounded" in dog
+    side = by_id["yoga_side_plank"].text
+    assert "stack the right foot directly over the left" in side
+    boat = by_id["yoga_boat"].text
+    assert "not a lying leg raise" in boat
+    headstand = by_id["yoga_headstand_bent_knees"].text
+    assert "crown" in headstand and "interlace the fingers" in headstand.lower()
+    # 本预设只挂 1 张参考图，"照抄另一张姿势范例" 的约束是空转的，且会干扰模型
+    assert "separate pose example" not in headstand
+    # 背面视角：脸必须完全不出镜（用户反馈露脸不好看）
+    assert "viewed from directly behind the character" in headstand
+    assert "face points away from the camera" in headstand
+    assert "stays completely hidden" in headstand
+    # 屈膝外开成大 V：膝盖向两侧打开到最宽，小腿折回向上，两脚高举分开
+    assert "both knees bent and opened wide apart" in headstand
+    assert "the widest points of the figure" in headstand
+    assert "both feet rise high above the hips" in headstand
+    assert "not a lotus" in headstand
+    # 旧版"屈膝收向臀部、双脚并拢"已被替换掉
+    assert "heels near the buttocks" not in headstand
+    assert "feet close together" not in headstand
+
+
+def test_yoga_complete_14_auto_ratio_is_landscape():
+    """auto 画幅走预设声明的 4:3（倒立/侧板等横向动作不被竖版切手切脚）。"""
+    from charvar import composer
+    from charvar.exporters.comfyui import _smart_ratio, dimensions_for_item
+    from charvar.models import GenerateRequest, SubjectProfile
+
+    preset = load("yoga_complete_14")
+    subject = SubjectProfile(id="demo", name="演示", subject_noun="woman")
+    result = composer.generate(subject, preset, GenerateRequest(subject_id="demo", seed=1))
+    for item in result.items:
+        assert _smart_ratio(item) == "4:3"
+        assert dimensions_for_item("auto", "1k", item) == (1024, 768)
 
 
 # ---------- chat_replies_v1_12（带字聊天表情包：schema 2，仅新预设启用） ----------

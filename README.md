@@ -12,7 +12,7 @@
 - **主体档案 CRUD**：id/称谓/触发词/风格锁定/外貌锁定/服饰锁定/自由补充，支持粘贴 YAML 导入
 - **历史记录**：每次生成存 SQLite，可回看、重新下载
 - **导出**：TXT（每行一条贴 ComfyUI）、JSONL、captions.zip（`000_full_front.txt …` 与图片同名）、ComfyUI API 逐条入队
-- **内置预设**：`q21_default_30`（原工作流 30 条，逐字保留）、`q21_legacy_30`（工作流残留旧版 30 条）、`matrix_basic`（3 景别 × 8 朝向 + 6 表情的矩阵版）、`yoga_basic_9`（瑜伽动作 9 式：全身景别，角度/表情留空，由各条 text 自述观察方向）
+- **内置预设**：`q21_default_30`（原工作流 30 条，逐字保留）、`q21_legacy_30`（工作流残留旧版 30 条）、`matrix_basic`（3 景别 × 8 朝向 + 6 表情的矩阵版）、`yoga_basic_9`（瑜伽动作 9 式：全身景别，角度/表情留空，由各条 text 自述观察方向）、`yoga_complete_14`（同上九式 + 手倒立/下犬式/侧板式/船式/屈膝头倒立共 14 式）
 
 ## 页面一览
 
@@ -110,6 +110,26 @@ YAML 预设放 `presets/*.yaml`，两种类型：
 
 预设根字段 `preferred_aspect_ratio`（如 `'4:3'`）声明出图画幅：智能画幅按它出图，不按景别推导；UI 手选的比例仍然优先。**画幅值必须加引号**——YAML 会把未加引号的 `4:3` 读成 sexagesimal 数字。
 
+## 主体档案
+
+档案分两处：`presets/subjects/*.yaml`（随仓库走的样例档案，`charvar subject add <file>` 建档）与 SQLite `subjects` 表（实际生效的档案）。每份档案还能带一份**全场景通用提示词模板**（Markdown，存 `subject_templates` 表，网页「主体档案 → 编辑模板」或「从 .md 文件载入」维护），作为 LLM 起草角色提示词时的参考资料。
+
+仓库内置档案：
+
+| id | 角色 | 媒介 |
+|---|---|---|
+| `autumn_birch_girl` | 秋日枫林女孩 | imaishi 风格手绘漫画 |
+| `mustard_cap_girl` | 黄帽红夹克女孩 | 二维手绘漫画 |
+| `yoga_teacher` | 瑜伽老师 | 自然真实摄影 |
+| `silver_witch` / `silver_girl_v1` | 银白女巫 / 银白女孩 | 水彩混合媒介 |
+| `tvelo_illustration` / `tvelo_photoreal` | 缇珞（星际迷航同人 OC） | 插画版 / 真人版 |
+| `pingpong_kid_v1` / `pingpong_kid_v2` | 乒乓小子 | 极简平涂 / 数字绘本 |
+| `black_cat_v1` / `black_cat_v21` | 黑白燕尾服猫 / 黑白猫 | 水彩混合媒介 |
+
+锁定项（`style_lock` / `identity_lock` / `outfit_lock`）是**英文**条目：每条会被拼成一句 `Maintain ...`，再与 `extra` 一起进主提示词。中文锁定项会让生成的提示词中英夹杂。
+
+> `autumn_birch_girl` 与 `mustard_cap_girl` 是同一角色的两份资产文档（都源自同一张海报参考），按用户决定拆成两份独立档案：二者在**右手手套、包的肩侧（左肩 vs 右肩）、耳钉侧、帽上皮质标牌**上互相矛盾，各自只对自己的模板负责，不互相继承。
+
 ## 可复现与子种子
 
 - 同一档案 + 同一预设 + 同一种子 → 输出完全一致；
@@ -127,6 +147,7 @@ YAML 预设放 `presets/*.yaml`，两种类型：
 - angle ∈ {l135, r135, back} 时省略表情标签；
 - `pose`（体式/动作标签）写在角度之后、表情之前，映射取 `caption_tags.pose`；
 - 标签映射可用预设 `caption_tags` 字段覆盖。
+- **caption 标签一律用英文**（`tree pose` / `warrior II pose`）：caption 是训练标签，中英夹杂会污染训练信号。
 
 ## ComfyUI 集成
 

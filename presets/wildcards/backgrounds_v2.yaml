@@ -1,5 +1,7 @@
 # 新版 Q21 工作流的 20 条背景选项（10 影棚 + 10 场景，带景深虚化），逐字；
 # 这里剥去了 The background is 前缀（由 q21_v2_30 的 suffix_template 还原成完整句）。
+# 末尾追加的 4 条来自新导入主体档案的场景模块（秋日枫林女孩 / 黄帽红夹克女孩 / 瑜伽老师），
+# 沿用同一「影棚/场景 + 景深虚化」措辞风格，可被同一批预设共用。
 items:
 - a seamless light gray studio backdrop
 - a smooth gradient studio backdrop fading from soft blue at the top to white at the bottom
@@ -21,3 +23,7 @@ items:
 - a red brick wall in a quiet city alley
 - a forest trail, with tall trees softly out of focus
 - a snowy mountain meadow under a bright blue sky
+- a leaf-covered autumn birch forest, with white birch trunks and golden leaves softly out of focus
+- a warm indoor yoga studio, with pale walls and a large window, softly out of focus
+- a quiet autumn forest path, with fallen orange and ochre leaves, softly out of focus
+- a sunlit studio corner with a light wooden floor and plain pale walls, softly out of focus

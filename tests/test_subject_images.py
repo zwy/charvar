@@ -340,6 +340,23 @@ def test_suggest_prompt_persists_to_db(client, tmp_path, monkeypatch):
     assert row["status"] == "empty"  # 只写 prompt，状态机不动
 
 
+def test_suggest_prompt_does_not_cap_max_tokens(client, monkeypatch):
+    """起草请求不设 max_tokens：默认 4000 会把长 JSON 截断成非法响应。
+
+    与 llm_compose 的改写路径同理（见 _REWRITE_MAX_TOKENS 注释）。
+    """
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+    seen: dict = {}
+
+    def _fake_chat_json(messages, **kwargs):
+        seen.update(kwargs)
+        return {"prompt": "Drafted."}
+
+    monkeypatch.setattr(llm, "chat_json", _fake_chat_json)
+    assert client.post("/subjects/demo_witch/images/front/suggest-prompt").status_code == 200
+    assert seen.get("max_tokens", "missing") is None
+
+
 def test_prompt_put_upsert_and_preserve(client, tmp_path):
     """手工编辑提示词落库：无行时建 empty 行；ready 行只改 prompt 不动文件/状态。"""
     client.post("/subjects", json={"id": "demo_witch", "name": "演示"})

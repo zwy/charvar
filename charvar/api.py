@@ -268,7 +268,11 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         messages = draft_subject_image_prompt_messages(subject, kind, template)
         try:
             data = llm.chat_json(
-                messages, config=config, schema=DRAFT_SCHEMA, schema_name="subject_image_prompt"
+                messages,
+                config=config,
+                schema=DRAFT_SCHEMA,
+                schema_name="subject_image_prompt",
+                max_tokens=None,
             )
         except llm.LLMError as exc:
             raise HTTPException(502, f"LLM 起草提示词失败：{exc}") from exc
