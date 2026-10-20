@@ -29,7 +29,7 @@
 name: yoga_basic_9
 type: list
 version: 1
-master_template: Create an image of the {subject_noun} from {reference_tag}. {style_lock_sentence}{identity_lock_sentence}{outfit_lock_sentence}{extra}
+master_template: 'Create an image of the {subject_noun} from {reference_tag}. {style_lock_sentence}{identity_lock_sentence}{outfit_lock_sentence}{extra} Exactly one person in the image - a single figure posing alone, full body, no other people, no duplicated or repeated figure, no multi-view panel, no character sheet layout, no split screen.'
 suffix_template: The background is {background}. The lighting is {lighting}.
 backgrounds_ref: wildcards/backgrounds_v2.yaml
 lighting_ref: wildcards/lighting_v2.yaml

@@ -67,6 +67,26 @@ def test_subject_preset_maps_into_prompt_placeholders(subject_id: str):
         assert mapping[key].endswith(" ")
 
 
+def test_subject_presets_avoid_multiview_layout_wording():
+    """锁定项/extra 不能带「多视角画册」措辞——会诱导模型画成角色卡分栏。
+
+    出图验证：yoga_teacher 档案里的 "character lookbook shot in a studio" 与
+    extra 里的 "across every view"，配合误选的 character_sheet 参考图，会让模型
+    把参考图的分栏布局照抄成多个同一人（19:06 跑批 14/14 张重复人物）。
+    "across every view" 这类措辞对「换姿势不换人」没有帮助，只增加歧义。
+    """
+    banned = ("lookbook", "across every view", "character sheet", "multi-view", "turnaround")
+    for subject_id in SUBJECT_IDS:
+        data = yaml.safe_load(_subject_path(subject_id).read_text(encoding="utf-8"))
+        subject = SubjectProfile.model_validate(data)
+        blobs = list(subject.style_lock) + list(subject.identity_lock) + list(subject.outfit_lock)
+        blobs.append(subject.extra)
+        for blob in blobs:
+            low = blob.lower()
+            for word in banned:
+                assert word not in low, f"{subject_id} 的锁定项含多视角措辞「{word}」：{blob}"
+
+
 def test_v2_wildcards_extended_with_subject_scenes():
     """V2 通配符池追加了三个新主体的场景背景/光照，原有条目不变。"""
     from charvar.preset_loader import load

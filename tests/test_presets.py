@@ -352,6 +352,39 @@ def test_yoga_basic_9_auto_ratio_is_landscape():
     assert dimensions_for_item("3:4", "1k", item) == (768, 1024)
 
 
+@pytest.mark.parametrize("preset_name", ["yoga_basic_9", "yoga_complete_14"])
+def test_yoga_presets_carry_single_person_guard(preset_name):
+    """动作预设必须带单人硬约束：classic 模式没有 "One character only" 兜底。
+
+    背景：参考图误选 character_sheet（四视图角色卡）时，模型会把分栏布局照抄成
+    多个同一人；主体档案的 "lookbook" 措辞进一步放大。出图验证：19:06 跑批
+    （character_sheet 参考图）14/14 张全是重复人物，19:08（front 参考图）仅 2 张。
+
+    "One character only" 只存在于 LLM 模式的 REFERENCE_TAIL_SENTENCE
+    （charvar/llm_prompts.py），classic 走 composer.generate 的
+    master+variant+guard+suffix 拼接，不经过它——所以约束必须写进 master_template。
+    """
+    preset = load(preset_name)
+    master = preset.master_template
+    assert "Exactly one person in the image" in master
+    assert "no other people" in master
+    assert "no duplicated or repeated figure" in master
+    # 明确排除「照抄角色卡分栏」这一失败模式
+    assert "no character sheet layout" in master
+    assert "no multi-view panel" in master
+
+    # 约束必须真的进到最终提示词里（不只是模板里躺着）
+    from charvar import composer
+    from charvar.models import GenerateRequest, SubjectProfile
+
+    subject = SubjectProfile(id="demo", name="演示", subject_noun="woman", trigger_word="sw1tch")
+    result = composer.generate(subject, preset, GenerateRequest(subject_id="demo", preset=preset_name, seed=42))
+    assert result.items
+    for item in result.items:
+        assert "Exactly one person in the image" in item.prompt
+
+
+
 # ---------- yoga_complete_14（原九式 + 新增五式：手倒立/下犬/侧板/船式/屈膝头倒立） ----------
 
 # 基准：原九式逐字沿用 yoga_basic_9（其前 9 条 digest 应等于 YOGA_BASIC_9_DIGEST），

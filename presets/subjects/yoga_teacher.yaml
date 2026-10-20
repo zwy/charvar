@@ -4,8 +4,8 @@ subject_noun: woman
 trigger_word: yogateacher
 reference_tag: <image1>
 style_lock:
-- realistic photographic portrayal of a performer in finished costume, like a fashion magazine
-  character lookbook shot in a studio
+- realistic photographic portrayal of a single performer in finished costume, like a fashion
+  magazine editorial shot in a studio
 - natural facial features, bone structure, body proportions and perspective without exaggerated
   stylization
 - fine natural skin texture, natural skin-tone variation, real hair strands and restrained
@@ -42,4 +42,4 @@ outfit_lock:
 - white mid-calf cotton socks reaching the middle of the calf, with a ribbed cuff
 extra: Keep the same face, high ponytail, trainer-style full build, bright purple one-piece
   bodysuit with the closed high round neck, cream-white piping, white mid-calf socks and the same
-  studio photographic look, across every view.
+  studio photographic look, in every pose.
