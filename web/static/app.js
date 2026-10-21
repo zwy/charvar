@@ -811,7 +811,10 @@ async function loadSubjectImages() {
 }
 
 function slotStatusText(slot) {
-  if (slot.status === "ready") return slot.source === "uploaded" ? "已上传" : "已生成";
+  if (slot.status === "ready") {
+    if (slot.source === "uploaded") return "已上传";
+    return slot.provider === "openrouter" ? "已生成（OpenRouter）" : "已生成";
+  }
   if (slot.status === "queued") return "生成中（可点同步）";
   if (slot.status === "error") return slot.error || "出错";
   return "空";
@@ -837,6 +840,7 @@ function renderSubjectImageSlots() {
           <button data-act="copy" data-kind="${slot.kind}">复制</button>
           <button data-act="suggest" data-kind="${slot.kind}">AI 起草</button>
           <button data-act="generate" data-kind="${slot.kind}" class="primary">${slot.is_ready ? "重新生成" : "生成"}</button>
+          <button data-act="generate-openrouter" data-kind="${slot.kind}">用 OpenRouter 生成</button>
           <label class="btn file-btn">上传<input type="file" data-upload="${slot.kind}" accept=".png,.jpg,.jpeg,.webp" hidden></label>
           ${slot.is_ready ? `<button data-act="delete" data-kind="${slot.kind}" class="danger">删除</button>` : ""}
           ${slot.status === "queued" ? `<button data-act="sync" data-kind="${slot.kind}">同步</button>` : ""}
@@ -897,6 +901,21 @@ $("#subject-image-slots").addEventListener("click", async (ev) => {
         }),
       });
       setStatus(statusEl, updated.status === "queued" ? "已提交，稍后点「同步」取图" : "完成");
+      await loadSubjectImages();
+    } else if (act === "generate-openrouter") {
+      btn.disabled = true;
+      setStatus(statusEl, "OpenRouter 生图中…（单张约 15–45 秒）");
+      const updated = await api(
+        `/subjects/${encodeURIComponent(sid)}/images/${kind}/generate-openrouter`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            prompt: promptEl.value.trim() || null,
+            seed: Number($("#slot-seed").value || 0), // 统一种子：工具栏唯一入口
+          }),
+        },
+      );
+      setStatus(statusEl, updated.status === "ready" ? "完成" : `状态：${updated.status}`);
       await loadSubjectImages();
     } else if (act === "sync") {
       btn.disabled = true;

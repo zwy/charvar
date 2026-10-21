@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS subject_images (
     kind TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'empty',
     source TEXT,
+    provider TEXT,
     prompt TEXT NOT NULL DEFAULT '',
     file_path TEXT,
     prompt_id TEXT,
@@ -88,6 +89,7 @@ CREATE TABLE IF NOT EXISTS settings (
 # 已存在的旧库补列（SQLite 无静默 ALTER，逐一尝试即可）
 _MIGRATIONS = """
 ALTER TABLE comfy_prompts ADD COLUMN output_files TEXT;
+ALTER TABLE subject_images ADD COLUMN provider TEXT;
 """
 
 
@@ -331,10 +333,11 @@ def upsert_subject_image(conn: sqlite3.Connection, entry: dict[str, Any]) -> Non
     now = utcnow()
     conn.execute(
         """INSERT INTO subject_images
-           (subject_id, kind, status, source, prompt, file_path, prompt_id, error, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           (subject_id, kind, status, source, provider, prompt, file_path, prompt_id, error, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(subject_id, kind) DO UPDATE SET
-             status=excluded.status, source=excluded.source, prompt=excluded.prompt,
+             status=excluded.status, source=excluded.source, provider=excluded.provider,
+             prompt=excluded.prompt,
              file_path=excluded.file_path, prompt_id=excluded.prompt_id, error=excluded.error,
              updated_at=excluded.updated_at""",
         (
@@ -342,6 +345,7 @@ def upsert_subject_image(conn: sqlite3.Connection, entry: dict[str, Any]) -> Non
             entry["kind"],
             entry.get("status", "empty"),
             entry.get("source"),
+            entry.get("provider"),
             entry.get("prompt", ""),
             entry.get("file_path"),
             entry.get("prompt_id"),

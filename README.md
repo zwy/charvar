@@ -49,6 +49,7 @@ OP_IMAGE_TIMEOUT=300                 # 秒，可选
 
 - 写 `.env`，或在网页「设置 → OpenRouter 生图」填模型 / Key（DB 设置优先于环境变量）。Key 读接口永远掩码，留空 = 用环境变量。
 - 网页「生成结果 → 推送 OpenRouter…」面板：画幅比例、参考图沿用生成页勾选。分辨率/质量档位按当前模型的能力动态显示（模型不支持就整个不显示，避免给出选了也不生效的选项）。
+- 网页「主体档案 → 档案图片」每个槽位卡片上有「用 OpenRouter 生成」按钮：跟 ComfyUI 的「生成」按钮并列，两条通路互不影响，槽位状态机和落盘位置完全一样（`data/subjects/{id}/{kind}.{ext}`）。两步流程也一致——先就绪「人物半身像＋三视图」，其余 4 种以它为参考图。槽位徽章会标出这张图是哪个后端出的（已生成（OpenRouter））。
 - 模型清单在 `data/openrouter/api-response.json`（可点设置页「拉取模型清单」强制刷新）。**清单是参数能力的唯一标准**——每个模型的 `supported_parameters` 决定它能用哪些参数、用哪些枚举值。面板按它生成可选项。
 - 产物落在和 ComfyUI 同一个目录（`data/generated/{run_id}/original/`），图片墙 / contact sheet / 合成视频全部复用；单条「重新生成」按上次用的通路（provider）重放。
 
@@ -207,6 +208,7 @@ YAML 预设放 `presets/*.yaml`，两种类型：
 | GET | `/runs/{run_id}/comfy-image/{item_index}` | 单条输出图（优先本地资产，缺失时代理 ComfyUI） |
 | GET | `/runs/{run_id}/assets/{scene}/{filename}`、`/runs/{run_id}/sheets/{kind}` | 本地原图/缩略图/拼图资产 |
 | POST | `/runs/{run_id}/contact-sheet` | 手动生成 `contact_sheet.png` |
+| POST | `/subjects/{subject_id}/images/{kind}/generate-openrouter` | 档案图片槽位走 OpenRouter 出图（`prompt` / `seed` / `aspect_ratio` / `resolution` / `model` / `quality`），同步返回固化后的槽位 |
 
 ## 数据文件
 

@@ -6,6 +6,9 @@
 - 状态机：empty（无行）→ queued（已提交 ComfyUI，等完成/超时补拉）→ ready / error。
 - 不走 runs 表（单图生命周期，不污染历史记录），但完整复用 ComfyUI 管道：
   构造临时 GenerateResult（不落库）走 submit()，产物经 assets._download_output 固化。
+- 两条生图通路：ComfyUI（``generate_subject_image``）与 OpenRouter
+  （``generate_subject_image_openrouter``）。两步流程与槽位语义完全一致，
+  只是参考图走 ``input_references`` 而不是 ComfyUI 的 image 节点。
 - 所有随机（seed）由调用方显式传入，模块本身不引入随机源。
 """
 from __future__ import annotations
@@ -19,7 +22,7 @@ from typing import Any, Literal
 from PIL import Image
 from pydantic import BaseModel
 
-from charvar import assets, paths, reference_images, storage
+from charvar import assets, openrouter_image, paths, reference_images, storage
 from charvar.exporters import comfyui as comfyui_exporter
 from charvar.models import GenerateResult, PromptItem, SubjectProfile
 
@@ -55,6 +58,7 @@ class SubjectImage(BaseModel):
     kind: str
     status: Literal["empty", "queued", "ready", "error"] = "empty"
     source: Literal["generated", "uploaded"] | None = None
+    provider: Literal["comfyui", "openrouter"] | None = None
     prompt: str = ""
     file_path: str | None = None
     prompt_id: str | None = None
@@ -150,7 +154,7 @@ def build_slot(
         resolution=getattr(size, "resolution", "1k"),
     )
     if row is not None:
-        for field in ("status", "source", "prompt", "file_path", "prompt_id", "error", "created_at", "updated_at"):
+        for field in ("status", "source", "provider", "prompt", "file_path", "prompt_id", "error", "created_at", "updated_at"):
             setattr(slot, field, row.get(field) or slot.__class__.model_fields[field].default)
     if slot.status == "ready" and _original_file(subject_id, kind) is None:
         slot.status = "empty"  # 文件丢失（如手动清理）→ 视为空槽
@@ -260,12 +264,14 @@ def _download_and_finalize(
         kind=kind,
         status="ready",
         source="generated",
+        provider="comfyui",
         prompt=previous.get("prompt", ""),
         file_path=_relative(saved),
         created_at=previous.get("created_at", ""),
     )
     _save_row(conn, slot)
-    return slot
+    # 同上：is_ready / original_url / thumb_url 由 build_slot 算，不能用裸 slot
+    return get_slot(conn, subject_id, kind)
 
 
 def generate_subject_image(
@@ -322,6 +328,7 @@ def generate_subject_image(
         "kind": kind,
         "status": "queued",
         "source": "generated",
+        "provider": "comfyui",
         "prompt": prompt.strip(),
     }
     slot = SubjectImageSlot(**{**row, "label": KIND_LABELS.get(kind, kind)})
@@ -361,6 +368,119 @@ def generate_subject_image(
     if not wait:
         return get_slot(conn, subject.id, kind, settings.image_sizes)  # 已入队，稍后 /sync 取图
     return _download_and_finalize(conn, subject.id, kind, paths.comfy_base_url(comfy_url), entry.get("files") or [])
+
+
+def _openrouter_reference_paths(conn: sqlite3.Connection, subject_id: str, kind: str) -> list[Path]:
+    """该槽位要发给 OpenRouter 的参考图。
+
+    与 ComfyUI 通路同源：其余 4 种以 character_sheet 为参考图（与 edit
+    workflow 的 image 节点等价），走同一份预处理缓存（长边 1536 / JPEG q88）。
+    character_sheet 本身是文生图，没有参考图。
+    """
+    if kind not in SHEET_DEPENDENT_KINDS:
+        return []
+    sheet_file = _require_ready_sheet(conn, subject_id)
+    return [reference_images.prepared_reference(sheet_file, subject_dir(subject_id), "character_sheet")]
+
+
+def _openrouter_prompt(prompt: str, has_reference: bool) -> str:
+    """槽位提示词 → OpenRouter 提示词。
+
+    OpenRouter 没有「标签→图片」绑定语义，参考图靠 input_references 的顺序传，
+    所以 ``<image1>`` 要换成序数词（the first reference image…）。
+    没有参考图时指向子句整段摘掉（留着会变成 "as ." 这种残句）。
+    """
+    if has_reference:
+        return openrouter_image.rewrite_reference_tags(prompt)
+    return openrouter_image.strip_reference_tags(prompt)
+
+
+def generate_subject_image_openrouter(
+    conn: sqlite3.Connection,
+    subject: SubjectProfile,
+    kind: str,
+    *,
+    prompt: str,
+    seed: int = 0,
+    aspect_ratio: str | None = None,
+    resolution: str | None = None,
+    model: str | None = None,
+    api_key: str | None = None,
+    quality: str | None = None,
+    settings: Any = None,
+) -> SubjectImageSlot:
+    """用 OpenRouter 生成一个槽位图（与 ComfyUI 通路同语义：两步流程 + 同槽位状态机）。
+
+    产物直接落 ``data/subjects/{subject_id}/{kind}.{ext}``（后缀按返回的字节嗅探），
+    缩略图同 ComfyUI 通路 —— 档案图片与生图结果页读的是同一份文件。
+    """
+    _validate_kind(kind)
+    if not prompt.strip():
+        raise SubjectImageError("提示词为空：请先填写或用 AI 起草")
+
+    settings = settings or _fallback_settings(conn)
+    # 槽位默认画幅：与 ComfyUI 通路同一份设置（主体图默认尺寸）
+    size = settings.image_sizes.get(kind)
+    if aspect_ratio is None and size is not None:
+        aspect_ratio = size.aspect_ratio
+        resolution = resolution or size.resolution
+
+    reference_paths = _openrouter_reference_paths(conn, subject.id, kind)
+    caps = openrouter_image.model_capabilities(openrouter_image.resolve_model(model))
+    if reference_paths and not caps.supports_refs:
+        raise SubjectImageError(
+            f"模型 {caps.model_id} 只支持文生图（清单里没有 image 输入），不能带参考图",
+            status=409,
+        )
+
+    # 画幅：走 size 显式像素，与生成结果页的 OpenRouter 通路同一套算法
+    # （auto 按景别选比例：全身 2:3，近景 3:4）。
+    ratio = aspect_ratio or "auto"
+    result = _synthetic_result(subject.id, seed, [(kind, prompt.strip())])
+    item = result.items[0]
+    item.meta["framing"] = _KIND_FRAMING.get(kind)
+    width, height = comfyui_exporter.dimensions_for_item(ratio, resolution or "1k", item)
+
+    op_result = openrouter_image.generate_image(
+        prompt=_openrouter_prompt(prompt.strip(), bool(reference_paths)),
+        width=width,
+        height=height,
+        model=model,
+        api_key=api_key,
+        seed=seed,
+        reference_paths=reference_paths,
+        aspect_ratio=ratio if ratio != "auto" else None,
+        resolution=resolution,
+        quality=quality,
+    )
+    if not op_result.images:
+        raise SubjectImageError("OpenRouter 未返回图片")
+    data = op_result.images[0]
+    suffix = f".{openrouter_image.sniff_image_ext(data)}"
+    if suffix == ".bin":
+        raise SubjectImageError("OpenRouter 返回的不是可识别的图片格式")
+
+    destination = subject_dir(subject.id) / f"{kind}{suffix}"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(data)
+    assets.make_thumb(destination, thumb_file(subject.id, kind))
+    _remove_stale_kind_files(subject.id, kind, keep=destination)
+
+    previous = storage.get_subject_image(conn, subject.id, kind) or {}
+    slot = SubjectImageSlot(
+        subject_id=subject.id,
+        kind=kind,
+        status="ready",
+        source="generated",
+        provider="openrouter",
+        prompt=previous.get("prompt", "") or prompt.strip(),
+        file_path=_relative(destination),
+        created_at=previous.get("created_at", ""),
+    )
+    _save_row(conn, slot)
+    # 走 get_slot 重建：is_ready / original_url / thumb_url 只在 build_slot 里算，
+    # 直接返回裸 slot 会带上 is_ready=False（与 status="ready" 自相矛盾）。
+    return get_slot(conn, subject.id, kind)
 
 
 def generate_subject_images_batch(
@@ -413,7 +533,8 @@ def generate_subject_images_batch(
         kind_aspect = aspect_ratio if aspect_ratio is not None else getattr(size, "aspect_ratio", None)
         kind_resolution = resolution if resolution is not None else getattr(size, "resolution", None)
         _save_row(conn, SubjectImageSlot(
-            subject_id=subject.id, kind=kind, status="queued", source="generated", prompt=kind_prompt,
+            subject_id=subject.id, kind=kind, status="queued", source="generated", provider="comfyui",
+            prompt=kind_prompt,
             label=KIND_LABELS.get(kind, kind),
         ))
         result = _synthetic_result(subject.id, seed, [(kind, kind_prompt)])
@@ -448,7 +569,7 @@ def generate_subject_images_batch(
         if not wait:
             row = storage.get_subject_image(conn, subject.id, kind) or {}
             _save_row(conn, SubjectImageSlot(
-                subject_id=subject.id, kind=kind, status="queued", source="generated",
+                subject_id=subject.id, kind=kind, status="queued", source="generated", provider="comfyui",
                 prompt=row.get("prompt", ""), prompt_id=str(entry.get("prompt_id") or ""),
             ))
             slots.append(get_slot(conn, subject.id, kind, settings.image_sizes))  # 已入队，稍后 /sync
@@ -527,6 +648,7 @@ def save_uploaded_image(
         kind=kind,
         status="ready",
         source="uploaded",
+        provider=None,  # 上传的图片不来自任一生图后端
         prompt=previous.get("prompt", ""),
         file_path=_relative(target),
         created_at=previous.get("created_at", ""),

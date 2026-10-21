@@ -115,6 +115,17 @@ class SubjectImageGenerateRequest(BaseModel):
     wait: bool = True
 
 
+class SubjectImageOpenRouterRequest(BaseModel):
+    """档案图片走 OpenRouter 出图（与 ComfyUI 通路同语义）。"""
+
+    prompt: str | None = None
+    seed: int = 0
+    aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
+    resolution: Literal["1k", "2k", "4k"] | None = None
+    model: str | None = None
+    quality: str | None = None
+
+
 class SubjectImageBatchRequest(BaseModel):
     kinds: list[str]
     seed: int = 0
@@ -350,6 +361,41 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                 )
             except subject_images.SubjectImageError as exc:
                 raise HTTPException(exc.status, str(exc)) from exc
+        return slot.model_dump()
+
+    @app.post("/subjects/{subject_id}/images/{kind}/generate-openrouter")
+    def api_subject_image_generate_openrouter(
+        subject_id: str, kind: str, req: SubjectImageOpenRouterRequest
+    ) -> dict[str, Any]:
+        """档案图片走 OpenRouter 出图。
+
+        与 ComfyUI 通路同语义：两步流程（character_sheet 先出，其余 4 种以它
+        为参考图）、同槽位状态机、同落盘位置（``data/subjects/{id}/{kind}.{ext}``）。
+        """
+        subject = _require_subject(subject_id)
+        with _db() as conn:
+            settings = settings_service.get_settings(conn)
+            overrides = settings_service.openrouter_overrides(conn)
+            previous = storage.get_subject_image(conn, subject_id, kind) or {}
+            prompt = (req.prompt if req.prompt is not None else previous.get("prompt", "")) or ""
+            try:
+                slot = subject_images.generate_subject_image_openrouter(
+                    conn,
+                    subject,
+                    kind,
+                    prompt=prompt,
+                    seed=req.seed,
+                    aspect_ratio=req.aspect_ratio,
+                    resolution=req.resolution,
+                    model=req.model or overrides.get("model"),
+                    api_key=overrides.get("api_key"),
+                    quality=req.quality,
+                    settings=settings,
+                )
+            except subject_images.SubjectImageError as exc:
+                raise HTTPException(exc.status, str(exc)) from exc
+            except openrouter_image.OpenRouterImageError as exc:
+                raise HTTPException(502, f"OpenRouter 生图失败：{exc}") from exc
         return slot.model_dump()
 
     @app.post("/subjects/{subject_id}/images/{kind}/sync")

@@ -11,7 +11,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from charvar.api import build_app
-from charvar import llm, paths, storage
+from charvar import llm, openrouter_image, paths, storage
 
 
 @pytest.fixture()
@@ -439,3 +439,213 @@ def test_generate_batch_injects_per_kind_size(client, tmp_path, monkeypatch):
     # 逐槽位提交 + index 递增 → 前缀序号与旧的单次提交一致
     assert head["47"]["inputs"]["filename_prefix"] == "demo_witch_000_headshot"
     assert front["47"]["inputs"]["filename_prefix"] == "demo_witch_001_front"
+
+
+# ---------- OpenRouter 通路 ----------
+
+def _fake_openrouter(monkeypatch, *, images=None, error=None):
+    """打桩 openrouter_image.generate_image，记录每次调用的参数。"""
+    calls: list[dict] = []
+
+    def fake_generate(**kwargs):
+        calls.append(kwargs)
+        if error is not None:
+            raise error
+        return openrouter_image.GenerateImageResult(
+            generation_id="g1",
+            created=1,
+            images=images if images is not None else [_png_bytes()],
+            media_types=["image/png"],
+            usage={"cost": 0.01},
+            request_body={},
+        )
+
+    monkeypatch.setattr(openrouter_image, "generate_image", fake_generate)
+    return calls
+
+
+def test_subject_image_openrouter_generates_and_saves(client, tmp_path, monkeypatch):
+    """OpenRouter 出图：落盘 + 缩略图 + 槽位状态机，provider 记 openrouter。"""
+    monkeypatch.setenv("OP_IMAGE_API_KEY", "sk-test")
+    calls = _fake_openrouter(monkeypatch)
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+
+    resp = client.post(
+        "/subjects/demo_witch/images/character_sheet/generate-openrouter",
+        json={"prompt": "character sheet, three views", "seed": 3},
+    )
+    assert resp.status_code == 200, resp.text
+    slot = resp.json()
+    assert slot["status"] == "ready"
+    assert slot["source"] == "generated"
+    assert slot["provider"] == "openrouter"
+
+    # 产物落 data/subjects/{id}/character_sheet.png + 缩略图
+    assert (paths.subjects_dir() / "demo_witch" / "character_sheet.png").exists()
+    assert (paths.subjects_dir() / "demo_witch" / "thumbs" / "character_sheet.webp").exists()
+
+    # 文生图：不带参考图；画幅走 size 显式像素
+    assert calls[0]["reference_paths"] == []
+    assert calls[0]["width"] > 0 and calls[0]["height"] > 0
+    assert calls[0]["seed"] == 3
+
+    # 槽位接口能读回来
+    slots = {s["kind"]: s for s in client.get("/subjects/demo_witch/images").json()["slots"]}
+    assert slots["character_sheet"]["is_ready"]
+    assert slots["character_sheet"]["provider"] == "openrouter"
+
+
+def test_subject_image_openrouter_dependent_kind_uses_sheet_reference(client, tmp_path, monkeypatch):
+    """其余 4 种：以 character_sheet 为参考图，并改写 <image1> 标签。"""
+    monkeypatch.setenv("OP_IMAGE_API_KEY", "sk-test")
+    calls = _fake_openrouter(monkeypatch)
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+    client.post(
+        "/subjects/demo_witch/images/character_sheet/upload",
+        files={"file": ("sheet.png", _png_bytes(), "image/png")},
+    )
+
+    resp = client.post(
+        "/subjects/demo_witch/images/headshot/generate-openrouter",
+        json={"prompt": "chest-up portrait, same identity as <image1>", "seed": 1},
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "ready"
+
+    # 参考图 = 预处理过的 character_sheet（.jpg 压缩版）
+    refs = calls[0]["reference_paths"]
+    assert len(refs) == 1
+    assert refs[0].name == "character_sheet.jpg"
+    assert refs[0].exists()
+    # 提示词里的 <image1> 换成序数词
+    assert "<image1>" not in calls[0]["prompt"]
+    assert "the first reference image" in calls[0]["prompt"]
+
+
+def test_subject_image_openrouter_requires_ready_sheet(client, tmp_path, monkeypatch):
+    """其余 4 种仍需先就绪 character_sheet（与 ComfyUI 通路同样的两步流程）。"""
+    monkeypatch.setenv("OP_IMAGE_API_KEY", "sk-test")
+    calls = _fake_openrouter(monkeypatch)
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+
+    resp = client.post(
+        "/subjects/demo_witch/images/headshot/generate-openrouter",
+        json={"prompt": "p"},
+    )
+    assert resp.status_code == 409
+    assert "character_sheet" in resp.json()["detail"]
+    assert calls == []  # 没发请求
+
+
+def test_subject_image_openrouter_requires_prompt(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("OP_IMAGE_API_KEY", "sk-test")
+    _fake_openrouter(monkeypatch)
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+    resp = client.post(
+        "/subjects/demo_witch/images/character_sheet/generate-openrouter", json={"prompt": "  "}
+    )
+    assert resp.status_code == 400
+
+
+def test_subject_image_openrouter_uses_saved_prompt_when_body_omits(client, tmp_path, monkeypatch):
+    """请求体不带 prompt 时用槽位里已存的提示词（与 ComfyUI 通路同语义）。"""
+    monkeypatch.setenv("OP_IMAGE_API_KEY", "sk-test")
+    calls = _fake_openrouter(monkeypatch)
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+    client.put("/subjects/demo_witch/images/character_sheet/prompt", json={"prompt": "saved prompt text"})
+
+    resp = client.post(
+        "/subjects/demo_witch/images/character_sheet/generate-openrouter", json={"seed": 2}
+    )
+    assert resp.status_code == 200, resp.text
+    assert calls[0]["prompt"] == "saved prompt text"
+
+
+def test_subject_image_openrouter_surfaces_provider_error(client, tmp_path, monkeypatch):
+    """provider 报错 → 502，且提示词/状态不被写坏。"""
+    monkeypatch.setenv("OP_IMAGE_API_KEY", "sk-test")
+    _fake_openrouter(monkeypatch, error=openrouter_image.OpenRouterFetchError("上游炸了"))
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+
+    resp = client.post(
+        "/subjects/demo_witch/images/character_sheet/generate-openrouter", json={"prompt": "p"}
+    )
+    assert resp.status_code == 502
+    assert "上游炸了" in resp.json()["detail"]
+
+
+def test_subject_image_openrouter_replaces_stale_suffix(client, tmp_path, monkeypatch):
+    """OpenRouter 出 webp 时要清掉旧的 .png（_original_file 按后缀序取图）。"""
+    monkeypatch.setenv("OP_IMAGE_API_KEY", "sk-test")
+    buf = io.BytesIO()
+    Image.new("RGB", (32, 32), (1, 2, 3)).save(buf, format="WEBP")
+    _fake_openrouter(monkeypatch, images=[buf.getvalue()])
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+    client.post(
+        "/subjects/demo_witch/images/character_sheet/upload",
+        files={"file": ("sheet.png", _png_bytes(), "image/png")},
+    )
+
+    resp = client.post(
+        "/subjects/demo_witch/images/character_sheet/generate-openrouter", json={"prompt": "p"}
+    )
+    assert resp.status_code == 200, resp.text
+    d = paths.subjects_dir() / "demo_witch"
+    assert (d / "character_sheet.webp").exists()
+    assert not (d / "character_sheet.png").exists()
+
+
+def test_subject_image_openrouter_returns_consistent_is_ready(client, tmp_path, monkeypatch):
+    """返回的槽位必须自洽：status="ready" 时 is_ready 也要为 True。
+
+    is_ready / original_url / thumb_url 只在 build_slot 里算，直接返回裸 slot
+    会带上 is_ready=False（与 status="ready" 自相矛盾）。
+    """
+    monkeypatch.setenv("OP_IMAGE_API_KEY", "sk-test")
+    _fake_openrouter(monkeypatch)
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+
+    resp = client.post(
+        "/subjects/demo_witch/images/character_sheet/generate-openrouter", json={"prompt": "p"}
+    )
+    slot = resp.json()
+    assert slot["status"] == "ready"
+    assert slot["is_ready"] is True
+    assert slot["original_url"] == "/subjects/demo_witch/images/character_sheet/file"
+    assert slot["thumb_url"] == "/subjects/demo_witch/images/character_sheet/thumb"
+
+
+def test_subject_image_openrouter_uses_per_kind_default_size(client, tmp_path, monkeypatch):
+    """每个槽位用自己配置的画幅（主体图默认尺寸），不是全局一套。"""
+    monkeypatch.setenv("OP_IMAGE_API_KEY", "sk-test")
+    calls = _fake_openrouter(monkeypatch)
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+    client.put(
+        "/settings",
+        json={
+            "image_sizes": {
+                "character_sheet": {"aspect_ratio": "16:9", "resolution": "1k"},
+                "headshot": {"aspect_ratio": "3:4", "resolution": "1k"},
+                "front": {"aspect_ratio": "2:3", "resolution": "1k"},
+                "side": {"aspect_ratio": "2:3", "resolution": "1k"},
+                "behind": {"aspect_ratio": "2:3", "resolution": "1k"},
+            }
+        },
+    )
+
+    client.post(
+        "/subjects/demo_witch/images/character_sheet/generate-openrouter", json={"prompt": "p"}
+    )
+    client.post(
+        "/subjects/demo_witch/images/character_sheet/upload",
+        files={"file": ("sheet.png", _png_bytes(), "image/png")},
+    )
+    client.post(
+        "/subjects/demo_witch/images/front/generate-openrouter", json={"prompt": "p"}
+    )
+
+    sheet, front = calls[0], calls[1]
+    # 16:9 / 1k → 1024x576
+    assert (sheet["width"], sheet["height"]) == (1024, 576)
+    # 2:3 / 1k → 704x1024
+    assert (front["width"], front["height"]) == (704, 1024)
