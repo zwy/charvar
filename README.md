@@ -126,6 +126,35 @@ python3 -m charvar.cli gen -s silver_witch --format comfyui --workflow <name> --
 
 `pip install -e .` 后上述命令可用 `charvar …` 直接调用。
 
+## 临时生图（跨项目调用）
+
+给一段提示词直接出一张图 —— 不进主体档案槽位、不跑预设批量、不进生成历史。
+给本项目之外的项目 / 其他 agent 用。
+
+```bash
+# ComfyUI（本机或局域网）
+charvar image comfyui --prompt "a red apple on a wooden table" --aspect 1:1 --out out.png
+
+# OpenRouter（在线）
+charvar image openrouter --prompt "a red apple on a wooden table" --aspect 1:1 --out out.png
+
+# 带参考图（最多 4 张，按序对应提示词里的 <image1>…）
+charvar image comfyui --prompt "same character, different pose" --ref ref.png --out out.png
+
+# 长提示词走文件（- 表示读 stdin）
+charvar image openrouter --prompt-file prompt.md --out out.png
+
+charvar image models    # 列 OpenRouter 可用模型
+```
+
+- `--seed` 默认 `0`（同提示词每次出同一张图）；要新图就换种子。
+- `--out` 给的是最终产物（后缀与内容一致，不一致时自动转格式）。
+- 不给 `--out` 时产物落 `data/generated/adhoc/{时间戳}/`（图 + 缩略图 + `manifest.json` 记录完整请求）。
+- 命令可全局调用：`./scripts/install_cli.sh` 装到 `~/.local/bin/charvar`（`scripts/start.sh` 会顺带装）。
+
+跨项目用还有一个 skill：`skills/charvar-skill/`（装到 `~/.claude/skills/` 后，
+Claude Code 在任何项目里都能按提示词调用这条生图通路）。
+
 ## 预设
 
 YAML 预设放 `presets/*.yaml`，两种类型：
@@ -225,11 +254,12 @@ YAML 预设放 `presets/*.yaml`，两种类型：
 
 ```
 charvar/            核心包：models/preset_loader/wildcard/composer/caption
-│                   exporters（txt/jsonl/captions/comfyui）/storage/api/cli
+│                   exporters（txt/jsonl/captions/comfyui）/storage/api/cli/adhoc
 presets/            q21_default_30、q21_legacy_30、matrix_basic、wildcards/、subjects/
 web/                web/app.py（uvicorn 启动）+ web/static/（无构建步骤）
-tests/              pytest：逐字一致性/可复现/子种子/拼接/矩阵/导出/API
-scripts/            start.sh / stop.sh（默认端口 8710）
+tests/              pytest：逐字一致性/可复现/子种子/拼接/矩阵/导出/API/adhoc/CLI
+scripts/            start.sh / stop.sh（默认端口 8710）/ install_cli.sh（装全局 CLI + skill）
+skills/             charvar-skill：跨项目调用 charvar 生图能力的 Claude Code skill
 ```
 
 ## 测试

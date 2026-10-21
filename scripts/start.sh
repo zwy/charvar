@@ -8,6 +8,10 @@ LOG="/tmp/charvar-web-${CHARVAR_WEB_PORT}.log"
 SCREEN_NAME="charvar-${CHARVAR_WEB_PORT}"
 PID_FILE="${ROOT}/.charvar-web-${CHARVAR_WEB_PORT}.pid"
 
+# 顺带装全局 CLI 与 charvar-skill（幂等）。失败不阻断 web 启动 ——
+# CLI 是附属能力，不能因为它把服务拖垮。
+bash "${ROOT}/scripts/install_cli.sh" || echo "警告：CLI 安装失败，继续启动 web" >&2
+
 if lsof -a -nP -iTCP:"${CHARVAR_WEB_PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
   echo "端口 ${CHARVAR_WEB_PORT} 已被占用" >&2
   exit 1

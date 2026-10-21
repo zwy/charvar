@@ -9,6 +9,14 @@
 - 没有热重载：改了 `charvar/**`、`web/app.py` 或直接改环境变量后必须先停再起；只改 `web/static/**` 刷新页面即可。
 - 后台启动使用 screen 会话 `charvar-8710`；stop.sh 优先读 `.charvar-web-8710.pid`，也支持按端口 + 本仓库 cwd 匹配修复前的旧进程。
 - 手动验证：`curl -s --noproxy '*' http://127.0.0.1:8710/api/version`
+- `start.sh` 会顺带跑 `scripts/install_cli.sh`（幂等）：把 `charvar` 装到 `~/.local/bin/`、把 `skills/charvar-skill` 软链到 `~/.claude/skills/`。安装失败不阻断 web 启动。
+
+## 临时生图（跨项目调用）
+
+- `charvar/adhoc.py` 是「给一段提示词出一张图」的独立通路：不进主体档案 5 槽位、不跑预设批量、不落 runs 表。
+- CLI：`charvar image comfyui|openrouter|models`（`--prompt`/`--prompt-file`/`--ref`/`--aspect`/`--seed`/`--out`/`--json`）。产物默认落 `data/generated/adhoc/{id}/`（图 + 缩略图 + manifest.json）。
+- 这是给本项目之外的项目和其他 agent 用的；改动它要考虑外部调用方依赖的参数名与输出格式。
+- `skills/charvar-skill/` 是配套的 Claude Code skill（装到 `~/.claude/skills/` 后跨项目可用）。改 CLI 参数时要同步改 skill 里的命令示例。
 
 ## 测试
 
@@ -29,6 +37,7 @@
 - `.env`（COMFYUI_HOST/PORT 等）不进 git；改 .env 后要重启 web 服务。
 - 主体档案的锁定项必须是英文：`style_lock` / `identity_lock` / `outfit_lock` 每条会被拼成一句 `Maintain ...` 进提示词，中文会中英夹杂。
 - 主体档案的 Markdown 模板上限 24,000 字符（LLM 输入截断阈值，`charvar.llm_prompts._TEMPLATE_MAX_CHARS`）；超长模板尾部会被静默截掉，别指望模型看到。
+- 临时生图（`charvar/adhoc.py`）的红线：参考图槽位名从 mapping 读（`image`/`image2`/…），不许写死节点 id；ComfyUI 上传的 remote_name 必须带唯一前缀（`upload_image` 发 `overwrite: true`，同名会互相覆盖 → 队列里的旧 prompt 取到新图）；`--out` 指定的文件后缀与内容必须一致（不一致时转格式，别让后缀骗人）；adhoc 不读 `settings.image_sizes`（那是主体档案槽位的尺寸）；不引入随机源（seed 由调用方显式给）。
 
 ## 导入主体档案（外部 Markdown → 系统）
 

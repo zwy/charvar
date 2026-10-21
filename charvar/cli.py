@@ -5,11 +5,14 @@
   charvar presets list
   charvar gen --subject silver_witch --preset q21_default_30 --seed 42 --out ./out
   charvar gen ... --format comfyui --workflow <workflows目录名称或路径> [--wait]
+  charvar image comfyui --prompt "..." --ref ref.png --out out.png
+  charvar image openrouter --prompt "..." --out out.png
   charvar serve --port 8710
 """
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -30,8 +33,10 @@ app = typer.Typer(
 )
 subject_app = typer.Typer(help="主体档案（SQLite 存储）", no_args_is_help=True)
 presets_app = typer.Typer(help="YAML 预设", no_args_is_help=True)
+image_app = typer.Typer(help="临时生图：给一段提示词直接出一张图", no_args_is_help=True)
 app.add_typer(subject_app, name="subject")
 app.add_typer(presets_app, name="presets")
+app.add_typer(image_app, name="image")
 
 
 def _die(message: str) -> None:
@@ -277,5 +282,152 @@ def serve(
     uvicorn.run(webapp, host=host, port=port, log_level="info")
 
 
-if __name__ == "__main__":
+# ---------- image（临时生图） ----------
+
+def _read_prompt(prompt: Optional[str], prompt_file: Optional[str]) -> str:
+    """``--prompt`` 与 ``--prompt-file`` 二选一；``--prompt-file -`` 读 stdin。"""
+    if prompt is not None and prompt_file is not None:
+        _die("--prompt 与 --prompt-file 只能给一个")
+    if prompt is None and prompt_file is None:
+        _die("需要 --prompt 或 --prompt-file")
+    if prompt is not None:
+        return prompt
+    if prompt_file == "-":
+        return sys.stdin.read()
+    path = Path(prompt_file).expanduser()
+    if not path.exists():
+        _die(f"提示词文件不存在：{path}")
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError as exc:
+        _die(f"无法读取提示词文件 {path}：{exc}")
+    return ""  # pragma: no cover - _die 已抛异常
+
+
+def _run_adhoc(req, json_out: bool) -> None:
+    """跑一次临时生图并输出结果（--json 时 stdout 只有 JSON）。"""
+    from charvar import adhoc as adhoc_service
+
+    try:
+        result = adhoc_service.generate(req)
+    except adhoc_service.AdhocError as exc:
+        _die(str(exc))
+    except Exception as exc:  # noqa: BLE001 - 网络/后端异常转友好提示
+        _die(f"{type(exc).__name__}: {exc}")
+        return
+    if json_out:
+        typer.echo(result.model_dump_json())
+        return
+    if result.status == "queued":
+        typer.echo(f"已入队（ComfyUI prompt_id={result.prompt_id}）")
+        typer.echo(f"  manifest → {result.manifest_path}")
+        return
+    typer.echo(f"完成：{result.image_path}")
+    typer.echo(f"  后端：{result.provider}  尺寸：{result.width}×{result.height}  seed：{result.seed}")
+    if result.model:
+        typer.echo(f"  模型：{result.model}")
+    if result.cost is not None:
+        typer.echo(f"  费用：{result.cost}")
+    typer.echo(f"  manifest → {result.manifest_path}")
+
+
+@image_app.command("comfyui")
+def image_comfyui(
+    prompt: Optional[str] = typer.Option(None, "--prompt", help="图片提示词"),
+    prompt_file: Optional[str] = typer.Option(
+        None, "--prompt-file", help="提示词文件（- 表示读 stdin）"
+    ),
+    ref: Optional[list[str]] = typer.Option(
+        None, "--ref", help="参考图路径，可重复（最多 4 张）"
+    ),
+    aspect: str = typer.Option("3:4", "--aspect", help="画幅：1:1/3:4/16:9/4:3/9:16/2:3/3:2/21:9"),
+    resolution: str = typer.Option("1k", "--resolution", help="分辨率档：1k/2k/4k"),
+    seed: int = typer.Option(0, "--seed", help="采样种子（0 = 固定复现；换种子出不同图）"),
+    negative: Optional[str] = typer.Option(None, "--negative", help="负向提示词（空串 = 明确不用）"),
+    workflow: Optional[str] = typer.Option(
+        None, "--workflow", help="workflows 目录里的名称或 workflow JSON 路径"
+    ),
+    comfy_url: Optional[str] = typer.Option(None, "--comfy-url", help="默认 COMFYUI_HOST/COMFYUI_PORT 组装"),
+    out: Optional[Path] = typer.Option(None, "--out", "-o", help="另外落一份到这个路径"),
+    wait: bool = typer.Option(True, "--wait/--no-wait", help="等待出图完成（默认）；--no-wait 只入队回 prompt_id"),
+    json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出到终端"),
+) -> None:
+    """用本机 ComfyUI 出图（提示词 + 可选参考图 → 一张图）。"""
+    from charvar import adhoc as adhoc_service
+
+    req = adhoc_service.AdhocRequest(
+        prompt=_read_prompt(prompt, prompt_file),
+        backend="comfyui",
+        negative_prompt=negative,
+        reference_paths=[Path(p).expanduser() for p in (ref or [])],
+        aspect_ratio=aspect,
+        resolution=resolution,
+        seed=seed,
+        comfy_url=comfy_url,
+        workflow=workflow,
+        wait=wait,
+        out=out,
+    )
+    _run_adhoc(req, json_out)
+
+
+@image_app.command("openrouter")
+def image_openrouter(
+    prompt: Optional[str] = typer.Option(None, "--prompt", help="图片提示词"),
+    prompt_file: Optional[str] = typer.Option(
+        None, "--prompt-file", help="提示词文件（- 表示读 stdin）"
+    ),
+    ref: Optional[list[str]] = typer.Option(
+        None, "--ref", help="参考图路径，可重复（最多 4 张）"
+    ),
+    aspect: str = typer.Option("3:4", "--aspect", help="画幅：1:1/3:4/16:9/4:3/9:16/2:3/3:2/21:9"),
+    resolution: str = typer.Option("1k", "--resolution", help="分辨率档：1k/2k/4k"),
+    seed: int = typer.Option(0, "--seed", help="采样种子（0 = 固定复现；换种子出不同图）"),
+    model: Optional[str] = typer.Option(None, "--model", help="模型 slug（默认 OP_IMAGE_MODEL / 设置页）"),
+    quality: Optional[str] = typer.Option(None, "--quality", help="质量档（模型声明支持才生效）"),
+    out: Optional[Path] = typer.Option(None, "--out", "-o", help="另外落一份到这个路径"),
+    json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出到终端"),
+) -> None:
+    """用 OpenRouter 在线生图（提示词 + 可选参考图 → 一张图）。"""
+    from charvar import adhoc as adhoc_service
+
+    req = adhoc_service.AdhocRequest(
+        prompt=_read_prompt(prompt, prompt_file),
+        backend="openrouter",
+        reference_paths=[Path(p).expanduser() for p in (ref or [])],
+        aspect_ratio=aspect,
+        resolution=resolution,
+        seed=seed,
+        model=model,
+        quality=quality,
+        out=out,
+    )
+    _run_adhoc(req, json_out)
+
+
+@image_app.command("models")
+def image_models(
+    json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出到终端"),
+) -> None:
+    """列 OpenRouter 可用的生图模型。"""
+    from charvar import openrouter_image
+
+    try:
+        models = openrouter_image.model_choices()
+    except openrouter_image.OpenRouterImageError as exc:
+        _die(f"读 OpenRouter 模型清单失败：{exc}")
+        return
+    if json_out:
+        typer.echo(json.dumps(models, ensure_ascii=False))
+        return
+    for model in models:
+        typer.echo(f"{model['id']}\t{model['name']}")
+
+
+def main() -> None:
+    """console script 入口（pyproject.toml 声明 charvar.cli:main）。"""
     app()
+
+
+if __name__ == "__main__":
+    main()
