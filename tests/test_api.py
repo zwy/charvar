@@ -614,8 +614,8 @@ def test_run_regenerate_replays_queue_settings(tmp_path, monkeypatch, client):
     # 请求不携带任何出图参数 → 全部来自快照
     client.post(f"/runs/{run_id}/regenerate", json={"item_index": 0, "seed": 9}).raise_for_status()
     injected = queued[2]["prompt"]
-    assert injected["5"]["inputs"]["width"] == 1152   # 9:16 @ 2K：短边 = 2048*9/16 → 1152
-    assert injected["5"]["inputs"]["height"] == 2048
+    assert injected["5"]["inputs"]["width"] == 1536   # 9:16 @ 2K = Qwen 官方像素 1536×2752
+    assert injected["5"]["inputs"]["height"] == 2752
     assert injected["12"]["inputs"]["text"] == "blurry"  # 负向词也按快照重放
 
     # 不传 seed → 沿用原 run.seed

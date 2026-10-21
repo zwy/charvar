@@ -325,3 +325,12 @@ td .caption { color: var(--muted); }
 /* 设置页 */
 .size-row { display: flex; gap: 6px; }
 .size-row select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; width: auto; flex: 1; }
+
+/* 临时生图页 */
+.adhoc-result-wrap { margin-top: 12px; }
+.adhoc-result-wrap img { display: block; max-width: min(640px, 100%); height: auto; object-fit: contain; background: #f4f6f9; border: 1px solid var(--line); border-radius: 10px; }
+/* .actions 里的 select 不是 label 的子元素，拿不到 label input 的样式 → 单开一条 */
+.actions select { font: inherit; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--text); max-width: 220px; }
+.actions select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+/* 参考图卡片里的「移除」按钮：贴着缩略图下方，别撑满 */
+.ref-pick .chip { padding: 2px 8px; font-size: 11px; }

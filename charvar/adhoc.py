@@ -23,6 +23,7 @@ manifest 记完整请求与结果，便于复现；产物不落 runs 表（临�
 from __future__ import annotations
 
 import json
+import re
 import time
 import uuid
 from pathlib import Path
@@ -43,7 +44,7 @@ _MAX_REFERENCES = 4
 
 # 画幅档位与 comfyui_exporter.SUPPORTED_ASPECT_RATIOS 一致（去掉 auto —— adhoc 没有景别概念）
 _ASPECT_RATIOS = ("1:1", "3:4", "16:9", "4:3", "9:16", "2:3", "3:2", "21:9")
-_RESOLUTIONS = ("1k", "2k", "4k")
+_RESOLUTIONS = ("1k", "2k")
 
 
 class AdhocError(ValueError):
@@ -92,13 +93,171 @@ def adhoc_root() -> Path:
     return paths.data_dir() / "generated" / "adhoc"
 
 
+def refs_dir() -> Path:
+    """网页上传的参考图暂存目录（``_refs/``）—— 出了图就没用了，可随时清。"""
+    return adhoc_root() / "_refs"
+
+
 def _new_run_id() -> str:
     """本次生成的 id：只含 ``[A-Za-z0-9_.-]``（assets.safe_run_id 的字符集约束）。"""
     return f"adhoc_{time.strftime('%Y%m%d-%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
 
+# run_id 必须是「adhoc_ 前缀 + 安全字符集」。比 assets.safe_run_id 严：
+# safe_run_id 的正则放行 ".."，而这里 run_id 直接拼进路径（拼 ``..`` 就穿出去了）。
+_RUN_ID_RE = re.compile(r"^adhoc_[A-Za-z0-9_.-]+$")
+
+
 def _run_dir(run_id: str) -> Path:
     return adhoc_root() / run_id
+
+
+def run_dir(run_id: str) -> Path:
+    """公开的 run 目录（对外服务产物用；非法 id 直接报错，不拼路径）。"""
+    if not _RUN_ID_RE.fullmatch(str(run_id)) or ".." in str(run_id):
+        raise AdhocError(f"非法 run_id：{run_id}")
+    return _run_dir(run_id)
+
+
+# ---------- 参考图暂存（网页上传用） ----------
+
+_STAGED_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
+
+
+def save_staged_reference(data: bytes, filename: str = "") -> Path:
+    """把上传的参考图存到暂存目录，返回路径。
+
+    后缀按**实际图片格式**判（用 PIL 读），不信任上传时的文件名 ——
+    "a.png" 里装的是 JPEG 就按 .jpg 存，否则下游按后缀走会出错。
+    """
+    import io
+
+    from PIL import Image
+
+    if not data:
+        raise AdhocError("参考图是空的")
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            image.load()
+            fmt = (image.format or "").upper()
+    except Exception as exc:  # noqa: BLE001
+        raise AdhocError(f"参考图不是可识别的图片：{exc}") from exc
+    suffix = {"PNG": ".png", "JPEG": ".jpg", "WEBP": ".webp"}.get(fmt)
+    if suffix is None:
+        raise AdhocError(f"不支持的参考图格式：{fmt or '未知'}")
+    target = refs_dir() / f"{uuid.uuid4().hex}{suffix}"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(data)
+    return target
+
+
+def staged_reference(ref_id: str) -> Path:
+    """按 id 取暂存的参考图路径（非法 id 报错）。"""
+    if not re.fullmatch(r"[0-9a-f]{32}", str(ref_id or "")):
+        raise AdhocError(f"非法参考图 id：{ref_id}")
+    matches = sorted(refs_dir().glob(f"{ref_id}.*"))
+    for path in matches:
+        if path.suffix.lower() in _STAGED_SUFFIXES and path.is_file():
+            return path
+    raise AdhocError(f"参考图不存在或已清理：{ref_id}")
+
+
+def clear_staged_references(ref_ids: list[str]) -> None:
+    """删掉用完的暂存参考图（出图成功后调用，失败时保留以便重试）。"""
+    for ref_id in ref_ids or []:
+        try:
+            staged_reference(ref_id).unlink(missing_ok=True)
+        except AdhocError:
+            continue
+
+
+def prune_staged_references(max_age_s: float = 24 * 3600) -> int:
+    """清掉过期未用的暂存参考图，返回删掉几个。
+
+    用户上传了参考图却没点出图就直接关页面，暂存文件会一直留着 ——
+    按 mtime 过期清理（出图成功时本来就会立刻删掉，这里兜底）。
+    """
+    directory = refs_dir()
+    if not directory.is_dir():
+        return 0
+    now = time.time()
+    removed = 0
+    for path in directory.iterdir():
+        if not path.is_file():
+            continue
+        try:
+            if now - path.stat().st_mtime < max_age_s:
+                continue
+        except OSError:
+            continue
+        path.unlink(missing_ok=True)
+        removed += 1
+    return removed
+
+
+# ---------- 产物 ----------
+
+def original_file(run_id: str) -> Path:
+    """某次临时生图的原图（``original/`` 下唯一一张）。"""
+    directory = run_dir(run_id) / "original"
+    for path in sorted(directory.iterdir()) if directory.is_dir() else []:
+        if path.is_file():
+            return path
+    raise FileNotFoundError(f"没有产物：{run_id}")
+
+
+def thumb_file(run_id: str) -> Path:
+    """某次临时生图的缩略图。"""
+    directory = run_dir(run_id) / "thumbs"
+    for path in sorted(directory.iterdir()) if directory.is_dir() else []:
+        if path.is_file():
+            return path
+    raise FileNotFoundError(f"没有缩略图：{run_id}")
+
+
+def list_recent(limit: int = 20) -> list[dict[str, Any]]:
+    """最近的临时生图记录（读 manifest.json，按时间倒序）。
+
+    manifest 是唯一留痕（不落 runs 表），所以这里就是扫目录。
+    """
+    root = adhoc_root()
+    if not root.is_dir():
+        return []
+    records: list[dict[str, Any]] = []
+    for directory in root.iterdir():
+        if not directory.is_dir() or directory.name.startswith("_"):
+            continue
+        manifest_path = directory / "manifest.json"
+        if not manifest_path.exists():
+            continue
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        result = manifest.get("result") or {}
+        request = manifest.get("request") or {}
+        status = "error" if manifest.get("error") else (result.get("status") or "ready")
+        thumbs = directory / "thumbs"
+        has_image = status == "ready" and thumbs.is_dir() and any(thumbs.iterdir())
+        records.append(
+            {
+                "run_id": directory.name,
+                "created_at": manifest.get("created_at") or "",
+                "backend": request.get("backend") or result.get("provider") or "",
+                "prompt": request.get("prompt") or "",
+                "aspect_ratio": request.get("aspect_ratio") or "",
+                "seed": request.get("seed"),
+                "width": result.get("width") or 0,
+                "height": result.get("height") or 0,
+                "status": status,
+                "error": manifest.get("error") or "",
+                # 只入队（--no-wait）与失败的记录没有产物 → 前端别去取图（否则是破图）
+                "has_image": has_image,
+            }
+        )
+    records.sort(key=lambda r: r["run_id"], reverse=True)
+    return records[: max(1, int(limit))]
+
 
 
 # ---------- 校验 ----------
@@ -188,8 +347,10 @@ def _image_slots(mapping: dict[str, Any]) -> list[str]:
 
 # ---------- ComfyUI ----------
 
-def _generate_comfyui(req: AdhocRequest, run_id: str, run_dir: Path) -> AdhocResult:
-    t2i_workflow, edit_workflow = _default_workflows()
+def _generate_comfyui(
+    req: AdhocRequest, run_id: str, run_dir: Path, db_path: Path | None = None
+) -> AdhocResult:
+    t2i_workflow, edit_workflow = _default_workflows(db_path)
     workflow_name = req.workflow or (
         edit_workflow if req.reference_paths else t2i_workflow
     )
@@ -291,8 +452,10 @@ def _download_bytes(client: httpx.Client, base: str, file: dict[str, str]) -> by
 
 # ---------- OpenRouter ----------
 
-def _generate_openrouter(req: AdhocRequest, run_id: str, run_dir: Path) -> AdhocResult:
-    with _conn() as conn:
+def _generate_openrouter(
+    req: AdhocRequest, run_id: str, run_dir: Path, db_path: Path | None = None
+) -> AdhocResult:
+    with _conn(db_path) as conn:
         overrides = settings_service.openrouter_overrides(conn)
     model = openrouter_image.resolve_model(req.model or overrides.get("model"))
     api_key = openrouter_image.resolve_api_key(overrides.get("api_key"))
@@ -304,7 +467,10 @@ def _generate_openrouter(req: AdhocRequest, run_id: str, run_dir: Path) -> Adhoc
     prepared = _prepare_references(req, run_dir)
     result = to_generate_result(req, run_id)
     item = result.items[0]
-    width, height = comfyui_exporter.dimensions_for_item(req.aspect_ratio, req.resolution, item)
+    # OpenRouter 跑的是 muse/grok/gpt-image，不是 Qwen —— 不走官方 2K 像素表
+    width, height = comfyui_exporter.dimensions_for_item(
+        req.aspect_ratio, req.resolution, item, use_model_native=False
+    )
 
     # 有参考图时提示词里的 <imageN> 换成序数词；没有参考图时整段摘掉
     # （留着会变成 "as ." 这种残句）。同 charvar.api._openrouter_prompt。
@@ -355,18 +521,18 @@ def _generate_openrouter(req: AdhocRequest, run_id: str, run_dir: Path) -> Adhoc
 
 # ---------- 公共工具 ----------
 
-def _conn():
-    return storage.connect()
+def _conn(db_path: Path | None = None):
+    return storage.connect(db_path)
 
 
-def _settings():
-    with _conn() as conn:
+def _settings(db_path: Path | None = None):
+    with _conn(db_path) as conn:
         return settings_service.get_settings(conn)
 
 
-def _default_workflows() -> tuple[str, str]:
+def _default_workflows(db_path: Path | None = None) -> tuple[str, str]:
     """（文生图 workflow, 图像编辑 workflow）—— 从设置页取。"""
-    settings = _settings()
+    settings = _settings(db_path)
     return settings.comfy_t2i_workflow, settings.comfy_edit_workflow
 
 
@@ -473,8 +639,11 @@ def _write_manifest(
 
 # ---------- 对外入口 ----------
 
-def generate(req: AdhocRequest) -> AdhocResult:
-    """跑一次临时生图，返回结果（含落盘路径与 manifest 路径）。"""
+def generate(req: AdhocRequest, db_path: Path | None = None) -> AdhocResult:
+    """跑一次临时生图，返回结果（含落盘路径与 manifest 路径）。
+
+    ``db_path`` 传了就用那个库读设置（测试隔离用）；不传走默认库。
+    """
     validate(req)
     run_id = _new_run_id()
     run_dir = _run_dir(run_id)
@@ -482,9 +651,9 @@ def generate(req: AdhocRequest) -> AdhocResult:
     started = time.time()
     try:
         if req.backend == "comfyui":
-            result = _generate_comfyui(req, run_id, run_dir)
+            result = _generate_comfyui(req, run_id, run_dir, db_path)
         else:
-            result = _generate_openrouter(req, run_id, run_dir)
+            result = _generate_openrouter(req, run_id, run_dir, db_path)
     except Exception as exc:
         # 失败也要留痕：manifest 记下失败原因，方便回头查（出图常在别处失败）
         _write_manifest(

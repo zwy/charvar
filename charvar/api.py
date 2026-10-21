@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from charvar import __version__, assets, llm, paths, settings_service, storage, subject_images
+from charvar import adhoc as adhoc_service
 from charvar import openrouter_image
 from charvar import reference_images
 from charvar.assets import ensure_thumb, resolve_run_asset, sheet_path, thumb_path
@@ -61,7 +62,7 @@ class ComfyQueueRequest(BaseModel):
     wait: bool = False
     comfy_url: str | None = None
     aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
-    resolution: Literal["1k", "2k", "4k"] | None = None
+    resolution: Literal["1k", "2k"] | None = None
     overrides: dict[str, Any] = Field(default_factory=dict)
     reference_kinds: list[str] = Field(default_factory=list, description="主体图参考（LLM 模式），按序注入 image/image2/…")
 
@@ -75,7 +76,7 @@ class OpenRouterQueueRequest(BaseModel):
     """
 
     aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
-    resolution: Literal["1k", "2k", "4k"] | None = None
+    resolution: Literal["1k", "2k"] | None = None
     reference_kinds: list[str] = Field(default_factory=list, description="主体图参考，按序对应提示词里的 the first/second… reference image")
     model: str | None = Field(default=None, description="覆盖默认模型（OP_IMAGE_MODEL / 设置页）")
     seed: int | None = Field(default=None, description="覆盖种子；缺省用条目自带的稳定子种子")
@@ -110,7 +111,7 @@ class SubjectImageGenerateRequest(BaseModel):
     prompt: str | None = None
     seed: int = 0
     aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
-    resolution: Literal["1k", "2k", "4k"] | None = None
+    resolution: Literal["1k", "2k"] | None = None
     comfy_url: str | None = None
     wait: bool = True
 
@@ -121,7 +122,7 @@ class SubjectImageOpenRouterRequest(BaseModel):
     prompt: str | None = None
     seed: int = 0
     aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
-    resolution: Literal["1k", "2k", "4k"] | None = None
+    resolution: Literal["1k", "2k"] | None = None
     model: str | None = None
     quality: str | None = None
 
@@ -143,6 +144,34 @@ class TemplatePutRequest(BaseModel):
 
 class Message(BaseModel):
     detail: str
+
+
+class AdhocReferenceSpec(BaseModel):
+    """一张参考图的来源：上传暂存的（staged_id）或主体档案里的（subject_id + kind）。
+
+    顺序即提示词里 ``<image1>`` / ``<image2>`` 的顺序。
+    """
+
+    staged_id: str | None = None
+    subject_id: str | None = None
+    kind: str | None = None
+
+
+class AdhocGenerateRequest(BaseModel):
+    """网页「临时生图」的请求（与 CLI ``charvar image`` 同一套参数）。"""
+
+    prompt: str
+    backend: Literal["comfyui", "openrouter"] = "comfyui"
+    negative_prompt: str | None = None
+    references: list[AdhocReferenceSpec] = Field(default_factory=list)
+    aspect_ratio: str = "3:4"
+    resolution: str = "1k"
+    seed: int = 0
+    model: str | None = None
+    quality: str | None = None
+    comfy_url: str | None = None
+    workflow: str | None = None
+    wait: bool = True
 
 
 def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
@@ -868,7 +897,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         try:
             ratio = aspect_ratio or str((item.meta or {}).get("preferred_aspect_ratio") or "")
             width, height = comfyui_exporter.dimensions_for_item(
-                ratio or "auto", resolution, item
+                ratio or "auto", resolution, item, use_model_native=False
             )
             effective_seed = seed if seed is not None else (item.meta or {}).get("subseed")
             op_result = openrouter_image.generate_image(
@@ -1013,6 +1042,144 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             "qualities": list(caps.qualities),
             "supports_references": caps.supports_refs,
         }
+
+    # ---- 临时生图（跨项目调用同一通路的网页入口） ----
+
+    def _adhoc_reference_paths(
+        references: list[AdhocReferenceSpec],
+    ) -> tuple[list[Path], list[str]]:
+        """参考图 spec → 本地路径列表（+ 暂存 id 列表，出图成功后清理）。
+
+        只认两种来源：上传暂存的（staged_id）、主体档案里的（subject_id + kind）。
+        不接受任意路径 —— 那是把文件读权限开给了浏览器。
+        """
+        paths_found: list[Path] = []
+        staged_ids: list[str] = []
+        for spec in references:
+            if spec.staged_id:
+                try:
+                    paths_found.append(adhoc_service.staged_reference(spec.staged_id))
+                except adhoc_service.AdhocError as exc:
+                    raise HTTPException(400, str(exc)) from exc
+                staged_ids.append(spec.staged_id)
+                continue
+            if spec.subject_id and spec.kind:
+                _require_subject(spec.subject_id)
+                if spec.kind not in subject_images.IMAGE_KINDS:
+                    raise HTTPException(
+                        400, f"未知图片类型：{spec.kind}（支持 {'/'.join(subject_images.IMAGE_KINDS)}）"
+                    )
+                local = subject_images.find_reference_file(spec.subject_id, spec.kind)
+                if local is None:
+                    raise HTTPException(
+                        400, f"参考图不存在：{spec.subject_id} / {spec.kind}（请先在主体档案里生成或上传）"
+                    )
+                # 走预处理过的压缩版（长边 1536 / JPEG q88），与 ComfyUI 上传同一份
+                subject_dir = subject_images.subject_dir(spec.subject_id)
+                paths_found.append(
+                    reference_images.prepared_reference(local, subject_dir, spec.kind)
+                )
+                continue
+            raise HTTPException(400, "参考图缺少来源（staged_id 或 subject_id + kind）")
+        return paths_found, staged_ids
+
+    @app.post("/adhoc/references")
+    def api_adhoc_reference_upload(file: UploadFile) -> dict[str, Any]:
+        """上传一张参考图 → 暂存并返回 id（出图时按 id 取）。"""
+        data = file.file.read()
+        try:
+            path = adhoc_service.save_staged_reference(data, file.filename or "")
+        except adhoc_service.AdhocError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        # 顺带清掉过期的暂存图（用户传了没出图就走了的那些）
+        adhoc_service.prune_staged_references()
+        return {"id": path.stem, "name": file.filename or path.name, "path": str(path)}
+
+    @app.delete("/adhoc/references/{ref_id}")
+    def api_adhoc_reference_delete(ref_id: str) -> dict[str, Any]:
+        try:
+            adhoc_service.staged_reference(ref_id).unlink(missing_ok=True)
+        except adhoc_service.AdhocError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        return {"ok": True}
+
+    @app.get("/adhoc/reference/{ref_id}")
+    def api_adhoc_reference_file(ref_id: str) -> FileResponse:
+        """暂存参考图的预览（出图成功后会被清掉，404 是正常的）。"""
+        try:
+            return FileResponse(adhoc_service.staged_reference(ref_id))
+        except adhoc_service.AdhocError as exc:
+            raise HTTPException(404, str(exc)) from exc
+
+    @app.post("/adhoc/generate")
+    def api_adhoc_generate(req: AdhocGenerateRequest) -> dict[str, Any]:
+        """临时生图：给一段提示词出一张图。
+
+        走的是 CLI ``charvar image`` 同一套（``charvar.adhoc``），不落 runs 表。
+        """
+        reference_paths, staged_ids = _adhoc_reference_paths(req.references)
+        adhoc_req = adhoc_service.AdhocRequest(
+            prompt=req.prompt,
+            backend=req.backend,
+            negative_prompt=req.negative_prompt,
+            reference_paths=reference_paths,
+            aspect_ratio=req.aspect_ratio,
+            resolution=req.resolution,
+            seed=req.seed,
+            model=req.model,
+            quality=req.quality,
+            comfy_url=req.comfy_url,
+            workflow=req.workflow,
+            wait=req.wait,
+        )
+        try:
+            result = adhoc_service.generate(adhoc_req, db_path)
+        except adhoc_service.AdhocError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001 - 后端出图失败统一转 502
+            raise HTTPException(502, f"生图失败：{exc}") from exc
+        # 暂存参考图用完了就清掉（失败时保留，方便重试）
+        if result.status == "ready":
+            adhoc_service.clear_staged_references(staged_ids)
+        payload = result.model_dump()
+        run_id = Path(result.manifest_path).parent.name if result.manifest_path else ""
+        payload["run_id"] = run_id
+        payload["image_url"] = f"/adhoc/{run_id}/image" if run_id else ""
+        payload["thumb_url"] = f"/adhoc/{run_id}/thumb" if run_id else ""
+        return payload
+
+    @app.get("/adhoc")
+    def api_adhoc_list(limit: int = Query(20, ge=1, le=100)) -> list[dict[str, Any]]:
+        """最近的临时生图（读 manifest.json；临时生图不落 runs 表）。"""
+        return adhoc_service.list_recent(limit)
+
+    @app.get("/adhoc/{run_id}/image")
+    def api_adhoc_image(run_id: str) -> FileResponse:
+        try:
+            return FileResponse(adhoc_service.original_file(run_id))
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except adhoc_service.AdhocError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.get("/adhoc/{run_id}/thumb")
+    def api_adhoc_thumb(run_id: str) -> FileResponse:
+        try:
+            return FileResponse(adhoc_service.thumb_file(run_id), media_type="image/webp")
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except adhoc_service.AdhocError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.get("/adhoc/{run_id}/manifest")
+    def api_adhoc_manifest(run_id: str) -> dict[str, Any]:
+        try:
+            path = adhoc_service.run_dir(run_id) / "manifest.json"
+        except adhoc_service.AdhocError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        if not path.exists():
+            raise HTTPException(404, f"没有 manifest：{run_id}")
+        return json.loads(path.read_text(encoding="utf-8"))
 
     @app.post("/runs/{run_id}/regenerate")
     def api_run_regenerate(run_id: str, req: RunRegenerateRequest) -> dict[str, Any]:

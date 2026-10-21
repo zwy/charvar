@@ -105,7 +105,23 @@ SUPPORTED_ASPECT_RATIOS = (
     "21:9",
 )
 
-_RESOLUTION_LONG_SIDE = {"1k": 1024, "2k": 2048, "4k": 4096}
+_RESOLUTION_LONG_SIDE = {"1k": 1024, "2k": 2048}
+
+# Qwen-Image-2.1 官方推荐像素（README 的 WH_RATIO_TO_SIZE）。
+# 模型原生 2K：面积恒定 ~4.2MP（不是长边恒定），各比例只微调边长凑面积。
+# 2k 档必须用这张表 —— 旧实现按"长边归一"给 2048 长边，16:9 只有 2.4MP
+# （原生的 56%），模型被迫上采样 → 糊。
+# 4k 档已下线：官方明说远超 2K 训练尺寸会丢提示词遵循度（实测 4096×4096
+# 耗时 75s 且细节崩坏），且 ComfyUI 侧上限 4096。
+_QWEN_2K_SIZES = {
+    "1:1": (2048, 2048),
+    "4:3": (2400, 1792),
+    "3:4": (1792, 2400),
+    "3:2": (2528, 1696),
+    "2:3": (1696, 2528),
+    "16:9": (2752, 1536),
+    "9:16": (1536, 2752),
+}
 
 
 def parse_aspect_ratio(value: str | None) -> tuple[int, int] | None:
@@ -136,8 +152,20 @@ def _smart_ratio(item: PromptItem) -> str:
     return "2:3" if framing == "full" else "3:4"
 
 
-def dimensions_for(aspect_ratio: str | None, resolution_tier: str | None, item: PromptItem | None = None) -> tuple[int, int]:
-    """按比例和分辨率档位计算宽高；auto 时按景别映射，短边取 64 倍数。"""
+def dimensions_for(
+    aspect_ratio: str | None,
+    resolution_tier: str | None,
+    item: PromptItem | None = None,
+    *,
+    use_model_native: bool = True,
+) -> tuple[int, int]:
+    """按比例和分辨率档位计算宽高；auto 时按景别映射，短边取 64 倍数。
+
+    ``use_model_native=True``（ComfyUI 通路）时，2k 档走 Qwen-Image-2.1 官方
+    像素表 —— 面积恒定 ~4.2MP，是模型训练时见过的尺寸。
+    ``use_model_native=False``（OpenRouter 通路）时用通用"长边归一"算法：
+    那边跑的是 muse/grok/gpt-image，Qwen 的尺寸表对它们无意义。
+    """
     ratio = str(aspect_ratio or "").strip().lower()
     if ratio == "auto":
         ratio = _smart_ratio(item) if item is not None else "3:4"
@@ -150,13 +178,23 @@ def dimensions_for(aspect_ratio: str | None, resolution_tier: str | None, item: 
     tier = (resolution_tier or "1k").strip().lower()
     if tier not in _RESOLUTION_LONG_SIDE:
         raise ValueError(f"resolution 只支持 {'/'.join(_RESOLUTION_LONG_SIDE)}，当前：{resolution_tier}")
+    if use_model_native and tier == "2k" and ratio in _QWEN_2K_SIZES:
+        return _QWEN_2K_SIZES[ratio]
     long_side = _RESOLUTION_LONG_SIDE[tier]
     short_side = max(64, int(round(long_side * min(w_ratio, h_ratio) / max(w_ratio, h_ratio) / 64.0)) * 64)
     return (long_side, short_side) if w_ratio >= h_ratio else (short_side, long_side)
 
 
-def dimensions_for_item(aspect_ratio: str | None, resolution_tier: str | None, item: PromptItem) -> tuple[int, int]:
-    return dimensions_for(aspect_ratio, resolution_tier, item)
+def dimensions_for_item(
+    aspect_ratio: str | None,
+    resolution_tier: str | None,
+    item: PromptItem,
+    *,
+    use_model_native: bool = True,
+) -> tuple[int, int]:
+    return dimensions_for(
+        aspect_ratio, resolution_tier, item, use_model_native=use_model_native
+    )
 
 
 def _injected_values(

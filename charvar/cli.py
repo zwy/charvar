@@ -341,7 +341,7 @@ def image_comfyui(
         None, "--ref", help="参考图路径，可重复（最多 4 张）"
     ),
     aspect: str = typer.Option("3:4", "--aspect", help="画幅：1:1/3:4/16:9/4:3/9:16/2:3/3:2/21:9"),
-    resolution: str = typer.Option("1k", "--resolution", help="分辨率档：1k/2k/4k"),
+    resolution: str = typer.Option("1k", "--resolution", help="分辨率档：1k/2k"),
     seed: int = typer.Option(0, "--seed", help="采样种子（0 = 固定复现；换种子出不同图）"),
     negative: Optional[str] = typer.Option(None, "--negative", help="负向提示词（空串 = 明确不用）"),
     workflow: Optional[str] = typer.Option(
@@ -381,7 +381,7 @@ def image_openrouter(
         None, "--ref", help="参考图路径，可重复（最多 4 张）"
     ),
     aspect: str = typer.Option("3:4", "--aspect", help="画幅：1:1/3:4/16:9/4:3/9:16/2:3/3:2/21:9"),
-    resolution: str = typer.Option("1k", "--resolution", help="分辨率档：1k/2k/4k"),
+    resolution: str = typer.Option("1k", "--resolution", help="分辨率档：1k/2k"),
     seed: int = typer.Option(0, "--seed", help="采样种子（0 = 固定复现；换种子出不同图）"),
     model: Optional[str] = typer.Option(None, "--model", help="模型 slug（默认 OP_IMAGE_MODEL / 设置页）"),
     quality: Optional[str] = typer.Option(None, "--quality", help="质量档（模型声明支持才生效）"),

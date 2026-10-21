@@ -64,7 +64,7 @@ cat prompt.md | charvar image comfyui --prompt-file - --out out.png
 | `--prompt` / `--prompt-file` | 提示词，二选一；`--prompt-file -` 读 stdin |
 | `--ref` | 参考图路径，可重复，最多 4 张 |
 | `--aspect` | `1:1` `3:4` `16:9` `4:3` `9:16` `2:3` `3:2` `21:9`（默认 `3:4`） |
-| `--resolution` | `1k` `2k` `4k`（默认 `1k`） |
+| `--resolution` | `1k` `2k`（默认 `1k`）。2K 是 Qwen 官方像素，面积恒定 ~4.2MP |
 | `--seed` | 采样种子，默认 `0`（固定复现）；要新图就换种子 |
 | `--out` | 产物路径 |
 | `--json` | 结果以 JSON 输出（给脚本消费时用） |
@@ -74,6 +74,11 @@ cat prompt.md | charvar image comfyui --prompt-file - --out out.png
 | `--quality` | OpenRouter 质量档（模型声明支持才生效） |
 
 完整参数见 `references/cli.md`。
+
+## 用户想在网页上出图
+
+charvar 的网页顶栏也有「临时生图」页签（`http://127.0.0.1:8710`），走的是同一条通路。
+用户明确说「在网页上出图 / 用 charvar 的网页」时指那个 —— 告诉用户地址即可，别自己用 CLI 顶替。
 
 ## 注意
 

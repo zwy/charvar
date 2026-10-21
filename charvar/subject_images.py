@@ -439,7 +439,9 @@ def generate_subject_image_openrouter(
     result = _synthetic_result(subject.id, seed, [(kind, prompt.strip())])
     item = result.items[0]
     item.meta["framing"] = _KIND_FRAMING.get(kind)
-    width, height = comfyui_exporter.dimensions_for_item(ratio, resolution or "1k", item)
+    width, height = comfyui_exporter.dimensions_for_item(
+        ratio, resolution or "1k", item, use_model_native=False
+    )
 
     op_result = openrouter_image.generate_image(
         prompt=_openrouter_prompt(prompt.strip(), bool(reference_paths)),

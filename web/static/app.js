@@ -388,11 +388,18 @@ async function refreshComfyWorkflows() {
 let ASPECT_RATIO = "auto";
 const ASPECT_BUTTONS = $$("#comfy-aspect .chip");
 const DIM_PREVIEW = $("#comfy-dim-preview");
-const TIER_TO_SIDE = { "1k": 1024, "2k": 2048, "4k": 4096 };
+const TIER_TO_SIDE = { "1k": 1024, "2k": 2048 };
+// Qwen-Image-2.1 官方 2K 像素（面积恒定 ~4.2MP）。后端 charvar/exporters/comfyui.py
+// 的 _QWEN_2K_SIZES 是同一张表 —— 改了那边这里要同步，否则预览和实际不符。
+const QWEN_2K_SIZES = {
+  "1:1": [2048, 2048], "4:3": [2400, 1792], "3:4": [1792, 2400],
+  "3:2": [2528, 1696], "2:3": [1696, 2528], "16:9": [2752, 1536],
+  "9:16": [1536, 2752],
+};
 
 function updateComfyDimensionPreview() {
   const ratio = ASPECT_RATIO;
-  const longSide = TIER_TO_SIDE[$("#comfy-resolution").value];
+  const tier = $("#comfy-resolution").value;
   const presetRatio = (currentPresetMeta() || {}).preferred_aspect_ratio;
   if (ratio === "auto") {
     DIM_PREVIEW.textContent = presetRatio
@@ -404,11 +411,17 @@ function updateComfyDimensionPreview() {
   if (parts.length !== 2 || parts.some((n) => !Number.isFinite(n) || n <= 0)) {
     DIM_PREVIEW.textContent = "比例无效"; return;
   }
+  if (tier === "2k" && QWEN_2K_SIZES[ratio]) {
+    const [w, h] = QWEN_2K_SIZES[ratio];
+    DIM_PREVIEW.textContent = `当前输出 ${w} × ${h}px（Qwen 官方 2K 像素，面积 ~4.2MP）`;
+    return;
+  }
+  const longSide = TIER_TO_SIDE[tier];
   const [w, h] = parts;
   const shortSide = Math.max(64, Math.round((longSide * Math.min(w, h)) / Math.max(w, h) / 64) * 64);
   const width = w >= h ? longSide : shortSide;
   const height = h >= w ? longSide : shortSide;
-  DIM_PREVIEW.textContent = `当前输出 ${width} × ${height}px（4K 长边上限 4096）`;
+  DIM_PREVIEW.textContent = `当前输出 ${width} × ${height}px`;
 }
 
 function setAspect(value) {
@@ -593,7 +606,7 @@ function applyOpenRouterCapabilities(caps) {
   updateOpenRouterHints();
 }
 
-const TIER_TO_PROVIDER_RESOLUTION = { "1k": "1K", "2k": "2K", "4k": "4K" };
+const TIER_TO_PROVIDER_RESOLUTION = { "1k": "1K", "2k": "2K" };
 
 async function loadOpenRouterSettings() {
   const settings = await api("/settings");
@@ -1138,7 +1151,7 @@ async function loadSettings() {
       div.innerHTML = `${label}
         <div class="size-row">
           <select data-size-aspect="${kind}">${ASPECT_OPTIONS.map((r) => `<option value="${r}" ${r === size.aspect_ratio ? "selected" : ""}>${r}</option>`).join("")}</select>
-          <select data-size-res="${kind}">${["1k", "2k", "4k"].map((r) => `<option value="${r}" ${r === size.resolution ? "selected" : ""}>${r}</option>`).join("")}</select>
+          <select data-size-res="${kind}">${["1k", "2k"].map((r) => `<option value="${r}" ${r === size.resolution ? "selected" : ""}>${r}</option>`).join("")}</select>
         </div>`;
       sizes.appendChild(div);
     }

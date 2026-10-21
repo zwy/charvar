@@ -35,7 +35,8 @@ COMFYUI_WORKFLOWS_DIR=./data/workflows
 - 请求一律绕过代理直连（trust_env=False），shell 的 `ALL_PROXY` 不影响内网调用。
 - workflow 采用与 `shared/comfy_client` 相同的成对约定：`data/workflows/{name}.json` + `{name}.mapping.json`；mapping 格式见 `presets/comfy_mapping.example.json`（`mappings` 列表 + `output_nodes`）。
 - 网页「生成 → 推送 ComfyUI」面板与 CLI 共用这套配置。
-- 推送前可选择 `智能 / 1:1 / 3:4 / 16:9 / 4:3 / 9:16 / 2:3 / 3:2 / 21:9` 与 `1K / 2K / 4K`；4K 长边上限 4096，短边取 64 倍数；`智能` 会按景别使用全身 `2:3`、胸像/头像/表情 `3:4`。
+- 推送前可选择 `智能 / 1:1 / 3:4 / 16:9 / 4:3 / 9:16 / 2:3 / 3:2 / 21:9` 与 `1K / 2K`；`智能` 会按景别使用全身 `2:3`、胸像/头像/表情 `3:4`。
+- **2K 用 Qwen-Image-2.1 官方像素**（面积恒定 ~4.2MP，如 16:9 = 2752×1536、1:1 = 2048×2048）——模型原生的就是这个尺寸；早期按「长边 2048」算的 2K 只有原生面积的 56%，图会糊。4K 档已下线：远超模型 2K 训练尺寸会丢提示词遵循度。
 
 ## OpenRouter 生图（可选）
 
@@ -155,6 +156,14 @@ charvar image models    # 列 OpenRouter 可用模型
 跨项目用还有一个 skill：`skills/charvar-skill/`（装到 `~/.claude/skills/` 后，
 Claude Code 在任何项目里都能按提示词调用这条生图通路）。
 
+### 网页入口
+
+网页顶栏「临时生图」页签是同一条通路的图形界面（后端 `/adhoc/*`，代码走同一个
+`charvar/adhoc.py`）：选后端（ComfyUI / OpenRouter）、画幅、分辨率、种子，
+写提示词，加参考图（上传本地图，或直接从主体档案里挑已就绪的档案图），出图后
+显示结果并可下载原图 / manifest.json。页面下方是「最近生成」墙，条目可以
+「复用提示词」再改。
+
 ## 预设
 
 YAML 预设放 `presets/*.yaml`，两种类型：
@@ -209,13 +218,13 @@ YAML 预设放 `presets/*.yaml`，两种类型：
 
 ## ComfyUI 集成
 
-- 推送前端已内置比例与分辨率：`智能 / 1:1 / 3:4 / 16:9 / 4:3 / 9:16 / 2:3 / 3:2 / 21:9` + `1K / 2K / 4K`；4K 长边上限 4096，短边取 64 的整数倍。`智能` 会按景别使用全身 `2:3`、近景 `3:4`。
+- 推送前端已内置比例与分辨率：`智能 / 1:1 / 3:4 / 16:9 / 4:3 / 9:16 / 2:3 / 3:2 / 21:9` + `1K / 2K`；2K 走 Qwen-Image-2.1 官方像素（面积恒定 ~4.2MP）。`智能` 会按景别使用全身 `2:3`、近景 `3:4`。
 
 - **模式 A（零改动）**：`prompts.txt` 每行一条完整提示词，直接贴进原工作流的 `Text Multiline`（把 Master Prompt 清空、wildcard 节点旁路），队列次数 = 行数。
 - **模式 B（API 排队，推荐）**：workflow 用 ComfyUI「导出 (API)」保存到 `data/workflows/{name}.json`，并写同名 `{name}.mapping.json` 指明注入节点（示例见 `presets/comfy_mapping.example.json`）。`filename_prefix` 默认写成 `{subject}_{index:03d}_{variant_id}`，与 captions 文件一一对应；逐条 `POST /prompt`，返回的 `prompt_id`（以及 `--wait` 时的输出文件名）记入 SQLite `comfy_prompts` 表，供后续关联图片与 caption。
 - 连接检查：`GET /comfy/status`（网页面板「检查连接」）；队列记录：`GET /runs/{run_id}/comfyui`。
 - 已验证链路：charvar → ComfyUI（0.40.0 / win32），单条排队 → 轮询完成 → 拿到输出文件名；`192.168.x.x` 属于你的本地网段，请自行替换。
-- 支持 `aspect_ratio` + `resolution`：比例可选拍档里的 `auto / 1:1 / 3:4 / 16:9 / 4:3 / 9:16 / 2:3 / 3:2 / 21:9`，分辨率支持 `1k / 2k / 4k`，长边按档位计算（4K 上限 4096），短边取 64 的整数倍；`auto` 按景别自动用 2:3（全身）或 3:4（胸像/头像/表情）。
+- 支持 `aspect_ratio` + `resolution`：比例可选拍档里的 `auto / 1:1 / 3:4 / 16:9 / 4:3 / 9:16 / 2:3 / 3:2 / 21:9`，分辨率支持 `1k / 2k`（2K 为 Qwen 官方像素，面积恒定 ~4.2MP）；`auto` 按景别自动用 2:3（全身）或 3:4（胸像/头像/表情）。
 
 ## HTTP API（127.0.0.1:8710）
 

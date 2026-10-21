@@ -26,11 +26,52 @@ def test_all_ui_ratios(ratio, expected_1k):
 
 @pytest.mark.parametrize(("tier", "expected_2_3"), [
     ("1k", (704, 1024)),
-    ("2k", (1344, 2048)),
-    ("4k", (2752, 4096)),
+    ("2k", (1696, 2528)),
 ])
-def test_resolution_tiers_and_4k_cap(tier, expected_2_3):
+def test_resolution_tiers(tier, expected_2_3):
     assert comfyui.dimensions_for("2:3", tier, None) == expected_2_3
+
+
+def test_2k_uses_qwen_official_pixels():
+    """2k 走 Qwen-Image-2.1 官方表：面积恒定 ~4.2MP，不是"长边归一"。
+
+    旧实现按长边归一给 2048，16:9 只有 2.4MP（原生的 56%）→ 模型被迫上采样、图糊。
+    """
+    official = {
+        "1:1": (2048, 2048),
+        "4:3": (2400, 1792),
+        "3:4": (1792, 2400),
+        "3:2": (2528, 1696),
+        "2:3": (1696, 2528),
+        "16:9": (2752, 1536),
+        "9:16": (1536, 2752),
+    }
+    for ratio, expected in official.items():
+        assert comfyui.dimensions_for(ratio, "2k", None) == expected
+
+
+def test_2k_official_area_is_constant():
+    """官方表按面积定义：各比例面积都 ~4.2MP（差在像素取整）。"""
+    official = [
+        (2048, 2048), (2400, 1792), (1792, 2400), (2528, 1696),
+        (1696, 2528), (2752, 1536), (1536, 2752),
+    ]
+    areas = [w * h for w, h in official]
+    assert max(areas) / min(areas) < 1.03
+
+
+def test_4k_tier_removed():
+    """4k 档已下线（超 2K 训练尺寸会丢提示词遵循度）→ 直接报错，不是静默降级。"""
+    import pytest as _pytest
+
+    with _pytest.raises(ValueError):
+        comfyui.dimensions_for("16:9", "4k", None)
+
+
+def test_openrouter_keeps_long_side_algorithm():
+    """OpenRouter 通路跑的不是 Qwen → 不走官方表，保持长边归一。"""
+    assert comfyui.dimensions_for("16:9", "2k", None, use_model_native=False) == (2048, 1152)
+    assert comfyui.dimensions_for("2:3", "2k", None, use_model_native=False) == (1344, 2048)
 
 
 def test_auto_maps_by_framing():

@@ -15,6 +15,11 @@
 
 - `charvar/adhoc.py` 是「给一段提示词出一张图」的独立通路：不进主体档案 5 槽位、不跑预设批量、不落 runs 表。
 - CLI：`charvar image comfyui|openrouter|models`（`--prompt`/`--prompt-file`/`--ref`/`--aspect`/`--seed`/`--out`/`--json`）。产物默认落 `data/generated/adhoc/{id}/`（图 + 缩略图 + manifest.json）。
+- **网页入口**：顶栏「临时生图」页签（`web/static/adhoc.js`），后端 `/adhoc/*`（`charvar/api.py`）。
+  走的是**同一个** `charvar/adhoc.py` —— 网页与 CLI 是同一套参数语义、同一套落盘、同一份 manifest。
+  改动 `charvar/adhoc.py` 的参数名或输出格式时，CLI、网页、skill 三处都要同步。
+- 网页的参考图只认两种来源：上传暂存（`/adhoc/references`）或主体档案里已就绪的档案图。
+  **不接受任意路径** —— 那是把文件读权限开给了浏览器。
 - 这是给本项目之外的项目和其他 agent 用的；改动它要考虑外部调用方依赖的参数名与输出格式。
 - `skills/charvar-skill/` 是配套的 Claude Code skill（装到 `~/.claude/skills/` 后跨项目可用）。改 CLI 参数时要同步改 skill 里的命令示例。
 
@@ -38,6 +43,23 @@
 - 主体档案的锁定项必须是英文：`style_lock` / `identity_lock` / `outfit_lock` 每条会被拼成一句 `Maintain ...` 进提示词，中文会中英夹杂。
 - 主体档案的 Markdown 模板上限 24,000 字符（LLM 输入截断阈值，`charvar.llm_prompts._TEMPLATE_MAX_CHARS`）；超长模板尾部会被静默截掉，别指望模型看到。
 - 临时生图（`charvar/adhoc.py`）的红线：参考图槽位名从 mapping 读（`image`/`image2`/…），不许写死节点 id；ComfyUI 上传的 remote_name 必须带唯一前缀（`upload_image` 发 `overwrite: true`，同名会互相覆盖 → 队列里的旧 prompt 取到新图）；`--out` 指定的文件后缀与内容必须一致（不一致时转格式，别让后缀骗人）；adhoc 不读 `settings.image_sizes`（那是主体档案槽位的尺寸）；不引入随机源（seed 由调用方显式给）。
+- 临时生图的 run_id 直接拼进文件路径（`/adhoc/{run_id}/image` 直接 serve 磁盘文件）：
+  `charvar.adhoc.run_dir()` 用自己的正则校验（`^adhoc_[A-Za-z0-9_.-]+$` 且不含 `..`），
+  比 `assets.safe_run_id` 严 —— 后者放行 `..`。**别退回用 safe_run_id**。
+- 上传的参考图按**实际图片格式**判后缀（用 PIL 读，不信文件名），落 `data/generated/adhoc/_refs/`；
+  出图成功后自动清掉，失败时保留以便重试。
+- **2K 必须用 Qwen-Image-2.1 官方像素表**（`charvar/exporters/comfyui.py` 的 `_QWEN_2K_SIZES`：
+  1:1=2048×2048、4:3=2400×1792、3:4=1792×2400、3:2=2528×1696、2:3=1696×2528、
+  16:9=2752×1536、9:16=1536×2752）。模型原生是**恒定 ~4.2MP 的 2K**（按面积定义，不是长边）——
+  早期按「长边 2048」归一算出的 2K 只有原生面积的 56%（16:9 才 2048×1152），
+  模型被迫上采样 → 图糊。**别退回长边归一**。前端 `web/static/app.js` 的 `QWEN_2K_SIZES`
+  是同一张表，改一处要同步另一处，否则预览像素和实际不符。
+- **4K 档已下线**（`1k` / `2k` 两档）。官方明说远超 2K 训练尺寸会丢提示词遵循度；
+  实测 4096×4096 耗时 75s（2K 只要 10s）且细节崩坏。`settings_service.ImageSize`
+  有 validator 把存量设置里的 "4k" 降级到 "1k"（别删 —— 存量 DB 里可能还有）。
+- 2K 官方表**只给 ComfyUI 通路**（跑的是 Qwen-Image-2.1）。OpenRouter 通路
+  （muse/grok/gpt-image）传 `use_model_native=False` 走通用长边归一 —— 那边的模型
+  不认 Qwen 的尺寸表。
 
 ## 导入主体档案（外部 Markdown → 系统）
 

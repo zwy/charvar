@@ -13,7 +13,7 @@
 | `--prompt-file` | str | — | 提示词文件路径；`-` 表示读 stdin |
 | `--ref` | list | — | 参考图路径，可重复，最多 4 张 |
 | `--aspect` | str | `3:4` | `1:1` `3:4` `16:9` `4:3` `9:16` `2:3` `3:2` `21:9` |
-| `--resolution` | str | `1k` | `1k` `2k` `4k` |
+| `--resolution` | str | `1k` | `1k` `2k` |
 | `--seed` | int | `0` | 采样种子。0 = 固定复现 |
 | `--negative` | str | — | 负向提示词。给空串 `--negative ""` = 明确不要负向词 |
 | `--workflow` | str | — | workflows 目录里的名称，或 workflow JSON 路径 |

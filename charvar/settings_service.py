@@ -7,9 +7,9 @@
 from __future__ import annotations
 
 import sqlite3
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from charvar import storage
 
@@ -22,7 +22,15 @@ _DEFAULT_WORKFLOW_EDIT = "image_qwen_image_2_1_turbo_image_edit_easy_api"
 
 class ImageSize(BaseModel):
     aspect_ratio: str = "3:4"
-    resolution: Literal["1k", "2k", "4k"] = "1k"
+    resolution: Literal["1k", "2k"] = "1k"
+
+    @field_validator("resolution", mode="before")
+    @classmethod
+    def _drop_removed_tiers(cls, value: Any) -> Any:
+        """4k 档已下线；存量设置里还留着 "4k" 的降级到 1k，别让整条 ImageSize 校验失败。"""
+        if isinstance(value, str) and value.strip().lower() not in ("1k", "2k"):
+            return "1k"
+        return value
 
 
 class LlmSettings(BaseModel):
