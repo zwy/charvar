@@ -10,6 +10,8 @@ const state = {
   lastRun: null, // GenerateResult
   genMode: "classic",
   subjectImages: [], // 主体档案图片槽位（当前主体）
+  openrouterSettings: null, // /settings 里的 openrouter 段
+  openrouterCaps: null, // 当前生图模型的能力（api-response.json 推导）
 };
 
 async function api(path, options = {}) {
@@ -112,6 +114,7 @@ async function renderRefPickers() {
       }
       updateComfyWorkflowHint();
       updateRefsHint();
+      updateOpenRouterHints();
     });
     const img = el.querySelector("img");
     if (img) {
@@ -132,6 +135,7 @@ async function renderRefPickers() {
   }
   updateRefsHint();
   updateComfyWorkflowHint();
+  updateOpenRouterHints();
 }
 
 /* 预设元信息（/presets 列表项，含 reference_order） */
@@ -485,6 +489,161 @@ $("#btn-comfy-queue").addEventListener("click", async () => {
     setStatus($("#comfy-result"), `失败：${err.message}`, true);
   }
 });
+
+/* ---------- OpenRouter 在线生图 ---------- */
+$("#btn-toggle-openrouter").addEventListener("click", async () => {
+  $("#openrouter-panel").hidden = !$("#openrouter-panel").hidden;
+  if (!$("#openrouter-panel").hidden) {
+    await loadOpenRouterSettings().catch(() => {});
+    updateOpenRouterHints();
+  }
+});
+
+let OPENROUTER_ASPECT_RATIO = "auto";
+const OPENROUTER_ASPECT_BUTTONS = $$("#openrouter-aspect .chip");
+const OPENROUTER_DIM_PREVIEW = $("#openrouter-dim-preview");
+
+function setOpenRouterAspect(value) {
+  OPENROUTER_ASPECT_RATIO = value;
+  OPENROUTER_ASPECT_BUTTONS.forEach((btn) => btn.classList.toggle("active", btn.dataset.ratio === value));
+  updateOpenRouterDimensionPreview();
+}
+
+OPENROUTER_ASPECT_BUTTONS.forEach((btn) => {
+  btn.addEventListener("click", () => setOpenRouterAspect(btn.dataset.ratio || "auto"));
+});
+$("#openrouter-resolution").addEventListener("change", updateOpenRouterDimensionPreview);
+
+function updateOpenRouterDimensionPreview() {
+  const ratio = OPENROUTER_ASPECT_RATIO;
+  const resSelect = $("#openrouter-resolution");
+  const resHidden = resSelect.closest("label").hidden;
+  // 模型不支持 resolution 档位（如 muse-image）→ 画幅只按比例走
+  const longSide = resHidden ? 1024 : TIER_TO_SIDE[resSelect.value];
+  const presetRatio = (currentPresetMeta() || {}).preferred_aspect_ratio;
+  if (ratio === "auto") {
+    OPENROUTER_DIM_PREVIEW.textContent = presetRatio
+      ? `智能（当前预设指定 ${presetRatio}）：自动采用预设比例；手动选择其他比例不被无声覆盖`
+      : "智能：全身 2:3，胸像/头像/表情 3:4。以上按长边档位计算。";
+    return;
+  }
+  const parts = ratio.split(":").map((n) => Number(n.trim()));
+  if (parts.length !== 2 || parts.some((n) => !Number.isFinite(n) || n <= 0)) {
+    OPENROUTER_DIM_PREVIEW.textContent = "比例无效"; return;
+  }
+  const [w, h] = parts;
+  const shortSide = Math.max(64, Math.round((longSide * Math.min(w, h)) / Math.max(w, h) / 64) * 64);
+  const width = w >= h ? longSide : shortSide;
+  const height = w >= h ? shortSide : longSide;
+  OPENROUTER_DIM_PREVIEW.textContent = resHidden
+    ? `当前比例 ${ratio}（该模型不支持分辨率档位，实际像素由 provider 决定）`
+    : `当前输出 ${width} × ${height}px`;
+}
+
+function updateOpenRouterHints() {
+  const refs = selectedRefKinds();
+  const caps = state.openrouterCaps;
+  const noRefs = caps && caps.supports_references === false;
+  $("#openrouter-refs-hint").textContent = noRefs
+    ? `当前模型 ${caps.model} 只支持文生图（清单里没有 image 输入），参考图不会发送。`
+    : refs.length
+      ? `已选 ${refs.length} 张：${refs.join("、")}（依次对应 the first / second… reference image）`
+      : "未选参考图：按纯文生图处理，提示词里的参考图指向句会被移除。";
+  updateOpenRouterDimensionPreview();
+}
+
+/* 面板按模型清单（api-response.json）动态生成可用档位：
+   清单没声明 resolution / quality 的模型（如 muse-image）不显示对应选择器，
+   免得给出选了也不生效的选项。 */
+function applyOpenRouterCapabilities(caps) {
+  state.openrouterCaps = caps;
+  const resSelect = $("#openrouter-resolution");
+  const resField = resSelect.closest("label");
+  const allowed = new Set(caps.resolutions || []);
+  const options = Array.from(resSelect.options);
+  options.forEach((opt) => {
+    const providerValue = (TIER_TO_PROVIDER_RESOLUTION || {})[opt.value];
+    opt.hidden = allowed.size > 0 ? !allowed.has(providerValue) : false;
+  });
+  resField.hidden = allowed.size === 0;
+
+  const qSelect = $("#openrouter-quality");
+  const qField = qSelect.closest("label");
+  const qualities = caps.qualities || [];
+  if (qualities.length) {
+    qSelect.innerHTML = qualities
+      .map((q) => `<option value="${escapeHtml(q)}">${escapeHtml(q)}</option>`)
+      .join("");
+    qField.hidden = false;
+    qSelect.hidden = false;
+  } else {
+    qSelect.innerHTML = "";
+    qField.hidden = true;
+    qSelect.hidden = true;
+  }
+
+  const notes = [];
+  if (!resField.hidden) notes.push(`分辨率档：${caps.resolutions.join(" / ")}`);
+  if (qualities.length) notes.push(`质量档：${qualities.join(" / ")}`);
+  if (caps.supports_references === false) notes.push("该模型不支持参考图");
+  if (resField.hidden && !qualities.length && caps.supports_references !== false) {
+    notes.push("该模型只支持按比例出图（清单里没有分辨率/质量档）");
+  }
+  $("#openrouter-caps-hint").textContent = notes.join("｜");
+  updateOpenRouterHints();
+}
+
+const TIER_TO_PROVIDER_RESOLUTION = { "1k": "1K", "2k": "2K", "4k": "4K" };
+
+async function loadOpenRouterSettings() {
+  const settings = await api("/settings");
+  state.openrouterSettings = settings;
+  const model = (settings.openrouter && settings.openrouter.model) || settings.openrouter_default_model || "";
+  $("#openrouter-model-hint").textContent = model ? `当前模型：${model}` : "未配置模型";
+  if (model) {
+    try {
+      const caps = await api(`/openrouter/capabilities?model=${encodeURIComponent(model)}`);
+      applyOpenRouterCapabilities(caps);
+    } catch (err) {
+      state.openrouterCaps = null;
+    }
+  }
+}
+
+$("#btn-openrouter-queue").addEventListener("click", async () => {
+  if (!state.lastRun) return;
+  const run = state.lastRun.run_id;
+  const refs = selectedRefKinds();
+  setStatus($("#openrouter-result"), "推送中…（并发 4 路，30 条 1K 约 2 分钟）");
+  try {
+    const body = {
+      aspect_ratio: OPENROUTER_ASPECT_RATIO,
+      resolution: $("#openrouter-resolution").value,
+    };
+    const quality = $("#openrouter-quality").value;
+    if (quality) body.quality = quality;
+    if (refs.length) body.reference_kinds = refs;
+    const out = await api(`/runs/${run}/openrouter`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    const cost = (out.items || []).reduce((sum, e) => sum + (e.cost || 0), 0);
+    $("#openrouter-result").textContent =
+      `模型 ${out.model}｜成功 ${out.succeeded} / 失败 ${out.failed}｜合计 $${cost.toFixed(3)}\n` +
+      (out.items || []).map((e) => {
+        const head = `#${String(e.index).padStart(3, "0")} ${e.variant_id}`;
+        if (!e.ok) return `${head} × ${e.error}`;
+        return `${head} ✓${e.cost != null ? ` $${e.cost.toFixed(3)}` : ""}`;
+      }).join("\n");
+    // OpenRouter 是同步出图，产物已落盘 → 直接刷新图片墙
+    await Media.syncImages(run);
+    Media.setStatus(`图片 ${Media.currentData.completed}/${Media.currentData.items.length} 完成`);
+  } catch (err) {
+    setStatus($("#openrouter-result"), `失败：${err.message}`, true);
+  }
+});
+
+setOpenRouterAspect("auto");
 
 /* ---------- 主体档案 ---------- */
 function renderSubjectList() {
@@ -946,6 +1105,12 @@ async function loadSettings() {
     $("#set-llm-key").value = "";
     $("#set-llm-key").placeholder = settings.llm_configured ? "已配置（留空保持不变）" : "留空 = 环境变量 LLM_API_KEY";
     $("#set-negative").value = settings.default_negative_prompt || "";
+    $("#set-or-model").value = (settings.openrouter && settings.openrouter.model) || "";
+    $("#set-or-model").placeholder = settings.openrouter_default_model
+      ? `留空 = 环境变量 OP_IMAGE_MODEL（当前默认 ${settings.openrouter_default_model}）`
+      : "留空 = 环境变量 OP_IMAGE_MODEL";
+    $("#set-or-key").value = "";
+    $("#set-or-key").placeholder = settings.openrouter_configured ? "已配置（留空保持不变）" : "留空 = OP_IMAGE_API_KEY / LLM_API_KEY";
     const sizes = $("#settings-sizes");
     sizes.innerHTML = "";
     for (const [kind, size] of Object.entries(settings.image_sizes)) {
@@ -984,12 +1149,37 @@ $("#btn-settings-save").addEventListener("click", async () => {
     base_url: $("#set-llm-base").value.trim(),
     model: $("#set-llm-model").value.trim(),
   };
+  // openrouter 同理：model 空串 = 落库为空 = 回到 env；api_key 空串 = 保留已存值
+  patch.openrouter = {
+    model: $("#set-or-model").value.trim(),
+    api_key: $("#set-or-key").value.trim(),
+  };
   try {
     await api("/settings", { method: "PUT", body: JSON.stringify(patch) });
     setStatus($("#settings-status"), "设置已保存");
     await loadSettings();
+    // 模型改了 → 面板的可用档位要按新模型的能力重算
+    await loadOpenRouterSettings().catch(() => {});
   } catch (err) {
     setStatus($("#settings-status"), `保存失败：${err.message}`, true);
+  }
+});
+
+/* 拉取 OpenRouter 可用生图模型，填进模型输入框的 datalist。
+   refresh=1 强制重新拉取并覆盖本地缓存（模型换了要重新校对参数能力）。 */
+$("#btn-or-models-refresh").addEventListener("click", async () => {
+  const statusEl = $("#or-models-status");
+  setStatus(statusEl, "拉取中…");
+  try {
+    const data = await api("/openrouter/models?refresh=1");
+    const models = data.models || [];
+    const list = $("#or-model-options");
+    list.innerHTML = models.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`).join("");
+    setStatus(statusEl, `已刷新 ${models.length} 个模型`);
+    // 清单变了 → 当前模型的能力可能要重算
+    await loadOpenRouterSettings().catch(() => {});
+  } catch (err) {
+    setStatus(statusEl, `拉取失败：${err.message}`, true);
   }
 });
 

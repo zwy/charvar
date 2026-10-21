@@ -37,6 +37,34 @@ COMFYUI_WORKFLOWS_DIR=./data/workflows
 - 网页「生成 → 推送 ComfyUI」面板与 CLI 共用这套配置。
 - 推送前可选择 `智能 / 1:1 / 3:4 / 16:9 / 4:3 / 9:16 / 2:3 / 3:2 / 21:9` 与 `1K / 2K / 4K`；4K 长边上限 4096，短边取 64 倍数；`智能` 会按景别使用全身 `2:3`、胸像/头像/表情 `3:4`。
 
+## OpenRouter 生图（可选）
+
+除 ComfyUI 外还有第二条出图通路：直接调 OpenRouter 的在线生图 API，不用自建 workflow、不用排队。
+
+```env
+OP_IMAGE_API_KEY=sk-or-v1-******      # 不配则回退 LLM_API_KEY（同一家 OpenRouter）
+OP_IMAGE_MODEL=meta/muse-image        # 默认模型
+OP_IMAGE_TIMEOUT=300                 # 秒，可选
+```
+
+- 写 `.env`，或在网页「设置 → OpenRouter 生图」填模型 / Key（DB 设置优先于环境变量）。Key 读接口永远掩码，留空 = 用环境变量。
+- 网页「生成结果 → 推送 OpenRouter…」面板：画幅比例、参考图沿用生成页勾选。分辨率/质量档位按当前模型的能力动态显示（模型不支持就整个不显示，避免给出选了也不生效的选项）。
+- 模型清单在 `data/openrouter/api-response.json`（可点设置页「拉取模型清单」强制刷新）。**清单是参数能力的唯一标准**——每个模型的 `supported_parameters` 决定它能用哪些参数、用哪些枚举值。面板按它生成可选项。
+- 产物落在和 ComfyUI 同一个目录（`data/generated/{run_id}/original/`），图片墙 / contact sheet / 合成视频全部复用；单条「重新生成」按上次用的通路（provider）重放。
+
+限制（与 ComfyUI 的差异，先知道再用）：
+
+- **没有负向提示词**：OpenRouter Images API 无此字段，推送面板不提供负向词栏。
+- **画幅走 `size` 显式像素**：`size` 是 OpenRouter 层的通用参数，provider 实测都吃，且像素精确（qwen / tencent 原样输出）。各模型自己的 `aspect_ratio` 枚举不全（tencent 不含 `21:9`，会 400），所以按 ComfyUI 同一套 `dimensions_for()` 算出宽高后传 `size`。
+- **参数会被自动降级**：provider 拒收某个参数时（实测 grok 声明支持 `quality` 但 provider 拒收），自动摘掉该参数重试，并记进 `data/openrouter/capabilities.json`，下次同一模型直接不发了。`size` 被拒则退到 `aspect_ratio`（画幅从像素精确退化为比例枚举）。
+- **清单不是永远准**：`supported_parameters` 是目录级声明。muse-image 声明为空但实际接受 `size` / `aspect_ratio` / `resolution` / `output_format` / `seed`；反过来 grok 声明 `quality` 但 provider 拒收。**以清单为基准 + 探测修正**。
+- **参考图按顺序对应**：勾选的参考图依次对应提示词里的 the first / second… reference image；提示词里的 `<imageN>` 标签会被替换成序数词（不替换的话模型会把字面标签画进图里）。没有参考图时指向句整段摘掉。只支持文生图的模型（如 `recraft/recraft-v4.1-flash`，清单里没有 image 输入）不发送参考图。
+- **参考图统一压缩**：主体档案里的参考图普遍是 2.4–3.5MB 的全尺寸 PNG。统一压到长边 1536 / JPEG q88（带透明通道的先白底合成——直接转 RGB 会把透明变黑污染参考图），缓存到 `data/subjects/{id}/_ref_cache/`，**ComfyUI 上传和 OpenRouter 发送共用这一份**。实测 3460KB → 195KB，请求体 517KB → 283KB，出图耗时基本不变。
+- **seed 不保证确定性**：同一 seed 两次请求可能返回不同的图（provider 侧不保证），「重新生成」不保证同种子出同图。
+- **没有排队**：一次请求内并发 4 路同步出图。单价约 **$0.01/张**（muse-image）、$0.024/张（hy-image）；30 条约 $0.3。
+- **分辨率档位可能无效**：muse-image 接受 `resolution` 但输出像素不变（1K 与 4K 同为 1920×1280），所以面板按清单隐藏该档位——清单没声明就不发。
+- **输出格式随模型**：muse-image 默认返回 webp（charvar 全链路已支持），ComfyUI 产物是 png。
+
 ## LLM 配置（可选）
 
 「LLM 优化」生成模式与主体图「一键 AI 起草」需要一个 OpenAI 规范 chat completions 的 API；不配置则网页两处 LLM 功能不可用（经典模板模式不受影响）。
@@ -170,6 +198,9 @@ YAML 预设放 `presets/*.yaml`，两种类型：
 | GET | `/runs`、`/runs/{run_id}`、`DELETE /runs/{run_id}` | 历史记录 |
 | GET | `/runs/{run_id}/export?format=txt\|jsonl\|captions_zip` | 导出（`&download=1` 触发下载） |
 | GET/POST | `/runs/{run_id}/comfyui` | 查看 ComfyUI 提交记录 / 逐条入队（`workload` + 可选 `wait`） |
+| POST | `/runs/{run_id}/openrouter` | 推送 OpenRouter 在线生图（`aspect_ratio` / `resolution` / `quality` / `reference_kinds` / `model`），并发 4 路同步出图 |
+| GET | `/openrouter/models` | OpenRouter 可用生图模型清单（`?refresh=1` 强制重新拉取） |
+| GET | `/openrouter/capabilities` | 某模型的参数能力（按模型清单推导，供面板动态生成可选项） |
 | GET | `/comfy/workflows`、`/comfy/status` | workflows 目录清单 / ComfyUI 连接检查 |
 | POST | `/runs/{run_id}/sync-outputs` | 按 ComfyUI history 同步输出图，生成缩略图和 contact sheet |
 | GET | `/runs/{run_id}/images` | 图片墙数据（本地原图/缩略图/sheet 状态） |

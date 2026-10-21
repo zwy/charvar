@@ -115,6 +115,26 @@ def make_thumb(source: Path, destination: Path, max_side: int = _THUMB_MAX) -> P
     return destination
 
 
+def save_run_image(run_id: str, item_index: int, data: bytes, suffix: str) -> Path:
+    """把内存里的图片 bytes 落成 run 资产（OpenRouter 通路用）。
+
+    产物落 ``original/{item_index:06d}{suffix}`` 并补缩略图，与 ComfyUI
+    同步下来的图同目录同命名 → 图片墙 / contact sheet / 合成视频全部复用。
+    同一条目换格式时清掉旧后缀文件（否则 image_entry 按固定后缀序取图会取到旧图）。
+    """
+    if not suffix.startswith("."):
+        suffix = f".{suffix}"
+    target = original_dir(run_id) / f"{item_index:06d}{suffix}"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(data)
+    for other in (".png", ".jpg", ".jpeg", ".webp"):
+        candidate = original_dir(run_id) / f"{item_index:06d}{other}"
+        if other != suffix and candidate.exists():
+            candidate.unlink()
+    make_thumb(target, thumb_path(run_id, item_index))
+    return target
+
+
 def _draw_label(image: Image.Image, label: str) -> Image.Image:
     label_box = Image.new("RGB", (image.width, _SHEET_LABEL_HEIGHT), (24, 32, 42))
     draw = ImageDraw.Draw(label_box)

@@ -193,9 +193,9 @@ def test_generate_edit_uses_uploaded_sheet(client, tmp_path, monkeypatch):
     assert resp.status_code == 200, resp.text
     slot = resp.json()
     assert slot["status"] == "ready" and slot["source"] == "generated"
-    assert uploads == ["demo_witch_character_sheet.png"]
+    assert uploads == ["demo_witch_character_sheet.jpg"]
     injected = queued[0]["prompt"]
-    assert injected["470"]["inputs"]["image"] == "demo_witch_character_sheet.png"
+    assert injected["470"]["inputs"]["image"] == "demo_witch_character_sheet.jpg"
     assert injected["11"]["inputs"]["text"] == "chest-up portrait of the same character"
     assert injected["47"]["inputs"]["filename_prefix"] == "demo_witch_000_headshot"
     assert (paths.subjects_dir() / "demo_witch" / "headshot.png").exists()
@@ -209,7 +209,7 @@ def test_generate_edit_uses_uploaded_sheet(client, tmp_path, monkeypatch):
         json={"prompt": "v2", "seed": 4},
     )
     assert resp2.status_code == 200
-    assert uploads == ["demo_witch_character_sheet.png", "demo_witch_character_sheet.png"]
+    assert uploads == ["demo_witch_character_sheet.jpg", "demo_witch_character_sheet.jpg"]
 
 
 def test_generate_sheet_uses_t2i_and_settings_size(client, tmp_path, monkeypatch):
@@ -278,7 +278,7 @@ def test_generate_batch(client, tmp_path, monkeypatch):
     assert resp.status_code == 200
     slots = resp.json()["slots"]
     assert {s["kind"]: s["status"] for s in slots} == {"headshot": "ready", "front": "ready"}
-    assert uploads == ["demo_witch_character_sheet.png"]  # 批量只上传一次参考图
+    assert uploads == ["demo_witch_character_sheet.jpg"]  # 批量只上传一次参考图
     # character_sheet 不属于批量（edit）类型
     bad = client.post("/subjects/demo_witch/images/generate-batch", json={"kinds": ["character_sheet"]})
     assert bad.status_code == 400
@@ -432,7 +432,7 @@ def test_generate_batch_injects_per_kind_size(client, tmp_path, monkeypatch):
 
     resp = client.post("/subjects/demo_witch/images/generate-batch", json={"kinds": ["headshot", "front"], "seed": 5})
     assert resp.status_code == 200, resp.text
-    assert uploads == ["demo_witch_character_sheet.png"]
+    assert uploads == ["demo_witch_character_sheet.jpg"]
     head, front = queued[0]["prompt"], queued[1]["prompt"]
     assert head["55"]["inputs"]["width"] == 768 and head["55"]["inputs"]["height"] == 1024
     assert front["55"]["inputs"]["width"] == 704 and front["55"]["inputs"]["height"] == 1024

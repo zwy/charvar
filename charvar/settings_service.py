@@ -31,11 +31,23 @@ class LlmSettings(BaseModel):
     api_key: str = ""  # 空串 = 用 env LLM_API_KEY；读接口永远掩码
 
 
+class OpenRouterSettings(BaseModel):
+    """OpenRouter 在线生图配置。
+
+    - model 空串 = 用 env OP_IMAGE_MODEL（再缺省 meta/muse-image）
+    - api_key 空串 = 用 env OP_IMAGE_API_KEY，再缺省回退 LLM_API_KEY（同一家 OpenRouter）
+    """
+
+    model: str = ""
+    api_key: str = ""  # 读接口永远掩码
+
+
 class AppSettings(BaseModel):
     comfy_t2i_workflow: str = _DEFAULT_WORKFLOW_T2I
     comfy_edit_workflow: str = _DEFAULT_WORKFLOW_EDIT
     image_sizes: dict[str, ImageSize] = Field(default_factory=dict)
     llm: LlmSettings = Field(default_factory=LlmSettings)
+    openrouter: OpenRouterSettings = Field(default_factory=OpenRouterSettings)
     default_negative_prompt: str = ""
 
 
@@ -60,11 +72,16 @@ def get_settings(conn: sqlite3.Connection) -> AppSettings:
                     continue
     llm_raw = data.get("llm")
     llm = LlmSettings.model_validate(llm_raw) if isinstance(llm_raw, dict) else LlmSettings()
+    or_raw = data.get("openrouter")
+    openrouter = (
+        OpenRouterSettings.model_validate(or_raw) if isinstance(or_raw, dict) else OpenRouterSettings()
+    )
     return AppSettings(
         comfy_t2i_workflow=str(data.get("comfy_t2i_workflow") or _DEFAULT_WORKFLOW_T2I),
         comfy_edit_workflow=str(data.get("comfy_edit_workflow") or _DEFAULT_WORKFLOW_EDIT),
         image_sizes=sizes,
         llm=llm,
+        openrouter=openrouter,
         default_negative_prompt=str(data.get("default_negative_prompt") or ""),
     )
 
@@ -74,16 +91,35 @@ def save_settings(conn: sqlite3.Connection, patch: dict) -> AppSettings:
 
     llm 三项整行覆盖，但 api_key 空串 = 保留已存值：
     读接口永远掩码不回显 key，前端无法回填，空串只能是「没改」。
+    openrouter 同理。
     """
     for key, value in patch.items():
-        if key not in ("comfy_t2i_workflow", "comfy_edit_workflow", "image_sizes", "llm", "default_negative_prompt"):
+        if key not in (
+            "comfy_t2i_workflow",
+            "comfy_edit_workflow",
+            "image_sizes",
+            "llm",
+            "openrouter",
+            "default_negative_prompt",
+        ):
             continue
-        if key == "llm" and isinstance(value, dict):
+        if key in ("llm", "openrouter") and isinstance(value, dict):
             value = {**value}
             if not str(value.get("api_key") or "").strip():
-                value["api_key"] = get_settings(conn).llm.api_key
+                value["api_key"] = getattr(get_settings(conn), key).api_key
         storage.set_setting(conn, key, value)
     return get_settings(conn)
+
+
+def openrouter_overrides(conn: sqlite3.Connection) -> dict[str, str]:
+    """DB 里非空的 OpenRouter 配置（model / api_key），供客户端覆盖 env。"""
+    settings = get_settings(conn)
+    overrides: dict[str, str] = {}
+    for key in ("model", "api_key"):
+        value = getattr(settings.openrouter, key)
+        if value.strip():
+            overrides[key] = value.strip()
+    return overrides
 
 
 def llm_overrides(conn: sqlite3.Connection) -> dict[str, str] | None:

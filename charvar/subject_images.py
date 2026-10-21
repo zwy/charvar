@@ -19,7 +19,7 @@ from typing import Any, Literal
 from PIL import Image
 from pydantic import BaseModel
 
-from charvar import assets, paths, storage
+from charvar import assets, paths, reference_images, storage
 from charvar.exporters import comfyui as comfyui_exporter
 from charvar.models import GenerateResult, PromptItem, SubjectProfile
 
@@ -96,6 +96,13 @@ def _original_file(subject_id: str, kind: str) -> Path | None:
         if candidate.exists():
             return candidate
     return None
+
+
+def find_reference_file(subject_id: str, kind: str) -> Path | None:
+    """按 kind 找主体图原文件（OpenRouter 参考图通路用；找不到返 None）。"""
+    if kind not in IMAGE_KINDS:
+        return None
+    return _original_file(subject_id, kind)
 
 
 def thumb_file(subject_id: str, kind: str) -> Path:
@@ -297,10 +304,13 @@ def generate_subject_image(
         resolution = resolution or size.resolution
     sheet_file = _require_ready_sheet(conn, subject.id) if kind in SHEET_DEPENDENT_KINDS else None
     if sheet_file is not None:
+        prepared = reference_images.prepared_reference(
+            sheet_file, subject_dir(subject.id), "character_sheet"
+        )
         remote = comfyui_exporter.upload_image(
             paths.comfy_base_url(comfy_url),
-            sheet_file,
-            remote_name=f"{subject.id}_character_sheet{sheet_file.suffix}",
+            prepared,
+            remote_name=f"{subject.id}_character_sheet{prepared.suffix}",
         )
         overrides["image"] = remote
     if settings.default_negative_prompt:
@@ -382,10 +392,13 @@ def generate_subject_images_batch(
     settings = settings or _fallback_settings(conn)
     workflow, mapping = comfyui_exporter.load_workflow_pair(settings.comfy_edit_workflow)
     sheet_file = _require_ready_sheet(conn, subject.id)
+    prepared = reference_images.prepared_reference(
+        sheet_file, subject_dir(subject.id), "character_sheet"
+    )
     remote = comfyui_exporter.upload_image(
         paths.comfy_base_url(comfy_url),
-        sheet_file,
-        remote_name=f"{subject.id}_character_sheet{sheet_file.suffix}",
+        prepared,
+        remote_name=f"{subject.id}_character_sheet{prepared.suffix}",
     )
     overrides: dict[str, Any] = {"image": remote}
     if settings.default_negative_prompt:

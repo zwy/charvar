@@ -21,6 +21,10 @@
 - 模板渲染只允许 `charvar.composer.render`（缺失占位符保留原样并记 warning），禁止 eval / Jinja 执行任意代码。
 - ComfyUI 节点 id 一律来自用户提供的 mapping.json，不许硬编码。
 - ComfyUI 请求必须 bypass 代理（exporter 里 httpx trust_env=False）：本机 shell 的 ALL_PROXY 会劫持内网地址。
+- OpenRouter 生图（`charvar/openrouter_image.py`）同样 bypass 代理；画幅必须走 `size` 显式像素（provider 的 `aspect_ratio` 枚举不含 21:9，会 400）；seed 必须收敛到 ≤ 2^53-1（charvar 的 subseed 是 64 位 sha256，不收敛直接 400）。
+- OpenRouter 生图的参数以 `data/openrouter/api-response.json` 里每个模型的 `supported_parameters` 为准（`resolution` / `quality` / `aspect_ratio` 的枚举值都从那里取，模型没声明就不发）。清单是目录级声明、未必准（muse-image 声明为空但实际接受 `size`；grok 声明 `quality` 但 provider 拒收），所以 provider 拒收参数时自动降级重试并把结果记进 `data/openrouter/capabilities.json`。
+- 参考图统一走 `charvar/reference_images.py` 预处理（长边 1536 / JPEG q88 / 透明白底合成），ComfyUI 上传与 OpenRouter 发送共用同一份缓存 —— 别再写新的压缩逻辑。
+- `web/static/style.css` 里 `label { display: flex }` 会盖掉浏览器默认的 `[hidden] { display: none }`，所以有 `[hidden] { display: none !important }` 这条兜底。新增按条件显隐的控件时，`<select>` 自身带 `hidden` 的话，JS 要同时清掉 select 和它外层 label 上的 `hidden`（`applyOpenRouterCapabilities` 就是这么做的）。
 - `.env`（COMFYUI_HOST/PORT 等）不进 git；改 .env 后要重启 web 服务。
 - 主体档案的锁定项必须是英文：`style_lock` / `identity_lock` / `outfit_lock` 每条会被拼成一句 `Maintain ...` 进提示词，中文会中英夹杂。
 - 主体档案的 Markdown 模板上限 24,000 字符（LLM 输入截断阈值，`charvar.llm_prompts._TEMPLATE_MAX_CHARS`）；超长模板尾部会被静默截掉，别指望模型看到。

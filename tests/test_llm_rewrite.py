@@ -256,9 +256,9 @@ def test_queue_with_reference_kinds(client, tmp_path, monkeypatch):
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["succeeded"] == 30
-    assert uploads == ["demo_witch_character_sheet.png"]  # 30 条共享一次上传
+    assert uploads == ["demo_witch_character_sheet.jpg"]  # 30 条共享一次上传
     for payload in queued:
-        assert payload["prompt"]["470"]["inputs"]["image"] == "demo_witch_character_sheet.png"
+        assert payload["prompt"]["470"]["inputs"]["image"] == "demo_witch_character_sheet.jpg"
         assert payload["prompt"]["11"]["inputs"]["text"].startswith("Rewritten ")
 
 
@@ -329,11 +329,11 @@ def test_queue_multi_reference_mapping_1_to_4(client, tmp_path, monkeypatch):
     assert resp.status_code == 200, resp.text
     assert resp.json()["succeeded"] == 30
     # 只上传选中的 2 张，顺序与参考说明一致
-    assert uploads == ["demo_witch_character_sheet.png", "demo_witch_headshot.png"]
+    assert uploads == ["demo_witch_character_sheet.jpg", "demo_witch_headshot.jpg"]
     for payload in queued:
         wf = payload["prompt"]
-        assert wf["514"]["inputs"]["image"] == "demo_witch_character_sheet.png"
-        assert wf["515"]["inputs"]["image"] == "demo_witch_headshot.png"
+        assert wf["514"]["inputs"]["image"] == "demo_witch_character_sheet.jpg"
+        assert wf["515"]["inputs"]["image"] == "demo_witch_headshot.jpg"
         assert wf["459:474"]["inputs"]["images.image_1"] == ["514", 0]
         assert wf["459:474"]["inputs"]["images.image_2"] == ["515", 0]
         # 未选中的槽位整块摘除，不带默认图

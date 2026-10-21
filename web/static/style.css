@@ -10,6 +10,9 @@
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 * { box-sizing: border-box; }
+/* 作者样式里的 display（label{flex} 等）会盖掉浏览器默认的 [hidden]{display:none}，
+   导致 hidden 掉的控件照样显示 —— 显式声明这条优先级。 */
+[hidden] { display: none !important; }
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;

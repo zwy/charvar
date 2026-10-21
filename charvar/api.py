@@ -6,6 +6,7 @@ web/app.py 负责启动（uvicorn），与其他本机工具栈一致。
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -19,6 +20,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from charvar import __version__, assets, llm, paths, settings_service, storage, subject_images
+from charvar import openrouter_image
+from charvar import reference_images
 from charvar.assets import ensure_thumb, resolve_run_asset, sheet_path, thumb_path
 
 from charvar.composer import expand_matrix, generate as compose_generate
@@ -28,7 +31,7 @@ from charvar.exporters import jsonl as jsonl_exporter
 from charvar.exporters import txt as txt_exporter
 from charvar.llm_compose import generate_llm
 from charvar.llm_prompts import DRAFT_SCHEMA, draft_subject_image_prompt_messages
-from charvar.models import GenerateRequest, GenerateResult, SubjectProfile
+from charvar.models import GenerateRequest, GenerateResult, PromptItem, SubjectProfile
 from charvar.preset_loader import (
     ListPreset,
     MatrixPreset,
@@ -44,6 +47,10 @@ EXPORT_FORMATS = ("txt", "jsonl", "captions_zip", "captions")
 
 _TEMPLATE_MAX_BYTES = 200_000
 
+# OpenRouter 批量生图的并发路数。实测单张 1K 约 14s、4K 约 45s；
+# 30 条 4 路并发约 2 分钟（1K），比串行（8 分钟）可接受。
+_OPENROUTER_CONCURRENCY = 4
+
 
 class ComfyQueueRequest(BaseModel):
     workload: str | None = Field(
@@ -57,6 +64,22 @@ class ComfyQueueRequest(BaseModel):
     resolution: Literal["1k", "2k", "4k"] | None = None
     overrides: dict[str, Any] = Field(default_factory=dict)
     reference_kinds: list[str] = Field(default_factory=list, description="主体图参考（LLM 模式），按序注入 image/image2/…")
+
+
+class OpenRouterQueueRequest(BaseModel):
+    """推送 OpenRouter 在线生图（与 ComfyUI 入队同一套语义）。
+
+    画幅换算成显式像素（``size``）——``size`` 是 OpenRouter 层的通用参数，
+    比各模型自己的 ``aspect_ratio`` 枚举更可靠（枚举不含 charvar 支持的 21:9）。
+    ``resolution`` / ``quality`` 只在模型清单声明支持时才真正生效。
+    """
+
+    aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
+    resolution: Literal["1k", "2k", "4k"] | None = None
+    reference_kinds: list[str] = Field(default_factory=list, description="主体图参考，按序对应提示词里的 the first/second… reference image")
+    model: str | None = Field(default=None, description="覆盖默认模型（OP_IMAGE_MODEL / 设置页）")
+    seed: int | None = Field(default=None, description="覆盖种子；缺省用条目自带的稳定子种子")
+    quality: str | None = Field(default=None, description="质量档；只在模型清单声明 quality 时生效")
 
 
 class RunRegenerateRequest(BaseModel):
@@ -431,6 +454,9 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         data = settings.model_dump()
         data["llm"]["api_key"] = ""
         data["llm_configured"] = bool(settings.llm.api_key) or bool(llm.get_llm_config().get("api_key"))
+        data["openrouter"]["api_key"] = ""
+        data["openrouter_configured"] = bool(openrouter_image.resolve_api_key())
+        data["openrouter_default_model"] = openrouter_image.resolve_model()
         return data
 
     @app.put("/settings")
@@ -440,6 +466,9 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         data = settings.model_dump()
         data["llm"]["api_key"] = ""
         data["llm_configured"] = bool(settings.llm.api_key) or bool(llm.get_llm_config().get("api_key"))
+        data["openrouter"]["api_key"] = ""
+        data["openrouter_configured"] = bool(openrouter_image.resolve_api_key())
+        data["openrouter_default_model"] = openrouter_image.resolve_model()
         return data
 
     # ---- 生成 ----
@@ -657,19 +686,19 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             # 按选择顺序对应 <image1>..<image4>；未选中的槽位由 mapping on_missing 从 payload 摘除
             base = paths.comfy_base_url(comfy_url)
             seen: list[str] = []
+            subject_dir = subject_images.subject_dir(result.subject_id)
             for kind in reference_kinds:
                 if kind not in subject_images.IMAGE_KINDS or kind in seen:
                     continue
                 seen.append(kind)
-                for suffix in (".png", ".jpg", ".jpeg", ".webp"):
-                    local = subject_images.subject_dir(result.subject_id) / f"{kind}{suffix}"
-                    if local.exists():
-                        break
-                else:
+                local = subject_images.find_reference_file(result.subject_id, kind)
+                if local is None:
                     raise HTTPException(400, f"参考图不存在：{kind}（请先在主体档案里生成或上传）")
+                # 上传压缩版（长边 1536 / JPEG q88），与 OpenRouter 通路共用同一份
+                prepared = reference_images.prepared_reference(local, subject_dir, kind)
                 try:
                     remote = comfyui_exporter.upload_image(
-                        base, local, remote_name=f"{result.subject_id}_{kind}{local.suffix}"
+                        base, prepared, remote_name=f"{result.subject_id}_{kind}{prepared.suffix}"
                     )
                 except (httpx.HTTPError, ValueError) as exc:
                     raise HTTPException(502, f"上传参考图到 ComfyUI 失败：{exc}") from exc
@@ -720,6 +749,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             )
             # 快照本次最终生效的入队参数：图片墙单条「重新生成」原样重放（种子除外）
             storage.save_queue_settings(conn, run_id, {
+                "provider": "comfyui",
                 "workload": workload_name,
                 "negative_prompt": req.negative_prompt,
                 "aspect_ratio": req.aspect_ratio,
@@ -736,6 +766,206 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             "succeeded": ok_count,
             "failed": len(submissions) - ok_count,
             "submissions": submissions,
+        }
+
+    def _openrouter_reference_paths(
+        subject_id: str, reference_kinds: list[str]
+    ) -> list[Path]:
+        """按勾选顺序取主体图（顺序 = 提示词里的 the first/second… reference image）。
+
+        走预处理过的压缩版（长边 1536 / JPEG q88），与 ComfyUI 上传同一份 ——
+        原始 PNG 有 2.4–3.5MB，转 data URL 会让请求体涨到十几 MB。
+        """
+        paths: list[Path] = []
+        seen: set[str] = set()
+        subject_dir = subject_images.subject_dir(subject_id)
+        for kind in reference_kinds:
+            if kind not in subject_images.IMAGE_KINDS or kind in seen:
+                continue
+            seen.add(kind)
+            local = subject_images.find_reference_file(subject_id, kind)
+            if local is None:
+                raise HTTPException(400, f"参考图不存在：{kind}（请先在主体档案里生成或上传）")
+            paths.append(reference_images.prepared_reference(local, subject_dir, kind))
+        return paths
+
+    def _openrouter_prompt(item: PromptItem, reference_paths: list[Path]) -> str:
+        """条目提示词 → OpenRouter 提示词。
+
+        OpenRouter 没有「标签→图片」绑定语义，参考图靠 input_references 的顺序传，
+        所以提示词里的 ``<imageN>`` 要换成序数词（the first reference image…）。
+        一张参考图都没有时，指向子句整段摘掉（留着会变成 "as ." 这种残句）。
+        """
+        if reference_paths:
+            return openrouter_image.rewrite_reference_tags(item.prompt)
+        return openrouter_image.strip_reference_tags(item.prompt)
+
+    def _openrouter_generate_one(
+        result: GenerateResult,
+        item: PromptItem,
+        *,
+        aspect_ratio: str | None,
+        resolution: str | None,
+        reference_paths: list[Path],
+        model: str,
+        api_key: str | None,
+        seed: int | None,
+        quality: str | None = None,
+    ) -> dict[str, Any]:
+        """生成一条并落盘；返回 {index, variant_id, ok, status, error?, cost?, generation_id?}。"""
+        entry: dict[str, Any] = {
+            "index": item.index,
+            "variant_id": item.variant_id,
+            "ok": False,
+            "status": "error",
+        }
+        try:
+            ratio = aspect_ratio or str((item.meta or {}).get("preferred_aspect_ratio") or "")
+            width, height = comfyui_exporter.dimensions_for_item(
+                ratio or "auto", resolution, item
+            )
+            effective_seed = seed if seed is not None else (item.meta or {}).get("subseed")
+            op_result = openrouter_image.generate_image(
+                prompt=_openrouter_prompt(item, reference_paths),
+                width=width,
+                height=height,
+                model=model,
+                api_key=api_key,
+                seed=int(effective_seed) if effective_seed is not None else None,
+                reference_paths=reference_paths,
+                aspect_ratio=ratio or None,
+                resolution=resolution,
+                quality=quality,
+            )
+            if not op_result.images:
+                raise openrouter_image.OpenRouterImageError("OpenRouter 未返回图片")
+            data = op_result.images[0]
+            suffix = openrouter_image.sniff_image_ext(data)
+            assets.save_run_image(result.run_id, item.index, data, suffix)
+            entry.update(
+                {
+                    "ok": True,
+                    "status": "done",
+                    "cost": op_result.cost,
+                    "generation_id": op_result.generation_id,
+                    "model": model,
+                }
+            )
+        except openrouter_image.OpenRouterImageError as exc:
+            entry["error"] = str(exc)
+        except Exception as exc:  # noqa: BLE001 - 单条失败不中断整批
+            entry["error"] = f"{type(exc).__name__}: {exc}"
+        return entry
+
+    def _submit_to_openrouter(
+        conn,
+        result: GenerateResult,
+        *,
+        aspect_ratio: str | None,
+        resolution: str | None,
+        reference_kinds: list[str],
+        model: str | None,
+        seed: int | None,
+        quality: str | None = None,
+    ) -> tuple[str, list[dict[str, Any]]]:
+        """批量走 OpenRouter 生图：并发 4 路，逐条落盘 + 落库。
+
+        单条失败不中断整批（与 ComfyUI 批量入队同一语义）。
+        """
+        overrides = settings_service.openrouter_overrides(conn)
+        effective_model = openrouter_image.resolve_model(model or overrides.get("model"))
+        api_key = openrouter_image.resolve_api_key(overrides.get("api_key"))
+        reference_paths = _openrouter_reference_paths(result.subject_id, reference_kinds)
+
+        entries: list[dict[str, Any]] = []
+        with ThreadPoolExecutor(max_workers=_OPENROUTER_CONCURRENCY) as pool:
+            futures = {
+                pool.submit(
+                    _openrouter_generate_one,
+                    result,
+                    item,
+                    aspect_ratio=aspect_ratio,
+                    resolution=resolution,
+                    reference_paths=reference_paths,
+                    model=effective_model,
+                    api_key=api_key,
+                    seed=seed,
+                    quality=quality,
+                ): item
+                for item in result.items
+            }
+            for future in as_completed(futures):
+                entries.append(future.result())
+        entries.sort(key=lambda e: int(e["index"]))
+        storage.save_openrouter_images(conn, result.run_id, entries)
+        return effective_model, entries
+
+    @app.post("/runs/{run_id}/openrouter")
+    def api_run_openrouter(run_id: str, req: OpenRouterQueueRequest) -> dict[str, Any]:
+        with _db() as conn:
+            result = storage.get_run(conn, run_id)
+            if result is None:
+                raise HTTPException(404, f"生成记录不存在：{run_id}")
+            model, entries = _submit_to_openrouter(
+                conn,
+                result,
+                aspect_ratio=req.aspect_ratio,
+                resolution=req.resolution,
+                reference_kinds=req.reference_kinds,
+                model=req.model,
+                seed=req.seed,
+                quality=req.quality,
+            )
+            # 快照本次最终生效的入队参数：图片墙单条「重新生成」原样重放（种子除外）
+            storage.save_queue_settings(conn, run_id, {
+                "provider": "openrouter",
+                "model": model,
+                "aspect_ratio": req.aspect_ratio,
+                "resolution": req.resolution,
+                "reference_kinds": list(req.reference_kinds),
+                "quality": req.quality,
+            })
+        ok_count = sum(1 for e in entries if e.get("ok"))
+        return {
+            "run_id": run_id,
+            "provider": "openrouter",
+            "model": model,
+            "succeeded": ok_count,
+            "failed": len(entries) - ok_count,
+            "items": entries,
+        }
+
+    @app.get("/openrouter/models")
+    def api_openrouter_models(refresh: bool = False) -> dict[str, Any]:
+        """模型清单。``refresh=true`` 强制重新拉取并覆盖本地缓存。
+
+        默认读本地缓存（``data/openrouter/api-response.json``），模型换了才需要
+        手动刷新一次 —— 清单是参数能力的唯一标准来源。
+        """
+        try:
+            if refresh:
+                openrouter_image.list_models(force_refresh=True)
+            return {"models": openrouter_image.model_choices()}
+        except openrouter_image.OpenRouterImageError as exc:
+            raise HTTPException(502, f"读 OpenRouter 模型清单失败：{exc}") from exc
+
+    @app.get("/openrouter/capabilities")
+    def api_openrouter_capabilities(model: str) -> dict[str, Any]:
+        """某模型的能力：清单声明 + 探测缓存。
+
+        前端据此动态生成面板（画幅档位 / 质量档 / 参考图开关）——
+        声明为空或缺项的模型（如 muse-image）走实际能力，而不是硬编码。
+        """
+        caps = openrouter_image.model_capabilities(model)
+        return {
+            "model": caps.model_id,
+            "declared": sorted(caps.declared),
+            "allowed": sorted(caps.allowed),
+            "rejected": sorted(caps.rejected),
+            "aspect_ratios": list(caps.aspect_ratios),
+            "resolutions": list(caps.resolutions),
+            "qualities": list(caps.qualities),
+            "supports_references": caps.supports_refs,
         }
 
     @app.post("/runs/{run_id}/regenerate")
@@ -760,6 +990,47 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             meta = item.meta or {}
             # 快照缺失（老 run）回退：LLM 模式生成时 meta 已带 reference_kinds
             reference_kinds = list(queued.get("reference_kinds") or []) or list(meta.get("reference_kinds") or [])
+
+            if queued.get("provider") == "openrouter":
+                # OpenRouter 通路：同一提示词 + 同一画幅/参考图，只换种子重出一张。
+                # provider 不保证同种子出同图（实测两次同参请求返回不同图），
+                # 种子只是尽量可复现。
+                overrides = settings_service.openrouter_overrides(conn)
+                model = openrouter_image.resolve_model(queued.get("model") or overrides.get("model"))
+                entry = _openrouter_generate_one(
+                    single,
+                    item,
+                    aspect_ratio=queued.get("aspect_ratio"),
+                    resolution=queued.get("resolution"),
+                    reference_paths=_openrouter_reference_paths(result.subject_id, reference_kinds),
+                    model=model,
+                    api_key=openrouter_image.resolve_api_key(overrides.get("api_key")),
+                    seed=seed,
+                    quality=queued.get("quality"),
+                )
+                if not entry.get("ok"):
+                    raise HTTPException(502, f"重新生成失败：{entry.get('error') or '未知错误'}")
+                item.meta = {
+                    **meta,
+                    "regen": {
+                        "provider": "openrouter",
+                        "seed": seed,
+                        "generation_id": entry.get("generation_id"),
+                        "submitted_at": storage.utcnow(),
+                    },
+                }
+                storage.save_run(conn, result)
+                return {
+                    "ok": True,
+                    "run_id": run_id,
+                    "item_index": item.index,
+                    "variant_id": item.variant_id,
+                    "seed": seed,
+                    "provider": "openrouter",
+                    "model": model,
+                    "cost": entry.get("cost"),
+                }
+
             try:
                 workload_name, submissions = _submit_to_comfy(
                     conn,
