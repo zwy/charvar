@@ -48,7 +48,11 @@
 - 档案图片有两条生图通路：ComfyUI（`subject_images.generate_subject_image`）与 OpenRouter（`subject_images.generate_subject_image_openrouter`）。两者同语义：两步流程（character_sheet 先出，其余 4 种以它为参考图）、同槽位状态机、同落盘位置（`data/subjects/{id}/{kind}.{ext}`）。产出哪个后端记在 `subject_images.provider` 列（`comfyui` / `openrouter` / 空=上传）。
 - `web/static/style.css` 里 `label { display: flex }` 会盖掉浏览器默认的 `[hidden] { display: none }`，所以有 `[hidden] { display: none !important }` 这条兜底。新增按条件显隐的控件时，`<select>` 自身带 `hidden` 的话，JS 要同时清掉 select 和它外层 label 上的 `hidden`（`applyOpenRouterCapabilities` 就是这么做的）。
 - `.env`（COMFYUI_HOST/PORT 等）不进 git；改 .env 后要重启 web 服务。
-- 主体档案的锁定项必须是英文：`style_lock` / `identity_lock` / `outfit_lock` 每条会被拼成一句 `Maintain ...` 进提示词，中文会中英夹杂。
+- 主体档案的锁定项中英文皆可（2026-10-22 放开，此前只许英文）：`style_lock` / `identity_lock` / `outfit_lock`
+  每条会被拼成一句 `Maintain ...` 进提示词——classic 模式下**原样进提示词**（中文条目就是中文进图，
+  Qwen-Image / OpenRouter 这类双语或 LLM 系模型没问题）；LLM 模式下锁定项只作为 LLM 输入、由
+  LLM 重写成英文，语言无所谓。目标后端要纯英文提示词时（SD 类老模型）建议仍写英文。
+  导入/校验工具不得把非 ASCII 锁定项当错误。
 - 主体档案的 Markdown 模板上限 24,000 字符（LLM 输入截断阈值，`charvar.llm_prompts._TEMPLATE_MAX_CHARS`）；超长模板尾部会被静默截掉，别指望模型看到。
 - 临时生图（`charvar/adhoc.py`）的红线：参考图槽位名从 mapping 读（`image`/`image2`/…），不许写死节点 id；ComfyUI 上传的 remote_name 必须带唯一前缀（`upload_image` 发 `overwrite: true`，同名会互相覆盖 → 队列里的旧 prompt 取到新图）；`--out` 指定的文件后缀与内容必须一致（不一致时转格式，别让后缀骗人）；adhoc 不读 `settings.image_sizes`（那是主体档案槽位的尺寸）；不引入随机源（seed 由调用方显式给）。
 - 临时生图的 run_id 直接拼进文件路径（`/adhoc/{run_id}/image` 直接 serve 磁盘文件）：
