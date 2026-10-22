@@ -37,10 +37,10 @@
 | `--prompt-file` | str | — | 提示词文件路径；`-` 表示读 stdin |
 | `--ref` | list | — | 参考图路径，可重复，最多 4 张 |
 | `--aspect` | str | `3:4` | 同上 |
-| `--resolution` | str | `1k` | 同上 |
+| `--resolution` | str | `1k` | 1k/2k 或模型声明枚举值（512/1K/1.5K/2K/4K…）；空串 = 用设置页/env 的模式默认 |
 | `--seed` | int | `0` | 采样种子 |
-| `--model` | str | — | 模型 slug（默认 `OP_IMAGE_MODEL` 或设置页） |
-| `--quality` | str | — | 质量档（模型声明支持 quality 才生效） |
+| `--model` | str | — | 模型 slug（默认按模式取 `OP_IMAGE_T2I_MODEL` / `OP_IMAGE_I2I_MODEL` 或设置页） |
+| `--quality` | str | — | 质量档（模型声明支持 quality 才生效；空 = 设置页/env 模式默认） |
 | `--out` / `-o` | path | — | 另外落一份到这个路径 |
 | `--json` | flag | — | 结果以 JSON 输出 |
 
@@ -99,7 +99,9 @@ data/generated/adhoc/{时间戳}_{短id}/
 | `COMFYUI_HOST` / `COMFYUI_PORT` | ComfyUI 地址（默认 `127.0.0.1:8188`） |
 | `COMFYUI_WORKFLOWS_DIR` | workflow + mapping 成对文件目录（默认 `data/workflows`） |
 | `OP_IMAGE_API_KEY` / `LLM_API_KEY` | OpenRouter key |
-| `OP_IMAGE_MODEL` | 默认模型（默认 `meta/muse-image`） |
+| `OP_IMAGE_T2I_MODEL` | 文生图默认模型（默认 `meta/muse-image`） |
+| `OP_IMAGE_T2I_RESOLUTION` / `OP_IMAGE_T2I_QUALITY` | 文生图分辨率/质量默认（模型声明枚举时才发送） |
+| `OP_IMAGE_I2I_MODEL` / `OP_IMAGE_I2I_RESOLUTION` / `OP_IMAGE_I2I_QUALITY` | 图片编辑（带参考图）默认模型 / 分辨率 / 质量 |
 | `CHARVAR_DATA_DIR` | 数据目录（默认仓库 `data/`） |
 | `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` | subject derive / verify 的 LLM（也可在网页设置页配置） |
 

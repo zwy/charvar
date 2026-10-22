@@ -394,3 +394,53 @@ def test_bad_comfy_url_scheme_raises(env):
 def test_bad_aspect_ratio_raises(env):
     with pytest.raises(adhoc.AdhocError):
         adhoc.generate(adhoc.AdhocRequest(prompt="p", backend="openrouter", aspect_ratio="7:3"))
+
+
+# ---------- 模式默认（t2i 文生图 / i2i 图片编辑） ----------
+
+
+def test_openrouter_mode_defaults_follow_references(env, monkeypatch):
+    """带参考图 = i2i 模式：模型/分辨率/质量按 i2i 组配置取；请求显式值优先。"""
+    with storage.connect() as conn:
+        storage.set_setting(conn, "openrouter", {
+            "t2i_model": "t/t2i", "t2i_resolution": "1K", "t2i_quality": "",
+            "i2i_model": "t/i2i", "i2i_resolution": "2K", "i2i_quality": "low",
+            "api_key": "",
+        })
+    calls = _fake_openrouter(monkeypatch)
+    adhoc.generate(adhoc.AdhocRequest(prompt="p", backend="openrouter", resolution=""))
+    assert calls[0]["model"] == "t/t2i"
+    assert calls[0]["resolution"] == "1K"
+    assert not calls[0]["quality"]  # 模式默认空 = 不发 quality 参数
+
+    calls = _fake_openrouter(monkeypatch)
+    ref = _ref_image(env)
+    adhoc.generate(adhoc.AdhocRequest(
+        prompt="p", backend="openrouter", reference_paths=[ref],
+    ))
+    assert calls[0]["model"] == "t/i2i"
+    assert calls[0]["resolution"] == "2K"
+    assert calls[0]["quality"] == "low"
+
+
+def test_openrouter_explicit_params_beat_mode_defaults(env, monkeypatch):
+    """请求显式给了 resolution / quality 就不动模式默认。"""
+    with storage.connect() as conn:
+        storage.set_setting(conn, "openrouter", {"t2i_model": "t/t2i", "t2i_quality": "high", "api_key": ""})
+    calls = _fake_openrouter(monkeypatch)
+    adhoc.generate(adhoc.AdhocRequest(
+        prompt="p", backend="openrouter", model="x/explicit", resolution="1k", quality="medium",
+    ))
+    assert calls[0]["model"] == "x/explicit"
+    assert calls[0]["resolution"] == "1k"
+    assert calls[0]["quality"] == "medium"
+
+
+def test_openrouter_resolution_accepts_provider_enum(env):
+    """provider 枚举写法（512/1K/1.5K/4K…）过格式校验；乱值报错。"""
+    req = adhoc.AdhocRequest(prompt="p", backend="openrouter", resolution="1.5K")
+    adhoc.validate(req)
+    with pytest.raises(adhoc.AdhocError):
+        adhoc.validate(adhoc.AdhocRequest(prompt="p", backend="openrouter", resolution="xxl"))
+    # 空 = 跟随设置页/env 的模式默认
+    adhoc.validate(adhoc.AdhocRequest(prompt="p", backend="openrouter", resolution=""))

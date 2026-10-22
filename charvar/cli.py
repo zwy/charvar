@@ -569,10 +569,16 @@ def image_openrouter(
         None, "--ref", help="参考图路径，可重复（最多 4 张）"
     ),
     aspect: str = typer.Option("3:4", "--aspect", help="画幅：1:1/3:4/16:9/4:3/9:16/2:3/3:2/21:9"),
-    resolution: str = typer.Option("1k", "--resolution", help="分辨率档：1k/2k"),
+    resolution: str = typer.Option(
+        "1k", "--resolution", help="分辨率：1k/2k 或模型声明枚举值（512/1K/1.5K/2K/4K…）；空 = 设置页/env 模式默认"
+    ),
     seed: int = typer.Option(0, "--seed", help="采样种子（0 = 固定复现；换种子出不同图）"),
-    model: Optional[str] = typer.Option(None, "--model", help="模型 slug（默认 OP_IMAGE_MODEL / 设置页）"),
-    quality: Optional[str] = typer.Option(None, "--quality", help="质量档（模型声明支持才生效）"),
+    model: Optional[str] = typer.Option(
+        None, "--model", help="模型 slug（默认按模式取设置页 / OP_IMAGE_T2I_MODEL、OP_IMAGE_I2I_MODEL）"
+    ),
+    quality: Optional[str] = typer.Option(
+        None, "--quality", help="质量档（模型声明支持才生效；空 = 设置页/env 模式默认）"
+    ),
     out: Optional[Path] = typer.Option(None, "--out", "-o", help="另外落一份到这个路径"),
     json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出到终端"),
 ) -> None:

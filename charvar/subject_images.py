@@ -413,6 +413,10 @@ def generate_subject_image_openrouter(
 
     产物直接落 ``data/subjects/{subject_id}/{kind}.{ext}``（后缀按返回的字节嗅探），
     缩略图同 ComfyUI 通路 —— 档案图片与生图结果页读的是同一份文件。
+
+    ``resolution`` / ``quality`` 是合并好的输入（显式请求 > 设置页/env 的模式
+    默认，由调用方算好注入）：值能不能发按模型 supported_parameters 校验，
+    撑不出像素时画幅回退主体图默认尺寸的档位。
     """
     _validate_kind(kind)
     if not prompt.strip():
@@ -421,12 +425,13 @@ def generate_subject_image_openrouter(
     settings = settings or _fallback_settings(conn)
     # 槽位默认画幅：与 ComfyUI 通路同一份设置（主体图默认尺寸）
     size = settings.image_sizes.get(kind)
+    slot_tier = (size.resolution if size is not None else None) or "1k"
     if aspect_ratio is None and size is not None:
         aspect_ratio = size.aspect_ratio
-        resolution = resolution or size.resolution
 
     reference_paths = _openrouter_reference_paths(conn, subject.id, kind)
-    caps = openrouter_image.model_capabilities(openrouter_image.resolve_model(model))
+    model_id = openrouter_image.resolve_model(model)
+    caps = openrouter_image.model_capabilities(model_id)
     if reference_paths and not caps.supports_refs:
         raise SubjectImageError(
             f"模型 {caps.model_id} 只支持文生图（清单里没有 image 输入），不能带参考图",
@@ -434,20 +439,24 @@ def generate_subject_image_openrouter(
         )
 
     # 画幅：走 size 显式像素，与生成结果页的 OpenRouter 通路同一套算法
-    # （auto 按景别选比例：全身 2:3，近景 3:4）。
+    # （auto 按景别选比例：全身 2:3，近景 3:4）。档位收 charvar 档位与
+    # provider 枚举值；模型不认的值退回主体图默认尺寸的档位，别撑大画幅。
     ratio = aspect_ratio or "auto"
     result = _synthetic_result(subject.id, seed, [(kind, prompt.strip())])
     item = result.items[0]
     item.meta["framing"] = _KIND_FRAMING.get(kind)
+    pixel_tier = openrouter_image.pixel_resolution_tier(
+        model_id, resolution, fallback_tier=slot_tier
+    )
     width, height = comfyui_exporter.dimensions_for_item(
-        ratio, resolution or "1k", item, use_model_native=False
+        ratio, pixel_tier, item, use_model_native=False
     )
 
     op_result = openrouter_image.generate_image(
         prompt=_openrouter_prompt(prompt.strip(), bool(reference_paths)),
         width=width,
         height=height,
-        model=model,
+        model=model_id,
         api_key=api_key,
         seed=seed,
         reference_paths=reference_paths,

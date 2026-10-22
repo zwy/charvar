@@ -40,14 +40,27 @@ class LlmSettings(BaseModel):
 
 
 class OpenRouterSettings(BaseModel):
-    """OpenRouter 在线生图配置。
+    """OpenRouter 在线生图配置（按模式分两组，对齐 ComfyUI 的 t2i / edit 两个 workflow）。
 
-    - model 空串 = 用 env OP_IMAGE_MODEL（再缺省 meta/muse-image）
+    - ``t2i_*``：文生图（不带参考图）；``i2i_*``：图片编辑 / 参考生图（带参考图）。
+      带不带参考图由调用方决定（主体档案看槽位、批量推送看勾选、临时生图看参考图列表）。
+    - model 空串 = 用 env ``OP_IMAGE_T2I_MODEL`` / ``OP_IMAGE_I2I_MODEL``
+      （再回退旧的 ``OP_IMAGE_MODEL``，最后 meta/muse-image）
+    - resolution / quality 空串 = 用 env ``OP_IMAGE_T2I_RESOLUTION`` 等。
+      值是 provider 清单里的枚举写法（如 "1K" / "4K" / "medium"）：
+      **请求显式给了就不用它，没给才作为默认**；能不能发还得以所选模型的
+      supported_parameters 枚举为准（charvar/openrouter_image 在调用时校验）。
     - api_key 空串 = 用 env OP_IMAGE_API_KEY，再缺省回退 LLM_API_KEY（同一家 OpenRouter）
     """
 
-    model: str = ""
+    model: str = ""  # 旧字段：仅作 t2i/i2i_model 都为空时的迁移来源，新代码不再写它
     api_key: str = ""  # 读接口永远掩码
+    t2i_model: str = ""
+    t2i_resolution: str = ""  # provider 格式（1K/2K/4K…），charvar 档位 1k/2k 也会被归一
+    t2i_quality: str = ""  # auto/low/medium/high…，"auto" = 不发送该参数
+    i2i_model: str = ""
+    i2i_resolution: str = ""
+    i2i_quality: str = ""
 
 
 class AppSettings(BaseModel):
@@ -84,6 +97,12 @@ def get_settings(conn: sqlite3.Connection) -> AppSettings:
     openrouter = (
         OpenRouterSettings.model_validate(or_raw) if isinstance(or_raw, dict) else OpenRouterSettings()
     )
+    # 迁移：旧的单模型配置（DB 里的 openrouter.model）平移到两个模式；
+    # 新字段各自可再覆盖。model 字段本体保留在返回值里，读接口不再展示。
+    if not openrouter.t2i_model:
+        openrouter.t2i_model = openrouter.model
+    if not openrouter.i2i_model:
+        openrouter.i2i_model = openrouter.model
     return AppSettings(
         comfy_t2i_workflow=str(data.get("comfy_t2i_workflow") or _DEFAULT_WORKFLOW_T2I),
         comfy_edit_workflow=str(data.get("comfy_edit_workflow") or _DEFAULT_WORKFLOW_EDIT),
@@ -119,15 +138,30 @@ def save_settings(conn: sqlite3.Connection, patch: dict) -> AppSettings:
     return get_settings(conn)
 
 
-def openrouter_overrides(conn: sqlite3.Connection) -> dict[str, str]:
-    """DB 里非空的 OpenRouter 配置（model / api_key），供客户端覆盖 env。"""
+def openrouter_mode_config(conn: sqlite3.Connection) -> dict[str, dict[str, str]]:
+    """每个生图模式（t2i 文生图 / i2i 图片编辑）的生效配置：DB > env。
+
+    - model 走 openrouter_image.resolve_model 的完整链路（DB 值 > 模式 env >
+      旧 OP_IMAGE_MODEL > 默认）；
+    - resolution / quality 这里只做 DB > env 的合并，**枚举校验留给调用时**
+      （openrouter_image 按 api-response.json 动态判断，清单一句话说不准）。
+    """
+    from charvar import openrouter_image
+
     settings = get_settings(conn)
-    overrides: dict[str, str] = {}
-    for key in ("model", "api_key"):
-        value = getattr(settings.openrouter, key)
-        if value.strip():
-            overrides[key] = value.strip()
-    return overrides
+    ors = settings.openrouter
+    modes: dict[str, dict[str, str]] = {}
+    for mode, model_attr in (("t2i", "t2i_model"), ("i2i", "i2i_model")):
+        modes[mode] = {
+            "model": openrouter_image.resolve_model(
+                getattr(ors, model_attr).strip(), mode=mode
+            ),
+            "resolution": getattr(ors, f"{mode}_resolution").strip()
+            or openrouter_image.env_mode_value(mode, "resolution"),
+            "quality": getattr(ors, f"{mode}_quality").strip()
+            or openrouter_image.env_mode_value(mode, "quality"),
+        }
+    return modes
 
 
 def llm_overrides(conn: sqlite3.Connection) -> dict[str, str] | None:

@@ -83,3 +83,42 @@ def test_default_image_sizes_shape():
     assert sizes["character_sheet"].aspect_ratio == "3:4"
     assert sizes["behind"].aspect_ratio == "2:3"
     assert all(s.resolution == "1k" for s in sizes.values())
+
+
+# ---------- OpenRouter 按模式配置（t2i 文生图 / i2i 图片编辑） ----------
+
+
+def test_openrouter_per_mode_fields_and_legacy_migration(client, tmp_path):
+    """旧的单模型配置（openrouter.model）迁移进 t2i/i2i_model；新字段各自可覆盖。"""
+    db = pathlib.Path(tmp_path) / "test.db"
+    client.put("/settings", json={"openrouter": {"model": "qwen/qwen-image-2.1-turbo"}})
+    settings = get_settings(storage.connect(db))
+    assert settings.openrouter.t2i_model == "qwen/qwen-image-2.1-turbo"
+    assert settings.openrouter.i2i_model == "qwen/qwen-image-2.1-turbo"
+    # 设置了 t2i_model 后 i2i 仍回退旧值；单独设置 i2i_model 则各自生效
+    client.put(
+        "/settings",
+        json={"openrouter": {"t2i_model": "a/t2i", "i2i_model": "b/i2i", "api_key": ""}},
+    )
+    settings = get_settings(storage.connect(db))
+    assert settings.openrouter.t2i_model == "a/t2i"
+    assert settings.openrouter.i2i_model == "b/i2i"
+
+
+def test_openrouter_mode_config_merges_env(client, tmp_path, monkeypatch):
+    """openrouter_mode_config：DB > env（model 走 resolve_model 全链路）。"""
+    from charvar import settings_service
+
+    monkeypatch.setenv("OP_IMAGE_T2I_MODEL", "env/t2i")
+    monkeypatch.setenv("OP_IMAGE_I2I_RESOLUTION", "4K")
+    db = pathlib.Path(tmp_path) / "test.db"
+    client.put(
+        "/settings",
+        json={"openrouter": {"t2i_model": "db/t2i", "t2i_resolution": "2K", "t2i_quality": "high", "api_key": ""}},
+    )
+    modes = settings_service.openrouter_mode_config(storage.connect(db))
+    assert modes["t2i"] == {"model": "db/t2i", "resolution": "2K", "quality": "high"}
+    # i2i：模型没配 → env 链（i2i env 缺 → 旧 OP_IMAGE_MODEL 缺 → 默认）；分辨率取 env
+    assert modes["i2i"]["model"] == "meta/muse-image"
+    assert modes["i2i"]["resolution"] == "4K"
+    assert modes["i2i"]["quality"] == ""

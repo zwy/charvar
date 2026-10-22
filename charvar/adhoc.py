@@ -59,7 +59,7 @@ class AdhocRequest(BaseModel):
     negative_prompt: str | None = None
     reference_paths: list[Path] = Field(default_factory=list)
     aspect_ratio: str = "3:4"
-    resolution: str = "1k"
+    resolution: str = ""  # 空 = 设置页/env 的模式默认（OpenRouter）/ 1k（ComfyUI）；1k/2k 或 provider 枚举值
     seed: int = 0
     model: str | None = None
     quality: str | None = None
@@ -262,14 +262,31 @@ def list_recent(limit: int = 20) -> list[dict[str, Any]]:
 
 # ---------- 校验 ----------
 
+# 分辨率两种写法都收：charvar 档位（1k/2k）或 provider 清单的枚举值（512/1K/1.5K/2K/4K…）。
+# 枚举值能不能发由 openrouter_image 按所选模型 supported_parameters 动态校验。
+_PROVIDER_RES_RE = re.compile(r"^\d+(?:\.\d+)?\s*[kK]?$")
+
+
+def _validate_resolution(value: str | None) -> str | None:
+    """分辨率格式校验；空 = 跟随设置页/env 的模式默认，放行。"""
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    if raw.lower() in _RESOLUTIONS or _PROVIDER_RES_RE.fullmatch(raw):
+        return raw
+    raise AdhocError(
+        f"分辨率只支持 {'/'.join(_RESOLUTIONS)} 或模型声明的枚举值"
+        f"（512 / 1K / 1.5K / 2K / 4K…），当前：{value}"
+    )
+
+
 def validate(req: AdhocRequest) -> None:
     """请求自检：能在发请求前发现的错就别浪费一次出图。"""
     if not req.prompt.strip():
         raise AdhocError("提示词为空")
     if req.aspect_ratio not in _ASPECT_RATIOS:
         raise AdhocError(f"画幅只支持 {'/'.join(_ASPECT_RATIOS)}，当前：{req.aspect_ratio}")
-    if req.resolution not in _RESOLUTIONS:
-        raise AdhocError(f"分辨率只支持 {'/'.join(_RESOLUTIONS)}，当前：{req.resolution}")
+    _validate_resolution(req.resolution)
     if len(req.reference_paths) > _MAX_REFERENCES:
         raise AdhocError(f"参考图最多 {_MAX_REFERENCES} 张，收到 {len(req.reference_paths)} 张")
     for path in req.reference_paths:
@@ -455,21 +472,29 @@ def _download_bytes(client: httpx.Client, base: str, file: dict[str, str]) -> by
 def _generate_openrouter(
     req: AdhocRequest, run_id: str, run_dir: Path, db_path: Path | None = None
 ) -> AdhocResult:
+    prepared = _prepare_references(req, run_dir)
     with _conn(db_path) as conn:
-        overrides = settings_service.openrouter_overrides(conn)
-    model = openrouter_image.resolve_model(req.model or overrides.get("model"))
-    api_key = openrouter_image.resolve_api_key(overrides.get("api_key"))
+        modes = settings_service.openrouter_mode_config(conn)
+        api_key = openrouter_image.resolve_api_key(settings_service.get_settings(conn).openrouter.api_key or None)
+    # 模式对齐 ComfyUI：带参考图 = 图片编辑（i2i / edit workflow），否则文生图（t2i）
+    mode = "i2i" if prepared else "t2i"
+    mcfg = modes[mode]
+    model = openrouter_image.resolve_model((req.model or "").strip() or mcfg["model"], mode=mode)
+    # 参数默认链：请求显式 > 设置页/env 的模式默认；枚举校验在 openrouter_image 里做
+    resolution = (req.resolution or "").strip() or mcfg["resolution"]
+    quality = (req.quality or "").strip() or mcfg["quality"]
     if not api_key:
         raise AdhocError(
             "缺少 OpenRouter API Key：请设置 OP_IMAGE_API_KEY / LLM_API_KEY，或在「设置」页配置"
         )
 
-    prepared = _prepare_references(req, run_dir)
     result = to_generate_result(req, run_id)
     item = result.items[0]
-    # OpenRouter 跑的是 muse/grok/gpt-image，不是 Qwen —— 不走官方 2K 像素表
+    # OpenRouter 跑的是 muse/grok/gpt-image，不是 Qwen —— 不走官方 2K 像素表；
+    # 档位收 charvar 档位与 provider 枚举值（1K/1.5K/4K…）
+    pixel_tier = openrouter_image.pixel_resolution_tier(model, resolution)
     width, height = comfyui_exporter.dimensions_for_item(
-        req.aspect_ratio, req.resolution, item, use_model_native=False
+        req.aspect_ratio, pixel_tier, item, use_model_native=False
     )
 
     # 有参考图时提示词里的 <imageN> 换成序数词；没有参考图时整段摘掉
@@ -489,8 +514,8 @@ def _generate_openrouter(
             seed=req.seed,
             reference_paths=prepared,
             aspect_ratio=req.aspect_ratio,
-            resolution=req.resolution,
-            quality=req.quality,
+            resolution=resolution,
+            quality=quality,
         )
     except openrouter_image.OpenRouterImageError as exc:
         raise AdhocError(f"OpenRouter 生图失败：{exc}") from exc

@@ -61,7 +61,7 @@ def get_llm_config(override: dict | None = None) -> dict:
 def chat(
     messages: list[dict],
     model: str | None = None,
-    max_tokens: int | None = 4000,
+    max_tokens: int | None = None,
     json_mode: bool = True,
     retries: int = 3,
     config: dict | None = None,

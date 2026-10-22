@@ -76,11 +76,11 @@ class OpenRouterQueueRequest(BaseModel):
     """
 
     aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
-    resolution: Literal["1k", "2k"] | None = None
+    resolution: str | None = Field(default=None, description="charvar 档位（1k/2k）或模型声明枚举值（1K/1.5K/2K/4K…）；空 = 用设置页/env 的模式默认")
     reference_kinds: list[str] = Field(default_factory=list, description="主体图参考，按序对应提示词里的 the first/second… reference image")
-    model: str | None = Field(default=None, description="覆盖默认模型（OP_IMAGE_MODEL / 设置页）")
+    model: str | None = Field(default=None, description="覆盖默认模型（按模式取设置页/OP_IMAGE_T2I_MODEL、OP_IMAGE_I2I_MODEL）")
     seed: int | None = Field(default=None, description="覆盖种子；缺省用条目自带的稳定子种子")
-    quality: str | None = Field(default=None, description="质量档；只在模型清单声明 quality 时生效")
+    quality: str | None = Field(default=None, description="质量档；只在模型清单声明 quality 时生效，空 = 用模式默认")
 
 
 class RunRegenerateRequest(BaseModel):
@@ -122,7 +122,8 @@ class SubjectImageOpenRouterRequest(BaseModel):
     prompt: str | None = None
     seed: int = 0
     aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
-    resolution: Literal["1k", "2k"] | None = None
+    # charvar 档位（1k/2k）或模型声明枚举值（1K/4K…）；空 = 用设置页/env 的模式默认
+    resolution: str | None = None
     model: str | None = None
     quality: str | None = None
 
@@ -165,7 +166,7 @@ class AdhocGenerateRequest(BaseModel):
     negative_prompt: str | None = None
     references: list[AdhocReferenceSpec] = Field(default_factory=list)
     aspect_ratio: str = "3:4"
-    resolution: str = "1k"
+    resolution: str = ""  # 空 = 用设置页/env 的模式默认；1k/2k 或模型声明枚举值（1K/4K…）
     seed: int = 0
     model: str | None = None
     quality: str | None = None
@@ -404,7 +405,11 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         subject = _require_subject(subject_id)
         with _db() as conn:
             settings = settings_service.get_settings(conn)
-            overrides = settings_service.openrouter_overrides(conn)
+            # 模式对齐 ComfyUI：character_sheet 是文生图（t2i / t2i workflow），
+            # 其余 4 槽以它为参考图 = 图片编辑（i2i / edit workflow）；
+            # 参数默认链：请求显式 > 设置页/env 的模式默认
+            mode = "t2i" if kind == "character_sheet" else "i2i"
+            mcfg = settings_service.openrouter_mode_config(conn)[mode]
             previous = storage.get_subject_image(conn, subject_id, kind) or {}
             prompt = (req.prompt if req.prompt is not None else previous.get("prompt", "")) or ""
             try:
@@ -415,10 +420,10 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                     prompt=prompt,
                     seed=req.seed,
                     aspect_ratio=req.aspect_ratio,
-                    resolution=req.resolution,
-                    model=req.model or overrides.get("model"),
-                    api_key=overrides.get("api_key"),
-                    quality=req.quality,
+                    resolution=(req.resolution or "").strip() or mcfg["resolution"],
+                    model=(req.model or "").strip() or mcfg["model"],
+                    api_key=openrouter_image.resolve_api_key(settings.openrouter.api_key or None),
+                    quality=(req.quality or "").strip() or mcfg["quality"],
                     settings=settings,
                 )
             except subject_images.SubjectImageError as exc:
@@ -522,29 +527,28 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         return {"ok": True, "subject_id": subject_id, "bytes": len(req.template_md.encode("utf-8"))}
 
     # ---- 全局设置 ----
-    @app.get("/settings")
-    def api_settings_get() -> dict[str, Any]:
-        with _db() as conn:
-            settings = settings_service.get_settings(conn)
+    def _settings_payload(settings: settings_service.AppSettings) -> dict[str, Any]:
         data = settings.model_dump()
         data["llm"]["api_key"] = ""
         data["llm_configured"] = bool(settings.llm.api_key) or bool(llm.get_llm_config().get("api_key"))
         data["openrouter"]["api_key"] = ""
         data["openrouter_configured"] = bool(openrouter_image.resolve_api_key())
-        data["openrouter_default_model"] = openrouter_image.resolve_model()
+        # 模型默认按模式给（env 兜底链在 resolve_model 里），供设置页占位提示
+        data["openrouter_default_t2i_model"] = openrouter_image.resolve_model(mode="t2i")
+        data["openrouter_default_i2i_model"] = openrouter_image.resolve_model(mode="i2i")
         return data
+
+    @app.get("/settings")
+    def api_settings_get() -> dict[str, Any]:
+        with _db() as conn:
+            settings = settings_service.get_settings(conn)
+        return _settings_payload(settings)
 
     @app.put("/settings")
     def api_settings_put(patch: dict[str, Any]) -> dict[str, Any]:
         with _db() as conn:
             settings = settings_service.save_settings(conn, patch)
-        data = settings.model_dump()
-        data["llm"]["api_key"] = ""
-        data["llm_configured"] = bool(settings.llm.api_key) or bool(llm.get_llm_config().get("api_key"))
-        data["openrouter"]["api_key"] = ""
-        data["openrouter_configured"] = bool(openrouter_image.resolve_api_key())
-        data["openrouter_default_model"] = openrouter_image.resolve_model()
-        return data
+        return _settings_payload(settings)
 
     # ---- 生成 ----
     def _resolve_subject(req: GenerateRequest) -> SubjectProfile:
@@ -896,8 +900,11 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         }
         try:
             ratio = aspect_ratio or str((item.meta or {}).get("preferred_aspect_ratio") or "")
+            # resolution 是合并后的输入（charvar 档位或 provider 枚举值）；
+            # 像素档位按模型枚举归一，provider 参数能不能发也由它定
+            pixel_tier = openrouter_image.pixel_resolution_tier(model, resolution)
             width, height = comfyui_exporter.dimensions_for_item(
-                ratio or "auto", resolution, item, use_model_native=False
+                ratio or "auto", pixel_tier, item, use_model_native=False
             )
             effective_seed = seed if seed is not None else (item.meta or {}).get("subseed")
             op_result = openrouter_image.generate_image(
@@ -947,9 +954,15 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
 
         单条失败不中断整批（与 ComfyUI 批量入队同一语义）。
         """
-        overrides = settings_service.openrouter_overrides(conn)
-        effective_model = openrouter_image.resolve_model(model or overrides.get("model"))
-        api_key = openrouter_image.resolve_api_key(overrides.get("api_key"))
+        mcfg = settings_service.openrouter_mode_config(conn)["t2i" if not reference_kinds else "i2i"]
+        # 模式对齐 ComfyUI：带参考图 = 图片编辑（i2i / edit workflow），否则文生图（t2i）；
+        # 参数默认链：请求显式 > 设置页/env 的模式默认，枚举校验留给 openrouter_image
+        effective_model = openrouter_image.resolve_model(
+            (model or "").strip() or mcfg["model"], mode="i2i" if reference_kinds else "t2i"
+        )
+        effective_resolution = (resolution or "").strip() or mcfg["resolution"]
+        effective_quality = (quality or "").strip() or mcfg["quality"]
+        api_key = openrouter_image.resolve_api_key(settings_service.get_settings(conn).openrouter.api_key or None)
         reference_paths = _openrouter_reference_paths(result.subject_id, reference_kinds)
 
         entries: list[dict[str, Any]] = []
@@ -960,12 +973,12 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                     result,
                     item,
                     aspect_ratio=aspect_ratio,
-                    resolution=resolution,
+                    resolution=effective_resolution,
                     reference_paths=reference_paths,
                     model=effective_model,
                     api_key=api_key,
                     seed=seed,
-                    quality=quality,
+                    quality=effective_quality,
                 ): item
                 for item in result.items
             }
@@ -991,7 +1004,8 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                 seed=req.seed,
                 quality=req.quality,
             )
-            # 快照本次最终生效的入队参数：图片墙单条「重新生成」原样重放（种子除外）
+            # 快照本次最终生效的入队参数（含模式默认合并后的参数）：
+            # 图片墙单条「重新生成」原样重放（种子除外）
             storage.save_queue_settings(conn, run_id, {
                 "provider": "openrouter",
                 "model": model,
@@ -1207,19 +1221,24 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             if queued.get("provider") == "openrouter":
                 # OpenRouter 通路：同一提示词 + 同一画幅/参考图，只换种子重出一张。
                 # provider 不保证同种子出同图（实测两次同参请求返回不同图），
-                # 种子只是尽量可复现。
-                overrides = settings_service.openrouter_overrides(conn)
-                model = openrouter_image.resolve_model(queued.get("model") or overrides.get("model"))
+                # 种子只是尽量可复现。快照里的是当时的请求参数，模式默认在此重放一遍。
+                mode = "i2i" if reference_kinds else "t2i"
+                mcfg = settings_service.openrouter_mode_config(conn)[mode]
+                model = openrouter_image.resolve_model(
+                    (str(queued.get("model") or "")).strip() or mcfg["model"], mode=mode
+                )
                 entry = _openrouter_generate_one(
                     single,
                     item,
                     aspect_ratio=queued.get("aspect_ratio"),
-                    resolution=queued.get("resolution"),
+                    resolution=(str(queued.get("resolution") or "")).strip() or mcfg["resolution"],
                     reference_paths=_openrouter_reference_paths(result.subject_id, reference_kinds),
                     model=model,
-                    api_key=openrouter_image.resolve_api_key(overrides.get("api_key")),
+                    api_key=openrouter_image.resolve_api_key(
+                        settings_service.get_settings(conn).openrouter.api_key or None
+                    ),
                     seed=seed,
-                    quality=queued.get("quality"),
+                    quality=(str(queued.get("quality") or "")).strip() or mcfg["quality"],
                 )
                 if not entry.get("ok"):
                     raise HTTPException(502, f"重新生成失败：{entry.get('error') or '未知错误'}")

@@ -42,15 +42,15 @@ def test_subject_preset_loads(subject_id: str):
 
 
 @pytest.mark.parametrize("subject_id", SUBJECT_IDS)
-def test_subject_preset_locks_are_english_sentences(subject_id: str):
-    """锁定项进的是英文提示词：不能混入中文，否则生成的提示词会中英夹杂。"""
+def test_subject_preset_locks_are_clean_sentences(subject_id: str):
+    """锁定项 / extra 原样进提示词：只查首尾空白。
+    2026-10-22 起锁定项中英文皆可（Qwen-Image / OpenRouter 双语系模型没问题），
+    不再强制 ASCII —— 与 AGENTS.md 的导入/校验红线一致。"""
     data = yaml.safe_load(_subject_path(subject_id).read_text(encoding="utf-8"))
     subject = SubjectProfile.model_validate(data)
     for group in (subject.style_lock, subject.identity_lock, subject.outfit_lock):
         for item in group:
             assert item == item.strip()
-            assert not any("一" <= ch <= "鿿" for ch in item), f"锁定项含中文：{item}"
-    assert not any("一" <= ch <= "鿿" for ch in subject.extra)
 
 
 @pytest.mark.parametrize("subject_id", SUBJECT_IDS)

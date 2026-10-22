@@ -151,12 +151,30 @@ def resolve_api_key(api_key: str | None = None) -> str:
     return ""
 
 
-def resolve_model(model: str | None = None) -> str:
-    """生效的模型 slug：显式传入 > OP_IMAGE_MODEL > 默认模型。"""
-    for candidate in (model, _env("OP_IMAGE_MODEL"), _DEFAULT_MODEL):
+def resolve_model(model: str | None = None, mode: str = "t2i") -> str:
+    """生效的模型 slug：显式传入 > 模式 env > 旧 OP_IMAGE_MODEL > 默认模型。
+
+    mode="t2i"/"i2i" 对齐 ComfyUI 的文生图 / 图片编辑两组配置；
+    旧的 ``OP_IMAGE_MODEL`` 保留为公共兜底，存量 .env 不用立刻改。
+    """
+    chain = [_MODE_ENV_PREFIX.get(mode, "OP_IMAGE_T2I") + "_MODEL", "OP_IMAGE_MODEL"]
+    for candidate in (model, *(_env(name) for name in chain)):
         if candidate and str(candidate).strip():
             return str(candidate).strip()
     return _DEFAULT_MODEL
+
+
+# 文生图 t2i（不带参考图）/ 图片编辑 i2i（带参考图）的 env 前缀
+_MODE_ENV_PREFIX = {"t2i": "OP_IMAGE_T2I", "i2i": "OP_IMAGE_I2I"}
+
+
+def env_mode_value(mode: str, param: str) -> str:
+    """模式级的 env 默认值（RESOLUTION / QUALITY）；没设返空串。
+
+    这是「请求没显式给时的默认」：请求给了一律不用它。
+    值是否能发以所选模型的 supported_parameters 枚举为准。
+    """
+    return _env(f"{_MODE_ENV_PREFIX.get(mode, 'OP_IMAGE_T2I')}_{param.upper()}")
 
 
 def resolve_timeout(timeout_s: float | None = None) -> float:
@@ -635,36 +653,78 @@ def build_generate_body(
     return body
 
 
-# charvar 的分辨率档位（1k/2k/4k）→ provider 清单里的写法（大写 K）
+# charvar 的分辨率档位 → provider 清单里的写法（大写 K）。
+# 4k 不在 charvar 档位表里（主体图已下线该档），但 provider 清单（gemini/flux 等）
+# 有 "4K" 枚举值，面板/env 选了就原样发 —— 这里只是值归一，不是开 4K 档。
 _RESOLUTION_TO_PROVIDER = {"1k": "1K", "1.5k": "1.5K", "2k": "2K", "4k": "4K"}
 
 
 def _provider_resolution(resolution: str | None, caps: ModelCapabilities) -> str | None:
-    """charvar 档位 → provider 的 resolution 值；模型没声明就不发。"""
-    if not resolution:
-        return None
-    value = _RESOLUTION_TO_PROVIDER.get(str(resolution).strip().lower())
+    """resolution 输入 → provider 的 resolution 值；不在模型枚举里就不发。
+
+    输入两种写法都收：
+    - charvar 档位（"1k" / "2k"，顺带 "1.5k" / "4k"），归一成大写 K；
+    - provider 枚举原样（"512" / "1K" / "1.5K" / "4K"，大小写不敏感）。
+    枚举匹配时用清单里的原始写法回传（避免大小写被 provider 拒）。
+    """
+    value = str(resolution or "").strip()
     if not value:
         return None
-    if caps.resolutions and value not in caps.resolutions:
+    value = _RESOLUTION_TO_PROVIDER.get(value.lower(), value)
+    if caps.resolutions:
+        for allowed in caps.resolutions:
+            if allowed.lower() == value.lower():
+                return allowed
         return None
-    if not caps.resolutions and "resolution" not in caps.declared:
+    if "resolution" not in caps.declared:
+        # 清单完全没声明（如 muse-image）→ 不发：发了也只是 provider 自由裁量
         return None
     return value
 
 
 def _provider_quality(quality: str | None, caps: ModelCapabilities) -> str | None:
-    """质量档：只有模型声明了 quality 且值在枚举内才发。"""
+    """质量档：只有模型声明了 quality 且值在枚举内才发；"auto" = 不发。"""
     if not quality:
         return None
     value = str(quality).strip().lower()
     if not value or value == "auto":
         return None
-    if caps.qualities and value not in caps.qualities:
+    if caps.qualities:
+        for allowed in caps.qualities:
+            if allowed.lower() == value.lower():
+                return allowed
         return None
-    if not caps.qualities and "quality" not in caps.declared:
+    if "quality" not in caps.declared:
         return None
     return value
+
+
+def pixel_resolution_tier(
+    model: str,
+    resolution: str | None = None,
+    *,
+    fallback_tier: str = "1k",
+) -> str:
+    """选「用来算 size 像素」的档位字符串（长边解析在 exporters.dimensions_for）。
+
+    三条通路（主体档案 / 批量推送 / 临时生图）同一套规则：
+    - `resolution` 输入能映射进模型枚举 → 用归一后的 provider 值
+      （"1K"/"2K"/"1.5K"/"4K"…，exporters 会按 1K=1024 长边换算像素）；
+    - 输入是 charvar 档位但模型没声明 resolution → 用档位本身
+      （照旧只算像素，provider 参数不发）；
+    - 都不是（空 / 无效枚举值）→ 回退 ``fallback_tier``，不让无效值撑大画幅。
+    """
+    raw = str(resolution or "").strip()
+    try:
+        caps = model_capabilities(model)
+    except OpenRouterImageError:
+        caps = ModelCapabilities(model_id=model)
+    provider_value = _provider_resolution(raw, caps)
+    if provider_value:
+        return provider_value
+    if raw.lower() in _RESOLUTION_TO_PROVIDER:
+        return raw.lower()
+    return fallback_tier
 
 
 

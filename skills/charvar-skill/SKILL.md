@@ -66,13 +66,13 @@ cat prompt.md | ~/.local/bin/charvar image comfyui --prompt-file - --out out.png
 | `--prompt` / `--prompt-file` | 提示词，二选一；`--prompt-file -` 读 stdin |
 | `--ref` | 参考图路径，可重复，最多 4 张 |
 | `--aspect` | `1:1` `3:4` `16:9` `4:3` `9:16` `2:3` `3:2` `21:9`（默认 `3:4`） |
-| `--resolution` | `1k` `2k`（默认 `1k`）。2K 是 Qwen 官方像素，面积恒定 ~4.2MP |
+| `--resolution` | `1k` `2k`（默认 `1k`）或模型声明枚举值（512/1K/1.5K/2K/4K…；OpenRouter 通路）。2K 是 Qwen 官方像素，面积恒定 ~4.2MP |
 | `--seed` | 采样种子，默认 `0`（固定复现）；要新图就换种子 |
 | `--out` | 产物路径 |
 | `--json` | 结果以 JSON 输出（给脚本消费时用） |
 | `--negative` | 负向提示词（仅 ComfyUI 支持） |
 | `--workflow` | 指定 ComfyUI workflow 名或 JSON 路径 |
-| `--model` | OpenRouter 模型 slug |
+| `--model` | OpenRouter 模型 slug（默认按模式取 `OP_IMAGE_T2I_MODEL` / `OP_IMAGE_I2I_MODEL`） |
 | `--quality` | OpenRouter 质量档（模型声明支持才生效） |
 
 完整参数见 `references/cli.md`。

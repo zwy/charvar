@@ -191,6 +191,8 @@ def test_resolve_api_key_falls_back_to_llm_key(monkeypatch):
 
 
 def test_resolve_model_precedence(monkeypatch):
+    monkeypatch.delenv("OP_IMAGE_T2I_MODEL", raising=False)
+    monkeypatch.delenv("OP_IMAGE_I2I_MODEL", raising=False)
     monkeypatch.setenv("OP_IMAGE_MODEL", "env/model")
     assert openrouter_image.resolve_model() == "env/model"
     assert openrouter_image.resolve_model("explicit/model") == "explicit/model"
@@ -198,9 +200,30 @@ def test_resolve_model_precedence(monkeypatch):
     assert openrouter_image.resolve_model() == "meta/muse-image"
 
 
+def test_resolve_model_per_mode_env(monkeypatch):
+    """模式级 env 优先于旧的公共 OP_IMAGE_MODEL；i2i / t2i 各取各的。"""
+    monkeypatch.setenv("OP_IMAGE_MODEL", "legacy/model")
+    monkeypatch.setenv("OP_IMAGE_T2I_MODEL", "t2i/model")
+    monkeypatch.setenv("OP_IMAGE_I2I_MODEL", "i2i/model")
+    assert openrouter_image.resolve_model() == "t2i/model"
+    assert openrouter_image.resolve_model(mode="i2i") == "i2i/model"
+    monkeypatch.delenv("OP_IMAGE_I2I_MODEL", raising=False)
+    assert openrouter_image.resolve_model(mode="i2i") == "legacy/model"
+    assert openrouter_image.resolve_model("explicit/model") == "explicit/model"
+
+
+def test_env_mode_value(monkeypatch):
+    monkeypatch.setenv("OP_IMAGE_T2I_RESOLUTION", "2K")
+    monkeypatch.setenv("OP_IMAGE_I2I_QUALITY", "high")
+    assert openrouter_image.env_mode_value("t2i", "resolution") == "2K"
+    assert openrouter_image.env_mode_value("i2i", "quality") == "high"
+    assert openrouter_image.env_mode_value("t2i", "quality") == ""
+
+
 def test_default_model_is_muse_image(monkeypatch):
     """默认模型是 meta/muse-image（$0.01/张，比 hy-image 便宜 2.4 倍）。"""
-    monkeypatch.delenv("OP_IMAGE_MODEL", raising=False)
+    for name in ("OP_IMAGE_MODEL", "OP_IMAGE_T2I_MODEL", "OP_IMAGE_I2I_MODEL"):
+        monkeypatch.delenv(name, raising=False)
     assert openrouter_image._DEFAULT_MODEL == "meta/muse-image"
 
 
@@ -437,7 +460,8 @@ def test_settings_expose_openrouter_masked(client, monkeypatch):
     data = client.get("/settings").json()
     assert data["openrouter"]["api_key"] == ""
     assert data["openrouter_configured"] is True
-    assert data["openrouter_default_model"] == "meta/muse-image"
+    assert data["openrouter_default_t2i_model"] == "meta/muse-image"
+    assert data["openrouter_default_i2i_model"] == "meta/muse-image"
 
 
 def test_settings_save_openrouter_model(client):
@@ -580,6 +604,62 @@ def test_body_sends_resolution_when_model_declares_it(fake_model_list):
         resolution="2k", capabilities=caps,
     )
     assert body["resolution"] == "2K"
+
+
+def test_body_accepts_provider_format_resolution(fake_model_list):
+    """provider 枚举原样（512/1.5K/4K…，大小写不敏感）也收：面板/env 的模式默认是这种写法。"""
+    caps = openrouter_image.model_capabilities("tencent/hy-image-v3.5-preview")
+    for raw, expected in (("1.5K", "1.5K"), ("1.5k", "1.5K"), ("512", None), ("8K", None)):
+        body = openrouter_image.build_generate_body(
+            prompt="p", model="tencent/hy-image-v3.5-preview", width=1024, height=1024,
+            resolution=raw, capabilities=caps,
+        )
+        if expected is None:
+            assert "resolution" not in body
+        else:
+            assert body["resolution"] == expected
+
+
+def test_quality_enum_match_is_case_insensitive(fake_model_list):
+    """quality 档大小写不敏感，命中后回传清单里的原始写法。"""
+    caps = openrouter_image.model_capabilities("openai/gpt-image-2")
+    body = openrouter_image.build_generate_body(
+        prompt="p", model="openai/gpt-image-2", width=1024, height=1024,
+        quality="HIGH", capabilities=caps,
+    )
+    assert body["quality"] == "high"
+
+
+def test_provider_quality_auto_means_skip(fake_model_list):
+    """"auto" 一律不发送（provider 自己的默认就是 auto，再发一遍没意义）。"""
+    caps = openrouter_image.model_capabilities("openai/gpt-image-2")
+    body = openrouter_image.build_generate_body(
+        prompt="p", model="openai/gpt-image-2", width=1024, height=1024,
+        quality="auto", capabilities=caps,
+    )
+    assert "quality" not in body
+
+
+# ---------- 模式默认合并后的像素档位规划 ----------
+
+
+def test_pixel_tier_uses_provider_value_when_in_enum(fake_model_list):
+    """枚举命中 → 直接用归一后的 provider 值算像素（1K=1024 长边）。"""
+    tier = openrouter_image.pixel_resolution_tier("tencent/hy-image-v3.5-preview", "4K")
+    assert tier == "4K"
+
+
+def test_pixel_tier_falls_back_for_invalid_value(fake_model_list):
+    """无效枚举值不许撑大画幅：退回 fallback_tier。"""
+    tier = openrouter_image.pixel_resolution_tier(
+        "tencent/hy-image-v3.5-preview", "8K", fallback_tier="1k"
+    )
+    assert tier == "1k"
+
+
+def test_pixel_tier_keeps_charvar_tier_when_not_declared(fake_model_list):
+    """模型没声明 resolution（muse）→ 档位保留原样只算像素。"""
+    assert openrouter_image.pixel_resolution_tier("meta/muse-image", "2k") == "2k"
 
 
 def test_body_omits_quality_when_value_not_in_enum(fake_model_list):

@@ -7,6 +7,7 @@ const ADHOC_MAX_REFS = 4;
 const adhocState = {
   references: [], // [{type:"staged", id, name, url} | {type:"subject", subject_id, kind, name, url}]
   caps: null, // 当前 OpenRouter 模型的能力
+  mode: null, // "t2i" | "i2i"：按当前参考图数判定，用于取模式默认
   subjectSlots: {}, // subject_id -> slots
 };
 
@@ -22,24 +23,44 @@ function applyAdhocBackend() {
   $("#adhoc-url-field").hidden = isOpenRouter;
   $("#adhoc-model-field").hidden = !isOpenRouter;
   updateAdhocHints();
-  if (isOpenRouter) loadAdhocModelCaps().catch(() => {});
+  if (isOpenRouter) {
+    loadAdhocModelCaps().catch(() => {});
+  } else {
+    applyAdhocTierOptions();
+  }
 }
 
-/* ---------- OpenRouter 模型能力（画幅/质量档/参考图） ---------- */
+/* ---------- OpenRouter 模型能力（分辨率/质量档/参考图） ---------- */
+/* 模式对齐 ComfyUI：不带参考图 = 文生图（t2i），带参考图 = 图片编辑（i2i）。
+   未手填模型时按模式取设置页/env 的默认（OP_IMAGE_T2I_MODEL / OP_IMAGE_I2I_MODEL）。 */
+function adhocMode() {
+  return adhocState.references.length ? "i2i" : "t2i";
+}
+
+function updateAdhocMode() {
+  const mode = adhocMode();
+  if (adhocState.mode !== mode) {
+    adhocState.mode = mode;
+    // 模式切了 → 默认模型与档位能力都变了，重算一遍
+    if (adhocBackend() === "openrouter") loadAdhocModelCaps().catch(() => {});
+  }
+}
+
 async function loadAdhocModelCaps() {
   let model = $("#adhoc-model").value.trim();
   if (!model) {
-    // 没指定模型就用生效的那个：设置页 openrouter.model > openrouter_default_model（env 回退）
+    // 没指定模型就用模式默认：设置页 t2i/i2i 模型 > env（OP_IMAGE_T2I_MODEL 等）
     const settings = await api("/settings");
-    const fallback =
-      (settings.openrouter && settings.openrouter.model) || settings.openrouter_default_model || "";
-    if (!fallback) {
+    const mode = adhocMode();
+    model =
+      (settings.openrouter && settings.openrouter[`${mode}_model`]) ||
+      (mode === "t2i" ? settings.openrouter_default_t2i_model : settings.openrouter_default_i2i_model) ||
+      "";
+    if (!model) {
       adhocState.caps = null;
       applyAdhocCaps({});
       return;
     }
-    model = fallback;
-    $("#adhoc-model").value = fallback;
   }
   const caps = await api(`/openrouter/capabilities?model=${encodeURIComponent(model)}`);
   applyAdhocCaps(caps);
@@ -48,28 +69,40 @@ async function loadAdhocModelCaps() {
 function applyAdhocCaps(caps) {
   adhocState.caps = caps || null;
   const resSelect = $("#adhoc-resolution");
-  const resField = resSelect.closest("label");
-  const allowed = new Set((caps && caps.resolutions) || []);
-  // 分辨率档位在 adhoc 一直可用（画幅走显式像素 size）。
-  // 模型声明了 resolution 枚举时按枚举筛；声明为空（如 muse-image）时全部放开 ——
-  // 清单是目录级声明、未必准（muse-image 声明为空但实际接受 size）。
-  resField.hidden = false;
-  const TIER_TO_PROVIDER = { "1k": "1K", "2k": "2K" };
-  Array.from(resSelect.options).forEach((opt) => {
-    opt.hidden = allowed.size > 0 ? !allowed.has(TIER_TO_PROVIDER[opt.value]) : false;
-  });
+  const enums = (caps && caps.resolutions) || [];
+  const parts = [`<option value="">跟随设置默认</option>`];
+  if (enums.length) {
+    for (const value of enums) {
+      parts.push(`<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`);
+    }
+  } else {
+    // 模型没声明 resolution 枚举（如 muse-image）→ 档位纯算像素：charvar 档位。
+    // muse 的清单声明未必准（声明为空但实际接受 size），别把档位锁死。
+    parts.push(
+      `<option value="1k">1k（长边 1024）</option>`,
+      `<option value="2k">2k（长边 2048）</option>`,
+    );
+  }
+  resSelect.innerHTML = parts.join("");
 
   const qualities = (caps && caps.qualities) || [];
   const qSelect = $("#adhoc-quality");
   const qField = $("#adhoc-quality-field");
-  if (qualities.length) {
-    qSelect.innerHTML = qualities.map((q) => `<option value="${escapeHtml(q)}">${escapeHtml(q)}</option>`).join("");
-    qField.hidden = false;
-  } else {
-    qSelect.innerHTML = "";
-    qField.hidden = true;
-  }
+  qSelect.innerHTML = [`<option value="">跟随设置默认</option>`]
+    .concat(qualities.map((q) => `<option value="${escapeHtml(q)}">${escapeHtml(q)}</option>`))
+    .join("");
+  qField.hidden = qualities.length === 0;
   updateAdhocHints();
+}
+
+function applyAdhocTierOptions() {
+  /* ComfyUI 通路：没有 provider 枚举，档位固定 charvar 档位（comfy 侧 2k 走官方像素表） */
+  const select = $("#adhoc-resolution");
+  select.innerHTML =
+    `<option value="1k">1k（长边 1024）</option>` +
+    `<option value="2k">2k（Qwen 官方像素 ~4.2MP）</option>`;
+  select.value = "1k";
+  $("#adhoc-quality-field").hidden = true;
 }
 
 function updateAdhocHints() {
@@ -84,6 +117,7 @@ function updateAdhocHints() {
   }
   if (count >= ADHOC_MAX_REFS) parts.push(`已达上限 ${ADHOC_MAX_REFS} 张`);
   hint.innerHTML = parts.map(escapeHtml).join("；");
+  updateAdhocMode();
 }
 
 /* ---------- 参考图 ---------- */
@@ -244,7 +278,8 @@ $("#btn-adhoc-generate").addEventListener("click", async () => {
     prompt,
     backend,
     aspect_ratio: $("#adhoc-aspect").value,
-    resolution: $("#adhoc-resolution").value,
+    // 分辨率空 = 后端用设置页/env 的模式默认（OpenRouter）或 1k（ComfyUI）
+    resolution: $("#adhoc-resolution").value || "",
     seed: Number($("#adhoc-seed").value || 0),
     references: adhocState.references.map((ref) =>
       ref.type === "staged"

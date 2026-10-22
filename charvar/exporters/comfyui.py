@@ -164,7 +164,10 @@ def dimensions_for(
     ``use_model_native=True``（ComfyUI 通路）时，2k 档走 Qwen-Image-2.1 官方
     像素表 —— 面积恒定 ~4.2MP，是模型训练时见过的尺寸。
     ``use_model_native=False``（OpenRouter 通路）时用通用"长边归一"算法：
-    那边跑的是 muse/grok/gpt-image，Qwen 的尺寸表对它们无意义。
+    那边跑的是 muse/grok/gpt-image，Qwen 的尺寸表对它们无意义。档位除了
+    charvar 的 1k/2k，还收 provider 清单里的枚举写法（512 / 1K / 1.5K / 4K…，
+    1K=1024 长边）。这里不做 4K 限档 —— OpenRouter 模型各自声明自己的
+    resolution 枚举，能不能传由 charvar.openrouter_image 按清单校验。
     """
     ratio = str(aspect_ratio or "").strip().lower()
     if ratio == "auto":
@@ -176,13 +179,36 @@ def dimensions_for(
         raise ValueError(f"aspect_ratio 非法：{aspect_ratio}")
     w_ratio, h_ratio = parsed
     tier = (resolution_tier or "1k").strip().lower()
-    if tier not in _RESOLUTION_LONG_SIDE:
-        raise ValueError(f"resolution 只支持 {'/'.join(_RESOLUTION_LONG_SIDE)}，当前：{resolution_tier}")
-    if use_model_native and tier == "2k" and ratio in _QWEN_2K_SIZES:
-        return _QWEN_2K_SIZES[ratio]
-    long_side = _RESOLUTION_LONG_SIDE[tier]
+    if use_model_native:
+        if tier not in _RESOLUTION_LONG_SIDE:
+            raise ValueError(f"resolution 只支持 {'/'.join(_RESOLUTION_LONG_SIDE)}，当前：{resolution_tier}")
+        if tier == "2k" and ratio in _QWEN_2K_SIZES:
+            return _QWEN_2K_SIZES[ratio]
+        long_side = _RESOLUTION_LONG_SIDE[tier]
+    else:
+        long_side = _generic_long_side(tier)
+        if long_side is None:
+            raise ValueError(
+                f"resolution 非法：{resolution_tier}（OpenRouter 通路支持 1k/2k 及"
+                " provider 枚举值，如 512 / 1K / 1.5K / 2K / 4K）"
+            )
     short_side = max(64, int(round(long_side * min(w_ratio, h_ratio) / max(w_ratio, h_ratio) / 64.0)) * 64)
     return (long_side, short_side) if w_ratio >= h_ratio else (short_side, long_side)
+
+
+_PROVIDER_RES_RE = re.compile(r"^(\d+(?:\.\d+)?)\s*[kK]?$")
+
+
+def _generic_long_side(tier: str) -> int | None:
+    """OpenRouter 通路的档位 → 长边：1k/2k 走老表，其他按 provider 写法解析。"""
+    if tier in _RESOLUTION_LONG_SIDE:
+        return _RESOLUTION_LONG_SIDE[tier]
+    match = _PROVIDER_RES_RE.fullmatch(str(tier).strip())
+    if match is None:
+        return None
+    number = float(match.group(1))
+    # "512"/"768" 这类纯数字按像素本身算；"1K"/"1.5K"/"4K" 按 1024 倍算
+    return max(64, int(round(number * (1024.0 if match.group(2) else 1.0))))
 
 
 def dimensions_for_item(
