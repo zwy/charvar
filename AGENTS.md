@@ -80,3 +80,9 @@
 3. 模板全文存 `subject_templates`：`PUT /subjects/<id>/template`（body `{"template_md": "..."}`），或网页「主体档案 → 从 .md 文件载入」。
 4. 锁定项与模板全文逐字保留原文，不做改写或摘要。
 5. 导入后跑一次 `python3 -m pytest -q`，并用 `/subjects/<id>/images/<kind>/suggest-prompt` 验一次 LLM 起草能跑通。
+
+**只有模板 .md、还没写档案时**：`charvar subject derive <template.md> --id <slug>` 从模板派生候选
+（`charvar/subject_derive.py`：LLM 抽取 → 引用核对（zh 模式锁定项必须回指模板原文，防编造）→
+独立审计（omission/contradiction/violation）；默认只写 `presets/subjects/<id>.yaml` 不入库，
+`--apply` 才入库，`--overwrite` 覆盖，多版本模板必须 `--version <关键词>`）。
+已入库配对的审计：`charvar subject verify <id>`（exit 0 通过 / 1 有问题单，`--json` 供 agent）。

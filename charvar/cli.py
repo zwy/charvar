@@ -111,6 +111,148 @@ def subject_remove(subject_id: str) -> None:
     typer.echo(f"已删除：{subject_id}")
 
 
+@subject_app.command("derive")
+def subject_derive(
+    template: Path = typer.Argument(..., exists=True, readable=True, help="「角色全场景通用提示词模板」.md 文件"),
+    subject_id: Optional[str] = typer.Option(None, "--id", help="档案 id（缺省由 LLM 从标题推导 slug）"),
+    display_name: Optional[str] = typer.Option(None, "--name", help="显示名（缺省沿用模板标题/正文）"),
+    lang: str = typer.Option("zh", "--lang", help="zh=模板原文摘录（默认，可防幻觉核对）/ en=翻译成英文"),
+    version_hint: Optional[str] = typer.Option(None, "--version", help="多版本模板时指定要抽取的候选关键词"),
+    apply: bool = typer.Option(False, "--apply", help="全链通过后直接入库（缺省只写 presets/subjects/<id>.yaml）"),
+    overwrite: bool = typer.Option(False, "--overwrite", "-f", help="同 id 已存在（DB 或 YAML 文件）时覆盖"),
+    json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出（外部 agent）"),
+) -> None:
+    """从模板 .md 派生主体档案候选：LLM 抽取 + 引用核对 + 审计（闸门在 charvar/subject_derive.py）。"""
+    from charvar import llm as llm_service
+    from charvar import settings_service
+    from charvar import subject_derive as derive_service
+
+    if lang not in ("zh", "en"):
+        _die("lang 只支持 zh/en")
+    try:
+        template_md = template.read_text(encoding="utf-8")
+    except OSError as exc:
+        _die(f"无法读取模板 {template}：{exc}")
+    if len(template_md) > derive_service._TEMPLATE_MAX_CHARS:
+        typer.secho(
+            f"警告：模板 {len(template_md)} 字符超过 LLM 输入上限 {derive_service._TEMPLATE_MAX_CHARS}，"
+            "超出部分模型看不到（与入库后被静默截断的行为一致）",
+            fg=typer.colors.YELLOW,
+        )
+
+    with storage.connect() as conn:
+        config = settings_service.llm_overrides(conn)
+    try:
+        outcome = derive_service.derive(
+            template_md,
+            lang=lang,
+            subject_id=subject_id or "",
+            name=display_name or "",
+            version_hint=version_hint or "",
+            config=config,
+        )
+    except derive_service.DeriveError as exc:
+        _die(str(exc))
+    except llm_service.LLMError as exc:
+        _die(f"LLM 调用失败：{exc}")
+    profile = outcome.profile
+
+    presets_subjects = paths.presets_dir() / "subjects"
+    yml_path = presets_subjects / f"{profile.id}.yaml"
+    with storage.connect() as conn:
+        db_conflict = storage.get_subject(conn, profile.id) is not None
+    if (db_conflict or yml_path.exists()) and not overwrite:
+        where = "DB 与" if db_conflict and yml_path.exists() else "DB" if db_conflict else "presets/subjects"
+        _die(f"档案已存在（{where}）：{profile.id}（--overwrite 覆盖）")
+
+    presets_subjects.mkdir(parents=True, exist_ok=True)
+    model = llm_service.get_llm_config(config)["model"]
+    derive_service.write_profile_yaml(
+        yml_path, profile,
+        source_name=template.name, source_sha256=_sha256_hex(template_md), model=model, outcome=outcome,
+    )
+    if apply:
+        with storage.connect() as conn:
+            storage.save_subject(conn, profile, replace=True)
+        typer.echo(f"已入库档案：{profile.id}")
+
+    if json_out:
+        typer.echo(json.dumps(_derive_summary(outcome, yml_path), ensure_ascii=False))
+        return
+    typer.echo(f"起草 {outcome.draft_rounds} 轮 · 审计 {outcome.verify_rounds} 轮（{'通过' if outcome.verify_pass else '未通过'}）")
+    typer.echo(f"  {outcome.citation_summary()}")
+    if outcome.quality_warnings:
+        typer.echo("  警告：")
+        for warning in outcome.quality_warnings:
+            typer.echo(f"    - {warning}")
+    typer.echo(f"档案 → {yml_path}" + ("（已入库）" if apply else "（未入库，确认无误后用 subject add 或 --apply）"))
+
+
+def _sha256_hex(text: str) -> str:
+    import hashlib
+
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _derive_summary(outcome, yml_path: Path) -> dict:
+    return {
+        "profile": outcome.profile.model_dump(),
+        "yaml_path": str(yml_path),
+        "lang": outcome.lang,
+        "draft_rounds": outcome.draft_rounds,
+        "verify_rounds": outcome.verify_rounds,
+        "verify_pass": outcome.verify_pass,
+        "verify_issues": [issue.get("detail") for issue in outcome.verify_issues],
+        "citation_misses": [[group, entry] for group, entry in outcome.citation_misses],
+        "citation_repaired": [[group, entry] for group, entry in outcome.citation_repaired],
+        "quality_warnings": outcome.quality_warnings,
+        "notes": outcome.notes,
+    }
+
+
+@subject_app.command("verify")
+def subject_verify(
+    subject_id: str = typer.Argument(..., help="主体档案 id"),
+    json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出（外部 agent）"),
+) -> None:
+    """审计已入库档案与它的模板是否一致（omission/矛盾/违例；通过 exit 0，有问题 exit 1）。"""
+    from charvar import llm as llm_service
+    from charvar import settings_service
+    from charvar import subject_derive as derive_service
+
+    with storage.connect() as conn:
+        subject = storage.get_subject(conn, subject_id)
+        if subject is None:
+            _die(f"主体档案不存在：{subject_id}")
+        template = storage.get_subject_template(conn, subject_id)
+        if not template:
+            _die(f"主体 {subject_id} 没有模板，无法审计（先 PUT /subjects/<id>/template 或网页「主体档案」上传）")
+        config = settings_service.llm_overrides(conn)
+    try:
+        verdict = llm_service.chat_json(
+            derive_service.build_verify_messages(subject, template),
+            schema=derive_service.VERIFY_SCHEMA,
+            schema_name="subject_profile_verify",
+            config=config,
+        )
+    except llm_service.LLMError as exc:
+        _die(f"LLM 审计失败：{exc}")
+    issues = [i for i in (verdict.get("issues") or []) if (i.get("detail") or "").strip()]
+    passed = bool(verdict.get("pass")) and not issues
+    if json_out:
+        typer.echo(json.dumps({"subject_id": subject_id, "pass": passed, "issues": issues}, ensure_ascii=False))
+    else:
+        if passed:
+            typer.echo(f"审计通过：{subject_id} 与模板一致")
+        else:
+            typer.echo(f"审计发现问题（{len(issues)} 条）：")
+            for issue in issues:
+                quote = f"（模板原文：{issue['quote']}）" if (issue.get("quote") or "").strip() else ""
+                typer.echo(f"  - [{issue.get('severity') or 'issue'}] {issue.get('detail')}{quote}")
+    if not passed:
+        raise typer.Exit(1)
+
+
 # ---------- presets ----------
 
 @presets_app.command("list")

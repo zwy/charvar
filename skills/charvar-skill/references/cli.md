@@ -101,3 +101,29 @@ data/generated/adhoc/{时间戳}_{短id}/
 | `OP_IMAGE_API_KEY` / `LLM_API_KEY` | OpenRouter key |
 | `OP_IMAGE_MODEL` | 默认模型（默认 `meta/muse-image`） |
 | `CHARVAR_DATA_DIR` | 数据目录（默认仓库 `data/`） |
+| `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` | subject derive / verify 的 LLM（也可在网页设置页配置） |
+
+## charvar subject derive〈MD 模板 → 档案〉
+
+手里只有「角色全场景通用提示词模板」.md 时，用它派生主体档案 YAML
+（LLM 抽取 + 引用核对 + 独立审计；锁定项必须能回指模板原文，防编造）：
+
+```bash
+~/.local/bin/charvar subject derive template.md --id yoga_teacher --json
+# 默认只写 presets/subjects/<id>.yaml（带出处注释头），不碰 DB；
+# 加 --apply 才入库；同 id 已存在要 --overwrite；多版本模板要 --version <关键词>。
+```
+
+- `--lang`：`zh`（默认，模板原文摘录，防幻觉核对最强）/ `en`（翻译成英文）。
+- 输出报告含质量警告与审计问题单；`--json` 的字段：profile / draft_rounds / verify_pass / citation_* 等。
+
+## charvar subject verify〈档案 ↔ 模板审计〉
+
+### 对已入库的主体
+
+```bash
+~/.local/bin/charvar subject verify <id> --json
+```
+
+读 DB 里已入库档案 + 它的模板（网页「主体档案」上传的），检查漏抽（omission）、
+与模板矛盾、把背景布光写成锁定。exit 0 = 通过，exit 1 = 有问题单。
