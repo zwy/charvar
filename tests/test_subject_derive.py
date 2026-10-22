@@ -150,6 +150,37 @@ def test_quality_issues_flags_scene_words():
     assert any("场景词" in w for w in warnings)
 
 
+def test_quality_issues_flags_sheet_layout_words():
+    """设定板版面结构（四个视图/右侧三个全身…）混进锁定项或 extra → 告警。"""
+    profile = sd.profile_from_draft({
+        "id": "demo", "name": "Demo", "subject_noun": "woman", "trigger_word": "",
+        "style_lock": ["同页并排的四个视图渲染"],
+        "identity_lock": ["柔和鹅蛋脸"],
+        "outfit_lock": ["亮紫色连体运动衣"],
+        "extra": "右侧三个全身均延续固定前缀的同一套服装，四处一致。",
+    })
+    warnings = sd.quality_issues(profile)
+    assert any("style_lock" in w and "设定板结构词" in w for w in warnings)
+    assert any(w.startswith("extra 含设定板结构词") for w in warnings)
+    # 干净的跨姿态兜底句不触发
+    clean = sd.profile_from_draft({**_V1, "extra": "Keep the same face and ponytail in every pose."})
+    assert not any("设定板" in w for w in sd.quality_issues(clean))
+
+
+def test_draft_prompt_bans_sheet_module_and_outfit_relisting():
+    messages = sd.build_draft_messages(_TEMPLATE, "zh", version_hint="正常版")
+    system = messages[0]["content"]
+    assert "排布描述一条都不许进档案" in system        # 版面结构禁入（但允许摘服装事实）
+    assert "不许因此遗漏" in system                     # 其他章节的服装事实照摘
+    assert "不复述服装清单" in system                  # extra 的形态规则
+    assert "「正常版」" in system                       # version_hint 注入 system 规则
+
+
+def test_verify_prompt_flags_sheet_layout_violation():
+    messages = sd.build_verify_messages(sd.profile_from_draft(_draft()), _TEMPLATE)
+    assert "版面结构语句" in messages[0]["content"] and "复述了整段服装清单" in messages[0]["content"]
+
+
 # ---------- derive 主流程 ----------
 
 def test_derive_success_zh(monkeypatch):
@@ -250,6 +281,43 @@ def test_derive_invalid_id_reports(monkeypatch):
     with pytest.raises(sd.DeriveError) as exc_info:
         sd.derive(_TEMPLATE)
     assert "字段不合规" in str(exc_info.value)
+
+
+def test_derive_retries_on_broken_json(monkeypatch):
+    """起草输出非法 JSON（截断/未转义）→ 带提示重抽，不算失败。"""
+    calls: list[str] = []
+
+    def fake_chat_json(messages, **kwargs):
+        calls.append(str(kwargs.get("schema_name")))
+        if kwargs["schema_name"] == "subject_profile_draft":
+            if len([c for c in calls if c == "subject_profile_draft"]) == 1:
+                raise llm.LLMParseError("invalid JSON response: {\"id\"…", text="{broken")
+            return _draft()
+        return {"pass": True, "issues": []}
+
+    monkeypatch.setattr(llm, "chat_json", fake_chat_json)
+    outcome = sd.derive(_TEMPLATE)
+    assert outcome.verify_pass and outcome.draft_rounds == 2
+
+
+def test_verify_parse_error_retries_in_place(monkeypatch):
+    """审计输出非法 JSON → 就地重试同一次审计，不退回重起草。"""
+    calls: list[str] = []
+
+    def fake_chat_json(messages, **kwargs):
+        calls.append(str(kwargs.get("schema_name")))
+        if kwargs["schema_name"] == "subject_profile_verify" and not getattr(fake_chat_json, "retried", False):
+            fake_chat_json.retried = True
+            raise llm.LLMParseError("truncated", text="{")
+        if kwargs["schema_name"] == "subject_profile_draft":
+            return _draft()
+        return {"pass": True, "issues": []}
+
+    monkeypatch.setattr(llm, "chat_json", fake_chat_json)
+    outcome = sd.derive(_TEMPLATE)
+    assert outcome.verify_pass and outcome.verify_rounds == 1
+    assert calls.count("subject_profile_draft") == 1  # 审计重试没有牵连重起草
+    assert calls.count("subject_profile_verify") == 2  # 就地重试了一次审计调用
 
 
 def test_derive_subject_id_and_name_override(monkeypatch):

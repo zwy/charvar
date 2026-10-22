@@ -43,6 +43,14 @@ _SCENE_LOCK_RE = re.compile(
     re.I,
 )
 
+# 设定板/多视图版面结构词：出现在锁定项或 extra 里就是污染（模板场景模块章节混入的版面描述）
+_SHEET_LAYOUT_RE = re.compile(
+    r"设定板|三视图|多视角|视图|版面|分格|并排|同页|同一页|panel|character sheet|\bviews?\b"
+    r"|[三个四个两个两]\s*个?[^，。;；]{0,6}(?:全身|视图|立绘)"
+    r"|(?:左|右)侧[^，。;；]{0,8}全身",
+    re.I,
+)
+
 MAX_LOCK_CHARS = 200  # 单条锁定项软上限
 MAX_LOCK_COUNT = 10   # 每组条数软上限
 MAX_EXTRA_CHARS = 300  # extra 软上限
@@ -113,7 +121,7 @@ def template_title(template_md: str) -> str | None:
 # ---------- 闸门① 质量软校验 ----------
 
 def quality_issues(profile: SubjectProfile) -> list[str]:
-    """软校验（警告不阻断）：单条太长、条数太多、跨组重复、noun 生僻、extra 过长、场景词。"""
+    """软校验（警告不阻断）：单条太长、条数太多、跨组重复、noun 生僻、extra 过长、场景词/设定板结构词。"""
     warnings: list[str] = []
     lock_groups = {"style_lock": profile.style_lock, "identity_lock": profile.identity_lock, "outfit_lock": profile.outfit_lock}
     for group, items in lock_groups.items():
@@ -125,6 +133,12 @@ def quality_issues(profile: SubjectProfile) -> list[str]:
             match = _SCENE_LOCK_RE.search(item)
             if match:
                 warnings.append(f"{group} 含场景词「{match.group(0)}」（背景/布光/镜头归场景采样，不建议写成锁定项）：{item[:60]}…")
+            match = _SHEET_LAYOUT_RE.search(item)
+            if match:
+                warnings.append(
+                    f"{group} 含设定板结构词「{match.group(0)}」（模板设定板/场景模块章节的版面描述混进来了，"
+                    f"单人档案不认这些）：{item[:60]}…"
+                )
     seen: dict[str, list[str]] = {}
     for group, items in lock_groups.items():
         for item in items:
@@ -137,6 +151,13 @@ def quality_issues(profile: SubjectProfile) -> list[str]:
         warnings.append(
             f"subject_noun「{profile.subject_noun}」不在建议范围（{'/'.join(sorted(SUGGESTED_NOUNS))}）：会原样拼进提示词"
         )
+    if profile.extra:
+        match = _SHEET_LAYOUT_RE.search(profile.extra)
+        if match:
+            warnings.append(
+                f"extra 含设定板结构词「{match.group(0)}」：模板设定板章节（如「四个视图…四处一致」）"
+                "不许摘成 extra——那是版面描述，拼进单人变体提示词就是污染"
+            )
     if len(profile.extra) > MAX_EXTRA_CHARS:
         warnings.append(f"extra 超过 {MAX_EXTRA_CHARS} 字符（现 {len(profile.extra)}）：兜底句建议短")
     return warnings
@@ -181,13 +202,10 @@ def citation_misses(template_md: str, profile: SubjectProfile) -> list[tuple[str
 
 def _lock_groups_rule(lang: str) -> str:
     if lang == "en":
-        return (
-            "- style_lock/identity_lock/outfit_lock/extra 用英文（翻译模板对应句，"
-            "保留专有名词与服装细节，不丢信息）。"
-        )
+        return "- style_lock/identity_lock/outfit_lock 三组用英文（翻译模板对应句，保留专有名词与服装细节，不丢信息）。"
     return (
-        "- style_lock/identity_lock/outfit_lock/extra 用模板原文（模板是中文就出中文条目）："
-        "每条必须是模板正文的近逐字摘录，允许删词收紧，禁止改写、翻译或引申。"
+        "- style_lock/identity_lock/outfit_lock 三组用模板原文（模板是中文就出中文条目）："
+        "每条必须是模板正文的近逐字摘录，允许删词收紧，禁止改写、翻译或引申。extra 除外（形态见字段语义）。"
     )
 
 
@@ -202,7 +220,11 @@ def _field_semantics() -> str:
         "- style_lock：画风/媒介/渲染质感（如真实摄影 vs 插画平涂、禁止 3D/蜡感皮肤）。\n"
         "- identity_lock：脸型/五官/发型/肤色（识别锚点表对应行）。\n"
         "- outfit_lock：服装/配饰（识别锚点表的上装/下装行）。\n"
-        "- extra：一句兜底一致性句（Keep the same ... in every pose 式），模板有现成锚定说明就摘录。\n"
+        "- extra：给跨姿态/跨场景出图用的兜底一致性句（Keep the same ... in every pose 式）："
+        "只强调身份特征与同一套服装在任意新姿态/新场景中保持一致；"
+        "**不复述服装清单**（outfit_lock 已有，复述即污染），"
+        "**绝对不提多视图/设定板结构**（如四个视图、右侧三个全身、同页、并排、分格——"
+        "那是设定图的版面描述，拼进单人场景提示词就是污染），也不提具体姿态。\n"
         "- candidates：仅当模板存在多套候选（正常/精简版、多套服装、双主体分段）时，"
         "列出每个候选的一句话描述；无歧义为空数组。\n"
         "- notes：补充说明（选用了哪个版本、有无不确定），可空。"
@@ -226,6 +248,12 @@ def build_draft_messages(
         _lock_groups_rule(lang),
         "- 锁定项只能来自模板正文：每条必须能在模板里找到对应原文；不得引入模板没有的设定。",
         "- 锁定项不写背景、布光、镜头类内容（那是场景采样/构图，不是身份锁定）。",
+        "- 素材范围：身份/服装/画风事实优先取【识别锚点表】和【固定前缀】章节；"
+        "其他章节（设定板/多视角/场景模块）只允许摘取其中**明确的服装或身份事实条目**"
+        "（锚点表没有的服装细节就在这类章节里，不许因此遗漏），"
+        "但摘录时必须剥掉版面与构图结构——视图数量（四个视图/左侧三个全身/三视图）、"
+        "同页/并排/分格/入镜框线这类排布描述一条都不许进档案；"
+        "「右肩背书包」这类穿着部位是服装事实，保留。",
         (f"- version_hint：「{version_hint}」——只对匹配该关键词的模板版本抽取，忽略其他版本，candidates 留空。"
          if version_hint else
          "- 模板存在多套候选（正常/精简、多套服装、双主体分段）时不要猜：输出 candidates 列出每个候选的一句话描述，等调用方裁定。"),
@@ -266,7 +294,10 @@ def build_verify_messages(profile: SubjectProfile, template_md: str) -> list[dic
         " SubjectProfile 候选。只检查这三类问题，其他一律不报：\n"
         "- omission：模板里明确的身份/服装/画风事实，档案缺失了关键条目（锚点表逐行核对）；\n"
         "- contradiction：档案条目与模板矛盾（颜色、款式、比例等）；\n"
-        "- violation：把背景/布光/镜头写成了锁定项，或把身份细节塞进了 name/trigger_word。\n"
+        "- violation：把背景/布光/镜头写成了锁定项；把身份细节塞进了 name/trigger_word；"
+        "extra 或锁定项残留多视图/设定板的版面结构语句（如「四个视图」「右侧三个全身…四处一致」"
+        "「同页」「并排」「分格」）——那是设定图版面描述，不属于单人档案；"
+        "extra 复述了整段服装清单（outfit_lock 已覆盖）。\n"
         "severity 取 omission/contradiction/violation；quote 引模板原文片段（找不到留空）；"
         "detail 用中文一句说清。轻微措辞差异、删词收紧不算问题；没有问题时 pass=true。\n"
         '只输出 JSON：{"pass": <bool>, "issues": [{severity, quote, detail}]}'
@@ -399,6 +430,12 @@ def derive(
                 schema_name="subject_profile_draft",
                 config=config,
             )
+        except llm.LLMParseError as exc:
+            # 输出非法/被截断（chat_json 已试过截取修复）：作为可重试问题进入下一轮
+            if round_no == _MAX_ROUNDS:
+                raise DeriveError(f"LLM 两次输出都不是合法 JSON：{exc}") from exc
+            repair_notes = ["上一稿输出不是合法 JSON（可能被截断或含未转义引号）：重新输出完整 JSON"]
+            continue
         except llm.LLMError as exc:
             raise DeriveError(f"LLM 起草档案失败：{exc}") from exc
         if draft_is_ambiguous(draft) and not version_hint:
@@ -425,15 +462,21 @@ def derive(
                 continue  # 重抽
 
         verifies += 1
-        try:
-            verdict = llm.chat_json(
-                build_verify_messages(profile, template_md),
-                schema=VERIFY_SCHEMA,
-                schema_name="subject_profile_verify",
-                config=config,
-            )
-        except llm.LLMError as exc:
-            raise DeriveError(f"LLM 审计失败：{exc}") from exc
+        verdict: dict | None = None
+        for attempt in range(1, 3):  # 审计输出非法 JSON 就地重试一次（不值得为此重起草）
+            try:
+                verdict = llm.chat_json(
+                    build_verify_messages(profile, template_md),
+                    schema=VERIFY_SCHEMA,
+                    schema_name="subject_profile_verify",
+                    config=config,
+                )
+                break
+            except llm.LLMParseError as exc:
+                if attempt == 2:
+                    raise DeriveError(f"LLM 审计输出不是合法 JSON：{exc}") from exc
+        if verdict is None:  # pragma: no cover - 上面已保证
+            raise DeriveError("LLM 审计未返回结果")
         issues = [i for i in (verdict.get("issues") or []) if (i.get("detail") or "").strip()]
         if verdict.get("pass") and not issues:
             return DeriveOutcome(
