@@ -1,0 +1,73 @@
+# charvar 三动作预设｜白裙丝袜女人（持裙展开三式）
+# 动作来源：用户提供的三张抖音姿势参考图（images/白裙丝袜女人/动作/pose_1..3.jpg），
+# 由《动作预设开发工作流｜Agent 操作手册 V1.1》流程提取为可核对动作卡与纯动作段。
+# 三条动作段只管肢体、支撑接触、朝向、机位与完整入镜；
+# 身份、画风、服装、背景一律由 front 参考图承担，动作段不描述主体外貌。
+#
+# ★ master_template 刻意**不含** {style_lock_sentence}{identity_lock_sentence}{outfit_lock_sentence}。
+#   实测（本轮，见 subject/白裙丝袜女人_角色开发/动作预设/）：
+#   把主体档案锁定项（本角色约 1080 字符）放在动作段前面，ComfyUI 的 Qwen-Image-Edit
+#   会把动作段稀释到 14%，动作**不执行**——双臂仍垂放、双手不握裙摆（4 个臂全部失败）。
+#   去掉锁定项、只提交纯动作段 + front 参考图，同一后端同一动作**核心结构全部成立**。
+#   即梦 seedream 5.0 对同样的稀释不敏感（动作能出），但会把身份漂成通用脸。
+#   → 本预设的选择：**身份完全由参考图承担，动作段独占提示词**。
+#     换一个参考图撑不住身份的主体时，才需要把锁定项加回 master_template。
+#
+# 动作段为单行双引号标量：折叠写法（>-）会在断行处把「，臀」之类拆出空格，normalize 不清这个。
+# 三个动作都是近正面全身竖构图，画幅保持 auto（full → 2:3 竖版）。
+# caption 标签一律英文（仓库约定，训练信号不中英夹杂；动作段中文不进 caption）。
+# tags 的最后一项为动作标识，不是表情标签。参考图用 front 一张。
+# 身份/绑定引用（素材1、#图1 等）是外层平台的约定，不属于本预设；动作段不重复绑定身份。
+# 已知限制见 subject/白裙丝袜女人_角色开发/动作预设/测试记录.md。
+
+name: white_skirt_stockings_poses
+type: list
+version: 1
+master_template: 'Create an image of the {subject_noun} from {reference_tag}. One character only, no duplicated or repeated figure, no multi-view panel, no character sheet layout, no split screen.'
+suffix_template: The background is {background}. The lighting is {lighting}.
+backgrounds_ref: wildcards/backgrounds_v2.yaml
+lighting_ref: wildcards/lighting_v2.yaml
+caption_background_suffix: false
+reference_order:
+- front
+caption_tags:
+  expression: {}
+  pose:
+    skirt_hold_stand: standing holding skirt hem open with both hands
+    skirt_hold_knee_up: standing holding skirt hem open with one knee raised
+    skirt_hold_leg_side: standing holding skirt hem open with one leg extended to the side
+variants:
+- id: skirt_hold_stand
+  # 纯动作段 v1（ComfyUI Qwen-Image-Edit + front 参考图，核心结构成立）。
+  text: "人物正面朝向镜头站立，双脚并拢、鞋底相贴、脚尖朝前，两腿伸直，重心均匀分布在双脚上。躯干直立，双肩水平。双臂从肩部向斜外下方伸出约四十度，两臂伸直，上臂离开躯干，两侧臂下留出可见空隙。双手落在腰部两侧、略低于腰线，明显在身体轮廓之外，两手中点之间的距离约为三个肩宽。两只手各捏住裙摆下缘的一个角，手指向下压在布边之下，把裙摆从腰部向斜外下方拉起并向左右拉开，裙摆在身前横向展开成一道中间下垂的弧，弧的最低处落在大腿中段高度。头正对镜头，目光看向镜头。正面全身入镜，头顶与双脚完整入镜。"
+  framing: full
+  angle: front
+  expression: null
+  pose: skirt_hold_stand
+  tags:
+  - full
+  - action
+  - skirt_hold_stand
+- id: skirt_hold_knee_up
+  # 纯动作段 v1：上半身同 skirt_hold_stand，腿改为支撑腿伸直 + 另一腿屈膝抬起。
+  text: "人物正面朝向镜头站立，抬起一条腿，正面全身入镜。支撑腿伸直，脚掌平踩地面，脚尖朝前，重心完全落在支撑腿上。抬起腿屈膝，膝盖朝向前方并略低于髋部，小腿向后下方收起，脚尖绷直向下，脚跟抬到接近小腿肚的高度，整条腿离开地面约二十厘米。躯干直立，双肩水平。双臂从肩部向斜外下方伸出约四十度，两臂伸直，上臂离开躯干，两侧臂下留出可见空隙。双手落在腰部两侧、略低于腰线，明显在身体轮廓之外，两手中点之间的距离约为三个肩宽。两只手各捏住裙摆下缘的一个角，手指向下压在布边之下，把裙摆从腰部向斜外下方拉起并向左右拉开，裙摆在身前横向展开成一道中间下垂的弧，弧的最低处落在大腿中段高度。头正对镜头，目光看向镜头。头顶与双脚完整入镜。"
+  framing: full
+  angle: front
+  expression: null
+  pose: skirt_hold_knee_up
+  tags:
+  - full
+  - action
+  - skirt_hold_knee_up
+- id: skirt_hold_leg_side
+  # 纯动作段 v1：腿改为支撑腿伸直 + 另一腿向侧前方伸直斜抬。
+  # 参考图 pose_3 的抬起脚是否点地无法从画面判定，本条按设计版取「整条腿离地」。
+  text: "人物正面朝向镜头站立，抬起一条腿向侧前方斜伸，正面全身入镜。支撑腿伸直，脚掌平踩地面，脚尖朝前，重心完全落在支撑腿上。抬起腿的膝关节基本伸直，整条腿从髋部向身体侧前方斜伸出约三十五度，脚尖绷直朝下，前脚掌接近地面，整条腿离开地面。躯干直立，双肩水平。双臂从肩部向斜外下方伸出约四十度，两臂伸直，上臂离开躯干，两侧臂下留出可见空隙。双手落在腰部两侧、略低于腰线，明显在身体轮廓之外，两手中点之间的距离约为三个肩宽。两只手各捏住裙摆下缘的一个角，手指向下压在布边之下，把裙摆从腰部向斜外下方拉起并向左右拉开，裙摆在身前横向展开成一道中间下垂的弧，弧的最低处落在大腿中段高度。头正对镜头，目光看向镜头。头顶与双脚完整入镜。"
+  framing: full
+  angle: front
+  expression: null
+  pose: skirt_hold_leg_side
+  tags:
+  - full
+  - action
+  - skirt_hold_leg_side
