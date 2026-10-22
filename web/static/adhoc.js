@@ -19,17 +19,34 @@ function adhocBackend() {
 }
 
 function applyAdhocBackend() {
-  const isOpenRouter = adhocBackend() === "openrouter";
-  // OpenRouter 不支持负向提示词；ComfyUI 没有「模型名 / 质量档」概念
-  $("#adhoc-negative-field").hidden = isOpenRouter;
-  $("#adhoc-url-field").hidden = isOpenRouter;
-  $("#adhoc-model-field").hidden = !isOpenRouter;
+  const backend = adhocBackend();
+  const isOpenRouter = backend === "openrouter";
+  const isDreamina = backend === "dreamina";
+  // OpenRouter / 即梦都不支持负向提示词；ComfyUI 没有「模型名 / 质量档」概念
+  $("#adhoc-negative-field").hidden = isOpenRouter || isDreamina;
+  $("#adhoc-url-field").hidden = isOpenRouter || isDreamina;
+  $("#adhoc-quality-field").hidden = true;
+  $("#adhoc-seed-field").hidden = isDreamina; // 即梦不暴露 seed
+  $("#adhoc-model-field").hidden = !(isOpenRouter || isDreamina);
   updateAdhocHints();
   if (isOpenRouter) {
     loadAdhocModelCaps().catch(() => {});
+  } else if (isDreamina) {
+    applyAdhocDreaminaOptions();
   } else {
     applyAdhocTierOptions();
   }
+}
+
+/* 即梦通路：分辨率档 2K/4K（5.0Pro 另有 1.5K）；模型不选，跟随设置页/env */
+function applyAdhocDreaminaOptions() {
+  const select = $("#adhoc-resolution");
+  select.innerHTML =
+    [`<option value="">跟随设置默认</option>`, `<option value="2K">2K</option>`,
+     `<option value="4K">4K</option>`, `<option value="1.5K">1.5K（仅 5.0Pro）</option>`].join("");
+  select.value = "";
+  $("#adhoc-resolution-field").hidden = false;
+  renderAdhocModelInfo();
 }
 
 /* ---------- OpenRouter 模型能力（模型名/分辨率档/质量档/参考图） ---------- */
@@ -123,6 +140,10 @@ function applyAdhocTierOptions() {
 function renderAdhocModelInfo() {
   const el = $("#adhoc-model-field");
   if (!el) return;
+  if (adhocBackend() === "dreamina") {
+    el.innerHTML = `即梦共用一组配置：模型跟随设置页/env（默认 5.0）${adhocState.references.length ? "；已选参考图 → 走 image2image" : "；未选参考图 → text2image"}`;
+    return;
+  }
   if (adhocBackend() !== "openrouter") {
     el.hidden = true;
     return;
@@ -329,7 +350,12 @@ $("#btn-adhoc-generate").addEventListener("click", async () => {
 
   const btn = $("#btn-adhoc-generate");
   btn.disabled = true;
-  setStatus($("#adhoc-status"), backend === "comfyui" ? "出图中…（ComfyUI 约 20–60 秒）" : "出图中…（OpenRouter 约 15–45 秒）");
+  const waitHints = {
+    comfyui: "出图中…（ComfyUI 约 20–60 秒）",
+    openrouter: "出图中…（OpenRouter 约 15–45 秒）",
+    dreamina: "出图中…（即梦约 40–90 秒，消耗积分/权益）",
+  };
+  setStatus($("#adhoc-status"), waitHints[backend] || "出图中…");
   try {
     const out = await api("/adhoc/generate", { method: "POST", body: JSON.stringify(body) });
     renderAdhocResult(out);

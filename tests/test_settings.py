@@ -122,3 +122,44 @@ def test_openrouter_mode_config_merges_env(client, tmp_path, monkeypatch):
     assert modes["i2i"]["model"] == "meta/muse-image"
     assert modes["i2i"]["resolution"] == "4K"
     assert modes["i2i"]["quality"] == ""
+
+
+# ---------- 即梦（Dreamina）设置 ----------
+
+def test_dreamina_in_settings_payload(client):
+    data = client.get("/settings").json()
+    assert data["dreamina"] == {"model": "", "resolution": ""}
+    assert isinstance(data["dreamina_cli_available"], bool)
+
+
+def test_dreamina_roundtrip_and_full_dict_overwrite(client):
+    """dreamina 与 llm/openrouter 同一存储惯例：顶层键整行覆盖，调用方要发全量 dict。"""
+    client.put("/settings", json={"dreamina": {"model": "5.0Pro", "resolution": "4K"}})
+    data = client.get("/settings").json()
+    assert data["dreamina"]["model"] == "5.0Pro"
+    assert data["dreamina"]["resolution"] == "4K"
+    # 整行覆盖（和 openrouter 一样）：新 dict 里没有的子键会被清掉
+    client.put("/settings", json={"dreamina": {"resolution": ""}})
+    data = client.get("/settings").json()
+    assert data["dreamina"]["model"] == ""
+    assert data["dreamina"]["resolution"] == ""
+
+
+def test_dreamina_config_chain(tmp_path, monkeypatch):
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    monkeypatch.delenv("DREAMINA_IMAGE_MODEL", raising=False)
+    monkeypatch.delenv("DREAMINA_IMAGE_RESOLUTION", raising=False)
+    from charvar import storage
+    from charvar.settings_service import dreamina_config
+
+    conn = storage.connect(pathlib.Path(tmp_path) / "t.db")
+    # env > 缺省
+    monkeypatch.setenv("DREAMINA_IMAGE_RESOLUTION", "4K")
+    cfg = dreamina_config(conn)
+    assert cfg == {"model": "", "resolution": "4k"}
+    monkeypatch.delenv("DREAMINA_IMAGE_RESOLUTION", raising=False)
+    # DB > env
+    monkeypatch.setenv("DREAMINA_IMAGE_RESOLUTION", "4K")
+    storage.set_setting(conn, "dreamina", {"model": "4.7", "resolution": "2K"})
+    cfg = dreamina_config(conn)
+    assert cfg == {"model": "4.7", "resolution": "2k"}

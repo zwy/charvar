@@ -3,7 +3,7 @@
 这是给「本项目之外」用的一条通路：用户档案的文档生成环节里，
 提示词是手工复制到即梦 AI / 本地 ComfyUI 出图的；这里把它变成一条命令。
 
-与既有两条通路的区别：
+与三条通路的区别：
 - 主体档案 5 槽位（``charvar.subject_images``）——槽位固定、依赖 character_sheet 先就绪；
 - 预设批量（``charvar.api`` 的 /runs/{id}/comfyui）——一次几十条变体；
 - 本模块——一次一张、提示词原样使用、不依赖档案也不落 runs 表。
@@ -18,6 +18,10 @@ manifest 记完整请求与结果，便于复现；产物不落 runs 表（临�
 - 参考图统一走 ``charvar.reference_images`` 预处理（长边 1536 / JPEG q88 / 白底合成）；
 - OpenRouter 画幅走显式像素（provider 的 aspect_ratio 枚举不含 21:9），seed 由
   ``build_generate_body`` 内部收敛到 2^53-1；
+- 即梦（Dreamina）走官方 ``dreamina`` CLI（``charvar.dreamina_image``）：
+  带参考图 = image2image，不带 = text2image（同一组设置，不分组）；
+  画幅用 --ratio（charvar 8 档与 CLI 枚举一致）；**不暴露 seed**，
+  请求里的 seed 只记 manifest；提示词长度在提交前预检（t2i/i2i 上限不同）；
 - 不引入随机源：seed 一律由调用方显式给定。
 """
 from __future__ import annotations
@@ -32,11 +36,11 @@ from typing import Any, Literal
 import httpx
 from pydantic import BaseModel, Field
 
-from charvar import assets, openrouter_image, paths, reference_images, settings_service, storage
+from charvar import assets, dreamina_image, openrouter_image, paths, reference_images, settings_service, storage
 from charvar.exporters import comfyui as comfyui_exporter
 from charvar.models import GenerateResult, PromptItem
 
-Backend = Literal["comfyui", "openrouter"]
+Backend = Literal["comfyui", "openrouter", "dreamina"]
 
 # 参考图上限：OpenRouter 的 input_references 最多 4 张（openrouter_image._MAX_REFERENCES），
 # ComfyUI edit workflow 的 LoadImage 槽位也是 4 个。两边取小的。
@@ -56,16 +60,16 @@ class AdhocRequest(BaseModel):
 
     prompt: str
     backend: Backend
-    negative_prompt: str | None = None
+    negative_prompt: str | None = None  # 仅 ComfyUI 生效
     reference_paths: list[Path] = Field(default_factory=list)
     aspect_ratio: str = "3:4"
-    resolution: str = ""  # 空 = 设置页/env 的模式默认（OpenRouter）/ 1k（ComfyUI）；1k/2k 或 provider 枚举值
-    seed: int = 0
-    model: str | None = None
-    quality: str | None = None
+    resolution: str = ""  # 空 = 设置页/env 的模式默认（OpenRouter）/ 1k（ComfyUI）/ 2k（即梦）；1k/2k 或枚举值
+    seed: int = 0  # ComfyUI/OpenRouter 生效；即梦不暴露 seed，仅记 manifest
+    model: str | None = None  # OpenRouter slug / 即梦 model_version；空 = 设置页/env 默认
+    quality: str | None = None  # 仅 OpenRouter 生效
     comfy_url: str | None = None
     workflow: str | None = None
-    wait: bool = True
+    wait: bool = True  # OpenRouter/即梦无 --no-wait 语义，忽略该字段（总是等完）
     out: Path | None = None
 
 
@@ -544,6 +548,66 @@ def _generate_openrouter(
     )
 
 
+# ---------- 即梦（Dreamina，官方 CLI） ----------
+
+def _generate_dreamina(
+    req: AdhocRequest, run_id: str, run_dir: Path, db_path: Path | None = None
+) -> AdhocResult:
+    """即梦通路：带参考图 = image2image，不带 = text2image（同一组配置）。
+
+    即梦不暴露 seed（req.seed 只记 manifest）、没有负向词、没有质量档。
+    提示词处理与 OpenRouter 通路相同：``<image1>`` 有参考图换序数词、
+    无参考图整段摘掉 —— image2image 的参考图也是按 --images 顺序对应，
+    没有「标签→图片」绑定语义。提示词长度由 dreamina_image 提交前预检
+    （t2i 1600 / i2i 2000 字符，超限是上游硬失败，白扣一次提交）。
+    """
+    prepared = _prepare_references(req, run_dir)
+    with _conn(db_path) as conn:
+        mcfg = settings_service.dreamina_config(conn)
+    model = (req.model or "").strip() or mcfg["model"]
+    resolution = (req.resolution or "").strip() or mcfg["resolution"]
+    prompt = (
+        openrouter_image.rewrite_reference_tags(req.prompt.strip())
+        if prepared
+        else openrouter_image.strip_reference_tags(req.prompt.strip())
+    )
+    try:
+        dm_result = dreamina_image.generate(
+            prompt=prompt,
+            download_dir=run_dir / "download",
+            resolution=resolution,
+            model=model,
+            ratio=req.aspect_ratio,
+            reference_paths=prepared or None,
+        )
+    except dreamina_image.DreaminaAuthError as exc:
+        raise AdhocError(str(exc)) from exc
+    except dreamina_image.DreaminaImageError as exc:
+        raise AdhocError(f"即梦生图失败：{exc}") from exc
+
+    source = dm_result.images[0]
+    data = source.read_bytes()
+    suffix = openrouter_image.sniff_image_ext(data)
+    if suffix == ".bin":
+        raise AdhocError("即梦返回的不是可识别的图片格式")
+    destination = run_dir / "original" / f"000000.{suffix}"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_bytes(data)
+    thumb = assets.make_thumb(destination, run_dir / "thumbs" / "000000.webp")
+    actual_w, actual_h = _image_size(data)
+    return AdhocResult(
+        image_path=str(destination),
+        thumb_path=str(thumb),
+        provider="dreamina",
+        manifest_path="",
+        width=actual_w or dm_result.width or 0,
+        height=actual_h or dm_result.height or 0,
+        seed=req.seed,  # 即梦不暴露 seed：请求值原样记录，不参与生成
+        model=dm_result.model,
+        prompt_id=dm_result.submit_id,  # 凭此可在 CLI 侧 dreamina query_result 追踪
+    )
+
+
 # ---------- 公共工具 ----------
 
 def _conn(db_path: Path | None = None):
@@ -677,6 +741,8 @@ def generate(req: AdhocRequest, db_path: Path | None = None) -> AdhocResult:
     try:
         if req.backend == "comfyui":
             result = _generate_comfyui(req, run_id, run_dir, db_path)
+        elif req.backend == "dreamina":
+            result = _generate_dreamina(req, run_id, run_dir, db_path)
         else:
             result = _generate_openrouter(req, run_id, run_dir, db_path)
     except Exception as exc:

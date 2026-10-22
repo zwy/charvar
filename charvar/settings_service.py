@@ -63,12 +63,31 @@ class OpenRouterSettings(BaseModel):
     i2i_quality: str = ""
 
 
+class DreaminaSettings(BaseModel):
+    """即梦（Dreamina）官方 dreamina CLI 生图配置。
+
+    不像 OpenRouter 分 t2i/i2i 两组：即梦的模型都有编辑能力，
+    带不带参考图由调用方决定（带 = image2image，不带 = text2image），
+    配置共用一组。
+
+    - model 空串 = 用 env ``DREAMINA_IMAGE_MODEL``（再缺省 CLI 默认 5.0）；
+    - resolution 空串 = 用 env ``DREAMINA_IMAGE_RESOLUTION``（再缺省 2k）。
+      值按设置页口径（2K/4K）存，调 CLI 时归一小写（``charvar.dreamina_image`` 做）；
+    - 鉴权走本机 ``dreamina login`` 的登录态，这里没有 key 可配；
+    - 即梦不暴露 seed，charvar 的 seed 只记 manifest，不发送。
+    """
+
+    model: str = ""
+    resolution: str = ""
+
+
 class AppSettings(BaseModel):
     comfy_t2i_workflow: str = _DEFAULT_WORKFLOW_T2I
     comfy_edit_workflow: str = _DEFAULT_WORKFLOW_EDIT
     image_sizes: dict[str, ImageSize] = Field(default_factory=dict)
     llm: LlmSettings = Field(default_factory=LlmSettings)
     openrouter: OpenRouterSettings = Field(default_factory=OpenRouterSettings)
+    dreamina: DreaminaSettings = Field(default_factory=DreaminaSettings)
     default_negative_prompt: str = ""
 
 
@@ -97,6 +116,10 @@ def get_settings(conn: sqlite3.Connection) -> AppSettings:
     openrouter = (
         OpenRouterSettings.model_validate(or_raw) if isinstance(or_raw, dict) else OpenRouterSettings()
     )
+    dm_raw = data.get("dreamina")
+    dreamina = (
+        DreaminaSettings.model_validate(dm_raw) if isinstance(dm_raw, dict) else DreaminaSettings()
+    )
     # 迁移：旧的单模型配置（DB 里的 openrouter.model）平移到两个模式；
     # 新字段各自可再覆盖。model 字段本体保留在返回值里，读接口不再展示。
     if not openrouter.t2i_model:
@@ -109,6 +132,7 @@ def get_settings(conn: sqlite3.Connection) -> AppSettings:
         image_sizes=sizes,
         llm=llm,
         openrouter=openrouter,
+        dreamina=dreamina,
         default_negative_prompt=str(data.get("default_negative_prompt") or ""),
     )
 
@@ -127,6 +151,7 @@ def save_settings(conn: sqlite3.Connection, patch: dict) -> AppSettings:
             "image_sizes",
             "llm",
             "openrouter",
+            "dreamina",
             "default_negative_prompt",
         ):
             continue
@@ -162,6 +187,24 @@ def openrouter_mode_config(conn: sqlite3.Connection) -> dict[str, dict[str, str]
             or openrouter_image.env_mode_value(mode, "quality"),
         }
     return modes
+
+
+def dreamina_config(conn: sqlite3.Connection) -> dict[str, str]:
+    """即梦生图的生效配置：DB > env > 缺省。
+
+    - model 走 dreamina_image.resolve_model 的完整链路（DB 值 > env >
+      空 = CLI 默认 5.0）；
+    - resolution 同链路（DB > env DREAMINA_IMAGE_RESOLUTION > 2k，归一小写）；
+    - 模型-分辨率枚举校验与提示词长度预检在 charvar.dreamina_image 调用时做。
+    """
+    from charvar import dreamina_image
+
+    settings = get_settings(conn)
+    ds = settings.dreamina
+    return {
+        "model": dreamina_image.resolve_model(ds.model),
+        "resolution": dreamina_image.resolve_resolution(ds.resolution),
+    }
 
 
 def llm_overrides(conn: sqlite3.Connection) -> dict[str, str] | None:

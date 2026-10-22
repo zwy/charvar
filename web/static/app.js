@@ -707,6 +707,90 @@ $("#btn-openrouter-queue").addEventListener("click", async () => {
 
 setOpenRouterAspect("auto");
 
+/* ---------- 即梦（Dreamina）在线生图 ---------- */
+$("#btn-toggle-dreamina").addEventListener("click", async () => {
+  $("#dreamina-panel").hidden = !$("#dreamina-panel").hidden;
+  if (!$("#dreamina-panel").hidden) {
+    await loadDreaminaSettings().catch(() => {});
+  }
+  updateDreaminaHints();
+});
+
+let DREAMINA_ASPECT_RATIO = "auto";
+const DREAMINA_ASPECT_BUTTONS = $$("#dreamina-aspect .chip");
+
+DREAMINA_ASPECT_BUTTONS.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    DREAMINA_ASPECT_RATIO = btn.dataset.ratio || "auto";
+    DREAMINA_ASPECT_BUTTONS.forEach((b) => b.classList.toggle("active", b.dataset.ratio === DREAMINA_ASPECT_RATIO));
+    updateDreaminaDimPreview();
+  });
+});
+$("#dreamina-resolution").addEventListener("change", updateDreaminaDimPreview);
+
+/* 即梦按 --ratio 出图，像素以即梦侧为准；auto 按预设/景别规则走后端 */
+function updateDreaminaDimPreview() {
+  const ratio = DREAMINA_ASPECT_RATIO;
+  const presetRatio = (currentPresetMeta() || {}).preferred_aspect_ratio;
+  if (ratio === "auto") {
+    $("#dreamina-dim-preview").textContent = presetRatio
+      ? `智能（当前预设指定 ${presetRatio}）：自动按预设比例出图`
+      : "智能：按条目自带的画幅出图（没有则 3:4）。";
+    return;
+  }
+  $("#dreamina-dim-preview").textContent = `输出比例 ${ratio}（像素以即梦侧为准）`;
+}
+
+async function loadDreaminaSettings() {
+  const settings = await api("/settings");
+  const dm = settings.dreamina || {};
+  const parts = [
+    `model_version：${dm.model || "（跟随 env，CLI 默认 5.0）"}`,
+    `分辨率：${dm.resolution || "（跟随 env，默认 2K）"}`,
+  ];
+  if (settings.dreamina_cli_available === false) {
+    parts.push("⚠ 未找到 dreamina CLI（需安装并 dreamina login）");
+  }
+  $("#dreamina-model-hint").textContent = parts.join("｜");
+}
+
+function updateDreaminaHints() {
+  const refs = selectedRefKinds();
+  $("#dreamina-refs-hint").textContent = refs.length
+    ? `已选 ${refs.length} 张：${refs.join("、")}（带参考图 = image2image，按顺序对应）`
+    : "未选参考图：纯 text2image（提示词上限约 1600 字符）。";
+  updateDreaminaDimPreview();
+}
+
+$("#btn-dreamina-queue").addEventListener("click", async () => {
+  if (!state.lastRun) return;
+  const run = state.lastRun.run_id;
+  const refs = selectedRefKinds();
+  setStatus($("#dreamina-result"), "推送中…（每张消耗即梦积分，单张约 60 秒）");
+  try {
+    const body = { aspect_ratio: DREAMINA_ASPECT_RATIO };
+    const resolution = $("#dreamina-resolution").value;
+    if (resolution) body.resolution = resolution; // 空 = 后端用设置页/env 默认
+    if (refs.length) body.reference_kinds = refs;
+    const out = await api(`/runs/${run}/dreamina`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    $("#dreamina-result").textContent =
+      `模型 ${out.model}｜成功 ${out.succeeded} / 失败 ${out.failed}\n` +
+      (out.items || []).map((e) => {
+        const head = `#${String(e.index).padStart(3, "0")} ${e.variant_id}`;
+        if (!e.ok) return `${head} × ${e.error}`;
+        return `${head} ✓${e.width ? ` ${e.width}×${e.height}` : ""}`;
+      }).join("\n");
+    // 即梦是同步出图，产物已落盘 → 直接刷新图片墙
+    await Media.syncImages(run);
+    Media.setStatus(`图片 ${Media.currentData.completed}/${Media.currentData.items.length} 完成`);
+  } catch (err) {
+    setStatus($("#dreamina-result"), `失败：${err.message}`, true);
+  }
+});
+
 /* ---------- 主体档案 ---------- */
 function renderSubjectList() {
   const box = $("#subject-list");
@@ -881,7 +965,9 @@ async function loadSubjectImages() {
 function slotStatusText(slot) {
   if (slot.status === "ready") {
     if (slot.source === "uploaded") return "已上传";
-    return slot.provider === "openrouter" ? "已生成（OpenRouter）" : "已生成";
+    if (slot.provider === "openrouter") return "已生成（OpenRouter）";
+    if (slot.provider === "dreamina") return "已生成（即梦）";
+    return "已生成";
   }
   if (slot.status === "queued") return "生成中（可点同步）";
   if (slot.status === "error") return slot.error || "出错";
@@ -910,6 +996,7 @@ function renderSubjectImageSlots() {
           <button data-act="edit-prompt" data-kind="${slot.kind}">编辑提示词</button>
           <button data-act="generate" data-kind="${slot.kind}" class="primary">${slot.is_ready ? "Comfy重新生成" : "Comfy生成"}</button>
           <button data-act="generate-openrouter" data-kind="${slot.kind}">${slot.is_ready ? "OP重新生成" : "OP生成"}</button>
+          <button data-act="generate-dreamina" data-kind="${slot.kind}">${slot.is_ready ? "即梦重新生成" : "即梦生成"}</button>
           <label class="btn file-btn">上传<input type="file" data-upload="${slot.kind}" accept=".png,.jpg,.jpeg,.webp" hidden></label>
           ${slot.is_ready ? `<button data-act="delete" data-kind="${slot.kind}" class="danger">删除</button>` : ""}
           ${slot.status === "queued" ? `<button data-act="sync" data-kind="${slot.kind}">同步</button>` : ""}
@@ -983,6 +1070,21 @@ $("#subject-image-slots").addEventListener("click", async (ev) => {
           body: JSON.stringify({
             prompt: promptEl.value.trim() || null,
             seed: Number($("#slot-seed").value || 0), // 统一种子：工具栏唯一入口
+          }),
+        },
+      );
+      setStatus(statusEl, updated.status === "ready" ? "完成" : `状态：${updated.status}`);
+      await loadSubjectImages();
+    } else if (act === "generate-dreamina") {
+      btn.disabled = true;
+      setStatus(statusEl, "即梦生图中…（单张约 60 秒，消耗积分）");
+      const updated = await api(
+        `/subjects/${encodeURIComponent(sid)}/images/${kind}/generate-dreamina`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            prompt: promptEl.value.trim() || null,
+            seed: Number($("#slot-seed").value || 0), // 统一种子：工具栏唯一入口（即梦不暴露 seed，仅存档）
           }),
         },
       );
@@ -1354,6 +1456,14 @@ async function loadSettings() {
     await refreshOpenRouterSettingFields(settings);
     $("#set-or-key").value = "";
     $("#set-or-key").placeholder = settings.openrouter_configured ? "已配置（留空保持不变）" : "留空 = OP_IMAGE_API_KEY / LLM_API_KEY";
+    // 即梦：model 自由文本（空 = env/CLI 默认）；分辨率档固定 2K/4K 枚举
+    const dm = settings.dreamina || {};
+    $("#set-dreamina-model").value = dm.model || "";
+    const dmRes = $("#set-dreamina-resolution");
+    dmRes.value = Array.from(dmRes.options).some((o) => o.value === dm.resolution) ? dm.resolution : "";
+    $("#dreamina-cli-status").textContent = settings.dreamina_cli_available === false
+      ? "⚠ 本机没有找到 dreamina CLI：安装（curl -s https://jimeng.jianying.com/cli | bash）并完成 dreamina login 后才能出图"
+      : "dreamina CLI 已就绪；登录态用 dreamina user_credit 可以自查";
     const sizes = $("#settings-sizes");
     sizes.innerHTML = "";
     for (const [kind, size] of Object.entries(settings.image_sizes)) {
@@ -1402,6 +1512,11 @@ $("#btn-settings-save").addEventListener("click", async () => {
     i2i_resolution: $("#set-or-i2i-res-field").hidden ? "" : $("#set-or-i2i-resolution").value,
     i2i_quality: $("#set-or-i2i-quality-field").hidden ? "" : $("#set-or-i2i-quality").value,
     api_key: $("#set-or-key").value.trim(),
+  };
+  // 即梦：model 空串 = 落库为空 = 回到 env / CLI 默认；分辨率档空 = env（2K）默认
+  patch.dreamina = {
+    model: $("#set-dreamina-model").value.trim(),
+    resolution: $("#set-dreamina-resolution").value,
   };
   try {
     await api("/settings", { method: "PUT", body: JSON.stringify(patch) });

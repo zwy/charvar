@@ -444,3 +444,132 @@ def test_openrouter_resolution_accepts_provider_enum(env):
         adhoc.validate(adhoc.AdhocRequest(prompt="p", backend="openrouter", resolution="xxl"))
     # 空 = 跟随设置页/env 的模式默认
     adhoc.validate(adhoc.AdhocRequest(prompt="p", backend="openrouter", resolution=""))
+
+
+# ---------- 即梦（Dreamina）通路 ----------
+
+
+def _fake_dreamina(monkeypatch, *, error=None):
+    """打桩 dreamina_image.generate，记录每次调用的参数；产物落到 download_dir。
+
+    保留真实模块的提交前校验（提示词长度 / 比例 / 模型-分辨率）——
+    这些是 generate() 的行为，别让假桩绕掉。
+    """
+    from charvar import dreamina_image as dm
+
+    calls: list[dict] = []
+
+    def fake_generate(**kwargs):
+        calls.append(kwargs)
+        has_refs = bool(kwargs.get("reference_paths"))
+        dm.validate_prompt(str(kwargs.get("prompt") or ""), has_reference=has_refs)
+        dm.validate_ratio(kwargs.get("ratio") or None)
+        dm.validate_model_resolution(
+            str(kwargs.get("model") or ""),
+            dm.resolve_resolution(kwargs.get("resolution")),
+            has_reference=has_refs,
+        )
+        if error is not None:
+            raise error
+        directory = pathlib.Path(kwargs["download_dir"])
+        directory.mkdir(parents=True, exist_ok=True)
+        image = directory / "dm-sid_image_1.png"
+        Image.new("RGB", (48, 72), (90, 40, 20)).save(image, format="PNG")
+        return dm.DreaminaGenerateResult(
+            submit_id="dm-sid-1",
+            gen_status="success",
+            images=[image],
+            width=48,
+            height=72,
+            model=str(kwargs.get("model") or ""),
+            ratio=str(kwargs.get("ratio") or ""),
+            resolution=str(kwargs.get("resolution") or ""),
+        )
+
+    monkeypatch.setattr(dm, "generate", fake_generate)
+    return calls
+
+
+def test_dreamina_uses_settings_defaults(env, monkeypatch):
+    with storage.connect() as conn:
+        storage.set_setting(conn, "dreamina", {"model": "4.7", "resolution": "4K"})
+    calls = _fake_dreamina(monkeypatch)
+    result = adhoc.generate(adhoc.AdhocRequest(prompt="p", backend="dreamina"))
+    assert calls[0]["model"] == "4.7"
+    assert calls[0]["resolution"] == "4k"  # 模块内归一小写
+    assert result.provider == "dreamina"
+    assert result.model == "4.7"
+    assert result.prompt_id == "dm-sid-1"  # 即梦 submit_id 存 prompt_id 字段
+    assert pathlib.Path(result.image_path).suffix == ".png"
+
+
+def test_dreamina_falls_back_to_cli_defaults(env, monkeypatch):
+    monkeypatch.delenv("DREAMINA_IMAGE_MODEL", raising=False)
+    monkeypatch.delenv("DREAMINA_IMAGE_RESOLUTION", raising=False)
+    calls = _fake_dreamina(monkeypatch)
+    result = adhoc.generate(adhoc.AdhocRequest(prompt="p", backend="dreamina"))
+    assert calls[0]["model"] == ""   # 空 = CLI 默认 5.0
+    assert calls[0]["resolution"] == "2k"
+    assert result.model == ""
+
+
+def test_dreamina_env_beats_cli_default_but_request_beats_all(env, monkeypatch):
+    monkeypatch.setenv("DREAMINA_IMAGE_RESOLUTION", "4K")
+    calls = _fake_dreamina(monkeypatch)
+    adhoc.generate(adhoc.AdhocRequest(prompt="p", backend="dreamina"))
+    assert calls[0]["resolution"] == "4k"  # 模块内归一小写
+
+    calls.clear()
+    adhoc.generate(adhoc.AdhocRequest(prompt="p", backend="dreamina", model="5.0Pro", resolution="1.5K"))
+    assert calls[0]["model"] == "5.0Pro"
+    assert calls[0]["resolution"] == "1.5K"  # 显式值原样传（大小写在 dreamina_image 归一）
+
+
+def test_dreamina_rewrites_tags_like_openrouter(env, tmp_path, monkeypatch):
+    calls = _fake_dreamina(monkeypatch)
+    ref = _ref_image(tmp_path)
+    adhoc.generate(adhoc.AdhocRequest(
+        prompt="in the character sheet in <image1>, change pose", backend="dreamina",
+        reference_paths=[ref],
+    ))
+    assert calls[0]["ratio"] == "3:4"
+    assert "in the character sheet" in calls[0]["prompt"]
+    assert "<image1>" not in calls[0]["prompt"]
+    assert all(path.suffix == ".jpg" for path in calls[0]["reference_paths"])  # 统一预处理
+
+    calls.clear()
+    adhoc.generate(adhoc.AdhocRequest(prompt="A red apple. Use <image1> as the reference.", backend="dreamina"))
+    assert "<image1>" not in calls[0]["prompt"]
+    assert calls[0]["reference_paths"] is None
+
+
+def test_dreamina_prompt_too_long_raises(env, monkeypatch):
+    from charvar import dreamina_image as dm
+
+    _fake_dreamina(monkeypatch)
+    with pytest.raises(adhoc.AdhocError) as exc:
+        adhoc.generate(adhoc.AdhocRequest(prompt="x" * 2500, backend="dreamina"))
+    dm.validate_prompt("x" * 1200, has_reference=False)  # 上限内不报错对照
+
+
+def test_dreamina_error_passthrough(env, monkeypatch):
+    from charvar import dreamina_image as dm
+
+    _fake_dreamina(monkeypatch, error=dm.DreaminaAuthError("即梦登录态无效：请先 dreamina login"))
+    with pytest.raises(adhoc.AdhocError) as exc:
+        adhoc.generate(adhoc.AdhocRequest(prompt="p", backend="dreamina"))
+    assert "dreamina login" in str(exc.value)
+
+    _fake_dreamina(monkeypatch, error=dm.DreaminaTaskError("即梦任务失败：内容违规", submit_id="sid"))
+    with pytest.raises(adhoc.AdhocError) as exc:
+        adhoc.generate(adhoc.AdhocRequest(prompt="p", backend="dreamina"))
+    assert "内容违规" in str(exc.value)
+
+
+def test_dreamina_manifest_records_seed_and_backend(env, monkeypatch):
+    _fake_dreamina(monkeypatch)
+    result = adhoc.generate(adhoc.AdhocRequest(prompt="p", backend="dreamina", seed=77))
+    data = json.loads(pathlib.Path(result.manifest_path).read_text(encoding="utf-8"))
+    assert data["request"]["backend"] == "dreamina"
+    assert data["request"]["seed"] == 77  # 即梦不暴露 seed：请求值仅存档
+    assert data["result"]["provider"] == "dreamina"

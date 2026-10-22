@@ -32,7 +32,7 @@
 <div class="actions"><button id="btn-generate" class="primary">生成变体</button><span id="gen-status" class="status"></span></div></div>
 <div class="card" id="result-card" hidden><div class="row-head"><h2>生成结果 <span id="result-summary"></span></h2><div class="actions">
 <button id="btn-copy-prompts">复制全部提示词</button><button id="btn-copy-captions">复制全部 caption</button>
-<a id="dl-txt" class="btn" hidden>下载 TXT</a><a id="dl-jsonl" class="btn" hidden>下载 JSONL</a><a id="dl-zip" class="btn" hidden>下载 captions.zip</a><button id="btn-toggle-comfy">推送 ComfyUI…</button><button id="btn-toggle-openrouter">推送 OpenRouter…</button></div></div>
+<a id="dl-txt" class="btn" hidden>下载 TXT</a><a id="dl-jsonl" class="btn" hidden>下载 JSONL</a><a id="dl-zip" class="btn" hidden>下载 captions.zip</a><button id="btn-toggle-comfy">推送 ComfyUI…</button><button id="btn-toggle-openrouter">推送 OpenRouter…</button><button id="btn-toggle-dreamina">推送即梦…</button></div></div>
 <div id="comfy-panel" class="comfy-panel" hidden><div class="form-grid">
 <label>ComfyUI 地址<input type="text" id="comfy-url" value="http://127.0.0.1:8188"></label>
 <div class="form-field"><div class="field-label">Workflow（自动选择）</div><span id="comfy-workflow-hint" class="hint"></span></div>
@@ -81,6 +81,27 @@
 <span id="openrouter-caps-hint" class="hint"></span>
 <label class="span2">参考图（沿用生成页勾选，按序对应提示词里的 the first/second… reference image）<span id="openrouter-refs-hint" class="hint"></span></label>
 </div><div class="actions"><button id="btn-openrouter-queue" class="primary">推送生图</button><span class="hint">并发 4 路；单张 1K 约 15 秒、2K 约 30 秒。OpenRouter 不支持负向提示词，也没有负向提示词栏。</span></div><pre id="openrouter-result" class="log"></pre></div>
+<div id="dreamina-panel" class="comfy-panel" hidden><div class="form-grid">
+<div class="form-field"><div class="field-label">模型版本</div><span id="dreamina-model-hint" class="hint"></span></div>
+<div class="form-field">
+<div class="field-label">画幅比例</div>
+<div id="dreamina-aspect" class="chip-row">
+<button id="dreamina-aspect-auto" class="chip active" data-ratio="auto" type="button" data-label="智能">智能</button>
+<button id="dreamina-aspect-1-1" class="chip" data-ratio="1:1" type="button" data-label="1:1">1:1</button>
+<button id="dreamina-aspect-3-4" class="chip" data-ratio="3:4" type="button" data-label="3:4">3:4</button>
+<button id="dreamina-aspect-16-9" class="chip" data-ratio="16:9" type="button" data-label="16:9">16:9</button>
+<button id="dreamina-aspect-4-3" class="chip" data-ratio="4:3" type="button" data-label="4:3">4:3</button>
+<button id="dreamina-aspect-9-16" class="chip" data-ratio="9:16" type="button" data-label="9:16">9:16</button>
+<button id="dreamina-aspect-2-3" class="chip" data-ratio="2:3" type="button" data-label="2:3">2:3</button>
+<button id="dreamina-aspect-3-2" class="chip" data-ratio="3:2" type="button" data-label="3:2">3:2</button>
+<button id="dreamina-aspect-21-9" class="chip" data-ratio="21:9" type="button" data-label="21:9">21:9</button>
+</div>
+</div>
+<label>分辨率档<select id="dreamina-resolution">
+<option value="">跟随设置默认</option><option value="2K">2K</option><option value="4K">4K</option><option value="1.5K">1.5K（仅 5.0Pro）</option></select></label>
+<span id="dreamina-dim-preview" class="hint"></span>
+<label class="span2">参考图（沿用生成页勾选；带参考图自动走 image2image）<span id="dreamina-refs-hint" class="hint"></span></label>
+</div><div class="actions"><button id="btn-dreamina-queue" class="primary">推送生图</button><span class="hint">每张消耗即梦积分/权益，单张 2K 约 60 秒。即梦不暴露 seed，也没有负向提示词。</span></div><pre id="dreamina-result" class="log"></pre></div>
 <div class="media-toolbar">
       <button id="btn-sync-images" class="chip">同步图片</button>
       <button id="btn-view-images" class="chip active" aria-pressed="true">图片墙</button>
@@ -163,18 +184,27 @@
 </div>
 <p class="form-note">提示：模型选完会按 api-response.json 里该模型的 supported_parameters 动态加载分辨率/质量档；该模型不支持的档会自动收起并重置为空。两个模式对齐 ComfyUI 的文生图 / 图片编辑 workflow：带参考图的生图（档案其余 4 槽、批量推送勾了参考图、临时生图带参考图）走「图片编辑」这组。分辨率/质量留空 = 用请求显式值 > 设置页 > env（OP_IMAGE_T2I_* / OP_IMAGE_I2I_*）的默认，且值要在所选模型声明的枚举里才真正发送。API Key 留空 = 用环境变量；同一家的 OpenRouter key 可以直接复用 LLM_API_KEY。OpenRouter 不支持负向提示词，参考图按勾选顺序对应提示词里的 the first/second… reference image。</p>
 </div>
+<div class="card"><h2>即梦 Dreamina 生图</h2>
+<div class="form-grid">
+<label>model_version<input type="text" id="set-dreamina-model" placeholder="留空 = DREAMINA_IMAGE_MODEL（CLI 默认 5.0）"></label>
+<label>分辨率档<select id="set-dreamina-resolution">
+<option value="">（跟随 env 默认）</option><option value="2K">2K</option><option value="4K">4K</option></select></label>
+</div>
+<p class="form-note">提示：即梦走本机官方 <code>dreamina</code> CLI，鉴权用 <code>dreamina login</code> 的登录态（这里没有 API Key）。即梦的模型都有编辑能力，**不区分文生图 / 图片编辑配置组**：带参考图自动走 image2image，不带走 text2image，共用这一组配置。即梦不暴露 seed；提示词上限 text2image 约 1600 字符、image2image 约 2000 字符（超限会硬失败）；生成消耗即梦积分/权益（仅限会员）。分辨率留空 = 请求显式值 > 设置页 > env（DREAMINA_IMAGE_RESOLUTION，默认 2K）。</p>
+<span id="dreamina-cli-status" class="hint"></span>
+</div>
 <div class="card settings-save"><div class="actions">
 <button id="btn-settings-save" class="primary">保存设置</button><span id="settings-status" class="status"></span>
-<span class="hint">一次保存本页全部设置：生图 workflow / 主体图默认尺寸 / LLM / OpenRouter。改完记得点这里，别的卡片没有各自的保存按钮。</span>
+<span class="hint">一次保存本页全部设置：生图 workflow / 主体图默认尺寸 / LLM / OpenRouter / 即梦。改完记得点这里，别的卡片没有各自的保存按钮。</span>
 </div></div>
 </section>
 <section id="tab-adhoc" class="tab-page"><div class="card"><h2>临时生图</h2>
-<p class="form-note">给一段提示词直接出一张图：不进主体档案槽位、不跑预设批量、不落生成历史。产物落在 <code>data/generated/adhoc/</code>，同目录有 manifest.json 记录完整请求。CLI 是同一条通路：<code>charvar image comfyui|openrouter</code>。</p>
+<p class="form-note">给一段提示词直接出一张图：不进主体档案槽位、不跑预设批量、不落生成历史。产物落在 <code>data/generated/adhoc/</code>，同目录有 manifest.json 记录完整请求。CLI 是同一条通路：<code>charvar image comfyui|openrouter|dreamina</code>。</p>
 <div class="form-grid">
-<label>后端<select id="adhoc-backend"><option value="comfyui">ComfyUI（本机 / 局域网）</option><option value="openrouter">OpenRouter（在线）</option></select></label>
+<label>后端<select id="adhoc-backend"><option value="comfyui">ComfyUI（本机 / 局域网）</option><option value="openrouter">OpenRouter（在线）</option><option value="dreamina">即梦 Dreamina（官方 CLI，消耗积分）</option></select></label>
 <label>画幅比例<select id="adhoc-aspect"></select></label>
 <label id="adhoc-resolution-field">分辨率档位<select id="adhoc-resolution"><option value="1k">1k（长边 1024）</option><option value="2k">2k（Qwen 官方像素 ~4.2MP）</option></select></label>
-<label>种子<input type="number" id="adhoc-seed" value="0" placeholder="0 = 固定复现"></label>
+<label id="adhoc-seed-field">种子<input type="number" id="adhoc-seed" value="0" placeholder="0 = 固定复现"></label>
 <span id="adhoc-model-field" class="hint full-row"></span>
 <label id="adhoc-quality-field" hidden>质量档<select id="adhoc-quality"></select></label>
 <label id="adhoc-negative-field">负向提示词<input type="text" id="adhoc-negative" placeholder="留空 = 用 workflow 默认"></label>

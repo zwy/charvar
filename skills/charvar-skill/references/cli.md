@@ -47,6 +47,38 @@
 API Key 取值顺序：显式参数 > 设置页 > `OP_IMAGE_API_KEY` > `LLM_API_KEY`。
 画幅走显式像素 `size`（provider 的 `aspect_ratio` 枚举不含 21:9）。
 
+## charvar image dreamina
+
+用即梦（Dreamina）官方 `dreamina` CLI 出图。前置：本机装好官方 CLI（`curl -s
+https://jimeng.jianying.com/cli | bash`）并完成 `dreamina login`（登录态存在
+`~/.dreamina_cli/`，`dreamina user_credit` 能返回积分即就绪；**授权要让用户手动
+在浏览器完成**，agent 代登录可能拿到错误 URL）。
+
+带参考图自动走 `image2image`，不带走 `text2image`（即梦的模型都有编辑能力，
+不区分 t2i/i2i 配置组）。
+
+| 参数 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `--prompt` | str | — | 图片提示词 |
+| `--prompt-file` | str | — | 提示词文件路径；`-` 表示读 stdin |
+| `--ref` | list | — | 参考图路径，可重复，最多 4 张 |
+| `--aspect` | str | `3:4` | 同上（即梦原生 8 档比例，与该列表一致） |
+| `--resolution` | str | 空 | `2k` `4k`（5.0Pro 另有 `1.5k`）；空 = 设置页/env 默认 2k |
+| `--model` | str | — | 即梦 model_version（`3.0` `3.1` `4.0` `4.1` `4.5` `4.6` `4.7` `5.0` `5.0Pro`）；默认 5.0 |
+| `--out` / `-o` | path | — | 另外落一份到这个路径 |
+| `--json` | flag | — | 结果以 JSON 输出 |
+
+**没有 `--seed`**：即梦不暴露 seed，同提示词每次出图都不同；`prompt_id` 字段
+存的是即梦 submit_id（`dreamina query_result --submit_id=<id>` 可追溯）。
+
+- 提示词硬上限：text2image 约 1600 字符、image2image 约 2000 字符（超限上游
+  硬失败）；charvar 会在提交前报错，别浪费积分。
+- model_version 与分辨率档配对（CLI 1.4.20）：3.0/3.1 → 1k/2k（且只能
+  text2image）；4.0–5.0 → 2k/4k；5.0Pro → 1.5k/2k/4k。配错在提交前报错。
+- 每张消耗即梦积分/会员权益（仅限会员可用），出图前先确认用户额度。
+- 生成是异步的：submit → 轮询 → 下载，单张约 40–90 秒；等待总预算默认 300s
+  （`DREAMINA_IMAGE_TIMEOUT` 可调）。
+
 ## charvar image models
 
 列 OpenRouter 可用的生图模型（`id<TAB>名称`）。加 `--json` 输出 JSON。
@@ -102,6 +134,11 @@ data/generated/adhoc/{时间戳}_{短id}/
 | `OP_IMAGE_T2I_MODEL` | 文生图默认模型（默认 `meta/muse-image`） |
 | `OP_IMAGE_T2I_RESOLUTION` / `OP_IMAGE_T2I_QUALITY` | 文生图分辨率/质量默认（模型声明枚举时才发送） |
 | `OP_IMAGE_I2I_MODEL` / `OP_IMAGE_I2I_RESOLUTION` / `OP_IMAGE_I2I_QUALITY` | 图片编辑（带参考图）默认模型 / 分辨率 / 质量 |
+| `DREAMINA_IMAGE_MODEL` | 即梦 model_version 默认（默认 5.0） |
+| `DREAMINA_IMAGE_RESOLUTION` | 即梦分辨率档默认（2K/4K，默认 2K；小写大写都收） |
+| `DREAMINA_IMAGE_TIMEOUT` | 即梦单次生图总等待预算秒数（默认 300） |
+| `DREAMINA_POLL` | 即梦提交后 CLI 内首轮等待秒数（默认 60） |
+| `DREAMINA_CLI` | 覆盖 dreamina 可执行文件路径（默认 PATH 或 `~/.local/bin/dreamina`） |
 | `CHARVAR_DATA_DIR` | 数据目录（默认仓库 `data/`） |
 | `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` | subject derive / verify 的 LLM（也可在网页设置页配置） |
 

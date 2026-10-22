@@ -6,6 +6,7 @@ web/app.py 负责启动（uvicorn），与其他本机工具栈一致。
 from __future__ import annotations
 
 import json
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
@@ -21,6 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from charvar import __version__, assets, llm, paths, settings_service, storage, subject_images
 from charvar import adhoc as adhoc_service
+from charvar import dreamina_image
 from charvar import openrouter_image
 from charvar import reference_images
 from charvar.assets import ensure_thumb, resolve_run_asset, sheet_path, thumb_path
@@ -51,6 +53,10 @@ _TEMPLATE_MAX_BYTES = 200_000
 # OpenRouter 批量生图的并发路数。实测单张 1K 约 14s、4K 约 45s；
 # 30 条 4 路并发约 2 分钟（1K），比串行（8 分钟）可接受。
 _OPENROUTER_CONCURRENCY = 4
+
+# 即梦批量生图的并发路数。单张 2K 约 60s（即梦侧排队 + 生成），
+# 2 路并发 30 条约 15 分钟；每张消耗即梦积分/权益，保守开 2（env 可调）。
+_DREAMINA_CONCURRENCY = max(1, int(os.environ.get("DREAMINA_CONCURRENCY") or 2))
 
 
 class ComfyQueueRequest(BaseModel):
@@ -128,6 +134,35 @@ class SubjectImageOpenRouterRequest(BaseModel):
     quality: str | None = None
 
 
+class SubjectImageDreaminaRequest(BaseModel):
+    """档案图片走即梦（dreamina CLI）出图（与 OpenRouter 通路同语义）。
+
+    即梦不区分文生图/图片编辑配置组（带参考图自动走 image2image）；
+    不暴露 seed（仅存档）；画幅用 --ratio。
+    """
+
+    prompt: str | None = None
+    seed: int = 0
+    aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
+    resolution: str | None = Field(default=None, description="2k/4k（5.0Pro 另有 1.5k）；空 = 设置页/env（DREAMINA_IMAGE_RESOLUTION）默认")
+    model: str | None = Field(default=None, description="即梦 model_version；空 = 设置页/env（DREAMINA_IMAGE_MODEL）默认 5.0")
+
+
+class DreaminaQueueRequest(BaseModel):
+    """推送即梦在线生图（与 OpenRouter 入队同一套语义）。
+
+    即梦不区分 t2i/i2i 配置组：带参考图走 image2image、不带走 text2image，
+    配置共用一组（设置页「即梦 Dreamina 生图」/ env DREAMINA_IMAGE_*）。
+    画幅用 --ratio（charvar 8 档与即梦原生枚举一致）；不暴露 seed。
+    """
+
+    aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
+    resolution: str | None = Field(default=None, description="2k/4k（5.0Pro 另有 1.5k）；空 = 用设置页/env 默认")
+    reference_kinds: list[str] = Field(default_factory=list, description="主体图参考：带 = image2image，不带 = text2image")
+    model: str | None = Field(default=None, description="即梦 model_version；空 = 设置页/env（DREAMINA_IMAGE_MODEL）默认 5.0")
+    seed: int | None = Field(default=None, description="仅存档；即梦不暴露 seed")
+
+
 class SubjectImageBatchRequest(BaseModel):
     kinds: list[str]
     seed: int = 0
@@ -162,7 +197,7 @@ class AdhocGenerateRequest(BaseModel):
     """网页「临时生图」的请求（与 CLI ``charvar image`` 同一套参数）。"""
 
     prompt: str
-    backend: Literal["comfyui", "openrouter"] = "comfyui"
+    backend: Literal["comfyui", "openrouter", "dreamina"] = "comfyui"
     negative_prompt: str | None = None
     references: list[AdhocReferenceSpec] = Field(default_factory=list)
     aspect_ratio: str = "3:4"
@@ -432,6 +467,37 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                 raise HTTPException(502, f"OpenRouter 生图失败：{exc}") from exc
         return slot.model_dump()
 
+    @app.post("/subjects/{subject_id}/images/{kind}/generate-dreamina")
+    def api_subject_image_generate_dreamina(
+        subject_id: str, kind: str, req: SubjectImageDreaminaRequest
+    ) -> dict[str, Any]:
+        """档案图片走即梦出图（与 OpenRouter 通路同语义：两步流程 + 同槽位状态机）。
+
+        即梦不分组：character_sheet 走 text2image，其余 4 槽以它为参考自动走
+        image2image；不暴露 seed（仅存档）。
+        """
+        subject = _require_subject(subject_id)
+        with _db() as conn:
+            settings = settings_service.get_settings(conn)
+            mcfg = settings_service.dreamina_config(conn)
+            previous = storage.get_subject_image(conn, subject_id, kind) or {}
+            prompt = (req.prompt if req.prompt is not None else previous.get("prompt", "")) or ""
+            try:
+                slot = subject_images.generate_subject_image_dreamina(
+                    conn,
+                    subject,
+                    kind,
+                    prompt=prompt,
+                    seed=req.seed,
+                    aspect_ratio=req.aspect_ratio,
+                    resolution=(req.resolution or "").strip() or mcfg["resolution"],
+                    model=(req.model or "").strip() or mcfg["model"],
+                    settings=settings,
+                )
+            except subject_images.SubjectImageError as exc:
+                raise HTTPException(exc.status, str(exc)) from exc
+        return slot.model_dump()
+
     @app.post("/subjects/{subject_id}/images/{kind}/sync")
     def api_subject_image_sync(subject_id: str, kind: str, comfy_url: str = Query("")) -> dict[str, Any]:
         _require_subject(subject_id)
@@ -536,6 +602,12 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         # 模型默认按模式给（env 兜底链在 resolve_model 里），供设置页占位提示
         data["openrouter_default_t2i_model"] = openrouter_image.resolve_model(mode="t2i")
         data["openrouter_default_i2i_model"] = openrouter_image.resolve_model(mode="i2i")
+        # 即梦：CLI 是否可用（登录态在 dreamina login 侧查，这里只探文件在不在）
+        try:
+            dreamina_image.resolve_binary()
+            data["dreamina_cli_available"] = True
+        except dreamina_image.DreaminaCliError:
+            data["dreamina_cli_available"] = False
         return data
 
     @app.get("/settings")
@@ -1024,6 +1096,139 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             "items": entries,
         }
 
+    def _dreamina_generate_one(
+        result: GenerateResult,
+        item: PromptItem,
+        *,
+        aspect_ratio: str | None,
+        resolution: str,
+        reference_paths: list[Path],
+        model: str,
+    ) -> dict[str, Any]:
+        """生成一条即梦图并落盘；返回 {index, variant_id, ok, status, error?, submit_id?}。"""
+        entry: dict[str, Any] = {
+            "index": item.index,
+            "variant_id": item.variant_id,
+            "ok": False,
+            "status": "error",
+        }
+        import shutil
+
+        try:
+            ratio = aspect_ratio or str((item.meta or {}).get("preferred_aspect_ratio") or "")
+            if ratio in ("", "auto"):
+                ratio = "3:4"  # 即梦没有 auto：退到 charvar 默认档
+            # 提示词处理与 OpenRouter 通路一致：<imageN> 有参考图换序数词，无参考图摘掉
+            prompt = (
+                openrouter_image.rewrite_reference_tags(item.prompt)
+                if reference_paths
+                else openrouter_image.strip_reference_tags(item.prompt)
+            )
+            download_dir = assets.original_dir(result.run_id).parent / f"_dreamina_dl_{item.index}"
+            try:
+                dm_result = dreamina_image.generate(
+                    prompt=prompt,
+                    download_dir=download_dir,
+                    resolution=resolution,
+                    model=model,
+                    ratio=ratio,
+                    reference_paths=reference_paths or None,
+                )
+                if not dm_result.images:
+                    raise dreamina_image.DreaminaCliError("即梦任务成功但未落盘图片")
+                # 先把产物字节拷出来，再清临时下载目录
+                data = dm_result.images[0].read_bytes()
+            finally:
+                shutil.rmtree(download_dir, ignore_errors=True)
+            suffix = openrouter_image.sniff_image_ext(data)
+            if suffix == ".bin":
+                raise dreamina_image.DreaminaCliError("即梦返回的不是可识别的图片格式")
+            assets.save_run_image(result.run_id, item.index, data, suffix)
+            entry.update(
+                {
+                    "ok": True,
+                    "status": "done",
+                    "submit_id": dm_result.submit_id,
+                    "width": dm_result.width,
+                    "height": dm_result.height,
+                    "model": model,
+                }
+            )
+        except dreamina_image.DreaminaImageError as exc:
+            entry["error"] = str(exc)
+        except Exception as exc:  # noqa: BLE001 - 单条失败不中断整批
+            entry["error"] = f"{type(exc).__name__}: {exc}"
+        return entry
+
+    def _submit_to_dreamina(
+        conn,
+        result: GenerateResult,
+        *,
+        aspect_ratio: str | None,
+        resolution: str | None,
+        reference_kinds: list[str],
+        model: str | None,
+    ) -> tuple[str, list[dict[str, Any]]]:
+        """批量走即梦生图：小并发（_DREAMINA_CONCURRENCY），逐条落盘。
+
+        单条失败不中断整批（与 OpenRouter 批量同一语义）；每张消耗即梦积分/权益。
+        """
+        mcfg = settings_service.dreamina_config(conn)
+        effective_model = (model or "").strip() or mcfg["model"]
+        effective_resolution = (resolution or "").strip() or mcfg["resolution"]
+        reference_paths = _openrouter_reference_paths(result.subject_id, reference_kinds)
+
+        entries: list[dict[str, Any]] = []
+        with ThreadPoolExecutor(max_workers=_DREAMINA_CONCURRENCY) as pool:
+            futures = {
+                pool.submit(
+                    _dreamina_generate_one,
+                    result,
+                    item,
+                    aspect_ratio=aspect_ratio,
+                    resolution=effective_resolution,
+                    reference_paths=reference_paths,
+                    model=effective_model,
+                ): item
+                for item in result.items
+            }
+            for future in as_completed(futures):
+                entries.append(future.result())
+        entries.sort(key=lambda e: int(e["index"]))
+        return effective_model, entries
+
+    @app.post("/runs/{run_id}/dreamina")
+    def api_run_dreamina(run_id: str, req: DreaminaQueueRequest) -> dict[str, Any]:
+        with _db() as conn:
+            result = storage.get_run(conn, run_id)
+            if result is None:
+                raise HTTPException(404, f"生成记录不存在：{run_id}")
+            model, entries = _submit_to_dreamina(
+                conn,
+                result,
+                aspect_ratio=req.aspect_ratio,
+                resolution=req.resolution,
+                reference_kinds=req.reference_kinds,
+                model=req.model,
+            )
+            # 快照本次最终生效的入队参数（图片墙单条「重新生成」原样重放，种子除外）
+            storage.save_queue_settings(conn, run_id, {
+                "provider": "dreamina",
+                "model": model,
+                "aspect_ratio": req.aspect_ratio,
+                "resolution": req.resolution,
+                "reference_kinds": list(req.reference_kinds),
+            })
+        ok_count = sum(1 for e in entries if e.get("ok"))
+        return {
+            "run_id": run_id,
+            "provider": "dreamina",
+            "model": model,
+            "succeeded": ok_count,
+            "failed": len(entries) - ok_count,
+            "items": entries,
+        }
+
     @app.get("/openrouter/models")
     def api_openrouter_models(refresh: bool = False) -> dict[str, Any]:
         """模型清单。``refresh=true`` 强制重新拉取并覆盖本地缓存。
@@ -1217,6 +1422,40 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             meta = item.meta or {}
             # 快照缺失（老 run）回退：LLM 模式生成时 meta 已带 reference_kinds
             reference_kinds = list(queued.get("reference_kinds") or []) or list(meta.get("reference_kinds") or [])
+
+            if queued.get("provider") == "dreamina":
+                # 即梦通路：同一提示词 + 同一画幅/参考图重出一张。
+                # 即梦不暴露 seed —— 请求里的 seed 仅记录，实际每次都是新图。
+                mcfg = settings_service.dreamina_config(conn)
+                entry = _dreamina_generate_one(
+                    single,
+                    item,
+                    aspect_ratio=queued.get("aspect_ratio"),
+                    resolution=(str(queued.get("resolution") or "")).strip() or mcfg["resolution"],
+                    reference_paths=_openrouter_reference_paths(result.subject_id, reference_kinds),
+                    model=(str(queued.get("model") or "")).strip() or mcfg["model"],
+                )
+                if not entry.get("ok"):
+                    raise HTTPException(502, f"重新生成失败：{entry.get('error') or '未知错误'}")
+                item.meta = {
+                    **meta,
+                    "regen": {
+                        "provider": "dreamina",
+                        "seed": seed,
+                        "submit_id": entry.get("submit_id"),
+                        "submitted_at": storage.utcnow(),
+                    },
+                }
+                storage.save_run(conn, result)
+                return {
+                    "ok": True,
+                    "run_id": run_id,
+                    "item_index": item.index,
+                    "variant_id": item.variant_id,
+                    "seed": seed,
+                    "provider": "dreamina",
+                    "model": entry.get("model") or "",
+                }
 
             if queued.get("provider") == "openrouter":
                 # OpenRouter 通路：同一提示词 + 同一画幅/参考图，只换种子重出一张。

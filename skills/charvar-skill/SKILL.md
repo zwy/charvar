@@ -1,16 +1,17 @@
 ---
 name: charvar-skill
-description: Generate images with the charvar project's ComfyUI or OpenRouter backends from any project. This skill should be used when the user asks to "用 comfyui 生图", "用 openrouter 生图", "charvar 帮我出图", "用 charvar 出张图", "generate an image with comfyui", "generate an image with openrouter", or otherwise asks to produce an image via the charvar CLI; also for charvar subject-profile tasks such as "导入角色档案", "从模板生成主体档案" or using the charvar subject CLI.
+description: Generate images with the charvar project's ComfyUI, OpenRouter, or Dreamina backends from any project. This skill should be used when the user asks to "用 comfyui 生图", "用 openrouter 生图", "用即梦生图", "charvar 帮我出图", "用 charvar 出张图", "generate an image with comfyui", "generate an image with openrouter", "generate an image with dreamina", or otherwise asks to produce an image via the charvar CLI; also for charvar subject-profile tasks such as "导入角色档案", "从模板生成主体档案" or using the charvar subject CLI.
 ---
 
 # charvar 生图
 
-通过 charvar 项目的 CLI 出图。两条后端：**comfyui**（本机/局域网 ComfyUI）和
-**openrouter**（OpenRouter 在线生图）。用户会明确说用哪条 —— 别自己猜。
+通过 charvar 项目的 CLI 出图。三条后端：**comfyui**（本机/局域网 ComfyUI）、
+**openrouter**（OpenRouter 在线生图）和 **dreamina**（即梦官方 CLI，消耗即梦积分）。
+用户会明确说用哪条 —— 别自己猜。
 
 ## 何时用
 
-用户说「用 comfyui 帮我生图」「用 openrouter 生图」「charvar 出张图」，
+用户说「用 comfyui 帮我生图」「用 openrouter 生图」「用即梦生图」「charvar 出张图」，
 或给出一段提示词并要求出图时。
 
 ## 前置
@@ -36,6 +37,12 @@ CLI 由 `scripts/install_cli.sh` 装到 `~/.local/bin/charvar`。
 
 ```bash
 ~/.local/bin/charvar image openrouter --prompt "a red apple on a wooden table" --aspect 1:1 --out out.png
+```
+
+**即梦 Dreamina**（官方 CLI；需本机已 `dreamina login`，每张消耗即梦积分/权益）：
+
+```bash
+~/.local/bin/charvar image dreamina --prompt "a red apple on a wooden table" --aspect 1:1 --out out.png
 ```
 
 **带参考图**（最多 4 张，按顺序对应提示词里的 `<image1>`/`<image2>`）：
@@ -66,13 +73,13 @@ cat prompt.md | ~/.local/bin/charvar image comfyui --prompt-file - --out out.png
 | `--prompt` / `--prompt-file` | 提示词，二选一；`--prompt-file -` 读 stdin |
 | `--ref` | 参考图路径，可重复，最多 4 张 |
 | `--aspect` | `1:1` `3:4` `16:9` `4:3` `9:16` `2:3` `3:2` `21:9`（默认 `3:4`） |
-| `--resolution` | `1k` `2k`（默认 `1k`）或模型声明枚举值（512/1K/1.5K/2K/4K…；OpenRouter 通路）。2K 是 Qwen 官方像素，面积恒定 ~4.2MP |
-| `--seed` | 采样种子，默认 `0`（固定复现）；要新图就换种子 |
+| `--resolution` | `1k` `2k`（默认 `1k`）或模型声明枚举值（512/1K/1.5K/2K/4K…；OpenRouter 通路）。即梦通路收 2k/4k/1.5k，空 = 设置页/env 默认 2k。2K 是 Qwen 官方像素，面积恒定 ~4.2MP |
+| `--seed` | 采样种子，默认 `0`（固定复现）；要新图就换种子。**即梦通路没有 `--seed`**（即梦不暴露 seed） |
 | `--out` | 产物路径 |
 | `--json` | 结果以 JSON 输出（给脚本消费时用） |
 | `--negative` | 负向提示词（仅 ComfyUI 支持） |
 | `--workflow` | 指定 ComfyUI workflow 名或 JSON 路径 |
-| `--model` | OpenRouter 模型 slug（默认按模式取 `OP_IMAGE_T2I_MODEL` / `OP_IMAGE_I2I_MODEL`） |
+| `--model` | OpenRouter 模型 slug（默认按模式取 `OP_IMAGE_T2I_MODEL` / `OP_IMAGE_I2I_MODEL`）；即梦通路填 model_version（`3.0`–`5.0Pro`，默认 5.0，即 `DREAMINA_IMAGE_MODEL`） |
 | `--quality` | OpenRouter 质量档（模型声明支持才生效） |
 
 完整参数见 `references/cli.md`。
@@ -104,11 +111,18 @@ exit 0 = 通过，exit 1 = 有问题单。完整参数与 `--json` 字段见 `re
 ## 注意
 
 - **seed 默认 0 = 同提示词每次出同一张图**。用户要「再来一张」时换 `--seed`。
-  （ComfyUI 出的 PNG 里嵌了当次的 workflow 元数据，所以文件 md5 会不一样 —— 像素是一样的。）
+  （ComfyUI 出的 PNG 里嵌了当次的 workflow 元数据，所以文件 md5 会不一样 —— 像素是一样的。
+  OpenRouter/即梦不保证同 seed 复现。）
 - ComfyUI 出图要 20~60 秒，命令会阻塞等待；`--no-wait` 只入队并回 prompt_id。
+  即梦要 40~90 秒（异步任务：提交 + 轮询），命令总是阻塞等完。
 - 一次只出一张图。要多张就跑多次（换 seed）。
 - 参考图会被压到长边 1536 / JPEG q88 —— 这是项目统一规格，不用自己压。
 - 列 OpenRouter 可用模型：`charvar image models`。
+- 即梦的前置：本机装好官方 CLI 并登录过 —— `dreamina -h` 能跑、`dreamina user_credit`
+  能返回积分就算就绪；没登录时先让用户手动跑 `dreamina login`（CLI 打印的授权 URL
+  建议用户手动在浏览器打开完成授权）。
+- 即梦提示词有硬上限：text2image 约 1600 字符、image2image（带参考图）约 2000 字符，
+  超限上游硬失败；charvar 会在提交前报错。
 
 ## 排错
 
@@ -117,5 +131,8 @@ exit 0 = 通过，exit 1 = 有问题单。完整参数与 `--json` 字段见 `re
 | `charvar: command not found` | 用绝对路径 `~/.local/bin/charvar`；还不行就跑 `scripts/install_cli.sh` |
 | ComfyUI 连不上 | 检查 `COMFYUI_HOST` / `COMFYUI_PORT`（`.env`）与 ComfyUI 是否在跑 |
 | OpenRouter 报 key 缺失 | 设 `OP_IMAGE_API_KEY` 或 `LLM_API_KEY` |
+| 即梦报登录态无效 | 让用户手动跑 `dreamina login`（授权 URL 手动在浏览器打开），别由 agent 代登 |
+| 即梦报找不到 dreamina CLI | 跑 `curl -s https://jimeng.jianying.com/cli \| bash` 安装，或设 `DREAMINA_CLI` 指向可执行文件 |
+| 即梦报提示词超限 | text2image 1600 / image2image 2000 字符（约），先压缩提示词 |
 | 参考图超 4 张 | ComfyUI edit workflow 只有 4 个参考图槽位 |
 | workflow 找不到 | `data/workflows/` 里没有该名字；用 `--workflow` 给 JSON 路径 |

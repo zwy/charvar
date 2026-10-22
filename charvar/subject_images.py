@@ -6,9 +6,12 @@
 - 状态机：empty（无行）→ queued（已提交 ComfyUI，等完成/超时补拉）→ ready / error。
 - 不走 runs 表（单图生命周期，不污染历史记录），但完整复用 ComfyUI 管道：
   构造临时 GenerateResult（不落库）走 submit()，产物经 assets._download_output 固化。
-- 两条生图通路：ComfyUI（``generate_subject_image``）与 OpenRouter
-  （``generate_subject_image_openrouter``）。两步流程与槽位语义完全一致，
-  只是参考图走 ``input_references`` 而不是 ComfyUI 的 image 节点。
+- 三条生图通路：ComfyUI（``generate_subject_image``）、OpenRouter
+  （``generate_subject_image_openrouter``）与即梦（``generate_subject_image_dreamina``，
+  官方 ``dreamina`` CLI）。两步流程与槽位语义完全一致，只是参考图分别走
+  ComfyUI 的 image 节点 / ``input_references`` / ``image2image --images``。
+- 即梦通路不暴露 seed（请求值仅存档）、画幅用 --ratio（charvar 8 档与 CLI 枚举一致）、
+  提示词长度按上游上限预检（charvar.dreamina_image 做校验）。
 - 所有随机（seed）由调用方显式传入，模块本身不引入随机源。
 """
 from __future__ import annotations
@@ -22,7 +25,7 @@ from typing import Any, Literal
 from PIL import Image
 from pydantic import BaseModel
 
-from charvar import assets, openrouter_image, paths, reference_images, storage
+from charvar import assets, dreamina_image, openrouter_image, paths, reference_images, storage
 from charvar.exporters import comfyui as comfyui_exporter
 from charvar.models import GenerateResult, PromptItem, SubjectProfile
 
@@ -58,7 +61,7 @@ class SubjectImage(BaseModel):
     kind: str
     status: Literal["empty", "queued", "ready", "error"] = "empty"
     source: Literal["generated", "uploaded"] | None = None
-    provider: Literal["comfyui", "openrouter"] | None = None
+    provider: Literal["comfyui", "openrouter", "dreamina"] | None = None
     prompt: str = ""
     file_path: str | None = None
     prompt_id: str | None = None
@@ -371,7 +374,7 @@ def generate_subject_image(
 
 
 def _openrouter_reference_paths(conn: sqlite3.Connection, subject_id: str, kind: str) -> list[Path]:
-    """该槽位要发给 OpenRouter 的参考图。
+    """该槽位要发给在线后端（OpenRouter / 即梦）的参考图。
 
     与 ComfyUI 通路同源：其余 4 种以 character_sheet 为参考图（与 edit
     workflow 的 image 节点等价），走同一份预处理缓存（长边 1536 / JPEG q88）。
@@ -466,32 +469,124 @@ def generate_subject_image_openrouter(
     )
     if not op_result.images:
         raise SubjectImageError("OpenRouter 未返回图片")
-    data = op_result.images[0]
+    return _finalize_generated_image(
+        conn, subject.id, kind, op_result.images[0],
+        provider="openrouter", prompt=prompt.strip(), prompt_id="",
+    )
+
+
+# 在线后端（OpenRouter / 即梦）通路的共同收尾：字节落盘 → 缩略图 → 清旧后缀 → 固化行。
+def _finalize_generated_image(
+    conn: sqlite3.Connection,
+    subject_id: str,
+    kind: str,
+    data: bytes,
+    *,
+    provider: Literal["openrouter", "dreamina"],
+    prompt: str,
+    prompt_id: str,
+) -> SubjectImageSlot:
     suffix = f".{openrouter_image.sniff_image_ext(data)}"
     if suffix == ".bin":
-        raise SubjectImageError("OpenRouter 返回的不是可识别的图片格式")
-
-    destination = subject_dir(subject.id) / f"{kind}{suffix}"
+        raise SubjectImageError(f"{provider} 返回的不是可识别的图片格式")
+    destination = subject_dir(subject_id) / f"{kind}{suffix}"
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(data)
-    assets.make_thumb(destination, thumb_file(subject.id, kind))
-    _remove_stale_kind_files(subject.id, kind, keep=destination)
+    assets.make_thumb(destination, thumb_file(subject_id, kind))
+    _remove_stale_kind_files(subject_id, kind, keep=destination)
 
-    previous = storage.get_subject_image(conn, subject.id, kind) or {}
+    previous = storage.get_subject_image(conn, subject_id, kind) or {}
     slot = SubjectImageSlot(
-        subject_id=subject.id,
+        subject_id=subject_id,
         kind=kind,
         status="ready",
         source="generated",
-        provider="openrouter",
-        prompt=previous.get("prompt", "") or prompt.strip(),
+        provider=provider,
+        prompt=previous.get("prompt", "") or prompt,
+        prompt_id=prompt_id or None,
         file_path=_relative(destination),
         created_at=previous.get("created_at", ""),
     )
     _save_row(conn, slot)
     # 走 get_slot 重建：is_ready / original_url / thumb_url 只在 build_slot 里算，
     # 直接返回裸 slot 会带上 is_ready=False（与 status="ready" 自相矛盾）。
-    return get_slot(conn, subject.id, kind)
+    return get_slot(conn, subject_id, kind)
+
+
+def generate_subject_image_dreamina(
+    conn: sqlite3.Connection,
+    subject: SubjectProfile,
+    kind: str,
+    *,
+    prompt: str,
+    seed: int = 0,  # 即梦不暴露 seed：仅记录，不参与生成
+    aspect_ratio: str | None = None,
+    resolution: str | None = None,
+    model: str | None = None,
+    settings: Any = None,
+) -> SubjectImageSlot:
+    """用即梦（dreamina CLI）生成一个槽位图（两步流程 / 槽位状态机与另两条通路一致）。
+
+    - 画幅走 --ratio（charvar 8 档与即梦枚举一致），默认用「主体图默认尺寸」的画幅；
+    - 参考图与其余在线后端同源：其余 4 槽以 character_sheet 为参考（image2image）；
+    - 分辨率默认链：请求显式 > 设置页/env（DREAMINA_IMAGE_RESOLUTION）> 2k，
+      且与 model_version 的组合在提交前校验（超限/不配对会白扣一次提交）；
+    - 提示词处理与 OpenRouter 通路一致：<image1> 有参考图换序数词、无参考图摘掉。
+    """
+    _validate_kind(kind)
+    if not prompt.strip():
+        raise SubjectImageError("提示词为空：请先填写或用 AI 起草")
+
+    settings = settings or _fallback_settings(conn)
+    size = settings.image_sizes.get(kind)
+    if aspect_ratio is None and size is not None:
+        aspect_ratio = size.aspect_ratio
+
+    reference_paths = _openrouter_reference_paths(conn, subject.id, kind)
+    model_id = (model or "").strip() or dreamina_image.resolve_model(None)
+    eff_resolution = (resolution or "").strip() or dreamina_image.resolve_resolution(None)
+
+    download_dir = subject_dir(subject.id) / "_dreamina_download"
+    try:
+        try:
+            # 提交前校验（提示词长度 / 模型-分辨率 / 画幅）也收进同一个 try：
+            # 参数类错误按 400 报，别让 DreaminaParamError 裸抛成 500
+            text = dreamina_image.validate_prompt(
+                _openrouter_prompt(prompt.strip(), bool(reference_paths)),
+                has_reference=bool(reference_paths),
+            )
+            eff_resolution = dreamina_image.validate_model_resolution(
+                model_id, eff_resolution, has_reference=bool(reference_paths)
+            )
+            ratio = dreamina_image.validate_ratio((aspect_ratio or "").strip() or "3:4")
+            dm_result = dreamina_image.generate(
+                prompt=text,
+                download_dir=download_dir,
+                resolution=eff_resolution,
+                model=model_id,
+                ratio=ratio,
+                reference_paths=reference_paths or None,
+            )
+        except dreamina_image.DreaminaParamError as exc:
+            # 提示词超限 / 模型-分辨率不配对都是输入错误：400 而不是 502
+            raise SubjectImageError(str(exc), status=400) from exc
+        except dreamina_image.DreaminaAuthError as exc:
+            raise SubjectImageError(str(exc), status=409) from exc
+        except dreamina_image.DreaminaImageError as exc:
+            raise SubjectImageError(f"即梦生图失败：{exc}", status=502) from exc
+        if not dm_result.images:
+            raise SubjectImageError("即梦未返回图片")
+        # 先把产物字节拷出来，再清 temporary 下载目录
+        data = dm_result.images[0].read_bytes()
+    finally:
+        import shutil as _shutil
+
+        _shutil.rmtree(download_dir, ignore_errors=True)
+
+    return _finalize_generated_image(
+        conn, subject.id, kind, data,
+        provider="dreamina", prompt=text, prompt_id=dm_result.submit_id,
+    )
 
 
 def generate_subject_images_batch(

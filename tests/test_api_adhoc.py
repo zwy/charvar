@@ -304,3 +304,32 @@ def test_illegal_run_id_rejected(client):
     """run_id 直接拼路径 → 非法 id 必须挡住（不能读任意文件）。"""
     assert client.get("/adhoc/..%2F..%2Fetc%2Fpasswd/image").status_code in (400, 404)
     assert client.get("/adhoc/adhoc_..%2F..%2Fetc/image").status_code in (400, 404)
+
+
+# ---------- 即梦（Dreamina）后端 ----------
+
+def test_adhoc_generate_dreamina_backend(client, monkeypatch):
+    from charvar import dreamina_image as dm
+    import pathlib as _pathlib
+
+    from PIL import Image as _Image
+
+    def fake_generate(**kwargs):
+        directory = _pathlib.Path(kwargs["download_dir"])
+        directory.mkdir(parents=True, exist_ok=True)
+        image = directory / "sid_image_1.png"
+        _Image.new("RGB", (32, 48), (10, 10, 10)).save(image, format="PNG")
+        return dm.DreaminaGenerateResult(
+            submit_id="dm-1", gen_status="success", images=[image],
+            width=32, height=48, model="", ratio="3:4", resolution="2k",
+        )
+
+    monkeypatch.setattr(dm, "generate", fake_generate)
+    resp = client.post("/adhoc/generate", json={
+        "prompt": "a red apple", "backend": "dreamina", "aspect_ratio": "3:4",
+    })
+    assert resp.status_code == 200, resp.text
+    out = resp.json()
+    assert out["provider"] == "dreamina"
+    assert out["prompt_id"] == "dm-1"
+    assert out["image_url"].startswith("/adhoc/")

@@ -649,3 +649,101 @@ def test_subject_image_openrouter_uses_per_kind_default_size(client, tmp_path, m
     assert (sheet["width"], sheet["height"]) == (1024, 576)
     # 2:3 / 1k → 704x1024
     assert (front["width"], front["height"]) == (704, 1024)
+
+
+# ---------- 即梦（Dreamina）通路 ----------
+
+def _fake_dreamina(monkeypatch, *, error=None):
+    from charvar import dreamina_image as dm
+
+    calls: list[dict] = []
+
+    def fake_generate(**kwargs):
+        calls.append(kwargs)
+        has_refs = bool(kwargs.get("reference_paths"))
+        dm.validate_prompt(str(kwargs.get("prompt") or ""), has_reference=has_refs)
+        dm.validate_ratio(kwargs.get("ratio") or None)
+        dm.validate_model_resolution(
+            str(kwargs.get("model") or ""),
+            dm.resolve_resolution(kwargs.get("resolution")),
+            has_reference=has_refs,
+        )
+        if error is not None:
+            raise error
+        directory = pathlib.Path(kwargs["download_dir"])
+        directory.mkdir(parents=True, exist_ok=True)
+        image = directory / "dm-sid_image_1.png"
+        Image.new("RGB", (40, 60), (5, 5, 5)).save(image, format="PNG")
+        return dm.DreaminaGenerateResult(
+            submit_id="dm-sid-1", gen_status="success", images=[image],
+            width=40, height=60, model=str(kwargs.get("model") or ""),
+            ratio=str(kwargs.get("ratio") or ""), resolution=str(kwargs.get("resolution") or ""),
+        )
+
+    monkeypatch.setattr(dm, "generate", fake_generate)
+    return calls
+
+
+def test_generate_dreamina_slots_two_step_flow(client, tmp_path, monkeypatch):
+    """character_sheet 走 text2image（无参考图），其余槽以它为参考走 image2image。"""
+    _setup_workflows(tmp_path, monkeypatch)
+    calls = _fake_dreamina(monkeypatch)
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+
+    resp = client.post(
+        "/subjects/demo_witch/images/character_sheet/generate-dreamina",
+        json={"prompt": "a character sheet of the same character"},
+    )
+    assert resp.status_code == 200, resp.text
+    slot = resp.json()
+    assert slot["status"] == "ready" and slot["provider"] == "dreamina"
+    assert calls[0]["reference_paths"] is None
+    assert calls[0]["ratio"] == "3:4"       # character_sheet 槽位默认画幅
+    assert calls[0]["resolution"] == "2k"   # 设置/env 默认链的缺省档
+    assert calls[0]["prompt"] == "a character sheet of the same character"  # 无标签句 → 原样
+    assert (paths.subjects_dir() / "demo_witch" / "character_sheet.png").exists()
+    assert (paths.subjects_dir() / "demo_witch" / "thumbs" / "character_sheet.webp").exists()
+
+    # front 槽：自动带 character_sheet 作参考（image2image），画幅按槽位默认 2:3
+    calls.clear()
+    resp = client.post(
+        "/subjects/demo_witch/images/front/generate-dreamina",
+        json={"prompt": "full body front view <image1> same character"},
+    )
+    assert resp.status_code == 200, resp.text
+    slot = resp.json()
+    assert slot["provider"] == "dreamina"
+    assert len(calls[0]["reference_paths"]) == 1
+    assert calls[0]["ratio"] == "2:3"
+    assert "the first reference image" in calls[0]["prompt"]
+    assert "<image1>" not in calls[0]["prompt"]
+    assert (paths.subjects_dir() / "demo_witch" / "front.png").exists()
+
+    slots = {s["kind"]: s for s in client.get("/subjects/demo_witch/images").json()["slots"]}
+    assert slots["character_sheet"]["is_ready"] and slots["front"]["is_ready"]
+
+
+def test_generate_dreamina_prompt_limit_is_client_error(client, tmp_path, monkeypatch):
+    """提示词超限是 400（输入错误），不是 502。"""
+    _setup_workflows(tmp_path, monkeypatch)
+    _fake_dreamina(monkeypatch)
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+    resp = client.post(
+        "/subjects/demo_witch/images/character_sheet/generate-dreamina",
+        json={"prompt": "x" * 3000},
+    )
+    assert resp.status_code == 400, resp.text
+    assert "上限" in resp.json()["detail"]
+
+
+def test_generate_dreamina_auth_error_is_409(client, tmp_path, monkeypatch):
+    _setup_workflows(tmp_path, monkeypatch)
+    from charvar import dreamina_image as dm
+
+    _fake_dreamina(monkeypatch, error=dm.DreaminaAuthError("即梦登录态无效"))
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+    resp = client.post(
+        "/subjects/demo_witch/images/character_sheet/generate-dreamina",
+        json={"prompt": "x"},
+    )
+    assert resp.status_code == 409, resp.text

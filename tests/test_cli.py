@@ -278,3 +278,66 @@ def test_export_without_template_warns(_export_env, tmp_path):
     assert result.exit_code == 0, result.output
     assert "警告" in result.output
     assert not (tmp_path / "presets" / "subjects" / "tvelo_x.md").exists()
+
+
+# ---------- image dreamina ----------
+
+def test_dreamina_command_builds_request(monkeypatch, tmp_path):
+    """参数原样进 AdhocRequest；没有 --seed（即梦不暴露 seed）。"""
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+
+    from charvar import adhoc as adhoc_service
+
+    seen: list = []
+
+    def fake_generate(req):
+        seen.append(req)
+        return _fake_result(provider="dreamina", model="5.0")
+
+    monkeypatch.setattr(adhoc_service, "generate", fake_generate)
+    result = runner.invoke(cli.app, [
+        "image", "dreamina", "--prompt", "a cat",
+        "--aspect", "2:3", "--resolution", "4k", "--model", "5.0Pro", "--json",
+    ])
+    assert result.exit_code == 0, result.output
+    req = seen[0]
+    assert req.backend == "dreamina"
+    assert req.prompt == "a cat"
+    assert req.aspect_ratio == "2:3"
+    assert req.resolution == "4k"
+    assert req.model == "5.0Pro"
+    data = json.loads(result.stdout)
+    assert data["provider"] == "dreamina"
+
+
+def test_dreamina_prompt_file(monkeypatch, tmp_path):
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+
+    from charvar import adhoc as adhoc_service
+
+    prompt_file = tmp_path / "p.md"
+    prompt_file.write_text("from a file", encoding="utf-8")
+    seen: list = []
+
+    def fake_generate(req):
+        seen.append(req)
+        return _fake_result(provider="dreamina")
+
+    monkeypatch.setattr(adhoc_service, "generate", fake_generate)
+    result = runner.invoke(cli.app, ["image", "dreamina", "--prompt-file", str(prompt_file)])
+    assert result.exit_code == 0, result.output
+    assert seen[0].prompt == "from a file"
+
+
+def test_dreamina_error_is_friendly(monkeypatch, tmp_path):
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+
+    from charvar import adhoc as adhoc_service
+
+    def boom(req):
+        raise adhoc_service.AdhocError("即梦生图失败：即梦任务失败：内容违规")
+
+    monkeypatch.setattr(adhoc_service, "generate", boom)
+    result = runner.invoke(cli.app, ["image", "dreamina", "--prompt", "p"])
+    assert result.exit_code == 1
+    assert "内容违规" in _stderr(result)

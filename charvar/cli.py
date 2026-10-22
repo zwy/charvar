@@ -7,6 +7,7 @@
   charvar gen ... --format comfyui --workflow <workflows目录名称或路径> [--wait]
   charvar image comfyui --prompt "..." --ref ref.png --out out.png
   charvar image openrouter --prompt "..." --out out.png
+  charvar image dreamina --prompt "..." --out out.png
   charvar serve --port 8710
 """
 from __future__ import annotations
@@ -594,6 +595,40 @@ def image_openrouter(
         seed=seed,
         model=model,
         quality=quality,
+        out=out,
+    )
+    _run_adhoc(req, json_out)
+
+
+@image_app.command("dreamina")
+def image_dreamina(
+    prompt: Optional[str] = typer.Option(None, "--prompt", help="图片提示词"),
+    prompt_file: Optional[str] = typer.Option(
+        None, "--prompt-file", help="提示词文件（- 表示读 stdin）"
+    ),
+    ref: Optional[list[str]] = typer.Option(
+        None, "--ref", help="参考图路径，可重复（最多 4 张，走 image2image）"
+    ),
+    aspect: str = typer.Option("3:4", "--aspect", help="画幅：1:1/3:4/16:9/4:3/9:16/2:3/3:2/21:9（即梦原生 8 档，同列表）"),
+    resolution: str = typer.Option(
+        "", "--resolution", help="分辨率档 2k/4k（5.0Pro 另有 1.5k）；空 = 设置页/env（DREAMINA_IMAGE_RESOLUTION）默认 2k"
+    ),
+    model: Optional[str] = typer.Option(
+        None, "--model", help="即梦 model_version（3.0/3.1/4.0/4.1/4.5/4.6/4.7/5.0/5.0Pro）；空 = 设置页/env（DREAMINA_IMAGE_MODEL）默认 5.0"
+    ),
+    out: Optional[Path] = typer.Option(None, "--out", "-o", help="另外落一份到这个路径"),
+    json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出到终端"),
+) -> None:
+    """用即梦（Dreamina）官方 CLI 出图（需已 dreamina login；不暴露 seed，消耗即梦积分）。"""
+    from charvar import adhoc as adhoc_service
+
+    req = adhoc_service.AdhocRequest(
+        prompt=_read_prompt(prompt, prompt_file),
+        backend="dreamina",
+        reference_paths=[Path(p).expanduser() for p in (ref or [])],
+        aspect_ratio=aspect,
+        resolution=resolution,
+        model=model,
         out=out,
     )
     _run_adhoc(req, json_out)

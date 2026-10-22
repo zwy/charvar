@@ -14,7 +14,7 @@
 ## 临时生图（跨项目调用）
 
 - `charvar/adhoc.py` 是「给一段提示词出一张图」的独立通路：不进主体档案 5 槽位、不跑预设批量、不落 runs 表。
-- CLI：`charvar image comfyui|openrouter|models`（`--prompt`/`--prompt-file`/`--ref`/`--aspect`/`--seed`/`--out`/`--json`）。产物默认落 `data/generated/adhoc/{id}/`（图 + 缩略图 + manifest.json）。
+- CLI：`charvar image comfyui|openrouter|dreamina|models`（`--prompt`/`--prompt-file`/`--ref`/`--aspect`/`--seed`/`--out`/`--json`；`dreamina` 子命令没有 `--seed`，即梦不暴露）。产物默认落 `data/generated/adhoc/{id}/`（图 + 缩略图 + manifest.json）。
 - **网页入口**：顶栏「临时生图」页签（`web/static/adhoc.js`），后端 `/adhoc/*`（`charvar/api.py`）。
   走的是**同一个** `charvar/adhoc.py` —— 网页与 CLI 是同一套参数语义、同一套落盘、同一份 manifest。
   改动 `charvar/adhoc.py` 的参数名或输出格式时，CLI、网页、skill 三处都要同步。
@@ -61,7 +61,28 @@
   OpenRouter 通路的面板档位可用 provider 枚举值（512/1K/1.5K/2K/4K…，
   1K=1024 长边）—— 这不是开 4K 档：主体图的 charvar 档位仍只有 1k/2k。
 - 参考图统一走 `charvar/reference_images.py` 预处理（长边 1536 / JPEG q88 / 透明白底合成），ComfyUI 上传与 OpenRouter 发送共用同一份缓存 —— 别再写新的压缩逻辑。
-- 档案图片有两条生图通路：ComfyUI（`subject_images.generate_subject_image`）与 OpenRouter（`subject_images.generate_subject_image_openrouter`）。两者同语义：两步流程（character_sheet 先出，其余 4 种以它为参考图）、同槽位状态机、同落盘位置（`data/subjects/{id}/{kind}.{ext}`）。产出哪个后端记在 `subject_images.provider` 列（`comfyui` / `openrouter` / 空=上传）。
+- 即梦生图（`charvar/dreamina_image.py`，2026-10-22 接入第三条通路）走本机官方
+  `dreamina` CLI（子进程，不是 HTTP）：鉴权是本机 `dreamina login` 的登录态（`~/.dreamina_cli/`），
+  **没有 API Key 可配；CLI 找不到用 `DREAMINA_CLI` 指路径**。授权必须用户手动在浏览器完成
+  （agent 代登可能拿到错误 URL，官方文档有「非法应用」案例）。
+  - 不区分文生图 / 图片编辑配置组（即梦模型都有编辑能力）：带参考图 = `image2image`
+    （`--images`，最多 10 张但 charvar 上限 4），不带 = `text2image`；设置页/env 共用一组：
+    `DREAMINA_IMAGE_MODEL`（默认 5.0，值 `3.0`–`5.0Pro`）+ `DREAMINA_IMAGE_RESOLUTION`
+    （2K|4K，5.0Pro 另有 1.5K），同样走 请求显式 > 设置页 > env > 缺省 的默认链
+    （settings_service.dreamina_config）。
+  - 即梦不暴露 seed：AdhocRequest.seed 等请求值只记 manifest，**绝不发送**。
+  - 提示词硬上限先于提交校验（`dreamina_image.validate_prompt`）：text2image 实测
+    1600 字符、image2image 2000；`--resolution_type` 必填且 model_version 与档位配对
+    （3.0/3.1→1k/2k 仅文生图；4.0–5.0→2k/4k；5.0Pro→1.5k/2k/4k），配错提交前报错。
+    规格（模型/比例/分辨率枚举）以 `dreamina <subcommand> -h` 为准，CLI 升级后要同步 `_MODEL_RESOLUTIONS` 表。
+  - 画幅用 `--ratio`（charvar 8 档与即梦枚举一致）；生成是异步 submit+query，
+    stdout 混着「download image N URL:」进度行，解析要从首个 `{`/`[` 行起
+    （`parse_task_output`），产物路径读 `result_json.images[].path`。
+- 档案图片有三条生图通路：ComfyUI（`subject_images.generate_subject_image`）、OpenRouter
+  （`generate_subject_image_openrouter`）与即梦（`generate_subject_image_dreamina`）。三者同语义：
+  两步流程（character_sheet 先出，其余 4 种以它为参考图）、同槽位状态机、同落盘位置
+  （`data/subjects/{id}/{kind}.{ext}`）。产出哪个后端记在 `subject_images.provider` 列
+  （`comfyui` / `openrouter` / `dreamina` / 空=上传）。
 - `web/static/style.css` 里 `label { display: flex }` 会盖掉浏览器默认的 `[hidden] { display: none }`，所以有 `[hidden] { display: none !important }` 这条兜底。新增按条件显隐的控件时，`<select>` 自身带 `hidden` 的话，JS 要同时清掉 select 和它外层 label 上的 `hidden`（`applyOpenRouterCapabilities` 就是这么做的）。
 - `.env`（COMFYUI_HOST/PORT 等）不进 git；改 .env 后要重启 web 服务。
 - 主体档案的锁定项中英文皆可（2026-10-22 放开，此前只许英文）：`style_lock` / `identity_lock` / `outfit_lock`
