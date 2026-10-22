@@ -733,7 +733,7 @@ def pixel_resolution_tier(
 ) -> str:
     """选「用来算 size 像素」的档位字符串（长边解析在 exporters.dimensions_for）。
 
-    三条通路（主体档案 / 批量推送 / 临时生图）同一套规则：
+    三条通路（主体档案 / 批量推送 / Playground）同一套规则：
     - `resolution` 输入能映射进模型枚举 → 用归一后的 provider 值
       （"1K"/"2K"/"1.5K"/"4K"…，exporters 会按 1K=1024 长边换算像素）；
     - 输入是 charvar 档位但模型没声明 resolution → 用档位本身

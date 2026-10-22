@@ -34,7 +34,7 @@ app = typer.Typer(
 )
 subject_app = typer.Typer(help="主体档案（SQLite 存储）", no_args_is_help=True)
 presets_app = typer.Typer(help="YAML 预设", no_args_is_help=True)
-image_app = typer.Typer(help="临时生图：给一段提示词直接出一张图", no_args_is_help=True)
+image_app = typer.Typer(help="Playground：给一段提示词直接出一张图", no_args_is_help=True)
 app.add_typer(subject_app, name="subject")
 app.add_typer(presets_app, name="presets")
 app.add_typer(image_app, name="image")
@@ -471,7 +471,7 @@ def serve(
     uvicorn.run(webapp, host=host, port=port, log_level="info")
 
 
-# ---------- image（临时生图） ----------
+# ---------- image（Playground） ----------
 
 def _read_prompt(prompt: Optional[str], prompt_file: Optional[str]) -> str:
     """``--prompt`` 与 ``--prompt-file`` 二选一；``--prompt-file -`` 读 stdin。"""
@@ -494,7 +494,7 @@ def _read_prompt(prompt: Optional[str], prompt_file: Optional[str]) -> str:
 
 
 def _run_adhoc(req, json_out: bool) -> None:
-    """跑一次临时生图并输出结果（--json 时 stdout 只有 JSON）。"""
+    """跑一次 Playground 生图并输出结果（--json 时 stdout 只有 JSON）。"""
     from charvar import adhoc as adhoc_service
 
     try:

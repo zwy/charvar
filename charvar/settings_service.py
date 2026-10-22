@@ -43,7 +43,7 @@ class OpenRouterSettings(BaseModel):
     """OpenRouter 在线生图配置（按模式分两组，对齐 ComfyUI 的 t2i / edit 两个 workflow）。
 
     - ``t2i_*``：文生图（不带参考图）；``i2i_*``：图片编辑 / 参考生图（带参考图）。
-      带不带参考图由调用方决定（主体档案看槽位、批量推送看勾选、临时生图看参考图列表）。
+      带不带参考图由调用方决定（主体档案看槽位、批量推送看勾选、Playground 看参考图列表）。
     - model 空串 = 用 env ``OP_IMAGE_T2I_MODEL`` / ``OP_IMAGE_I2I_MODEL``
       （再回退旧的 ``OP_IMAGE_MODEL``，最后 meta/muse-image）
     - resolution / quality 空串 = 用 env ``OP_IMAGE_T2I_RESOLUTION`` 等。

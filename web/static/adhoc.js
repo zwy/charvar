@@ -1,4 +1,4 @@
-/* 临时生图页：给一段提示词出一张图。
+/* Playground 页：给一段提示词出一张图。
    走的是 CLI `charvar image` 同一条通路（后端 charvar/adhoc.py），不落 runs 表。 */
 
 const ADHOC_ASPECTS = ["3:4", "1:1", "16:9", "4:3", "9:16", "2:3", "3:2", "21:9"];
@@ -406,7 +406,7 @@ async function loadAdhocRecent() {
     const records = await api("/adhoc?limit=24");
     box.innerHTML = "";
     if (!records.length) {
-      box.innerHTML = `<span class="hint">还没有临时生图记录</span>`;
+      box.innerHTML = `<span class="hint">还没有 Playground 记录</span>`;
       return;
     }
     for (const rec of records) {
@@ -435,7 +435,7 @@ async function loadAdhocRecent() {
         const promptBtn = document.createElement("button");
         promptBtn.textContent = "查看提示词";
         promptBtn.addEventListener("click", () =>
-          Media.showTextModal("临时生图 · 提示词", rec.prompt || "", { copyable: true }));
+          Media.showTextModal("Playground · 提示词", rec.prompt || "", { copyable: true }));
         actions.appendChild(promptBtn);
       }
       if (rec.has_image) {

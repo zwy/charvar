@@ -1,4 +1,4 @@
-"""临时生图：给一段提示词（+ 可选参考图）直接出一张图。
+"""Playground：给一段提示词（+ 可选参考图）直接出一张图。
 
 这是给「本项目之外」用的一条通路：用户档案的文档生成环节里，
 提示词是手工复制到即梦 AI / 本地 ComfyUI 出图的；这里把它变成一条命令。
@@ -56,7 +56,7 @@ class AdhocError(ValueError):
 
 
 class AdhocRequest(BaseModel):
-    """一次临时生图的请求。"""
+    """一次 Playground 生图的请求。"""
 
     prompt: str
     backend: Backend
@@ -74,7 +74,7 @@ class AdhocRequest(BaseModel):
 
 
 class AdhocResult(BaseModel):
-    """一次临时生图的结果。"""
+    """一次 Playground 生图的结果。"""
 
     image_path: str
     thumb_path: str | None = None
@@ -93,7 +93,7 @@ class AdhocResult(BaseModel):
 # ---------- 落盘目录 ----------
 
 def adhoc_root() -> Path:
-    """临时生图根目录：``<data>/generated/adhoc/``。"""
+    """Playground 根目录：``<data>/generated/adhoc/``。"""
     return paths.data_dir() / "generated" / "adhoc"
 
 
@@ -202,7 +202,7 @@ def prune_staged_references(max_age_s: float = 24 * 3600) -> int:
 # ---------- 产物 ----------
 
 def original_file(run_id: str) -> Path:
-    """某次临时生图的原图（``original/`` 下唯一一张）。"""
+    """某次 Playground 生图的原图（``original/`` 下唯一一张）。"""
     directory = run_dir(run_id) / "original"
     for path in sorted(directory.iterdir()) if directory.is_dir() else []:
         if path.is_file():
@@ -211,7 +211,7 @@ def original_file(run_id: str) -> Path:
 
 
 def thumb_file(run_id: str) -> Path:
-    """某次临时生图的缩略图。"""
+    """某次 Playground 生图的缩略图。"""
     directory = run_dir(run_id) / "thumbs"
     for path in sorted(directory.iterdir()) if directory.is_dir() else []:
         if path.is_file():
@@ -220,7 +220,7 @@ def thumb_file(run_id: str) -> Path:
 
 
 def list_recent(limit: int = 20) -> list[dict[str, Any]]:
-    """最近的临时生图记录（读 manifest.json，按时间倒序）。
+    """最近的 Playground 生图记录（读 manifest.json，按时间倒序）。
 
     manifest 是唯一留痕（不落 runs 表），所以这里就是扫目录。
     """
@@ -729,7 +729,7 @@ def _write_manifest(
 # ---------- 对外入口 ----------
 
 def generate(req: AdhocRequest, db_path: Path | None = None) -> AdhocResult:
-    """跑一次临时生图，返回结果（含落盘路径与 manifest 路径）。
+    """跑一次 Playground 生图，返回结果（含落盘路径与 manifest 路径）。
 
     ``db_path`` 传了就用那个库读设置（测试隔离用）；不传走默认库。
     """

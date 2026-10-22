@@ -1,4 +1,4 @@
-"""临时生图的网页入口：/adhoc/* 接口（MockTransport + 打桩，不发真网）。"""
+"""Playground 的网页入口：/adhoc/* 接口（MockTransport + 打桩，不发真网）。"""
 from __future__ import annotations
 
 import io

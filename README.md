@@ -127,7 +127,7 @@ python3 -m charvar.cli gen -s silver_witch --format comfyui --workflow <name> --
 
 `pip install -e .` 后上述命令可用 `charvar …` 直接调用。
 
-## 临时生图（跨项目调用）
+## Playground（跨项目调用）
 
 给一段提示词直接出一张图 —— 不进主体档案槽位、不跑预设批量、不进生成历史。
 给本项目之外的项目 / 其他 agent 用。
@@ -158,7 +158,7 @@ Claude Code 在任何项目里都能按提示词调用这条生图通路）。
 
 ### 网页入口
 
-网页顶栏「临时生图」页签是同一条通路的图形界面（后端 `/adhoc/*`，代码走同一个
+网页顶栏「Playground」页签是同一条通路的图形界面（后端 `/adhoc/*`，代码走同一个
 `charvar/adhoc.py`）：选后端（ComfyUI / OpenRouter）、画幅、分辨率、种子，
 写提示词，加参考图（上传本地图，或直接从主体档案里挑已就绪的档案图），出图后
 显示结果并可下载原图 / manifest.json。页面下方是「最近生成」墙，条目可以

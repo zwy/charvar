@@ -1529,7 +1529,7 @@ $("#btn-settings-save").addEventListener("click", async () => {
   }
 });
 
-/* 拉取 OpenRouter 可用生图模型：填 datalist（临时生图页的模型输入框）
+/* 拉取 OpenRouter 可用生图模型：填 datalist（Playground 页的模型输入框）
    并重算设置页两个模式的档位 + 面板能力（模型换了要重新校对参数能力）。
    refresh=1 强制重新拉取并覆盖本地缓存。 */
 $("#btn-or-models-refresh").addEventListener("click", async () => {

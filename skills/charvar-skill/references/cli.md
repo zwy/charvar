@@ -96,7 +96,7 @@ data/generated/adhoc/{时间戳}_{短id}/
 └── manifest.json          ← 完整请求与结果，便于复现
 ```
 
-临时生图**不落 runs 表** —— 不进生成历史、不进图片墙。
+Playground **不落 runs 表** —— 不进生成历史、不进图片墙。
 
 ## JSON 输出格式
 

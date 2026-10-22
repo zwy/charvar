@@ -372,7 +372,7 @@ td .caption { color: var(--muted); }
 .size-row { display: flex; gap: 6px; }
 .size-row select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; width: auto; flex: 1; }
 
-/* 临时生图页 */
+/* Playground 页 */
 .adhoc-result-wrap { margin-top: 12px; }
 .adhoc-result-wrap img { display: block; max-width: min(640px, 100%); height: auto; object-fit: contain; background: #f4f6f9; border: 1px solid var(--line); border-radius: 10px; }
 /* .actions 里的 select 不是 label 的子元素，拿不到 label input 的样式 → 单开一条 */
@@ -381,7 +381,7 @@ td .caption { color: var(--muted); }
 /* 参考图卡片里的「移除」按钮：贴着缩略图下方，别撑满 */
 .ref-pick .chip { padding: 2px 8px; font-size: 11px; }
 
-/* 临时生图「最近生成」卡：提示词最多 3 行（长提示词不再把卡片撑高），全文点
+/* Playground「最近生成」卡：提示词最多 3 行（长提示词不再把卡片撑高），全文点
    「查看提示词」看弹层 */
 #adhoc-recent .image-card p {
   display: -webkit-box;

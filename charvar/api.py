@@ -194,7 +194,7 @@ class AdhocReferenceSpec(BaseModel):
 
 
 class AdhocGenerateRequest(BaseModel):
-    """网页「临时生图」的请求（与 CLI ``charvar image`` 同一套参数）。"""
+    """网页「Playground」的请求（与 CLI ``charvar image`` 同一套参数）。"""
 
     prompt: str
     backend: Literal["comfyui", "openrouter", "dreamina"] = "comfyui"
@@ -1262,7 +1262,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             "supports_references": caps.supports_refs,
         }
 
-    # ---- 临时生图（跨项目调用同一通路的网页入口） ----
+    # ---- Playground（跨项目调用同一通路的网页入口） ----
 
     def _adhoc_reference_paths(
         references: list[AdhocReferenceSpec],
@@ -1332,7 +1332,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
 
     @app.post("/adhoc/generate")
     def api_adhoc_generate(req: AdhocGenerateRequest) -> dict[str, Any]:
-        """临时生图：给一段提示词出一张图。
+        """Playground：给一段提示词出一张图。
 
         走的是 CLI ``charvar image`` 同一套（``charvar.adhoc``），不落 runs 表。
         """
@@ -1369,7 +1369,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
 
     @app.get("/adhoc")
     def api_adhoc_list(limit: int = Query(20, ge=1, le=100)) -> list[dict[str, Any]]:
-        """最近的临时生图（读 manifest.json；临时生图不落 runs 表）。"""
+        """最近的 Playground 记录（读 manifest.json；不落 runs 表）。"""
         return adhoc_service.list_recent(limit)
 
     @app.get("/adhoc/{run_id}/image")
