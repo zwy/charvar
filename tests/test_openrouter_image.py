@@ -64,6 +64,93 @@ def test_body_includes_seed_and_references(tmp_path):
     assert entry["image_url"]["url"].startswith("data:image/jpeg;base64,")
 
 
+def test_seed_dropped_when_model_declares_params_without_seed():
+    """清单声明了参数却没有 seed（如 flux-3-image-klein）→ 不发 seed，别让 provider 400。"""
+    caps = openrouter_image.ModelCapabilities(
+        model_id="black-forest-labs/flux-3-image-klein",
+        declared=frozenset({"resolution", "aspect_ratio", "n", "input_references"}),
+    )
+    body = openrouter_image.build_generate_body(
+        prompt="p", model="m/x", width=1024, height=576, seed=42, capabilities=caps
+    )
+    assert "seed" not in body
+
+
+def test_aspect_ratio_used_when_manifest_has_no_size():
+    """清单声明了参数却没列 size（flux-3 只收分辨率档+aspect_ratio）→ 不发 size。"""
+    caps = openrouter_image.ModelCapabilities(
+        model_id="black-forest-labs/flux-3-image-klein",
+        declared=frozenset({"resolution", "aspect_ratio", "n", "input_references"}),
+        aspect_ratios=("21:9", "16:9", "2:3", "1:1"),
+        resolutions=("768", "1K", "1.5K", "2K", "4K"),
+    )
+    body = openrouter_image.build_generate_body(
+        prompt="p", model="m/x", width=1344, height=2048, aspect_ratio="2:3",
+        resolution="1k", capabilities=caps,
+    )
+    assert "size" not in body
+    assert body["aspect_ratio"] == "2:3"
+    assert body["resolution"] == "1K"  # 档位归一进枚举，随 aspect_ratio 一起发
+
+
+def test_size_falls_back_when_aspect_not_in_enum():
+    """声明了参数、没列 size，但调用方的 aspect 不在枚举里 → 仍发 size（靠降级兜底）。"""
+    caps = openrouter_image.ModelCapabilities(
+        model_id="m/x",
+        declared=frozenset({"resolution", "aspect_ratio"}),
+        aspect_ratios=("16:9", "1:1"),
+    )
+    body = openrouter_image.build_generate_body(
+        prompt="p", model="m/x", width=1000, height=1000, aspect_ratio="21:9", capabilities=caps
+    )
+    assert body["size"] == "1000x1000"
+    assert "aspect_ratio" not in body
+
+
+def test_size_swapped_after_probe_rejection():
+    """探测缓存记过 size 被拒（清单没声明时）→ 下次直接走 aspect_ratio，不再浪费一次 400。"""
+    caps = openrouter_image.ModelCapabilities(
+        model_id="m/x", declared=frozenset(), rejected=frozenset({"size"}),
+        aspect_ratios=("1:1", "2:3"),
+    )
+    body = openrouter_image.build_generate_body(
+        prompt="p", model="m/x", width=1344, height=2048, aspect_ratio="2:3", capabilities=caps
+    )
+    assert "size" not in body
+    assert body["aspect_ratio"] == "2:3"
+
+
+def test_rejected_parameter_matches_not_pixel_dimensions():
+    """provider 句式 "takes a resolution tier … not pixel dimensions. Received size …" 认出 size。"""
+    message = (
+        "Black Forest Labs FLUX 3 Image takes a resolution tier (768, 1K, 1.5K, 2K, 4K) "
+        'plus aspect_ratio, not pixel dimensions. Received size "1344x2048".'
+    )
+    assert openrouter_image._rejected_parameter(message) == "size"
+
+
+def test_seed_sent_when_declared():
+    """清单声明了 seed → 正常发送并收敛到安全范围。"""
+    caps = openrouter_image.ModelCapabilities(
+        model_id="m/declares-seed", declared=frozenset({"seed", "n"})
+    )
+    body = openrouter_image.build_generate_body(
+        prompt="p", model="m/declares-seed", width=1024, height=576,
+        seed=2**60, capabilities=caps,
+    )
+    assert body["seed"] == openrouter_image.normalize_seed(2**60)
+
+
+def test_rejected_parameter_matches_does_not_support():
+    """provider 句式 "… FLUX 3 Image does not support: seed." 也要认出参数名（触发降级重试）。"""
+    assert (
+        openrouter_image._rejected_parameter(
+            "Black Forest Labs FLUX 3 Image does not support: seed."
+        )
+        == "seed"
+    )
+
+
 def test_seed_is_clamped_to_safe_integer_range():
     """charvar 的 subseed 是 64 位 sha256，超出 JS 安全整数会被 provider 400 拒绝。"""
     subseed = 4854601689830238561  # composer 实际产出的量级

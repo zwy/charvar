@@ -8,6 +8,8 @@ const adhocState = {
   references: [], // [{type:"staged", id, name, url} | {type:"subject", subject_id, kind, name, url}]
   caps: null, // 当前 OpenRouter 模型的能力
   mode: null, // "t2i" | "i2i"：按当前参考图数判定，用于取模式默认
+  modeModel: "", // 当前模式的默认模型（显示名 + capabilities 来源）
+  capsToken: 0, // 后端/模式切换的竞态守卫：只采纳最后一次拉取的能力
   subjectSlots: {}, // subject_id -> slots
 };
 
@@ -18,7 +20,7 @@ function adhocBackend() {
 
 function applyAdhocBackend() {
   const isOpenRouter = adhocBackend() === "openrouter";
-  // OpenRouter 不支持负向提示词；ComfyUI 没有「模型 / 质量档」概念
+  // OpenRouter 不支持负向提示词；ComfyUI 没有「模型名 / 质量档」概念
   $("#adhoc-negative-field").hidden = isOpenRouter;
   $("#adhoc-url-field").hidden = isOpenRouter;
   $("#adhoc-model-field").hidden = !isOpenRouter;
@@ -30,9 +32,10 @@ function applyAdhocBackend() {
   }
 }
 
-/* ---------- OpenRouter 模型能力（分辨率/质量档/参考图） ---------- */
+/* ---------- OpenRouter 模型能力（模型名/分辨率档/质量档/参考图） ---------- */
 /* 模式对齐 ComfyUI：不带参考图 = 文生图（t2i），带参考图 = 图片编辑（i2i）。
-   未手填模型时按模式取设置页/env 的默认（OP_IMAGE_T2I_MODEL / OP_IMAGE_I2I_MODEL）。 */
+   模型不在面板里选，一律跟随设置页/env 的模式默认（OP_IMAGE_T2I_MODEL 等），
+   模式随参考图增删切换时重新按新模式的模型拉取 supported_parameters。 */
 function adhocMode() {
   return adhocState.references.length ? "i2i" : "t2i";
 }
@@ -47,43 +50,52 @@ function updateAdhocMode() {
 }
 
 async function loadAdhocModelCaps() {
-  let model = $("#adhoc-model").value.trim();
+  const token = (adhocState.capsToken += 1);
+  const settle = (fn) => {
+    if (token === adhocState.capsToken) fn();
+  };
+  // 模型 = 设置页 t2i/i2i 组的模型 > env（OP_IMAGE_T2I_MODEL 等）——面板不提供手动覆盖
+  const settings = await api("/settings");
+  const mode = adhocMode();
+  const model =
+    (settings.openrouter && settings.openrouter[`${mode}_model`]) ||
+    (mode === "t2i" ? settings.openrouter_default_t2i_model : settings.openrouter_default_i2i_model) ||
+    "";
+  adhocState.modeModel = model;
   if (!model) {
-    // 没指定模型就用模式默认：设置页 t2i/i2i 模型 > env（OP_IMAGE_T2I_MODEL 等）
-    const settings = await api("/settings");
-    const mode = adhocMode();
-    model =
-      (settings.openrouter && settings.openrouter[`${mode}_model`]) ||
-      (mode === "t2i" ? settings.openrouter_default_t2i_model : settings.openrouter_default_i2i_model) ||
-      "";
-    if (!model) {
+    adhocState.caps = null;
+    settle(() => applyAdhocCaps({}));
+    return;
+  }
+  try {
+    const caps = await api(`/openrouter/capabilities?model=${encodeURIComponent(model)}`);
+    settle(() => applyAdhocCaps(caps));
+  } catch {
+    settle(() => {
       adhocState.caps = null;
       applyAdhocCaps({});
-      return;
-    }
+    });
   }
-  const caps = await api(`/openrouter/capabilities?model=${encodeURIComponent(model)}`);
-  applyAdhocCaps(caps);
 }
 
 function applyAdhocCaps(caps) {
   adhocState.caps = caps || null;
   const resSelect = $("#adhoc-resolution");
+  const resField = $("#adhoc-resolution-field");
   const enums = (caps && caps.resolutions) || [];
-  const parts = [`<option value="">跟随设置默认</option>`];
   if (enums.length) {
-    for (const value of enums) {
-      parts.push(`<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`);
-    }
+    // 模型声明了 resolution 枚举 → 只列枚举值（分辨率与设置页一致，面板不提供 charvar 档位）
+    resSelect.innerHTML = [`<option value="">跟随设置默认</option>`]
+      .concat(enums.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`))
+      .join("");
+    resField.hidden = false;
   } else {
-    // 模型没声明 resolution 枚举（如 muse-image）→ 档位纯算像素：charvar 档位。
-    // muse 的清单声明未必准（声明为空但实际接受 size），别把档位锁死。
-    parts.push(
-      `<option value="1k">1k（长边 1024）</option>`,
-      `<option value="2k">2k（长边 2048）</option>`,
-    );
+    // 模型没声明 resolution 枚举（如 muse-image）→ 该参数不设，面板也不再显示：
+    // 分辨率完全由设置页/env 的模式默认决定
+    resSelect.innerHTML = `<option value=""></option>`;
+    resSelect.value = "";
+    resField.hidden = true;
   }
-  resSelect.innerHTML = parts.join("");
 
   const qualities = (caps && caps.qualities) || [];
   const qSelect = $("#adhoc-quality");
@@ -92,6 +104,7 @@ function applyAdhocCaps(caps) {
     .concat(qualities.map((q) => `<option value="${escapeHtml(q)}">${escapeHtml(q)}</option>`))
     .join("");
   qField.hidden = qualities.length === 0;
+  renderAdhocModelInfo();
   updateAdhocHints();
 }
 
@@ -102,7 +115,24 @@ function applyAdhocTierOptions() {
     `<option value="1k">1k（长边 1024）</option>` +
     `<option value="2k">2k（Qwen 官方像素 ~4.2MP）</option>`;
   select.value = "1k";
+  $("#adhoc-resolution-field").hidden = false;
   $("#adhoc-quality-field").hidden = true;
+}
+
+/* 当前模式（文生图/图片编辑）与其默认模型名：随参考图增删、模式切换刷新 */
+function renderAdhocModelInfo() {
+  const el = $("#adhoc-model-field");
+  if (!el) return;
+  if (adhocBackend() !== "openrouter") {
+    el.hidden = true;
+    return;
+  }
+  const mode = adhocMode();
+  const label = mode === "i2i" ? "图片编辑（带参考图）" : "文生图（未选参考图）";
+  const model = adhocState.modeModel || "";
+  el.innerHTML = model
+    ? `当前走 ${escapeHtml(label)}：模型 <code>${escapeHtml(model)}</code>（跟随设置页，此处不选模型）`
+    : `当前走 ${escapeHtml(label)}：设置页 / OP_IMAGE_${mode.toUpperCase()}_MODEL 还没配模型`;
 }
 
 function updateAdhocHints() {
@@ -292,8 +322,7 @@ $("#btn-adhoc-generate").addEventListener("click", async () => {
     const url = $("#adhoc-comfy-url").value.trim();
     if (url) body.comfy_url = url;
   } else {
-    const model = $("#adhoc-model").value.trim();
-    if (model) body.model = model;
+    // 模型不传，后端按参考图有无取 t2i/i2i 模式默认（设置页 > env）
     const quality = $("#adhoc-quality").value;
     if (quality && !$("#adhoc-quality-field").hidden) body.quality = quality;
   }
@@ -375,6 +404,14 @@ async function loadAdhocRecent() {
       card.appendChild(p);
       const actions = document.createElement("div");
       actions.className = "image-actions";
+      // 提示词在卡片里最多显示 3 行（见 .adhoc-recent p 的 CSS），全文走弹层
+      if (rec.prompt && rec.prompt.trim()) {
+        const promptBtn = document.createElement("button");
+        promptBtn.textContent = "查看提示词";
+        promptBtn.addEventListener("click", () =>
+          Media.showTextModal("临时生图 · 提示词", rec.prompt || "", { copyable: true }));
+        actions.appendChild(promptBtn);
+      }
       if (rec.has_image) {
         const openBtn = document.createElement("button");
         openBtn.textContent = "查看大图";
@@ -412,8 +449,5 @@ function initAdhoc() {
 }
 
 $("#adhoc-backend").addEventListener("change", applyAdhocBackend);
-$("#adhoc-model").addEventListener("change", () => {
-  loadAdhocModelCaps().catch(() => {});
-});
 
 initAdhoc();

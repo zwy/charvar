@@ -492,6 +492,15 @@ def _rejected_parameter(message: str) -> str | None:
     match = re.search(r"parameter\(s\):\s*(\w+)", low)
     if match:
         return match.group(1)
+    # "Black Forest Labs FLUX 3 Image does not support: seed."
+    match = re.search(r"does not support:\s*(\w+)", low)
+    if match:
+        return match.group(1)
+    # "… takes a resolution tier (768, 1K, …) plus aspect_ratio, not pixel
+    # dimensions. Received size \"1344x2048\"." —— 拒的是 size（像素画幅）
+    match = re.search(r"not pixel dimensions", low)
+    if match:
+        return "size"
     # "Image size '1024x448' is not supported" / "quality: not supported"
     match = re.search(r"\bsize\b[^.]*is not supported", low)
     if match:
@@ -615,16 +624,20 @@ def build_generate_body(
 ) -> dict[str, Any]:
     """组装 ``POST /api/v1/images`` 的请求体。
 
-    画幅走 ``size`` 显式像素（``"{width}x{height}"``）——``size`` 是
-    OpenRouter 层的通用参数，provider 实测都吃（tencent / qwen 按像素精确
-    输出），而 ``aspect_ratio`` 受各模型自己的枚举限制（tencent 的枚举不含
-    charvar 支持的 21:9，会 400）。``size`` 被某个 provider 拒收时，
-    :func:`generate_image` 会自动改用 ``aspect_ratio`` 重试。
+    画幅默认走 ``size`` 显式像素（``"{width}x{height}"``）——``size`` 是
+    OpenRouter 层的通用参数，实测多被吃（tencent / qwen 按像素精确输出）。
+    但清单里**声明了参数却没列 ``size``** 的模型（如 flux-3）只收
+    「分辨率档 + ``aspect_ratio``」，发 ``size`` 直接 400 —— 这种模型改发
+    ``aspect_ratio``（值须在模型枚举内）。清单完全没声明（如 muse）当未知
+    处理，仍发 ``size``；探测缓存里记过 ``size`` 被拒的也换道。没有可用的
+    ``aspect_ratio`` 表达时仍保底发 ``size``，由 :func:`generate_image` 的
+    自动降级重试兜底。
 
-    ``resolution`` / ``quality`` 只在模型清单里**声明**支持时才发：
+    ``resolution`` / ``quality`` / ``seed`` 只在模型清单里**声明**支持时才发：
     清单是标准（用户明确要求以 api-response.json 为准），muse-image 虽
     接受 ``resolution`` 但输出像素完全不变（1K 与 4K 同为 1920×1280），
-    发了反而误导。
+    发了反而误导；清单完全没声明的模型（如 muse）当未知处理，seed 照发，
+    provider 拒收时由 :func:`generate_image` 自动降级重试。
     """
     if not prompt or not prompt.strip():
         raise OpenRouterParamError("prompt 不能为空")
@@ -637,12 +650,25 @@ def build_generate_body(
     body: dict[str, Any] = {
         "model": model,
         "prompt": prompt.strip(),
-        "size": f"{width}x{height}",
     }
-    if seed is not None:
+    # seed 的清单语义：**显式声明了却没列 seed**（如 flux-3-image-klein）→ 不发，
+    # provider 会直接 400；清单完全没声明任何参数（如 muse）当未知处理，照发，
+    # provider 拒收时由 _post_generate 的自动降级兜底。
+    if seed is not None and (not caps.declared or "seed" in caps.declared):
         body["seed"] = normalize_seed(seed)
     if reference_paths and caps.supports_refs:
         body["input_references"] = build_input_references(reference_paths)
+
+    # 画幅的清单语义与 seed 同构：声明了参数却没列 size（flux-3 这类只收
+    # 「分辨率档 + aspect_ratio」）→ 改发 aspect_ratio（值在模型枚举内才发）；
+    # 探测缓存记过 size 被拒的一并换道。清单为空或没有可用的 aspect 表达时
+    # 仍发 size —— 它是像素精确的通路，错报由 _post_generate 降级兜底。
+    size_supported = (not caps.declared or "size" in caps.declared) and "size" not in caps.rejected
+    aspect_ok = aspect_ratio and (not caps.aspect_ratios or aspect_ratio in caps.aspect_ratios)
+    if size_supported or not aspect_ok:
+        body["size"] = f"{width}x{height}"
+    else:
+        body["aspect_ratio"] = aspect_ratio
 
     provider_resolution = _provider_resolution(resolution, caps)
     if provider_resolution:

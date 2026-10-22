@@ -1246,11 +1246,13 @@ function orModelOptionsHtml() {
   return parts.join("");
 }
 
-async function fillOpenRouterSettingParams(mode, settings) {
+async function fillOpenRouterSettingParams(mode, settings, modelOverride = null) {
   const or = (settings && settings.openrouter) || {};
-  $(`#set-or-${mode}-model`).value = or[`${mode}_model`] || "";
+  // modelOverride：用户刚在下拉里选了还没保存的值（设置页存的值此刻是旧的）
+  const modelValue = modelOverride != null ? modelOverride : (or[`${mode}_model`] || "");
+  $(`#set-or-${mode}-model`).value = modelValue;
   const effectiveModel =
-    or[`${mode}_model`] ||
+    modelValue ||
     (mode === "t2i" ? settings.openrouter_default_t2i_model : settings.openrouter_default_i2i_model) ||
     "";
   let caps = null;
@@ -1302,7 +1304,7 @@ async function refreshOpenRouterSettingFields(settings) {
 async function onOpenRouterSettingModelChange(mode) {
   try {
     const settings = await api("/settings");
-    await fillOpenRouterSettingParams(mode, settings);
+    await fillOpenRouterSettingParams(mode, settings, $(`#set-or-${mode}-model`).value.trim());
     const hintEl = $("#or-model-hints");
     const otherMode = mode === "t2i" ? "i2i" : "t2i";
     const otherHints = OR_CAPS_BY_MODE[otherMode]
@@ -1336,6 +1338,14 @@ async function loadSettings() {
       const models = await api("/openrouter/models");
       OR_MODEL_OPTIONS = models.models || [];
     } catch {} // 清单读不到时下拉里只剩「跟随 env 默认」
+    // 已存的模型值必须在下拉里，否则赋值会静默失败，下一次保存还会把它清掉
+    const or = settings.openrouter || {};
+    for (const mode of ["t2i", "i2i"]) {
+      const stored = or[`${mode}_model`];
+      if (stored && !OR_MODEL_OPTIONS.some((m) => m.id === stored)) {
+        OR_MODEL_OPTIONS.push({ id: stored, name: `${stored}（不在当前清单里）` });
+      }
+    }
     const optionsHtml = orModelOptionsHtml();
     $("#set-or-t2i-model").innerHTML = optionsHtml;
     $("#set-or-i2i-model").innerHTML = optionsHtml;

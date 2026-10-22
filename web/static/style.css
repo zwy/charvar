@@ -177,6 +177,16 @@ td .caption { color: var(--muted); }
 /* 锁定项三栏并排（窄屏自动换成单列） */
 .lock-grid { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
 .full-row { grid-column: 1 / -1; }
+/* OpenRouter 设置：两种模式（文生图 / 图片编辑）并排两组，窄屏自动堆叠 */
+.or-mode-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px 28px; margin-bottom: 12px; }
+.or-mode-group { display: grid; gap: 12px 16px; align-content: start; }
+.or-mode-group .form-section-title { margin-bottom: 0; }
+/* 卡片底行：API Key 与「拉取模型清单」同一行，按钮对齐输入框底边 */
+.or-foot { display: flex; align-items: flex-end; gap: 20px 32px; flex-wrap: wrap; }
+.or-foot label { flex: 0 1 360px; margin: 0; }
+.or-foot .actions { margin-top: 0; }
+/* 「保存设置」独立行卡片：全页设置一个入口 */
+.settings-save .hint { flex: 1 1 320px; }
 .import-box { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
 .import-box summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 .import-box textarea { width: 100%; margin-top: 8px; font-family: var(--mono); font-size: 12px; }
@@ -370,3 +380,12 @@ td .caption { color: var(--muted); }
 .actions select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 /* 参考图卡片里的「移除」按钮：贴着缩略图下方，别撑满 */
 .ref-pick .chip { padding: 2px 8px; font-size: 11px; }
+
+/* 临时生图「最近生成」卡：提示词最多 3 行（长提示词不再把卡片撑高），全文点
+   「查看提示词」看弹层 */
+#adhoc-recent .image-card p {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

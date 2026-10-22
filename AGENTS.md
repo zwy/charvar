@@ -42,7 +42,12 @@
 - 模板渲染只允许 `charvar.composer.render`（缺失占位符保留原样并记 warning），禁止 eval / Jinja 执行任意代码。
 - ComfyUI 节点 id 一律来自用户提供的 mapping.json，不许硬编码。
 - ComfyUI 请求必须 bypass 代理（exporter 里 httpx trust_env=False）：本机 shell 的 ALL_PROXY 会劫持内网地址。
-- OpenRouter 生图（`charvar/openrouter_image.py`）同样 bypass 代理；画幅必须走 `size` 显式像素（provider 的 `aspect_ratio` 枚举不含 21:9，会 400）；seed 必须收敛到 ≤ 2^53-1（charvar 的 subseed 是 64 位 sha256，不收敛直接 400）。
+- OpenRouter 生图（`charvar/openrouter_image.py`）同样 bypass 代理；画幅默认走 `size`
+  显式像素（像素精确；tencent 的 `aspect_ratio` 枚举不含 21:9），但清单**声明了参数却没列
+  `size`** 的模型（flux-3 只收「分辨率档 + aspect_ratio」，发 size 直接 400）改发
+  `aspect_ratio`（值须在枚举内），探测缓存记过 size 被拒的一并换道，清单为空（muse）仍发
+  size —— 别把这条「清单没列 size」扩大成一律不发 size。`seed` / `resolution` / `quality`
+  同理只在声明支持时才发；seed 收敛到 ≤ 2^53-1（charvar 的 subseed 是 64 位 sha256，不收敛直接 400）。
 - OpenRouter 生图按**模式分两组配置**（对齐 ComfyUI 文生图 / 图片编辑 workflow）：
   带参考图 = `i2i`（图片编辑），不带 = `t2i`（文生图）；能否带参考图按清单
   `architecture.input_modalities` 判断（没有 `image` 就不能当图片编辑模型）。
