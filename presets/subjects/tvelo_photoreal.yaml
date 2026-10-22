@@ -1,0 +1,53 @@
+# 由 `charvar subject export` 导出的 DB 快照（2026-10-22 06:21:35），模板逐字在同名 .md。
+id: tvelo_photoreal
+name: 缇珞 · 真人摄影版（星际迷航同人OC）
+subject_noun: woman
+reference_tag: <image1>
+style_lock:
+- realistic photographic portrayal of a performer in finished costume makeup, like
+  a film character shot on set
+- natural facial features, bone structure, body proportions and perspective without
+  exaggerated stylization
+- fine natural skin texture, natural skin-tone variation, real hair strands and restrained
+  retouching
+- uniform fabric, leather boot surface and metal badge materials clearly distinguishable,
+  face, ears, neck and hands sharing one consistent lighting space
+- no illustration lines or brush strokes, no 3D game rendering, no wax-like plastic
+  skin
+identity_lock:
+- adult female natural physique with a full bust and defined waist, coordinated shoulders,
+  chest, pelvis and limbs, upright bearing, without exaggerating bust or waist
+- soft upper face, naturally narrowing jaw, small chin without being pointy, light
+  ivory skin with a very faint warm-pink cheek tint, face, ears, neck and hands sharing
+  one base skin tone that shifts naturally with the scene light
+- blue almond eyes of natural iris size with realistic iris texture, slightly low
+  upper lids, upward-tilted outer corners and a little soft catchlight
+- black angled eyebrows with real hair flow and upswept tips, small nose with natural
+  bridge and nostrils, coral-red lips with subtle lip lines, light makeup with a thin
+  eyeliner close to the lash roots
+- black short bob with neat straight bangs, rounded crown and back of the head, jaw-length
+  sides, inward-curling ends, back hair tucked above the nape, natural strand gaps,
+  visible hairline and a few flyaways with soft reflections
+- pointed Vulcan ears with real ear contours, cartilage folds and skin texture, naturally
+  connected to the head and shown or hidden per view
+- calm, composed default bearing with a slight scrutinizing feel, specific brow, eye
+  and mouth states decided by the scene
+outfit_lock:
+- mustard-yellow and black color-blocked long-sleeve starship uniform with a black
+  stand collar covering the neck root and fine dark-gold trim along the collar edge
+  and front closure
+- black shoulder and upper-back pieces separated from the yellow bodice by a continuous
+  narrow white trim stripe
+- low-saturation mustard-yellow chest, back body and sleeves, black side panels with
+  a natural waist tuck, front hem tapering into a pointed notch, coordinated short-jacket-length
+  back hem
+- single small silver-gold upward arrow metal badge on the character's own left chest,
+  no badge on the back
+- matte, opaque fabric with moderate thickness, slight stretch, visible seams, natural
+  ease and a few reasonable wrinkles
+- black low-heeled short ankle boots with a slightly round almond toe and trouser
+  legs tucked in, fine matte leather, simple structure
+extra: Keep the same facial identity, black bob, blue almond eyes, pointed ears, yellow-black
+  uniform with the white trim stripe, left-chest arrow badge and black trousers and
+  boots across all views; avoid plastic skin, glowing iris highlights or glossy latex-looking
+  fabric.

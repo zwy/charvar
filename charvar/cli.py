@@ -253,6 +253,52 @@ def subject_verify(
         raise typer.Exit(1)
 
 
+@subject_app.command("export")
+def subject_export(
+    subject_id: str = typer.Argument(..., help="主体档案 id"),
+    dir_out: Optional[Path] = typer.Option(None, "--dir", "-o", help="导出目录（默认 presets/subjects）"),
+    overwrite: bool = typer.Option(False, "--overwrite", "-f", help="目标文件已存在时覆盖"),
+    json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出（外部 agent）"),
+) -> None:
+    """把 DB 里的主体档案快照回仓库：<id>.yaml + <id>.md（模板逐字，无改写）。"""
+    import yaml as _yaml
+
+    if dir_out is None:  # 运行时解析：模块导入期的默认值会绕过 CHARVAR_PRESETS_DIR
+        dir_out = paths.presets_dir() / "subjects"
+    with storage.connect() as conn:
+        profile = storage.get_subject(conn, subject_id)
+        if profile is None:
+            _die(f"主体档案不存在：{subject_id}")
+        template_md = storage.get_subject_template(conn, subject_id)
+
+    yml_path = dir_out / f"{profile.id}.yaml"
+    md_path = dir_out / f"{profile.id}.md"
+    existing = [p for p in (yml_path, *( [md_path] if template_md else [] )) if p.exists()]
+    if existing and not overwrite:
+        _die(f"目标文件已存在：{existing[0]}（--overwrite 覆盖）")
+    dir_out.mkdir(parents=True, exist_ok=True)
+    body = _yaml.safe_dump(profile.model_dump(exclude_none=True), allow_unicode=True, sort_keys=False)
+    yml_path.write_text(
+        f"# 由 `charvar subject export` 导出的 DB 快照（{storage.utcnow()}），模板逐字在同名 .md。\n" + body,
+        encoding="utf-8",
+    )
+    if template_md:
+        md_path.write_text(template_md, encoding="utf-8")
+    if json_out:
+        typer.echo(json.dumps({
+            "subject_id": profile.id,
+            "yaml_path": str(yml_path),
+            "template_path": str(md_path) if template_md else None,
+            "template_chars": len(template_md) if template_md else 0,
+        }, ensure_ascii=False))
+        return
+    typer.echo(f"已导出：{yml_path}")
+    if template_md:
+        typer.echo(f"  模板（{len(template_md)} 字符，逐字）→ {md_path}")
+    else:
+        typer.secho("  警告：DB 里没有该主体的模板，只导出档案（.md 未写）", fg=typer.colors.YELLOW)
+
+
 # ---------- presets ----------
 
 @presets_app.command("list")

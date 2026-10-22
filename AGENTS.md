@@ -86,3 +86,6 @@
 独立审计（omission/contradiction/violation）；默认只写 `presets/subjects/<id>.yaml` 不入库，
 `--apply` 才入库，`--overwrite` 覆盖，多版本模板必须 `--version <关键词>`）。
 已入库配对的审计：`charvar subject verify <id>`（exit 0 通过 / 1 有问题单，`--json` 供 agent）。
+DB → 仓库对偶：`charvar subject export <id>` 把已入库档案快照成 `presets/subjects/<id>.yaml` +
+`<id>.md`（模板逐字、无改写）。**DB 是运行时真源，仓库靠 export 保持镜像**——直接在 DB/网页建档后
+要记得 export，仓库里没有备份的档案清库即失。

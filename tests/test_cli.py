@@ -9,7 +9,8 @@ import json
 import pytest
 from typer.testing import CliRunner
 
-from charvar import cli, openrouter_image
+from charvar import cli, openrouter_image, storage
+from charvar.models import SubjectProfile
 
 runner = CliRunner()
 
@@ -208,3 +209,72 @@ def test_main_is_console_script_target():
         pytest.skip("charvar 未安装为 distribution")
     targets = {ep.value for ep in entry_points if ep.group == "console_scripts"}
     assert "charvar.cli:main" in targets
+
+
+# ---------- subject export ----------
+
+def _seed_export_subject(subject_id: str = "tvelo_x", *, template: bool = True) -> None:
+    profile = SubjectProfile(
+        id=subject_id, name="缇珞", subject_noun="woman", trigger_word="tvelo",
+        style_lock=["clean lineart"], identity_lock=["short silver bob"],
+        outfit_lock=["flight suit"], extra="Keep the same silhouette.",
+    )
+    with storage.connect() as conn:
+        storage.save_subject(conn, profile, replace=True)
+        if template:
+            storage.save_subject_template(conn, subject_id, "# 模板标题\n\n正文逐字，一字不改。")
+
+
+@pytest.fixture()
+def _export_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CHARVAR_PRESETS_DIR", str(tmp_path / "presets"))
+    return tmp_path
+
+
+def test_export_writes_yaml_and_verbatim_md(_export_env, tmp_path):
+    _seed_export_subject()
+    result = runner.invoke(cli.app, ["subject", "export", "tvelo_x"])
+    assert result.exit_code == 0, result.output
+    yml = tmp_path / "presets" / "subjects" / "tvelo_x.yaml"
+    md = tmp_path / "presets" / "subjects" / "tvelo_x.md"
+    assert yml.exists() and md.exists()
+    assert md.read_text(encoding="utf-8") == "# 模板标题\n\n正文逐字，一字不改。"
+    text = yml.read_text(encoding="utf-8")
+    assert "# 由 `charvar subject export` 导出的 DB 快照" in text
+    import yaml as _yaml
+
+    data = _yaml.safe_load(text)
+    assert data["id"] == "tvelo_x" and data["trigger_word"] == "tvelo"
+
+
+def test_export_json_fields(_export_env, tmp_path):
+    _seed_export_subject()
+    result = runner.invoke(cli.app, ["subject", "export", "tvelo_x", "--json"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.stdout)
+    assert data["subject_id"] == "tvelo_x" and data["template_chars"] == len("# 模板标题\n\n正文逐字，一字不改。")
+    assert data["template_path"].endswith("tvelo_x.md")
+
+
+def test_export_conflict_needs_overwrite(_export_env, tmp_path):
+    _seed_export_subject()
+    assert runner.invoke(cli.app, ["subject", "export", "tvelo_x"]).exit_code == 0
+    result = runner.invoke(cli.app, ["subject", "export", "tvelo_x"])
+    assert result.exit_code == 1
+    assert "--overwrite" in result.output
+    assert runner.invoke(cli.app, ["subject", "export", "tvelo_x", "--overwrite"]).exit_code == 0
+
+
+def test_export_missing_subject(_export_env):
+    result = runner.invoke(cli.app, ["subject", "export", "ghost"])
+    assert result.exit_code == 1
+    assert "主体档案不存在" in _stderr(result)
+
+
+def test_export_without_template_warns(_export_env, tmp_path):
+    _seed_export_subject(template=False)
+    result = runner.invoke(cli.app, ["subject", "export", "tvelo_x"])
+    assert result.exit_code == 0, result.output
+    assert "警告" in result.output
+    assert not (tmp_path / "presets" / "subjects" / "tvelo_x.md").exists()

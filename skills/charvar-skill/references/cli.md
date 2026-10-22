@@ -127,3 +127,14 @@ data/generated/adhoc/{时间戳}_{短id}/
 
 读 DB 里已入库档案 + 它的模板（网页「主体档案」上传的），检查漏抽（omission）、
 与模板矛盾、把背景布光写成锁定。exit 0 = 通过，exit 1 = 有问题单。
+
+## charvar subject export〈DB 快照 → 仓库〉
+
+对已入库的主体（含只在 DB 里建过、仓库没有 YAML 的），把档案回写仓库做备份：
+
+```bash
+~/.local/bin/charvar subject export <id>            # → presets/subjects/<id>.yaml + <id>.md（模板逐字）
+```
+
+目标文件已存在要 `--overwrite`；没有模板时只导出 YAML 并警告。DB 是运行时真源，
+新建/网建档案后记得 export，否则清库即失。
