@@ -1,0 +1,84 @@
+# charvar 三动作冻结预设｜花环式 / 倚门交叉站姿 / 单手扶后脑
+# 来源：three_pose_workflow_archive.md（2026-10-21《三动作工作流实践｜冻结提示词与复盘》）。
+# 三条动作提示词是用户在外层工作流逐字调试的冻结版，本文件逐字保留中文原文，不翻译不改写。
+# 倚门提示词原文里没有明确写哪只手扶腰、持烟手朝向的英文左右，整段以门框为唯一参照
+# （持烟手与前跨腿同属靠门框一侧），沿用原文措辞，不再补 side 约定以免改变已验证行为。
+# 中文动作段在 charvar 的 classic 模式下原样进提示词；Qwen-Image / OpenRouter 双语系模型
+# 可直接消化。翻成英文会改写用户已调好的结构关系，因此不做。
+# 推荐先用 classic：LLM 模式会把中文段重写成英文，改写过程不认识冻结版的语义优先级，
+# 可能附加「平视正对镜头」类规范，削弱低头/斜视等要求（与瑜伽预设同一提醒）。
+# 动作段只管肢体、支撑接触、朝向、机位与完整入镜；服装、体型、画风、背景走主体档案锁定项。
+# 三个动作冻结时均为「试用冻结」状态（user_reported / image_reviewed）：有用户反馈与图像检查，
+# 未在本仓库出图验证；出图后按下面的验收条件逐条对勾（照录自来源文档）。
+# 花环式验收：臀低于双膝且离地、双脚接地；肘低于手腕、双手胸前合掌；双肘抵住同侧膝内侧
+#   （搭在膝顶不算精确通过）；头顶、双肘、双膝、双脚完整入镜。
+# 倚门验收：持烟手与前跨腿同属靠门框一侧；另一手扶腰、两条小腿交叉、两脚接地
+#   （前跨脚允许脚尖触地）；身体与门框明确接触（严格肩贴需单独检查）；低头向下、全身入镜。
+# 扶后脑验收：前臂位于脑后（不是越过头顶或手扶太阳穴）；另一手扶腰、双肘外展；
+#   头转向抬臂一侧、下巴略抬视线向上；双脚分开接地；头顶、双肘、双脚完整入镜
+#   （后脑手掌被身体遮挡属自然，不算失败）。
+# 冻结时已记录的已知限制（未修复，别当作已解决）：倚门门框接触点常落在上臂/肘而非肩；
+# 扶后脑后脑手掌被遮挡、掌心接触面不可检查；三动作均无跨人物稳定性证据。
+# 倚门条目的门框是动作段自带的接触条件，不写进背景；随机背景可能与门框冲突
+# （如沙滩无门可倚）。跑这条前建议先在界面固定走廊/门口类背景，或接受首轮废图。
+# caption 标签一律英文（仓库约定，训练信号不中英夹杂；动作段中文不进 caption）。
+# 三个动作都是近正面全身竖构图，画幅保持 auto（full → 2:3 竖版）；若花环式左右裁切，
+# 再考虑 preferred_aspect_ratio（值必须加引号，YAML 会把未加引号的 4:3 读成数字）。
+# 每条用 pose 字段标动作（独立于 expression 表情语义），caption 按 caption_tags.pose 取英文名。
+# tags 的最后一项为动作标识，不是表情标签。参考图推荐 front 一张。
+# 身份/绑定引用（素材1、#图1 等）是外层平台的约定，不属于本预设；动作段不重复绑定身份。
+
+name: three_pose_pack
+type: list
+version: 1
+master_template: 'Create an image of the {subject_noun} from {reference_tag}. {style_lock_sentence}{identity_lock_sentence}{outfit_lock_sentence}{extra} One character only, no duplicated or repeated figure, no multi-view panel, no character sheet layout, no split screen.'
+suffix_template: The background is {background}. The lighting is {lighting}.
+backgrounds_ref: wildcards/backgrounds_v2.yaml
+lighting_ref: wildcards/lighting_v2.yaml
+caption_background_suffix: false
+reference_order:
+- front
+caption_tags:
+  expression: {}
+  pose:
+    malasana_wide_prayer: garland pose deep squat with prayer hands
+    smoke_break: door-frame lean with crossed legs
+    in_the_limelight: standing pose with one hand behind head
+variants:
+- id: yoga_malasana_wide_prayer
+  # 冻结版 V4.1 逐字保留；写成单行避免折叠标量留半角空格。
+  # >- 折叠写法会在断行处把「，臀」之类拆出空格，normalize 不清这个。
+  text: >-
+    人物做花环式，正面全身入镜。双脚略宽于肩，脚尖外转，脚底接地。双膝向两侧打开，蹲到底，臀部接近地面但不落地，明显低于双膝。上身略前倾，胸腹降到两条大腿之间。双上臂沿躯干两侧向下，双肘低于手腕，分别抵住同侧膝内侧；两侧前臂从低处的肘部斜向上汇合，双手在胸前合掌，指尖朝上。头顶与双脚完整入镜。
+  framing: full
+  angle: front
+  expression: null
+  pose: malasana_wide_prayer
+  tags:
+  - full
+  - action
+  - malasana
+- id: smoke_break
+  # 冻结版 V3 逐字保留（单行，理由同上）。
+  text: >-
+    人物侧倚竖直门框，肩部贴住门框，髋部向远离门框的方向偏。靠门框一侧的手屈肘抬至脸旁，食指与中指夹一支香烟，远离嘴部；另一只手扶腰，手肘向外。远离门框一侧的腿支撑，靠门框一侧的腿斜跨在支撑腿前方，两条小腿交叉，两脚接地。头略低，视线向下。正面全身入镜，双手与双脚完整可见。
+  framing: full
+  angle: front
+  expression: null
+  pose: smoke_break
+  tags:
+  - full
+  - action
+  - smoke_break
+- id: in_the_limelight
+  # 冻结版 V3 逐字保留（单行，理由同上）。
+  text: >-
+    人物双脚分开站立，脚尖略向外，双脚接地，膝盖自然放松。身体略侧转，上身向扶腰一侧轻倾，胸部抬起。一臂屈肘，肘部向侧方展开，略高于肩；前臂在耳部高度横向伸向脑后，手掌扶住后脑勺。另一只手扶同侧腰髋，肘部向外。头转向抬臂一侧，下巴略抬，视线斜向上。接近正面的全身视角，头顶、双肘与双脚完整入镜。
+  framing: full
+  angle: front
+  expression: null
+  pose: in_the_limelight
+  tags:
+  - full
+  - action
+  - in_the_limelight
