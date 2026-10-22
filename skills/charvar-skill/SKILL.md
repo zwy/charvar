@@ -15,8 +15,10 @@ description: Generate images with the charvar project's ComfyUI or OpenRouter ba
 
 ## 前置
 
-CLI 由 `scripts/install_cli.sh` 装到 `~/.local/bin/charvar`（已在 PATH）。
-如果 `charvar` 命令找不到，先跑：
+CLI 由 `scripts/install_cli.sh` 装到 `~/.local/bin/charvar`。
+
+**用绝对路径 `~/.local/bin/charvar` 调，别用裸 `charvar`** —— 不同 agent 的 shell
+未必把 `~/.local/bin` 加进 PATH（Claude Desktop 聊天面就不一定）。命令找不到时先跑：
 
 ```bash
 /path/to/charvar/scripts/install_cli.sh
@@ -27,27 +29,27 @@ CLI 由 `scripts/install_cli.sh` 装到 `~/.local/bin/charvar`（已在 PATH）�
 **ComfyUI**（本机或局域网；无参考图走文生图 workflow，有参考图自动切图像编辑 workflow）：
 
 ```bash
-charvar image comfyui --prompt "a red apple on a wooden table" --aspect 1:1 --out out.png
+~/.local/bin/charvar image comfyui --prompt "a red apple on a wooden table" --aspect 1:1 --out out.png
 ```
 
 **OpenRouter**（在线）：
 
 ```bash
-charvar image openrouter --prompt "a red apple on a wooden table" --aspect 1:1 --out out.png
+~/.local/bin/charvar image openrouter --prompt "a red apple on a wooden table" --aspect 1:1 --out out.png
 ```
 
 **带参考图**（最多 4 张，按顺序对应提示词里的 `<image1>`/`<image2>`）：
 
 ```bash
-charvar image comfyui --prompt "same character, different pose" --ref ref1.png --ref ref2.png --out out.png
+~/.local/bin/charvar image comfyui --prompt "same character, different pose" --ref ref1.png --ref ref2.png --out out.png
 ```
 
 **长提示词**（别塞进 shell 历史）：
 
 ```bash
-charvar image comfyui --prompt-file prompt.md --out out.png
+~/.local/bin/charvar image comfyui --prompt-file prompt.md --out out.png
 # 或从 stdin
-cat prompt.md | charvar image comfyui --prompt-file - --out out.png
+cat prompt.md | ~/.local/bin/charvar image comfyui --prompt-file - --out out.png
 ```
 
 ## 给用户交付产物
@@ -93,7 +95,7 @@ charvar 的网页顶栏也有「临时生图」页签（`http://127.0.0.1:8710`�
 
 | 现象 | 原因 |
 |---|---|
-| `charvar: command not found` | 跑 `scripts/install_cli.sh`，或 `source ~/.zshrc` |
+| `charvar: command not found` | 用绝对路径 `~/.local/bin/charvar`；还不行就跑 `scripts/install_cli.sh` |
 | ComfyUI 连不上 | 检查 `COMFYUI_HOST` / `COMFYUI_PORT`（`.env`）与 ComfyUI 是否在跑 |
 | OpenRouter 报 key 缺失 | 设 `OP_IMAGE_API_KEY` 或 `LLM_API_KEY` |
 | 参考图超 4 张 | ComfyUI edit workflow 只有 4 个参考图槽位 |

@@ -21,7 +21,15 @@
 - 网页的参考图只认两种来源：上传暂存（`/adhoc/references`）或主体档案里已就绪的档案图。
   **不接受任意路径** —— 那是把文件读权限开给了浏览器。
 - 这是给本项目之外的项目和其他 agent 用的；改动它要考虑外部调用方依赖的参数名与输出格式。
-- `skills/charvar-skill/` 是配套的 Claude Code skill（装到 `~/.claude/skills/` 后跨项目可用）。改 CLI 参数时要同步改 skill 里的命令示例。
+- `skills/charvar-skill/` 是配套的 Claude Code skill，改 CLI 参数时要同步改 skill 里的命令示例。
+  要「全局可用」得装到**两处**（`scripts/install_cli.sh` 负责，幂等，`start.sh` 会调）：
+  - `~/.claude/skills/charvar-skill`（软链到仓库）→ Claude Code CLI + Claude Desktop 的 **Code 标签页**；
+  - Claude Desktop 的**聊天面**（3p 部署的 local agent mode）**不读 `~/.claude/skills/`** —— 它用自己的一套：
+    `<Application Support>/Claude*/local-agent-mode-sessions/skills-plugin/<workspace>/<account>/`，
+    技能 = `skills/` 下的**真实目录** + `manifest.json` 里一条 `creatorType: "user"` 记录
+    （`ensurePluginStructure` 会清掉 app 没登记过的东西，所以必须同时写 manifest）。
+- skill 里调 CLI 一律用绝对路径 `~/.local/bin/charvar` —— Desktop 聊天面的 shell 不保证把
+  `~/.local/bin` 加进 PATH。
 
 ## 测试
 
