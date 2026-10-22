@@ -341,7 +341,7 @@ def test_suggest_prompt_persists_to_db(client, tmp_path, monkeypatch):
 
 
 def test_suggest_prompt_does_not_cap_max_tokens(client, monkeypatch):
-    """起草请求不设 max_tokens：默认 4000 会把长 JSON 截断成非法响应。
+    """起草请求不设 max_tokens：默认 None 会把长 JSON 截断成非法响应。
 
     与 llm_compose 的改写路径同理（见 _REWRITE_MAX_TOKENS 注释）。
     """
