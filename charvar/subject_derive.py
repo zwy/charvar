@@ -429,7 +429,7 @@ def derive(
                 schema=DRAFT_SCHEMA,
                 schema_name="subject_profile_draft",
                 config=config,
-                max_tokens=None,  # 档案 JSON 较长：默认 4000 token 会截断（见 llm_compose 同款注释）
+                max_tokens=None,  # 档案 JSON 较长：默认 None token 会截断（见 llm_compose 同款注释）
             )
         except llm.LLMParseError as exc:
             # 输出非法/被截断（chat_json 已试过截取修复）：作为可重试问题进入下一轮
@@ -439,7 +439,7 @@ def derive(
             continue
         except llm.LLMError as exc:
             raise DeriveError(f"LLM 起草档案失败：{exc}") from exc
-        # （起草调用传 max_tokens=None：档案 JSON 较长，chat() 默认 4000 token 会截断）
+        # （起草调用传 max_tokens=None：档案 JSON 较长，chat() 默认 None token 会截断）
         if draft_is_ambiguous(draft) and not version_hint:
             raise _ambiguous_error(draft)
         try:
