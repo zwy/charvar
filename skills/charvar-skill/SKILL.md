@@ -1,6 +1,6 @@
 ---
 name: charvar-skill
-description: Generate images with the charvar project's ComfyUI or OpenRouter backends from any project. This skill should be used when the user asks to "用 comfyui 生图", "用 openrouter 生图", "charvar 帮我出图", "用 charvar 出张图", "generate an image with comfyui", "generate an image with openrouter", or otherwise asks to produce an image via the charvar CLI.
+description: Generate images with the charvar project's ComfyUI or OpenRouter backends from any project. This skill should be used when the user asks to "用 comfyui 生图", "用 openrouter 生图", "charvar 帮我出图", "用 charvar 出张图", "generate an image with comfyui", "generate an image with openrouter", or otherwise asks to produce an image via the charvar CLI; also for charvar subject-profile tasks such as "导入角色档案", "从模板生成主体档案" or using the charvar subject CLI.
 ---
 
 # charvar 生图
@@ -81,6 +81,25 @@ cat prompt.md | ~/.local/bin/charvar image comfyui --prompt-file - --out out.png
 
 charvar 的网页顶栏也有「临时生图」页签（`http://127.0.0.1:8710`），走的是同一条通路。
 用户明确说「在网页上出图 / 用 charvar 的网页」时指那个 —— 告诉用户地址即可，别自己用 CLI 顶替。
+
+## 主体档案：从模板导入（subject derive / verify）
+
+手里只有「角色全场景通用提示词模板」.md、要建主体档案时：
+
+```bash
+~/.local/bin/charvar subject derive <模板.md> --id <slug>
+# 默认只写 presets/subjects/<id>.yaml（带出处注释头），不落库；--apply 才入库
+# 模板含多版本时会列候选并拒绝 → 用 --version <关键词> 指定抽哪个
+# 锁定项默认从模板原文摘录（防幻觉核对）；--lang en 才翻译成英文
+```
+
+已入库档案 ↔ 模板的审计（漏抽/矛盾/违例）：
+
+```bash
+~/.local/bin/charvar subject verify <id> --json
+```
+
+exit 0 = 通过，exit 1 = 有问题单。完整参数与 `--json` 字段见 `references/cli.md`。
 
 ## 注意
 
