@@ -91,16 +91,24 @@
     </div>
     <div id="result-images" class="image-grid"></div>
 <div class="table-wrap" id="result-table-wrap"><table id="result-table"><thead><tr><th>#</th><th>变体</th><th>景别</th><th>角度</th><th>表情</th><th>体式</th><th>背景</th><th>光照</th><th>最终提示词</th><th>图片文案</th><th>caption</th></tr></thead><tbody></tbody></table></div></div></section>
-<section id="tab-subjects" class="tab-page"><div class="card"><h2>主体档案</h2><ul id="subject-list" class="subject-list"></ul><div class="actions"><button id="btn-subject-new">+ 新建</button></div></div><div class="card"><h2 id="subject-form-title">档案详情</h2><div class="form-grid">
+<section id="tab-subjects" class="tab-page"><div class="card"><div class="row-head"><h2>主体档案</h2><div class="actions"><button id="btn-subject-new">+ 新建</button></div></div>
+<div id="subject-list" class="subject-cards"></div></div>
+<div class="card"><h2 id="subject-form-title">档案详情</h2>
+<div class="form-section"><div class="form-section-title">基本信息</div><div class="form-grid">
 <label>ID（slug）<input type="text" id="s-id" placeholder="silver_witch"></label>
 <label>显示名<input type="text" id="s-name"></label>
 <label>称谓（提示词里的人称）<input type="text" id="s-noun" value="person" placeholder="woman / man / cat"></label>
-<label>LoRA 触发词<input type="text" id="s-trigger"></label>
-<label>风格锁定（Maintain 每行一条）<textarea id="s-style" rows="3" placeholder="2d comic book style"></textarea></label>
-<label>外貌锁定（每行一条）<textarea id="s-identity" rows="4" placeholder="long silver-white hair"></textarea></label>
-<label>服饰锁定（每行一条）<textarea id="s-outfit" rows="3" placeholder="the black witch robe"></textarea></label>
-<label class="span2">自由补充（拼到主提示词末尾）<input type="text" id="s-extra"></label>
-</div><div class="actions"><button id="btn-subject-save" class="primary">保存</button><button id="btn-subject-delete" class="danger">删除</button></div>
+<label>LoRA 触发词<input type="text" id="s-trigger" placeholder="留空 = 不用触发词"></label>
+</div></div>
+<div class="form-section"><div class="form-section-title">锁定项<span class="hint">每行一条，拼成一句 Maintain … 进提示词；中英文皆可</span></div><div class="form-grid lock-grid">
+<label>风格锁定<textarea id="s-style" rows="5" placeholder="2d comic book style"></textarea></label>
+<label>外貌锁定<textarea id="s-identity" rows="5" placeholder="long silver-white hair"></textarea></label>
+<label>服饰锁定<textarea id="s-outfit" rows="5" placeholder="the black witch robe"></textarea></label>
+</div></div>
+<div class="form-section"><div class="form-section-title">补充</div><div class="form-grid">
+<label class="full-row">自由补充（拼到主提示词末尾）<input type="text" id="s-extra"></label>
+</div></div>
+<div class="actions"><button id="btn-subject-save" class="primary">保存</button><button id="btn-subject-delete" class="danger">删除</button></div>
 <details class="import-box"><summary>粘贴 YAML 导入档案</summary><textarea id="s-yaml" rows="8" placeholder="id: silver_witch&#10;name: 银白女巫&#10;subject_noun: woman&#10;trigger_word: sw1tch&#10;style_lock: [the original illustration style]&#10;identity_lock: [long silver-white hair]&#10;outfit_lock: [the black witch robe]"></textarea><div class="actions"><button id="btn-subject-import">解析并保存</button></div></details></div>
 <div class="card" id="subject-images-card" hidden><h2>档案图片（生成变体时可作参考图）</h2>
 <div class="slot-toolbar">

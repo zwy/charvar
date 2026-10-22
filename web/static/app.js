@@ -660,21 +660,27 @@ setOpenRouterAspect("auto");
 
 /* ---------- 主体档案 ---------- */
 function renderSubjectList() {
-  const ul = $("#subject-list");
-  ul.innerHTML = "";
+  const box = $("#subject-list");
+  box.innerHTML = "";
+  if (!state.subjects.length) {
+    box.innerHTML = `<span class="hint">还没有档案：点「+ 新建」建档，或粘贴 YAML 导入。</span>`;
+    return;
+  }
   for (const s of state.subjects) {
-    const li = document.createElement("li");
-    li.innerHTML = `<span>${s.id}</span><span class="meta">${s.name}</span>`;
-    if (state.currentSubject === s.id) li.classList.add("active");
-    li.addEventListener("click", () => fillSubjectForm(s));
-    ul.appendChild(li);
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "subject-card"; // id ＋ 显示名两行的紧凑选择卡
+    card.innerHTML = `<span class="sc-id">${escapeHtml(s.id)}</span><span class="sc-name">${escapeHtml(s.name)}</span>`;
+    if (state.currentSubject === s.id) card.classList.add("active");
+    card.addEventListener("click", () => fillSubjectForm(s));
+    box.appendChild(card);
   }
 }
 
 function fillSubjectForm(s) {
   state.currentSubject = s.id;
   renderSubjectList();
-  $("#subject-form-title").textContent = `档案详情：${s.id}`;
+  $("#subject-form-title").textContent = `档案详情：${s.id}${s.name ? `（${s.name}）` : ""}`;
   $("#s-id").value = s.id;
   $("#s-name").value = s.name;
   $("#s-noun").value = s.subject_noun;
@@ -847,13 +853,14 @@ function renderSubjectImageSlots() {
         <div class="slot-head"><strong>${SLOT_LABELS[slot.kind] || slot.kind}</strong>
           <span class="badge badge-${slot.status}">${slotStatusText(slot)}</span></div>
         <span class="hint">${SLOT_HINTS[slot.kind] || ""} · 默认 ${slot.aspect_ratio} / ${slot.resolution}</span>
-        <textarea class="slot-prompt" rows="3" placeholder="提示词（生成 / 编辑指令）">${escapeHtml(slot.prompt || "")}</textarea>
+        <textarea class="slot-prompt" rows="3" placeholder="提示词（失焦自动保存）">${escapeHtml(slot.prompt || "")}</textarea>
         <div class="slot-actions">
           <button data-act="view" data-kind="${slot.kind}">查看</button>
           <button data-act="copy" data-kind="${slot.kind}">复制</button>
           <button data-act="suggest" data-kind="${slot.kind}">AI 起草</button>
-          <button data-act="generate" data-kind="${slot.kind}" class="primary">${slot.is_ready ? "重新生成" : "生成"}</button>
-          <button data-act="generate-openrouter" data-kind="${slot.kind}">用 OpenRouter 生成</button>
+          <button data-act="edit-prompt" data-kind="${slot.kind}">编辑提示词</button>
+          <button data-act="generate" data-kind="${slot.kind}" class="primary">${slot.is_ready ? "Comfy重新生成" : "Comfy生成"}</button>
+          <button data-act="generate-openrouter" data-kind="${slot.kind}">${slot.is_ready ? "OP重新生成" : "OP生成"}</button>
           <label class="btn file-btn">上传<input type="file" data-upload="${slot.kind}" accept=".png,.jpg,.jpeg,.webp" hidden></label>
           ${slot.is_ready ? `<button data-act="delete" data-kind="${slot.kind}" class="danger">删除</button>` : ""}
           ${slot.status === "queued" ? `<button data-act="sync" data-kind="${slot.kind}">同步</button>` : ""}
@@ -897,6 +904,8 @@ $("#subject-image-slots").addEventListener("click", async (ev) => {
       }
       const ok = await copyText(text);
       setStatus(statusEl, ok ? "提示词已复制" : "复制失败（可在「查看」弹窗里复制）", !ok);
+    } else if (act === "edit-prompt") {
+      openSlotPromptEditor(slot, promptEl);
     } else if (act === "suggest") {
       setStatus(statusEl, "AI 起草中…");
       const data = await api(`/subjects/${encodeURIComponent(sid)}/images/${kind}/suggest-prompt`, { method: "POST" });
@@ -992,6 +1001,58 @@ $("#btn-slots-draft").addEventListener("click", async () => {
   setStatus(statusEl, failed.length ? `起草完成，${failed.length} 个失败：${failed.join("、")}` : `起草完成 ${targets.length}/${targets.length} 个`);
   btn.disabled = false;
 });
+
+/* 编辑提示词弹窗：大 textarea + 显式保存。走的是已有接口
+   PUT /subjects/{id}/images/{kind}/prompt（与内联 textarea 失焦保存同一落库），
+   不新增后端接口。打开时以卡片内联 textarea 的当前值为准（可能含未失焦的草稿）。 */
+function openSlotPromptEditor(slot, promptEl) {
+  const sid = state.currentSubject;
+  if (!sid) return;
+  const label = SLOT_LABELS[slot.kind] || slot.kind;
+  Media.showPanelModal(`编辑提示词 · ${label}`, (body, close) => {
+    const ta = document.createElement("textarea");
+    ta.className = "md-edit";
+    ta.rows = 12;
+    ta.placeholder = "生图提示词；留空则生成前需先 AI 起草或手写";
+    ta.value = promptEl ? promptEl.value : (slot.prompt || "");
+    body.appendChild(ta);
+    const hint = document.createElement("span");
+    hint.className = "hint";
+    hint.textContent = "保存即落库；「Comfy生成 / OP生成」未在前端另填提示词时用这条。";
+    body.appendChild(hint);
+    const row = document.createElement("div");
+    row.className = "actions";
+    const save = document.createElement("button");
+    save.className = "primary";
+    save.textContent = "保存提示词";
+    const cancel = document.createElement("button");
+    cancel.textContent = "取消";
+    const status = document.createElement("span");
+    status.className = "status";
+    row.append(save, cancel, status);
+    body.appendChild(row);
+    cancel.addEventListener("click", close);
+    save.addEventListener("click", async () => {
+      save.disabled = true;
+      const text = ta.value.trim();
+      try {
+        await api(`/subjects/${encodeURIComponent(sid)}/images/${slot.kind}/prompt`, {
+          method: "PUT",
+          body: JSON.stringify({ prompt: text }),
+        });
+        slot.prompt = text;
+        if (promptEl) promptEl.value = text;
+        setStatus(status, "提示词已保存");
+        const cardStatus = slotCard(slot.kind)?.querySelector(".slot-status");
+        if (cardStatus) setStatus(cardStatus, "提示词已保存");
+        close();
+      } catch (err) {
+        save.disabled = false;
+        setStatus(status, `保存失败：${err.message}`, true);
+      }
+    });
+  });
+}
 
 /* 提示词 textarea 失焦保存（change 事件）：没改动不请求。 */
 async function saveSlotPrompt(textarea) {
