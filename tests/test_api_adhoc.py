@@ -220,6 +220,50 @@ def test_generate_with_subject_reference(client, monkeypatch):
     assert len(uploads) == 1
 
 
+def test_generate_with_recent_run_reference(client, monkeypatch):
+    """从「最近生成」取参考图：run_id 指到 Playground run 的落盘原图，成功后不清理。"""
+    uploads: list[str] = []
+    _mock_comfy(monkeypatch, uploads, [])
+    first = client.post(
+        "/adhoc/generate", json={"prompt": "a red apple", "backend": "comfyui"}
+    ).json()
+    resp = client.post(
+        "/adhoc/generate",
+        json={
+            "prompt": "same character <image1>",
+            "backend": "comfyui",
+            "references": [{"run_id": first["run_id"]}],
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    assert len(uploads) == 1  # 第一次出图没有参考图；第二次把 run 的原图传上去了
+    # run 产物不随出图被清理（同一张可以反复引用）
+    resp2 = client.post(
+        "/adhoc/generate",
+        json={
+            "prompt": "again",
+            "backend": "comfyui",
+            "references": [{"run_id": first["run_id"]}, {"run_id": first["run_id"]}],
+        },
+    )
+    assert resp2.status_code == 200, resp2.text
+    assert len(uploads) == 3
+
+
+def test_generate_with_bad_recent_run_id_rejected(client):
+    """run_id 指不到产物或带路径穿越 → 400，不能拿 ../ 读任意文件。"""
+    resp = client.post(
+        "/adhoc/generate",
+        json={"prompt": "x", "references": [{"run_id": "adhoc_0000"}]},
+    )
+    assert resp.status_code == 400
+    resp = client.post(
+        "/adhoc/generate",
+        json={"prompt": "x", "references": [{"run_id": "adhoc_../etc"}]},
+    )
+    assert resp.status_code == 400
+
+
 def test_generate_empty_prompt_rejected(client):
     resp = client.post("/adhoc/generate", json={"prompt": "   "})
     assert resp.status_code == 400

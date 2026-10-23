@@ -312,6 +312,41 @@ const Media = {
     overlay.querySelector("[data-close]")?.focus();
   },
 
+  /* 「从最近生成」选图：列 Playground 最近的出图记录（只列有图的），点卡片即选定。
+     onPick(rec) 收到 /adhoc 列表记录（含 run_id / prompt），由调用方决定装进首帧还是参考图。 */
+  pickRecentImage(onPick, { title = "从最近生成选择" } = {}) {
+    this.showPanelModal(title, (body, close) => {
+      body.innerHTML = `<span class="hint">加载中…</span>`;
+      api("/adhoc?limit=24")
+        .then((all) => {
+          const records = (all || []).filter((r) => r.has_image);
+          const grid = document.createElement("div");
+          grid.className = "image-grid ref-picker-grid";
+          if (!records.length) {
+            grid.innerHTML = `<span class="hint">还没有可用的图 —— 先在 Playground 出几张图</span>`;
+          }
+          for (const rec of records) {
+            const card = document.createElement("div");
+            card.className = "image-card";
+            card.innerHTML =
+              `<img src="/adhoc/${encodeURIComponent(rec.run_id)}/thumb" alt="" loading="lazy">` +
+              `<div class="image-meta"><span>${escapeHtml(rec.backend || "")}</span>` +
+              `<span>${escapeHtml((rec.created_at || "").slice(5, 16))}</span></div>`;
+            card.title = rec.prompt || rec.run_id;
+            card.addEventListener("click", () => {
+              close();
+              onPick(rec);
+            });
+            grid.appendChild(card);
+          }
+          body.replaceChildren(grid);
+        })
+        .catch((err) => {
+          body.innerHTML = `<span class="hint">加载失败：${escapeHtml(err.message)}</span>`;
+        });
+    });
+  },
+
   setView(view) {
     this.view = view;
     const grid = $("#result-images");

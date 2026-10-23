@@ -42,7 +42,9 @@
 - **网页入口**：顶栏「Playground」页签（`web/static/adhoc.js`），后端 `/adhoc/*`（`charvar/api.py`）。
   走的是**同一个** `charvar/adhoc.py` —— 网页与 CLI 是同一套参数语义、同一套落盘、同一份 manifest。
   改动 `charvar/adhoc.py` 的参数名或输出格式时，CLI、网页、skill 三处都要同步。
-- 网页的参考图只认两种来源：上传暂存（`/adhoc/references`）或主体档案里已就绪的档案图。
+- 网页的参考图只认三种来源：上传暂存（`/adhoc/references`）、主体档案里已就绪的档案图、
+  Playground「最近生成」的原图（spec 带 `run_id`；run_id 过该模块自己的严格正则，
+  文件名由服务端从该 run 的 `original/` 目录按落盘布局定 —— 浏览器永远不给路径）。
   **不接受任意路径** —— 那是把文件读权限开给了浏览器。
 - 这是给本项目之外的项目和其他 agent 用的；改动它要考虑外部调用方依赖的参数名与输出格式。
 - `skills/charvar-skill/` 是配套的 Claude Code skill，改 CLI 参数时要同步改 skill 里的命令示例。

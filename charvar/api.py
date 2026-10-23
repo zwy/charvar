@@ -185,14 +185,17 @@ class Message(BaseModel):
 
 
 class AdhocReferenceSpec(BaseModel):
-    """一张参考图的来源：上传暂存的（staged_id）或主体档案里的（subject_id + kind）。
+    """一张参考图的来源：上传暂存（staged_id）、主体档案（subject_id + kind）
 
+    或 Playground「最近生成」的原图（run_id，服务端从该 run 的 original/
+    目录定文件名 —— 不接受任意路径）。
     顺序即提示词里 ``<image1>`` / ``<image2>`` 的顺序。
     """
 
     staged_id: str | None = None
     subject_id: str | None = None
     kind: str | None = None
+    run_id: str | None = None
 
 
 class AdhocGenerateRequest(BaseModel):
@@ -217,7 +220,8 @@ class VideoGenerateRequest(BaseModel):
 
     视频是异步作业：本端点只提交（202 + job id），前端按 /videos/{run_id}/status 轮询。
     首帧图 = 图生视频（frame_images）；参考图 = 参考生成（input_references）；
-    两者同给时首帧优先（官方语义）。都只认「上传暂存 / 主体档案就绪图」两种来源。
+    两者同给时首帧优先（官方语义）。都只认「上传暂存 / 主体档案就绪图 /
+    Playground 最近生成原图」三种来源。
     """
 
     prompt: str
@@ -1293,7 +1297,8 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     ) -> tuple[list[Path], list[str]]:
         """参考图 spec → 本地路径列表（+ 暂存 id 列表，出图成功后清理）。
 
-        只认两种来源：上传暂存的（staged_id）、主体档案里的（subject_id + kind）。
+        只认三种来源：上传暂存的（staged_id）、主体档案里的（subject_id + kind）、
+        Playground「最近生成」的原图（run_id，文件名由服务端从该 run 目录取）。
         不接受任意路径 —— 那是把文件读权限开给了浏览器。
         """
         paths_found: list[Path] = []
@@ -1323,7 +1328,17 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                     reference_images.prepared_reference(local, subject_dir, spec.kind)
                 )
                 continue
-            raise HTTPException(400, "参考图缺少来源（staged_id 或 subject_id + kind）")
+            if spec.run_id:
+                # 最近生成的原图：run_id 过 adhoc 自己的严格正则（挡 ".."），
+                # 文件从该 run 的 original/ 目录按落盘布局定 —— 不收浏览器给的路径
+                try:
+                    paths_found.append(adhoc_service.original_file(spec.run_id))
+                except FileNotFoundError as exc:
+                    raise HTTPException(400, str(exc)) from exc
+                except adhoc_service.AdhocError as exc:
+                    raise HTTPException(400, str(exc)) from exc
+                continue
+            raise HTTPException(400, "参考图缺少来源（staged_id、subject_id + kind 或 run_id）")
         return paths_found, staged_ids
 
     @app.post("/adhoc/references")
@@ -1433,10 +1448,10 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     ) -> tuple[list[Path], list[str]]:
         """参考图 spec → 本地路径列表（+ 暂存 id 列表，成片 ready 后清理）。
 
-        与 /adhoc 的 `_adhoc_reference_paths` 同一套规则：只认上传暂存（staged_id）
-        或主体档案就绪图（subject_id + kind），**不接受任意路径** —— 那是把
-        文件读权限开给了浏览器。暂存池走 adhoc_video 自己的（出图/出片各自
-        清理，互不误删）。
+        与 /adhoc 的 `_adhoc_reference_paths` 同一套规则：只认上传暂存（staged_id）、
+        主体档案就绪图（subject_id + kind）、Playground「最近生成」的原图（run_id），
+        **不接受任意路径** —— 那是把文件读权限开给了浏览器。暂存池走 adhoc_video
+        自己的（出图/出片各自清理，互不误删）。
         """
         paths_found: list[Path] = []
         staged_ids: list[str] = []
@@ -1466,7 +1481,16 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                     reference_images.prepared_reference(local, subject_dir, spec.kind)
                 )
                 continue
-            raise HTTPException(400, "参考图缺少来源（staged_id 或 subject_id + kind）")
+            if spec.run_id:
+                # Playground 最近生成的原图：run_id 过严格正则，文件名服务端定
+                try:
+                    paths_found.append(adhoc_service.original_file(spec.run_id))
+                except FileNotFoundError as exc:
+                    raise HTTPException(400, str(exc)) from exc
+                except adhoc_service.AdhocError as exc:
+                    raise HTTPException(400, str(exc)) from exc
+                continue
+            raise HTTPException(400, "参考图缺少来源（staged_id、subject_id + kind 或 run_id）")
         return paths_found, staged_ids
 
     @app.get("/videos/models")

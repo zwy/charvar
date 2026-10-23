@@ -229,6 +229,53 @@ def test_generate_with_subject_reference(client, tmp_path, monkeypatch):
     assert resp.status_code == 400  # 缺来源
 
 
+def test_generate_with_recent_run_first_frame(client, tmp_path, monkeypatch):
+    """「最近生成」来源：首帧/参考图直接指到 Playground 出图的落盘原图。"""
+    from charvar import adhoc as adhoc_service
+
+    _inject_catalog(tmp_path, monkeypatch)
+    seen = {}
+
+    def fake_submit(body, *, api_key=None, timeout_s=None):
+        seen.update(body)
+        return openrouter_video.VideoJob("job-11", "pending")
+
+    def fake_poll(job_id, **kw):
+        return {"status": "completed", "unsigned_urls": [], "usage": {"cost": 0.4}}
+
+    monkeypatch.setattr(openrouter_video, "submit", fake_submit)
+    monkeypatch.setattr(openrouter_video, "wait_for_job", lambda *a, **k: (_ for _ in ()).throw(AssertionError()))
+    monkeypatch.setattr(openrouter_video, "poll", fake_poll)
+    monkeypatch.setattr(openrouter_video, "download", lambda job_id, **kw: b"\x00\x00\x00\x20ftyp" + b"\x00" * 12)
+    monkeypatch.setattr(adhoc_video, "_make_poster", lambda p, d: None)
+
+    # 手工造一个 Playground 图 run（original/ 里放一张真图）
+    run_id = "adhoc_20261023-000000_deadbeef"
+    run_dir = adhoc_service.run_dir(run_id)
+    (run_dir / "original").mkdir(parents=True)
+    Image.new("RGB", (48, 64)).save(run_dir / "original" / "000000.png", format="PNG")
+
+    resp = client.post("/videos/generate", json={
+        "prompt": "the woman in <image1> waves",
+        "first_frame": {"run_id": run_id},
+        "references": [{"run_id": run_id}],
+    })
+    assert resp.status_code == 200, resp.text
+    # 原图经 encode_reference 重编码成 data URL（JPEG q88），两条链路都吃同一份
+    assert seen["frame_images"][0]["frame_type"] == "first_frame"
+    assert seen["frame_images"][0]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+    assert len(seen["input_references"]) == 1
+
+
+def test_generate_with_bad_recent_run_id_rejected(client):
+    """run_id 指不到产物 / 非法前缀 / 路径穿越 → 400。"""
+    for bad in ("adhoc_no_such_run", "video_../evil"):
+        resp = client.post(
+            "/videos/generate", json={"prompt": "p", "first_frame": {"run_id": bad}}
+        )
+        assert resp.status_code == 400, resp.text
+
+
 def test_status_404_and_illegal_run_id(client):
     assert client.get("/videos/video_nope/status").status_code == 404
     assert client.get("/videos/evil_/status").status_code in (400, 404)

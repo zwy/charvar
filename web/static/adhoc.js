@@ -426,6 +426,24 @@ $("#btn-adhoc-ref-add").addEventListener("click", () => {
   setStatus($("#adhoc-status"), "已加入参考图");
 });
 
+/* 最近生成里有现成的产物图：点开弹层选一张，直接当参考图（不用先下载再上传）。
+   图片是 run 的落盘产物（original/），出图成功后不会被清理 —— 和暂存图不同。 */
+$("#btn-adhoc-recent-add").addEventListener("click", () => {
+  if (adhocState.references.length >= ADHOC_MAX_REFS) {
+    return setStatus($("#adhoc-status"), `参考图最多 ${ADHOC_MAX_REFS} 张`, true);
+  }
+  Media.pickRecentImage((rec) => {
+    adhocState.references.push({
+      type: "recent",
+      run_id: rec.run_id,
+      name: (rec.prompt || "").slice(0, 40) || rec.run_id,
+      url: `/adhoc/${encodeURIComponent(rec.run_id)}/thumb`,
+    });
+    renderAdhocRefs();
+    setStatus($("#adhoc-status"), "已加入参考图");
+  }, { title: "Playground · 从最近生成选择参考图" });
+});
+
 /* ---------- 出图 ---------- */
 $("#btn-adhoc-generate").addEventListener("click", async () => {
   const prompt = $("#adhoc-prompt").value.trim();
@@ -435,7 +453,7 @@ $("#btn-adhoc-generate").addEventListener("click", async () => {
   if (i2i && !adhocState.references.length) {
     return setStatus(
       $("#adhoc-status"),
-      "图片编辑需要至少 1 张参考图：上传，或从主体档案选就绪的图",
+      "图片编辑需要至少 1 张参考图：上传、从最近生成选，或从主体档案选就绪的图",
       true
     );
   }
@@ -456,6 +474,8 @@ $("#btn-adhoc-generate").addEventListener("click", async () => {
     body.references = adhocState.references.map((ref) =>
       ref.type === "staged"
         ? { staged_id: ref.id }
+        : ref.type === "recent"
+        ? { run_id: ref.run_id }
         : { subject_id: ref.subject_id, kind: ref.kind }
     );
   }

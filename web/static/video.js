@@ -185,7 +185,7 @@ function applyVideoMode() {
       parts.push(`${refs.length} 张参考图随「文生视频」发送；想带参考图请切回该页签`);
     }
     if (mode.refs && !refs.length && !frameRef) {
-      parts.push("上传图，或从主体档案选就绪的图");
+      parts.push("上传图、从最近生成选，或从主体档案选就绪的图");
     }
     hint.textContent = parts.join(" · ");
   }
@@ -202,7 +202,7 @@ function renderVideoFrame() {
   box.innerHTML = "";
   const ref = videoState.firstFrame;
   if (!ref) {
-    box.innerHTML = `<span class="hint">未选首帧：上传一张，或从主体档案选就绪的「全身正面」</span>`;
+    box.innerHTML = `<span class="hint">未选首帧：上传一张、从最近生成选，或从主体档案选「全身正面」</span>`;
     return;
   }
   const el = document.createElement("div");
@@ -425,6 +425,40 @@ $("#btn-video-ref-add").addEventListener("click", () => {
   setStatus($("#video-status"), "已加入参考图");
 });
 
+/* 最近生成里有现成的产物图（Playground 出的图）：点开弹层选一张，直接当首帧/参考图，
+   不用先下载到本地再上传。图片是 Playground run 的落盘产物，不会随一次出片被清理。 */
+$("#btn-video-frame-recent").addEventListener("click", () => {
+  Media.pickRecentImage((rec) => {
+    if (videoState.firstFrame) releaseVideoRef(videoState.firstFrame);
+    videoState.firstFrame = {
+      type: "recent",
+      run_id: rec.run_id,
+      name: (rec.prompt || "").slice(0, 40) || rec.run_id,
+      url: `/adhoc/${encodeURIComponent(rec.run_id)}/thumb`,
+    };
+    renderVideoFrame();
+    updateVideoCostHint();
+    setStatus($("#video-status"), "已设为首帧");
+  }, { title: "视频 · 从最近生成选择首帧图" });
+});
+
+$("#btn-video-ref-recent").addEventListener("click", () => {
+  if (videoState.references.length >= 4) {
+    return setStatus($("#video-status"), "参考图最多 4 张", true);
+  }
+  Media.pickRecentImage((rec) => {
+    videoState.references.push({
+      type: "recent",
+      run_id: rec.run_id,
+      name: (rec.prompt || "").slice(0, 40) || rec.run_id,
+      url: `/adhoc/${encodeURIComponent(rec.run_id)}/thumb`,
+    });
+    renderVideoRefs();
+    updateVideoCostHint();
+    setStatus($("#video-status"), "已加入参考图");
+  }, { title: "视频 · 从最近生成选择参考图" });
+});
+
 /* ---------- 提交与轮询（异步作业） ---------- */
 
 $("#btn-video-generate").addEventListener("click", async () => {
@@ -432,7 +466,7 @@ $("#btn-video-generate").addEventListener("click", async () => {
   if (!prompt) return setStatus($("#video-status"), "提示词为空", true);
   const mode = VIDEO_MODES[videoState.mode];
   if (videoState.mode === "i2v" && !videoState.firstFrame) {
-    return setStatus($("#video-status"), "图生视频需要 1 张首帧图：上传，或从主体档案选就绪的图", true);
+    return setStatus($("#video-status"), "图生视频需要 1 张首帧图：上传、从最近生成选，或从主体档案选就绪的图", true);
   }
   // 种子留空 = 随机 0–100000（与生成页/Playground 同一约定，随机源在调用方这一侧）
   const seedRaw = $("#video-seed").value.trim();
@@ -448,11 +482,15 @@ $("#btn-video-generate").addEventListener("click", async () => {
       ? videoState.references.map((ref) =>
           ref.type === "staged"
             ? { staged_id: ref.id }
+            : ref.type === "recent"
+            ? { run_id: ref.run_id }
             : { subject_id: ref.subject_id, kind: ref.kind })
       : [],
     first_frame: videoState.mode === "i2v" && videoState.firstFrame
       ? (videoState.firstFrame.type === "staged"
           ? { staged_id: videoState.firstFrame.id }
+          : videoState.firstFrame.type === "recent"
+          ? { run_id: videoState.firstFrame.run_id }
           : { subject_id: videoState.firstFrame.subject_id, kind: videoState.firstFrame.kind })
       : null,
   };
