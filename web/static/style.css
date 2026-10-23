@@ -461,9 +461,10 @@ td .caption { color: var(--muted); }
 .actions select { font: inherit; padding: 6px 9px; min-height: var(--ctl-h); border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; color: var(--text); max-width: 220px; }
 .actions select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
-/* Playground「最近生成」卡：提示词最多 3 行（长提示词不再把卡片撑高），全文点
-   「查看提示词」看弹层 */
-#adhoc-recent .image-card p {
+/* Playground/视频「最近生成」卡：提示词最多 3 行（长提示词不再把卡片撑高），全文
+   点「查看提示词」看弹层 */
+#adhoc-recent .image-card p,
+#video-recent .image-card p {
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
