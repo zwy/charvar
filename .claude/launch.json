@@ -1,0 +1,10 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "charvar-web",
+      "url": "http://127.0.0.1:8710",
+      "port": 8710
+    }
+  ]
+}

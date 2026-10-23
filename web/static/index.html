@@ -30,6 +30,9 @@
 <span class="hint">LLM 模式要求：主体已上传「通用提示词模板」，且所选参考图已就绪；出图走图片编辑 workflow。</span>
 </div>
 <div class="actions"><button id="btn-generate" class="primary">生成变体</button><span id="gen-status" class="status"></span></div></div>
+<div class="card" id="rounds-bar" hidden>
+<div class="rounds-row"><div class="field-label">轮次</div><div id="rounds-list" class="chip-row"></div><span class="hint" id="rounds-hint">点击切换查看；出图中自动同步</span></div>
+</div>
 <div class="card" id="result-card" hidden><div class="row-head"><h2>生成结果 <span id="result-summary"></span></h2><div class="actions">
 <button id="btn-copy-prompts">复制全部提示词</button><button id="btn-copy-captions">复制全部 caption</button>
 <a id="dl-txt" class="btn" hidden>下载 TXT</a><a id="dl-jsonl" class="btn" hidden>下载 JSONL</a><a id="dl-zip" class="btn" hidden>下载 captions.zip</a><button id="btn-toggle-comfy">推送 ComfyUI…</button><button id="btn-toggle-openrouter">推送 OpenRouter…</button><button id="btn-toggle-dreamina">推送即梦…</button></div></div>
@@ -149,17 +152,17 @@
 </section>
 <section id="tab-runs" class="tab-page"><div class="card"><h2>生成历史</h2><div class="table-wrap"><table id="runs-table"><thead><tr><th>run_id</th><th>主体</th><th>预设</th><th>种子</th><th>条数</th><th>ComfyUI</th><th>时间</th><th>操作</th></tr></thead><tbody></tbody></table></div><div class="actions"><button id="btn-runs-refresh">刷新</button></div></div></section>
 <section id="tab-settings" class="tab-page">
-<div class="card"><h2>生图 Workflow</h2><div class="form-grid">
-<label>文生图 workflow（主体图：三视图）<select id="set-t2i"></select></label>
-<label>图片编辑 workflow（LLM 模式变体 / 档案单图）<select id="set-edit"></select></label>
-<p class="form-note">提示：主体图各槽位一律按「主体图默认尺寸」的画幅 × 分辨率注入宽高出图，文生图（三视图）与图片编辑（其余 4 槽）都生效；参考图只提供外观，不决定画幅。</p>
-</div></div>
-<div class="card"><h2>主体图默认尺寸</h2><div id="settings-sizes" class="form-grid"></div></div>
 <div class="card"><h2>LLM</h2><div class="form-grid">
 <label>Base URL<input type="text" id="set-llm-base" placeholder="留空 = 环境变量 LLM_BASE_URL"></label>
 <label>模型<input type="text" id="set-llm-model" placeholder="留空 = LLM_MODEL"></label>
 <label>API Key<input type="password" id="set-llm-key" placeholder="留空 = LLM_API_KEY（已配置则留空即可）" autocomplete="off"></label>
 <label class="span2">默认负向提示词<input type="text" id="set-negative" placeholder="主体图生成时统一追加（可留空）"></label>
+</div></div>
+<div class="card"><h2>主体图默认尺寸</h2><div id="settings-sizes" class="form-grid"></div></div>
+<div class="card"><h2>生图 Workflow</h2><div class="workflow-grid">
+<label>文生图 workflow（主体图：三视图）<select id="set-t2i"></select></label>
+<label>图片编辑 workflow（LLM 模式变体 / 档案单图）<select id="set-edit"></select></label>
+<p class="form-note">提示：主体图各槽位一律按「主体图默认尺寸」的画幅 × 分辨率注入宽高出图，文生图（三视图）与图片编辑（其余 4 槽）都生效；参考图只提供外观，不决定画幅。</p>
 </div></div>
 <div class="card"><h2>OpenRouter 生图</h2>
 <div class="or-mode-grid">
@@ -195,7 +198,7 @@
 </div>
 <div class="card settings-save"><div class="actions">
 <button id="btn-settings-save" class="primary">保存设置</button><span id="settings-status" class="status"></span>
-<span class="hint">一次保存本页全部设置：生图 workflow / 主体图默认尺寸 / LLM / OpenRouter / 即梦。改完记得点这里，别的卡片没有各自的保存按钮。</span>
+<span class="hint">一次保存本页全部设置：LLM / 主体图默认尺寸 / 生图 workflow / OpenRouter / 即梦。改完记得点这里，别的卡片没有各自的保存按钮。</span>
 </div></div>
 </section>
 <section id="tab-adhoc" class="tab-page"><div class="card"><h2>Playground</h2>

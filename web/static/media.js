@@ -130,6 +130,8 @@ const Media = {
     this.currentData = data;
     this.renderImages(data);
     this.setStatus(`图片 ${data.completed}/${data.items.length} 完成${data.errors ? `，失败 ${data.errors}` : ""}`);
+    // 生成页轮次条同步计数（app.js 提供，media.js 先加载、运行时才有）
+    if (typeof updateRoundStatus === "function") updateRoundStatus(data);
     return data;
   },
 

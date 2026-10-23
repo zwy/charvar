@@ -7,7 +7,8 @@ const state = {
   presets: [],
   presetDetails: {},
   currentSubject: null,
-  lastRun: null, // GenerateResult
+  lastRun: null, // GenerateResult（= 当前选中的轮次，结果卡 / 推送面板都作用于它）
+  rounds: [], // 轮次条：{run_id, completed, total, errors, queued}，按时间排
   genMode: "classic",
   subjectImages: [], // 主体档案图片槽位（当前主体）
   openrouterSettings: null, // /settings 里的 openrouter 段
@@ -269,6 +270,7 @@ $("#btn-generate").addEventListener("click", async () => {
     }
   }
   try {
+    $("#btn-generate").disabled = true; // 生成中不许再点（防止两轮并发互相覆盖视图）
     setStatus($("#gen-status"), "生成中…");
     state.lastRun = await api("/generate", { method: "POST", body: JSON.stringify(payload) });
     let msg = `完成：${state.lastRun.items.length} 条（run_id: ${state.lastRun.run_id}）`;
@@ -276,6 +278,7 @@ $("#btn-generate").addEventListener("click", async () => {
       msg += `　⚠ 生成声明：${state.lastRun.warnings.join("；")}`;
     }
     setStatus($("#gen-status"), msg);
+    addRound(state.lastRun.run_id, { completed: 0, errors: 0, queued: 0, items: state.lastRun.items });
     renderResult(state.lastRun);
     Media.setView("images");
     Media.loadImages(state.lastRun.run_id)
@@ -283,6 +286,8 @@ $("#btn-generate").addEventListener("click", async () => {
       .catch(() => Media.setStatus("图片加载失败", true));
   } catch (err) {
     setStatus($("#gen-status"), `失败：${err.message}`, true);
+  } finally {
+    $("#btn-generate").disabled = false;
   }
 });
 
@@ -333,6 +338,140 @@ function escapeHtml(text) {
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   }[c]));
 }
+
+/* ---------- 轮次条（多轮生成变体互不干扰） ---------- */
+/* 生成页只显示一个轮次的完整视图（结果表 / 图墙 / 推送面板，绑定 state.lastRun）；
+   上面加一排轮次徽标，新一轮完成后自动切过去，旧轮点徽标切回；
+   还有未出图（尤其 ComfyUI 未同步）的轮次由轮询自动 sync-outputs。 */
+const ROUNDS_MAX = 12;
+let roundsRenderKey = "";
+
+function addRound(runId, counts) {
+  let r = state.rounds.find((x) => x.run_id === runId);
+  if (!r) {
+    r = { run_id: runId, completed: 0, total: 0, errors: 0, queued: 0 };
+    state.rounds.push(r);
+    // 上限：只保留最近 ROUNDS_MAX 轮（更早的去历史记录看）
+    while (state.rounds.length > ROUNDS_MAX) state.rounds.shift();
+  }
+  if (counts) assignRound(r, counts);
+  renderRounds();
+  return r;
+}
+
+/* counts 兼容 /images 与 /sync-outputs 两种响应（items 完整列表 + completed/errors/queued） */
+function assignRound(r, data) {
+  if (!r || !data) return;
+  r.completed = data.completed ?? 0;
+  r.errors = data.errors ?? 0;
+  r.queued = data.queued ?? 0;
+  r.total = data.items ? data.items.length : r.total;
+  // 是否真的推过生图（有提交记录 / 已成品）。纯提示词轮次（没推任何端）不该一直转轮询
+  r.everSubmitted = Boolean(data.items?.some((it) => it.record || it.prompt_id || it.status === "done"));
+}
+
+function roundSettled(r) {
+  return r.total > 0 && (r.completed + r.errors + r.queued >= r.total || !r.everSubmitted);
+}
+
+/* media.js 的 Media.loadImages 回调：任何图墙刷新都会带来最新计数 */
+function updateRoundStatus(data) {
+  if (!data || !data.run_id) return;
+  const r = state.rounds.find((x) => x.run_id === data.run_id);
+  if (!r) return;
+  const before = roundKey(r);
+  assignRound(r, data);
+  if (roundKey(r) !== before) renderRounds();
+}
+
+function roundKey(r) {
+  return [r.completed, r.errors, r.queued, r.total].join("/");
+}
+
+function renderRounds() {
+  const bar = $("#rounds-bar");
+  const list = $("#rounds-list");
+  if (!list) return;
+  bar.hidden = state.rounds.length === 0;
+  const key = state.rounds.map(roundKey).join("|") + "#" + (state.lastRun?.run_id || "");
+  if (key === roundsRenderKey) return; // 轮询不改内容就不重建，免得闪烁
+  roundsRenderKey = key;
+  list.innerHTML = "";
+  state.rounds.forEach((r, i) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "chip round-chip" + (r.run_id === state.lastRun?.run_id ? " active" : "")
+      + (roundSettled(r) ? " done" : "");
+    btn.title = `${r.run_id}（第 ${i + 1} 轮）`;
+    const idSpan = document.createElement("span");
+    idSpan.textContent = `${i + 1}. ${r.run_id.length > 14 ? r.run_id.slice(0, 14) + "…" : r.run_id}`;
+    const countSpan = document.createElement("span");
+    countSpan.className = "rc-count";
+    countSpan.textContent = r.total ? `${r.completed}/${r.total}` : "";
+    btn.appendChild(idSpan);
+    if (r.errors) {
+      const err = document.createElement("span");
+      err.className = "rc-err";
+      err.textContent = `⚠${r.errors}`;
+      btn.appendChild(err);
+    }
+    btn.appendChild(countSpan);
+    if (!roundSettled(r)) {
+      const spin = document.createElement("span");
+      spin.textContent = "⟳";
+      btn.appendChild(spin);
+    }
+    btn.addEventListener("click", () => { selectRound(r.run_id).catch((err) => setStatus($("#gen-status"), `切换轮次失败：${err.message}`, true)); });
+    list.appendChild(btn);
+  });
+}
+
+async function selectRound(runId) {
+  if (state.lastRun?.run_id === runId) return;
+  state.lastRun = await api(`/runs/${encodeURIComponent(runId)}`);
+  addRound(runId);
+  renderResult(state.lastRun);
+  Media.setView("images");
+  await Media.loadImages(state.lastRun.run_id).catch(() => Media.setStatus("图片加载失败", true));
+  renderRounds();
+}
+
+/* 轮询：未完成且有提交记录的轮次每 5s 查一次状态；有 ComfyUI 真实提交在队列里
+   （record/prompt_id 已落库但还没成品）才真正 sync-outputs 取图。
+   当前选中轮的图墙一并刷新（Media.loadImages 自带渲染）。 */
+let roundsPollBusy = false;
+async function pollRounds() {
+  if (roundsPollBusy || document.visibilityState !== "visible") return;
+  const pending = state.rounds.filter((r) => r.total > 0 && r.everSubmitted && !roundSettled(r));
+  if (!pending.length) return;
+  roundsPollBusy = true;
+  try {
+    for (const r of pending) {
+      let data;
+      if (r.run_id === Media.currentRunId) {
+        data = await Media.loadImages(r.run_id); // 当前轮：顺带刷图墙
+      } else {
+        data = await api(`/runs/${encodeURIComponent(r.run_id)}/images`);
+      }
+      assignRound(r, data);
+      const hasQueuedSub = (data.items || []).some((it) => it.status === "queued" && (it.record || it.prompt_id));
+      if (hasQueuedSub) {
+        // 有在 ComfyUI 队列里的，取图（同步也会重建 sheet）；OpenRouter / 即梦在推送时已落记录，无需 sync
+        const s = await api(`/runs/${encodeURIComponent(r.run_id)}/sync-outputs`, {
+          method: "POST", body: JSON.stringify({ build_sheets: true }),
+        });
+        assignRound(r, s);
+        if (r.run_id === Media.currentRunId) await Media.loadImages(r.run_id);
+      }
+      renderRounds();
+    }
+  } catch (_err) {
+    // 单次轮询失败（如 ComfyUI 断连）静默跳过，下一轮再试
+  } finally {
+    roundsPollBusy = false;
+  }
+}
+setInterval(pollRounds, 5000);
 
 $("#btn-copy-prompts").addEventListener("click", () => {
   if (!state.lastRun) return;
@@ -1564,12 +1703,7 @@ async function loadRuns() {
   tbody.querySelectorAll("button[data-run]").forEach((btn) =>
     btn.addEventListener("click", async () => {
       try {
-        state.lastRun = await api(`/runs/${encodeURIComponent(btn.dataset.run)}`);
-        renderResult(state.lastRun);
-        Media.setView("images");
-        Media.loadImages(state.lastRun.run_id)
-          .then((data) => Media.setStatus(`图片 ${data.completed}/${data.items.length} 完成${data.errors ? `，失败 ${data.errors}` : ""}`))
-          .catch(() => Media.setStatus("图片加载失败", true));
+        await selectRound(btn.dataset.run); // 复用轮次条切换：进轮次条 + 结果卡 + 图墙
         $$(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === "gen"));
         $$(".tab-page").forEach((p) => p.classList.toggle("active", p.id === "tab-gen"));
       } catch (err) {
