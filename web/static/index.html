@@ -203,18 +203,21 @@
 </section>
 <section id="tab-adhoc" class="tab-page"><div class="card"><h2>Playground</h2>
 <p class="form-note">给一段提示词直接出一张图：不进主体档案槽位、不跑预设批量、不落生成历史。产物落在 <code>data/generated/adhoc/</code>，同目录有 manifest.json 记录完整请求。CLI 是同一条通路：<code>charvar image comfyui|openrouter|dreamina</code>。</p>
+<div class="adhoc-switch">
+<div class="segmented" id="adhoc-backend"><button type="button" class="seg active" data-backend="comfyui">ComfyUI</button><button type="button" class="seg" data-backend="openrouter">OpenRouter</button><button type="button" class="seg" data-backend="dreamina">即梦</button></div>
+<div class="segmented seg-sm" id="adhoc-mode"><button type="button" class="seg active" data-mode="t2i">文生图</button><button type="button" class="seg" data-mode="i2i">图片编辑</button></div>
+<span id="adhoc-model-field" class="hint"></span>
+</div>
 <div class="form-grid">
-<label>后端<select id="adhoc-backend"><option value="comfyui">ComfyUI（本机 / 局域网）</option><option value="openrouter">OpenRouter（在线）</option><option value="dreamina">即梦 Dreamina（官方 CLI，消耗积分）</option></select></label>
 <label>画幅比例<select id="adhoc-aspect"></select></label>
-<label id="adhoc-resolution-field">分辨率档位<select id="adhoc-resolution"><option value="1k">1k（长边 1024）</option><option value="2k">2k（Qwen 官方像素 ~4.2MP）</option></select></label>
-<label id="adhoc-seed-field">种子<input type="number" id="adhoc-seed" value="0" placeholder="0 = 固定复现"></label>
-<span id="adhoc-model-field" class="hint full-row"></span>
+<label id="adhoc-resolution-field">分辨率<select id="adhoc-resolution"></select></label>
+<label id="adhoc-model-select-field" hidden>模型版本<select id="adhoc-model-select"></select></label>
 <label id="adhoc-quality-field" hidden>质量档<select id="adhoc-quality"></select></label>
+<label id="adhoc-seed-field">种子<input type="number" id="adhoc-seed" placeholder="留空 = 随机；填数值 = 固定复现"></label>
 <label id="adhoc-negative-field">负向提示词<input type="text" id="adhoc-negative" placeholder="留空 = 用 workflow 默认"></label>
-<label id="adhoc-url-field">ComfyUI 地址<input type="text" id="adhoc-comfy-url" placeholder="留空 = COMFYUI_HOST/PORT"></label>
 <label class="span2">提示词<textarea id="adhoc-prompt" rows="5" placeholder="a red apple on a wooden table"></textarea></label>
 </div>
-<div class="form-field"><div class="field-label">参考图（最多 4 张，按顺序对应提示词里的 &lt;image1&gt;、&lt;image2&gt;）</div>
+<div class="form-field" id="adhoc-refs-block" hidden><div class="field-label">参考图（最多 4 张，按顺序对应提示词里的 &lt;image1&gt;、&lt;image2&gt;）</div>
 <div id="adhoc-ref-list" class="ref-grid"></div>
 <div class="actions">
 <label class="btn file-btn">上传参考图<input type="file" id="adhoc-ref-file" accept="image/*" multiple hidden></label>
@@ -222,8 +225,9 @@
 <select id="adhoc-ref-kind"></select>
 <button id="btn-adhoc-ref-add" type="button">从主体档案加入</button>
 <button id="btn-adhoc-ref-clear" type="button">清空参考图</button>
-<span id="adhoc-ref-hint" class="hint"></span>
-</div></div>
+</div>
+<span id="adhoc-ref-hint" class="hint"></span></div>
+<div id="adhoc-refs-t2i-hint" class="hint full-row" hidden></div>
 <div class="actions"><button id="btn-adhoc-generate" class="primary">出图</button><span id="adhoc-status" class="status"></span></div>
 </div>
 <div class="card" id="adhoc-result-card" hidden><div class="row-head"><h2>结果 <span id="adhoc-result-summary"></span></h2><div class="actions">

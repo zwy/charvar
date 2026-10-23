@@ -113,6 +113,22 @@ tbody tr:hover { background: var(--accent-soft); }
 td .prompt, td .caption { font-family: var(--mono); font-size: 12px; }
 td .prompt { display: block; }
 td .caption { color: var(--muted); }
+/* 历史记录表：run_id 太长会把「操作」顶出可视区 → run_id 压缩省略（悬停 title 看全名），
+   操作列钉在滚动区右缘，不管横滚到哪都看得见 */
+#runs-table td.prompt {
+  max-width: 18em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#runs-table th:last-child,
+#runs-table td:last-child {
+  position: sticky;
+  right: 0;
+  background: #fff;
+  box-shadow: -8px 0 12px -10px rgba(16, 24, 40, 0.18);
+}
+#runs-table td:last-child .row-actions { flex-wrap: nowrap; }
 .copy-cell { cursor: pointer; }
 .comfy-panel {
   margin: 12px 0;
@@ -402,3 +418,43 @@ td .caption { color: var(--muted); }
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* Playground 两级页签：一级 = 后端（ComfyUI/OpenRouter/即梦），
+   二级 = 模式（文生图/图片编辑）。segmented 壳套住两组按钮，
+   选中态浮在灰底上（同顶部 .tab 一族，只是更小）。 */
+.adhoc-switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  margin: 0 0 14px;
+}
+.segmented {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  background: #eef0f4;
+  border-radius: 10px;
+}
+.segmented .seg {
+  border: 0;
+  background: transparent;
+  padding: 5px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 13px;
+  font-family: inherit;
+}
+.segmented .seg:hover { color: var(--text); }
+.segmented .seg.active {
+  background: #fff;
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.12);
+}
+.seg-sm .seg { padding: 3px 10px; font-size: 12px; }
+.segmented .seg:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* 参考「图片编辑」页签的操作行：按钮组不撑满整行 */
+#adhoc-refs-block .actions { margin-top: 2px; }
+#adhoc-refs-block .field-label { margin-bottom: 8px; }

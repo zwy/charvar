@@ -1693,7 +1693,7 @@ async function loadRuns() {
   tbody.innerHTML = "";
   for (const r of runs) {
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td class="prompt">${escapeHtml(r.run_id)}</td><td>${escapeHtml(r.subject_id)}</td>
+    tr.innerHTML = `<td class="prompt" title="${escapeHtml(r.run_id)}">${escapeHtml(r.run_id)}</td><td>${escapeHtml(r.subject_id)}</td>
       <td>${escapeHtml(r.preset)}</td><td>${r.seed}</td><td>${r.item_count}</td>
       <td>${r.comfy_count}</td><td>${escapeHtml(r.created_at)}</td>
       <td><div class="row-actions"><button data-run="${escapeHtml(r.run_id)}">查看</button>
