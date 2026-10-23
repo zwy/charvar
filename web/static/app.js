@@ -322,7 +322,7 @@ function renderResult(result) {
       ${promptCell}${dtCell}${capCell}`;
     tbody.appendChild(tr);
   }
-  // 点击复制
+  // 点击复制（闪一下底色示意已复制，无弹窗打断）
   tbody.onclick = (ev) => {
     const cell = ev.target.closest(".copy-cell");
     if (!cell) return;
@@ -330,6 +330,8 @@ function renderResult(result) {
       ? cell.querySelector(".caption").textContent
       : cell.textContent;
     navigator.clipboard.writeText(text.trim());
+    cell.classList.add("cell-copied");
+    setTimeout(() => cell.classList.remove("cell-copied"), 600);
   };
 }
 

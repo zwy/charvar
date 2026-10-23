@@ -4,9 +4,9 @@
 <button class="tab active" data-tab="gen">生成</button><button class="tab" data-tab="adhoc">Playground</button><button class="tab" data-tab="subjects">主体档案</button><button class="tab" data-tab="runs">历史记录</button><button class="tab" data-tab="settings">设置</button></nav></header>
 <main>
 <section id="tab-gen" class="tab-page active"><div class="card"><h2>生成参数</h2>
-<div class="form-field gen-mode-row"><div class="field-label">生成模式</div><div class="chip-row">
-<button id="gen-mode-classic" class="chip active" data-mode="classic" type="button">经典模板</button>
-<button id="gen-mode-llm" class="chip" data-mode="llm" type="button">LLM 优化</button>
+<div class="form-field gen-mode-row"><div class="field-label">生成模式</div><div class="segmented">
+<button id="gen-mode-classic" class="seg active" data-mode="classic" type="button">经典模板</button>
+<button id="gen-mode-llm" class="seg" data-mode="llm" type="button">LLM 优化</button>
 </div></div>
 <div class="form-grid">
 <label>主体档案<select id="gen-subject"></select></label>
@@ -106,11 +106,10 @@
 <label class="span2">参考图（沿用生成页勾选；带参考图自动走 image2image）<span id="dreamina-refs-hint" class="hint"></span></label>
 </div><div class="actions"><button id="btn-dreamina-queue" class="primary">推送生图</button><span class="hint">每张消耗即梦积分/权益，单张 2K 约 60 秒。即梦不暴露 seed，也没有负向提示词。</span></div><pre id="dreamina-result" class="log"></pre></div>
 <div class="media-toolbar">
-      <button id="btn-sync-images" class="chip">同步图片</button>
-      <button id="btn-view-images" class="chip active" aria-pressed="true">图片墙</button>
-      <button id="btn-view-table" class="chip" aria-pressed="false">表格</button>
-      <button id="btn-contact-sheet" class="chip">Contact sheet</button>
-      <button id="btn-video" class="chip">合成视频</button>
+      <button id="btn-sync-images">同步图片</button>
+      <div class="segmented"><button id="btn-view-images" class="seg active" aria-pressed="true">图片墙</button><button id="btn-view-table" class="seg" aria-pressed="false">表格</button></div>
+      <button id="btn-contact-sheet">Contact sheet</button>
+      <button id="btn-video">合成视频</button>
       <span id="image-status" class="status"></span>
     </div>
     <div id="result-images" class="image-grid"></div>
@@ -139,8 +138,8 @@
 <span class="hint">两步流程：先就绪「人物半身像＋三视图」（生成或上传），再生成 / 上传其余 4 种。</span>
 <div class="actions">
 <label class="check seed-inline">统一种子<input type="number" id="slot-seed" value="0"></label>
-<button id="btn-slot-seed-random" type="button" class="chip" title="随机生成一个种子（0–100000）">随机种子</button>
-<button id="btn-slots-draft">一键 AI 起草（只补空白）</button>
+<button id="btn-slot-seed-random" type="button" class="btn-sm" title="随机生成一个种子（0–100000）">随机种子</button>
+<button id="btn-slots-draft" class="btn-sm">一键 AI 起草（只补空白）</button>
 <span id="slot-toolbar-status" class="status"></span>
 </div>
 </div>
@@ -183,7 +182,7 @@
 <datalist id="or-model-options"></datalist>
 <div class="or-foot">
 <label>API Key<input type="password" id="set-or-key" placeholder="留空 = OP_IMAGE_API_KEY / LLM_API_KEY" autocomplete="off"></label>
-<div class="actions"><button id="btn-or-models-refresh" class="chip">拉取模型清单</button><span id="or-models-status" class="status"></span></div>
+<div class="actions"><button id="btn-or-models-refresh">拉取模型清单</button><span id="or-models-status" class="status"></span></div>
 </div>
 <p class="form-note">提示：模型选完会按 api-response.json 里该模型的 supported_parameters 动态加载分辨率/质量档；该模型不支持的档会自动收起并重置为空。两个模式对齐 ComfyUI 的文生图 / 图片编辑 workflow：带参考图的生图（档案其余 4 槽、批量推送勾了参考图、Playground 带参考图）走「图片编辑」这组。分辨率/质量留空 = 用请求显式值 > 设置页 > env（OP_IMAGE_T2I_* / OP_IMAGE_I2I_*）的默认，且值要在所选模型声明的枚举里才真正发送。API Key 留空 = 用环境变量；同一家的 OpenRouter key 可以直接复用 LLM_API_KEY。OpenRouter 不支持负向提示词，参考图按勾选顺序对应提示词里的 the first/second… reference image。</p>
 </div>
@@ -193,7 +192,7 @@
 <label>分辨率档<select id="set-dreamina-resolution">
 <option value="">（跟随 env 默认）</option><option value="2K">2K</option><option value="4K">4K</option></select></label>
 </div>
-<p class="form-note">提示：即梦走本机官方 <code>dreamina</code> CLI，鉴权用 <code>dreamina login</code> 的登录态（这里没有 API Key）。即梦的模型都有编辑能力，**不区分文生图 / 图片编辑配置组**：带参考图自动走 image2image，不带走 text2image，共用这一组配置。即梦不暴露 seed；提示词上限 text2image 约 1600 字符、image2image 约 2000 字符（超限会硬失败）；生成消耗即梦积分/权益（仅限会员）。分辨率留空 = 请求显式值 > 设置页 > env（DREAMINA_IMAGE_RESOLUTION，默认 2K）。</p>
+<p class="form-note">提示：即梦走本机官方 <code>dreamina</code> CLI，鉴权用 <code>dreamina login</code> 的登录态（这里没有 API Key）。即梦的模型都有编辑能力，不区分文生图 / 图片编辑配置组：带参考图自动走 image2image，不带走 text2image，共用这一组配置。即梦不暴露 seed；提示词上限 text2image 约 1600 字符、image2image 约 2000 字符（超限会硬失败）；生成消耗即梦积分/权益（仅限会员）。分辨率留空 = 请求显式值 > 设置页 > env（DREAMINA_IMAGE_RESOLUTION，默认 2K）。</p>
 <span id="dreamina-cli-status" class="hint"></span>
 </div>
 <div class="card settings-save"><div class="actions">
@@ -236,7 +235,7 @@
 </div></div>
 <div class="adhoc-result-wrap"><img id="adhoc-result-image" alt="Playground 结果"></div>
 <pre id="adhoc-result-log" class="log"></pre></div>
-<div class="card"><div class="row-head"><h2>最近生成</h2><div class="actions"><button id="btn-adhoc-recent-refresh" class="chip">刷新</button></div></div>
+<div class="card"><div class="row-head"><h2>最近生成</h2><div class="actions"><button id="btn-adhoc-recent-refresh">刷新</button></div></div>
 <div id="adhoc-recent" class="image-grid"></div></div>
 </section>
 </main><script src="/static/media.js"></script><script src="/static/app.js"></script><script src="/static/adhoc.js"></script></body></html>

@@ -293,7 +293,7 @@ function renderAdhocRefs() {
     }
     const del = document.createElement("button");
     del.type = "button";
-    del.className = "chip";
+    del.className = "btn-sm";
     del.textContent = "移除";
     del.addEventListener("click", () => removeAdhocRef(index));
     el.appendChild(del);
@@ -510,6 +510,8 @@ function renderAdhocResult(out) {
   $("#adhoc-result-card").hidden = false;
   const img = $("#adhoc-result-image");
   img.src = out.image_url;
+  img.title = "点击预览大图";
+  img.onclick = () => Media.showImageModal(out.image_url, "");
   const dl = $("#adhoc-dl-image");
   dl.href = out.image_url;
   dl.hidden = false;
@@ -543,6 +545,10 @@ async function loadAdhocRecent() {
       // 只有真落了产物才有图；入队未完成与失败画占位，不取不存在的图
       if (rec.has_image) {
         card.innerHTML = `<img src="/adhoc/${encodeURIComponent(rec.run_id)}/thumb" alt="" loading="lazy">`;
+        const thumb = card.querySelector("img");
+        thumb.title = "点击预览大图";
+        thumb.addEventListener("click", () =>
+          Media.showImageModal(`/adhoc/${encodeURIComponent(rec.run_id)}/image`, rec.prompt || ""));
       } else {
         const label = rec.status === "error" ? "失败" : "已入队";
         card.innerHTML = `<div class="image-placeholder">${label}</div>`;

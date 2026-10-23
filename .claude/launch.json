@@ -3,8 +3,9 @@
   "configurations": [
     {
       "name": "charvar-web",
-      "url": "http://127.0.0.1:8710",
-      "port": 8710
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd /Users/zwy/Sites/charvar && CHARVAR_WEB_PORT=8799 python3 -m web.app"],
+      "port": 8799
     }
   ]
 }

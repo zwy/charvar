@@ -152,7 +152,7 @@ const Media = {
       const card = document.createElement("div");
       card.className = "image-card sheet-card";
       const sheetImageSrc = `/runs/${encodeURIComponent(data.run_id)}/sheets/contact`;
-      card.innerHTML = `<img src="${sheetImageSrc}" loading="lazy" alt="contact sheet"><div class="image-meta"><span>Contact sheet</span><button class="chip" data-sheet>查看</button></div>`;
+      card.innerHTML = `<img src="${sheetImageSrc}" loading="lazy" alt="contact sheet"><div class="image-meta"><span>Contact sheet</span><button class="btn-sm" data-sheet>查看</button></div>`;
       card.querySelector("img").addEventListener("click", () =>
         this.showImageModal(sheetImageSrc, "Contact sheet"));
       card.querySelector("button[data-sheet]").addEventListener("click", () =>
@@ -166,7 +166,7 @@ const Media = {
       const promptText = String(item.text || "").trim();
       // 查看提示词 / 复制 / 重新生成（与档案图片槽位同一套弹层：可滚动 pre + 复制全文）
       const actionsHtml = promptText
-        ? `<button class="chip" data-prompt-view>查看提示词</button><button class="chip" data-prompt-copy>复制</button><button class="chip" data-regen title="同一提示词换个随机种子，按原出图设置重推 ComfyUI 出一张新图">重新生成</button>`
+        ? `<button class="btn-sm" data-prompt-view>查看提示词</button><button class="btn-sm" data-prompt-copy>复制</button><button class="btn-sm" data-regen title="同一提示词换个随机种子，按原出图设置重推 ComfyUI 出一张新图">重新生成</button>`
         : `<span class="hint">（无提示词记录）</span>`;
       if (imageSrc) {
         card.innerHTML = `<img src="${imageSrc}" alt="${item.variant_id || `图片 ${item.item_index}`}" loading="lazy"><div class="image-meta"><strong>#${String(item.item_index).padStart(3, "0")}</strong><span>${item.variant_id}</span></div><div class="image-actions">${actionsHtml}</div>`;
@@ -271,7 +271,7 @@ const Media = {
       body.appendChild(pre);
       if (copyable) {
         const btn = document.createElement("button");
-        btn.className = "chip";
+        btn.className = "btn-sm";
         btn.textContent = "复制全文";
         btn.addEventListener("click", async () => {
           btn.textContent = (await copyText(text)) ? "已复制 ✓" : "复制失败";
@@ -296,8 +296,14 @@ const Media = {
     overlay.className = "image-overlay";
     overlay.setAttribute("role", "dialog");
     overlay.setAttribute("aria-modal", "true");
-    overlay.innerHTML = `<div class="image-modal"><button class="chip" data-close>关闭</button><img src="${url}" alt="生成结果"><pre></pre></div>`;
-    overlay.querySelector("pre").textContent = caption || "";
+    // 与 showPanelModal 同一骨架：modal-head（关闭钮靠右）+ modal-body（图片 + 可选图注）
+    overlay.innerHTML = `<div class="image-modal"><div class="modal-head"><strong></strong><button class="btn-sm" data-close>关闭</button></div><div class="modal-body"><img alt="生成结果"></div></div>`;
+    if (caption) {
+      const pre = document.createElement("pre");
+      pre.textContent = caption;
+      overlay.querySelector(".modal-body").appendChild(pre);
+    }
+    overlay.querySelector(".modal-body img").src = url;
     overlay.querySelector("[data-close]").addEventListener("click", close);
     overlay.addEventListener("click", (event) => { if (event.target === overlay) close(); });
     document.addEventListener("keydown", handleKey);
