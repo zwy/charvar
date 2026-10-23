@@ -488,12 +488,16 @@ def _rejected_parameter(message: str) -> str | None:
     match = re.search(r"unknown parameter\s+[`'\"]?(\w+)", low)
     if match:
         return match.group(1)
-    # "No provider ... supports the requested parameter(s): quality \"high\""
-    match = re.search(r"parameter\(s\):\s*(\w+)", low)
+    # "`input_references` is not supported for this model."（视频 API 的参数拒收话式）
+    match = re.search(r"`(\w+)`\s+is not supported", low)
     if match:
         return match.group(1)
     # "Black Forest Labs FLUX 3 Image does not support: seed."
     match = re.search(r"does not support:\s*(\w+)", low)
+    if match:
+        return match.group(1)
+    # "No provider ... supports the requested parameter(s): quality \"high\""
+    match = re.search(r"parameter\(s\):\s*(\w+)", low)
     if match:
         return match.group(1)
     # "… takes a resolution tier (768, 1K, …) plus aspect_ratio, not pixel

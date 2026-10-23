@@ -15,6 +15,30 @@
 
 - `charvar/adhoc.py` 是「给一段提示词出一张图」的独立通路：不进主体档案 5 槽位、不跑预设批量、不落 runs 表。
 - CLI：`charvar image comfyui|openrouter|dreamina|models`（`--prompt`/`--prompt-file`/`--ref`/`--aspect`/`--seed`/`--out`/`--json`；`dreamina` 子命令没有 `--seed`，即梦不暴露）。产物默认落 `data/generated/adhoc/{id}/`（图 + 缩略图 + manifest.json）。
+
+### Playground 视频（OpenRouter 通路，2026-10-23 接入）
+
+- `charvar/adhoc_video.py` 是「给一段提示词出一段视频」的同构通路，这一轮只接 OpenRouter
+  （`charvar/openrouter_video.py` 客户端）；`charvar/video.py` 是另一回事（静态图轮播合成）。
+- CLI：`charvar video openrouter`（`--prompt`/`--first-frame`/`--ref`/`--aspect`/`--duration`/
+  `--resolution`/`--seed`/`--model`/`--out`/`--json`）与 `charvar video models`。
+  产物落 `data/generated/adhoc_video/{id}/`（original/ 成片 + thumbs/ 海报帧 + manifest.json）。
+- **网页入口**：顶栏「视频」页签（`web/static/video.js`），后端 `/videos/*`（`charvar/api.py`），
+  同一套 `charvar/adhoc_video.py`；改参数名/输出格式时 CLI、网页、skill 三处同步。
+- 视频是**异步作业**（`POST /api/v1/videos` → 202 + job id → 轮询 → `…/content` 下载）：
+  web 提交即返回 pending，前端每 8s 打 `GET /videos/{run_id}/status`（引擎是
+  `adhoc_video.refresh`，幂等，终态后不打 OpenRouter）；CLI `--timeout`（默认 900s）内
+  阻塞轮询，超时作业仍在跑（manifest 保持 in_progress，网页可续查）。
+- 参数枚举按 `GET /api/v1/videos/models` 目录**提交前校验**（超枚举 400 白扣一次提交费），
+  目录缓存在 `data/openrouter/video-models.json`（与生图 api-response.json 是两份缓存）；
+  提交时 provider 拒参自动降级重试（复用 openrouter_image 的报错话式识别）。
+- 首帧图 = `frame_images`（图生视频，主体一致性靠它；**别用 character_sheet，那是四视图
+  拼图会出多人**——用单人全身正面/front 槽位）；参考图 = `input_references`（≤4）；
+  两者同给时官方语义首帧优先（API 层原样放行，网页 UI 图生视频页签不并送参考图）。
+- 模型默认链：请求显式 > 设置页「OpenRouter 视频」组（DB） > `OP_VIDEO_MODEL` env >
+  heygen/heygen-video-1；API key 与生图同链路（`OP_IMAGE_API_KEY`/`LLM_API_KEY`）。
+- seed：目录标 `seed: false` 的模型不发；时长的 bool 会过 pydantic int 校验，`validate` 里明确拦。
+- 按秒计费（面板按 pricing_skus 出「预计 ≈」只做展示）；heygen-video-1 的便宜档是 480p $0.02/s。
 - **网页入口**：顶栏「Playground」页签（`web/static/adhoc.js`），后端 `/adhoc/*`（`charvar/api.py`）。
   走的是**同一个** `charvar/adhoc.py` —— 网页与 CLI 是同一套参数语义、同一套落盘、同一份 manifest。
   改动 `charvar/adhoc.py` 的参数名或输出格式时，CLI、网页、skill 三处都要同步。

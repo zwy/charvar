@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>charvar · 角色变体提示词生成器</title><link rel="stylesheet" href="/static/style.css"><link rel="icon" type="image/svg+xml" href="/static/favicon.svg"><link rel="alternate icon" type="image/png" sizes="1024x1024" href="/static/icon.png"><link rel="apple-touch-icon" href="/static/icon.png"></head><body>
 <header class="topbar"><div class="brand">charvar <span class="sub">角色变体提示词生成器</span></div><nav>
-<button class="tab active" data-tab="gen">生成</button><button class="tab" data-tab="adhoc">Playground</button><button class="tab" data-tab="subjects">主体档案</button><button class="tab" data-tab="runs">历史记录</button><button class="tab" data-tab="settings">设置</button></nav></header>
+<button class="tab active" data-tab="gen">生成</button><button class="tab" data-tab="adhoc">Playground</button><button class="tab" data-tab="video">视频</button><button class="tab" data-tab="subjects">主体档案</button><button class="tab" data-tab="runs">历史记录</button><button class="tab" data-tab="settings">设置</button></nav></header>
 <main>
 <section id="tab-gen" class="tab-page active"><div class="card"><h2>生成参数</h2>
 <div class="form-field gen-mode-row"><div class="field-label">生成模式</div><div class="segmented">
@@ -195,6 +195,12 @@
 <p class="form-note">提示：即梦走本机官方 <code>dreamina</code> CLI，鉴权用 <code>dreamina login</code> 的登录态（这里没有 API Key）。即梦的模型都有编辑能力，不区分文生图 / 图片编辑配置组：带参考图自动走 image2image，不带走 text2image，共用这一组配置。即梦不暴露 seed；提示词上限 text2image 约 1600 字符、image2image 约 2000 字符（超限会硬失败）；生成消耗即梦积分/权益（仅限会员）。分辨率留空 = 请求显式值 > 设置页 > env（DREAMINA_IMAGE_RESOLUTION，默认 2K）。</p>
 <span id="dreamina-cli-status" class="hint"></span>
 </div>
+<div class="card"><h2>OpenRouter 视频</h2>
+<div class="form-grid">
+<label>默认模型<select id="set-or-video-model"></select></label>
+</div>
+<p class="form-note">提示：「视频」页的默认模型（生效链：请求显式 &gt; 这里 &gt; <code>OP_VIDEO_MODEL</code> &gt; heygen/heygen-video-1）。时长/分辨率/画幅不在这里配 —— 枚举随所选模型的目录条目变，在视频页逐条选。API key 与生图共用（OP_IMAGE_API_KEY / LLM_API_KEY）。</p>
+</div>
 <div class="card settings-save"><div class="actions">
 <button id="btn-settings-save" class="primary">保存设置</button><span id="settings-status" class="status"></span>
 <span class="hint">一次保存本页全部设置：LLM / 主体图默认尺寸 / 生图 workflow / OpenRouter / 即梦。改完记得点这里，别的卡片没有各自的保存按钮。</span>
@@ -238,4 +244,50 @@
 <div class="card"><div class="row-head"><h2>最近生成</h2><div class="actions"><button id="btn-adhoc-recent-refresh">刷新</button></div></div>
 <div id="adhoc-recent" class="image-grid"></div></div>
 </section>
-</main><script src="/static/media.js"></script><script src="/static/app.js"></script><script src="/static/adhoc.js"></script></body></html>
+<section id="tab-video" class="tab-page"><div class="card"><h2>视频</h2>
+<p class="form-note">给一段提示词直接出一段视频（OpenRouter 视频通路，异步作业）：不进主体档案槽位、不跑预设批量、不落生成历史。产物在 <code>data/generated/adhoc_video/</code>，manifest 记录请求与作业 id。按秒计费：面板有费用预估，提交前看一眼。CLI 是同一条通路：<code>charvar video openrouter</code>。</p>
+<div class="adhoc-switch">
+<div class="segmented" id="video-mode"><button type="button" class="seg active" data-mode="t2v">文生视频</button><button type="button" class="seg" data-mode="i2v">图生视频（首帧）</button></div>
+<span id="video-model-field" class="hint"></span>
+</div>
+<div class="form-grid">
+<label>模型<select id="video-model"></select></label>
+<label>画幅比例<select id="video-aspect"></select></label>
+<label>分辨率档<select id="video-resolution"></select></label>
+<label>时长<select id="video-duration"></select></label>
+<label id="video-seed-field">种子<input type="number" id="video-seed" placeholder="留空 = 随机；填数值 = 固定复现"></label>
+<label class="span2">提示词<textarea id="video-prompt" rows="5" placeholder="a young woman performs a graceful solo dance ..."></textarea></label>
+</div>
+<div class="form-field" id="video-frame-block" hidden><div class="field-label">首帧图（图生视频；1 张 —— 用单人全身正面照，多人物拼图会出多人）</div>
+<div id="video-frame-list" class="ref-grid"></div>
+<div class="actions">
+<label class="btn file-btn">上传首帧<input type="file" id="video-frame-file" accept="image/*" hidden></label>
+<select id="video-frame-subject"></select>
+<select id="video-frame-kind"></select>
+<button id="btn-video-frame-add" type="button">从主体档案加入</button>
+<button id="btn-video-frame-clear" type="button">移除首帧</button>
+</div>
+<span id="video-frame-hint" class="hint"></span></div>
+<div class="form-field" id="video-refs-block"><div class="field-label">参考图（最多 4 张，按顺序对应提示词里的 &lt;image1&gt;、&lt;image2&gt;；图生视频页签不发送参考图）</div>
+<div id="video-ref-list" class="ref-grid"></div>
+<div class="actions">
+<label class="btn file-btn">上传参考图<input type="file" id="video-ref-file" accept="image/*" multiple hidden></label>
+<select id="video-ref-subject"></select>
+<select id="video-ref-kind"></select>
+<button id="btn-video-ref-add" type="button">从主体档案加入</button>
+<button id="btn-video-ref-clear" type="button">清空参考图</button>
+</div>
+<span id="video-ref-hint" class="hint"></span></div>
+<div class="actions"><button id="btn-video-generate" class="primary">生成视频</button><span id="video-status" class="status"></span>
+<span class="hint" id="video-cost-hint"></span></div>
+</div>
+<div class="card" id="video-result-card" hidden><div class="row-head"><h2>结果 <span id="video-result-summary"></span></h2><div class="actions">
+<a id="video-dl-video" class="btn" hidden download>下载 MP4</a>
+<a id="video-dl-manifest" class="btn" hidden>manifest.json</a>
+</div></div>
+<div class="video-result"><video id="video-result-player" controls preload="metadata"></video></div>
+<pre id="video-result-log" class="log"></pre></div>
+<div class="card"><div class="row-head"><h2>最近生成</h2><div class="actions"><button id="btn-video-recent-refresh">刷新</button></div></div>
+<div id="video-recent" class="image-grid"></div></div>
+</section>
+</main><script src="/static/media.js"></script><script src="/static/app.js"></script><script src="/static/adhoc.js"></script><script src="/static/video.js"></script></body></html>

@@ -3,9 +3,8 @@
   "configurations": [
     {
       "name": "charvar-web",
-      "runtimeExecutable": "sh",
-      "runtimeArgs": ["-c", "cd /Users/zwy/Sites/charvar && CHARVAR_WEB_PORT=8799 python3 -m web.app"],
-      "port": 8799
+      "runtimeExecutable": "./scripts/start.sh",
+      "port": 8710
     }
   ]
 }

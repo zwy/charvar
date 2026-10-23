@@ -22,8 +22,10 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from charvar import __version__, assets, llm, paths, settings_service, storage, subject_images
 from charvar import adhoc as adhoc_service
+from charvar import adhoc_video as adhoc_video_service
 from charvar import dreamina_image
 from charvar import openrouter_image
+from charvar import openrouter_video
 from charvar import reference_images
 from charvar.assets import ensure_thumb, resolve_run_asset, sheet_path, thumb_path
 
@@ -208,6 +210,24 @@ class AdhocGenerateRequest(BaseModel):
     comfy_url: str | None = None
     workflow: str | None = None
     wait: bool = True
+
+
+class VideoGenerateRequest(BaseModel):
+    """网页「视频」页的请求（与 CLI ``charvar video`` 同一套参数；OpenRouter 作业通路）。
+
+    视频是异步作业：本端点只提交（202 + job id），前端按 /videos/{run_id}/status 轮询。
+    首帧图 = 图生视频（frame_images）；参考图 = 参考生成（input_references）；
+    两者同给时首帧优先（官方语义）。都只认「上传暂存 / 主体档案就绪图」两种来源。
+    """
+
+    prompt: str
+    model: str | None = None  # 空 = 设置页/env 默认（heygen/heygen-video-1）
+    duration: int | None = None  # 秒；None = 不发（跟随 provider 默认）
+    resolution: str | None = None  # 480p/768p/2K…；None = 不发
+    aspect_ratio: str = "9:16"
+    seed: int = 0
+    first_frame: AdhocReferenceSpec | None = None
+    references: list[AdhocReferenceSpec] = Field(default_factory=list)
 
 
 def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
@@ -602,6 +622,10 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         # 模型默认按模式给（env 兜底链在 resolve_model 里），供设置页占位提示
         data["openrouter_default_t2i_model"] = openrouter_image.resolve_model(mode="t2i")
         data["openrouter_default_i2i_model"] = openrouter_image.resolve_model(mode="i2i")
+        # 视频：默认链 DB > OP_VIDEO_MODEL > heygen，供设置页占位提示
+        data["openrouter_video_default_model"] = openrouter_video.resolve_model(
+            settings.openrouter_video.model
+        )
         # 即梦：CLI 是否可用（登录态在 dreamina login 侧查，这里只探文件在不在）
         try:
             dreamina_image.resolve_binary()
@@ -1395,6 +1419,187 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         try:
             path = adhoc_service.run_dir(run_id) / "manifest.json"
         except adhoc_service.AdhocError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        if not path.exists():
+            raise HTTPException(404, f"没有 manifest：{run_id}")
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    # ---- Playground 视频（charvar.adhoc_video：web 与 CLI charvar video 同一通路） ----
+    # 注意路由声明顺序：字面路径（/videos/models、/videos/references…）必须在
+    # /videos/{run_id}/… 之前，否则 run_id 通配会把它们吞掉。
+
+    def _video_reference_spec_paths(
+        specs: list[AdhocReferenceSpec],
+    ) -> tuple[list[Path], list[str]]:
+        """参考图 spec → 本地路径列表（+ 暂存 id 列表，成片 ready 后清理）。
+
+        与 /adhoc 的 `_adhoc_reference_paths` 同一套规则：只认上传暂存（staged_id）
+        或主体档案就绪图（subject_id + kind），**不接受任意路径** —— 那是把
+        文件读权限开给了浏览器。暂存池走 adhoc_video 自己的（出图/出片各自
+        清理，互不误删）。
+        """
+        paths_found: list[Path] = []
+        staged_ids: list[str] = []
+        for spec in specs:
+            if spec.staged_id:
+                try:
+                    paths_found.append(adhoc_video_service.staged_reference(spec.staged_id))
+                except adhoc_video_service.AdhocVideoError as exc:
+                    raise HTTPException(400, str(exc)) from exc
+                staged_ids.append(spec.staged_id)
+                continue
+            if spec.subject_id and spec.kind:
+                _require_subject(spec.subject_id)
+                if spec.kind not in subject_images.IMAGE_KINDS:
+                    raise HTTPException(
+                        400, f"未知图片类型：{spec.kind}（支持 {'/'.join(subject_images.IMAGE_KINDS)}）"
+                    )
+                local = subject_images.find_reference_file(spec.subject_id, spec.kind)
+                if local is None:
+                    raise HTTPException(
+                        400,
+                        f"参考图不存在：{spec.subject_id} / {spec.kind}（请先在主体档案里生成或上传）",
+                    )
+                # 走预处理过的压缩版（长边 1536 / JPEG q88），与出图通路同一份
+                subject_dir = subject_images.subject_dir(spec.subject_id)
+                paths_found.append(
+                    reference_images.prepared_reference(local, subject_dir, spec.kind)
+                )
+                continue
+            raise HTTPException(400, "参考图缺少来源（staged_id 或 subject_id + kind）")
+        return paths_found, staged_ids
+
+    @app.get("/videos/models")
+    def api_video_models(refresh: bool = Query(False)) -> dict[str, Any]:
+        """视频模型目录（每模型的时长/分辨率/画幅枚举 + 价格 SKU；缓存本地 JSON）。"""
+        try:
+            data = openrouter_video.list_models(force_refresh=refresh)
+        except openrouter_video.OpenRouterVideoError as exc:
+            raise HTTPException(502, f"读视频模型目录失败：{exc}") from exc
+        models: list[dict[str, Any]] = []
+        for item in data.get("data") or []:
+            if not isinstance(item, dict):
+                continue
+            models.append(
+                {
+                    "id": str(item.get("id") or ""),
+                    "name": str(item.get("name") or ""),
+                    "supported_durations": item.get("supported_durations"),
+                    "supported_resolutions": item.get("supported_resolutions"),
+                    "supported_aspect_ratios": item.get("supported_aspect_ratios"),
+                    "supported_frame_images": item.get("supported_frame_images"),
+                    "seed": bool(item.get("seed")),
+                    "pricing_skus": item.get("pricing_skus") or {},
+                }
+            )
+        with _db() as conn:
+            default_model = settings_service.openrouter_video_config(conn)["model"]
+        return {"data": models, "default_model": default_model}
+
+    @app.post("/videos/references")
+    def api_video_reference_upload(file: UploadFile) -> dict[str, Any]:
+        """上传一张参考图/首帧图 → 暂存并返回 id（提交作业时按 id 取）。"""
+        data = file.file.read()
+        try:
+            path = adhoc_video_service.save_staged_reference(data, file.filename or "")
+        except adhoc_video_service.AdhocVideoError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        # 顺带清掉过期的暂存图（用户传了没出片就走了的那些）
+        adhoc_video_service.prune_staged_references()
+        return {"id": path.stem, "name": file.filename or path.name, "path": str(path)}
+
+    @app.delete("/videos/references/{ref_id}")
+    def api_video_reference_delete(ref_id: str) -> dict[str, Any]:
+        try:
+            adhoc_video_service.staged_reference(ref_id).unlink(missing_ok=True)
+        except adhoc_video_service.AdhocVideoError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        return {"ok": True}
+
+    @app.get("/videos/reference/{ref_id}")
+    def api_video_reference_file(ref_id: str) -> FileResponse:
+        """暂存参考图的预览（提交成功并成片后会被清掉，404 是正常的）。"""
+        try:
+            return FileResponse(adhoc_video_service.staged_reference(ref_id))
+        except adhoc_video_service.AdhocVideoError as exc:
+            raise HTTPException(404, str(exc)) from exc
+
+    @app.post("/videos/generate")
+    def api_video_generate(req: VideoGenerateRequest) -> dict[str, Any]:
+        """Playground 视频：给一段提示词出一段视频（异步作业，提交即返回）。
+
+        走的是 CLI ``charvar video`` 同一套（``charvar.adhoc_video``），不落 runs 表。
+        """
+        reference_paths, staged_ids = _video_reference_spec_paths(req.references)
+        first_frames, first_staged = (
+            _video_reference_spec_paths([req.first_frame]) if req.first_frame else ([], [])
+        )
+        video_req = adhoc_video_service.VideoRequest(
+            prompt=req.prompt,
+            model=(req.model or "").strip() or None,
+            duration=req.duration,
+            resolution=(req.resolution or "").strip() or None,
+            aspect_ratio=req.aspect_ratio,
+            seed=req.seed,
+            first_frame=first_frames[0] if first_frames else None,
+            reference_paths=reference_paths,
+            wait=False,
+            staged_ref_ids=staged_ids + first_staged,
+        )
+        try:
+            result = adhoc_video_service.generate(video_req, db_path)
+        except adhoc_video_service.AdhocVideoError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001 - 提交失败统一转 502
+            raise HTTPException(502, f"视频提交失败：{exc}") from exc
+        payload = result.model_dump()
+        payload["status_url"] = f"/videos/{result.run_id}/status"
+        return payload
+
+    @app.get("/videos/{run_id}/status")
+    def api_video_status(run_id: str) -> dict[str, Any]:
+        """查一次作业状态并把成片收下来（前端每 8s 轮询；ready 后不再打 OpenRouter）。"""
+        try:
+            summary = adhoc_video_service.refresh(run_id, db_path)
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except adhoc_video_service.AdhocVideoError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        if summary.get("status") == "ready":
+            summary["video_url"] = f"/videos/{run_id}/video"
+            summary["poster_url"] = f"/videos/{run_id}/poster"
+        return summary
+
+    @app.get("/videos")
+    def api_video_list(limit: int = Query(20, ge=1, le=100)) -> list[dict[str, Any]]:
+        """最近的 Playground 视频记录（读 manifest.json；不落 runs 表）。"""
+        return adhoc_video_service.list_recent(limit)
+
+    @app.get("/videos/{run_id}/video")
+    def api_video_file(run_id: str) -> FileResponse:
+        try:
+            return FileResponse(adhoc_video_service.video_file(run_id))
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except adhoc_video_service.AdhocVideoError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.get("/videos/{run_id}/poster")
+    def api_video_poster(run_id: str) -> FileResponse:
+        try:
+            return FileResponse(
+                adhoc_video_service.poster_file(run_id), media_type="image/jpeg"
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except adhoc_video_service.AdhocVideoError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.get("/videos/{run_id}/manifest")
+    def api_video_manifest(run_id: str) -> dict[str, Any]:
+        try:
+            path = adhoc_video_service.run_dir(run_id) / "manifest.json"
+        except adhoc_video_service.AdhocVideoError as exc:
             raise HTTPException(400, str(exc)) from exc
         if not path.exists():
             raise HTTPException(404, f"没有 manifest：{run_id}")

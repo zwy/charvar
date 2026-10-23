@@ -1,6 +1,6 @@
 ---
 name: charvar-skill
-description: Generate images with the charvar project's ComfyUI, OpenRouter, or Dreamina backends from any project. This skill should be used when the user asks to "用 comfyui 生图", "用 openrouter 生图", "用即梦生图", "charvar 帮我出图", "用 charvar 出张图", "generate an image with comfyui", "generate an image with openrouter", "generate an image with dreamina", or otherwise asks to produce an image via the charvar CLI; also for charvar subject-profile tasks such as "导入角色档案", "从模板生成主体档案" or using the charvar subject CLI.
+description: Generate images with the charvar project's ComfyUI, OpenRouter, or Dreamina backends from any project. This skill should be used when the user asks to "用 comfyui 生图", "用 openrouter 生图", "用即梦生图", "charvar 帮我出图", "用 charvar 出张图", "generate an image with comfyui", "generate an image with openrouter", "generate an image with dreamina", or otherwise asks to produce an image via the charvar CLI; also for generating short videos via OpenRouter ("charvar 帮我出段视频", "用 openrouter 生视频", "generate a video with charvar"), and for charvar subject-profile tasks such as "导入角色档案", "从模板生成主体档案" or using the charvar subject CLI.
 ---
 
 # charvar 生图
@@ -88,6 +88,26 @@ cat prompt.md | ~/.local/bin/charvar image comfyui --prompt-file - --out out.png
 
 charvar 的网页顶栏也有「Playground」页签（`http://127.0.0.1:8710`），走的是同一条通路。
 用户明确说「在网页上出图 / 用 charvar 的网页」时指那个 —— 告诉用户地址即可，别自己用 CLI 顶替。
+
+## 视频（OpenRouter 通路）
+
+给一段提示词出**一段视频**（异步作业；按秒计费 —— 提交成功就开始计费，长跑前提醒用户）。
+默认模型 `heygen/heygen-video-1`（便宜档 480p $0.02/s），设置里可用 `OP_VIDEO_MODEL` 换：
+
+```bash
+~/.local/bin/charvar video openrouter --prompt "a young woman performs a smooth dance" --aspect 9:16 --resolution 480p --duration 5
+```
+
+带**首帧图**（图生视频，主体一致靠它；用单人全身照，别用四视图拼图）：
+
+```bash
+~/.local/bin/charvar video openrouter --prompt "the woman dances, spins, ends in a pose" --first-frame out/character_front.png --duration 8
+```
+
+- 时长/分辨率/画幅的合法值随所选模型目录变（超枚举提交前会报错）：先跑
+  `~/.local/bin/charvar video models` 看清单，heygen 支持 5–15s、480p/768p/2K。
+- 生成要 1–3 分钟，命令阻塞轮询（`--timeout` 默认 900s）；`--json` 给脚本消费。
+- 网页顶栏「视频」页签是同一条通路（`http://127.0.0.1:8710`）。
 
 ## 主体档案：从模板导入（subject derive / verify）
 

@@ -35,9 +35,11 @@ app = typer.Typer(
 subject_app = typer.Typer(help="主体档案（SQLite 存储）", no_args_is_help=True)
 presets_app = typer.Typer(help="YAML 预设", no_args_is_help=True)
 image_app = typer.Typer(help="Playground：给一段提示词直接出一张图", no_args_is_help=True)
+video_app = typer.Typer(help="Playground 视频：给一段提示词直接出一段视频（OpenRouter，异步作业）", no_args_is_help=True)
 app.add_typer(subject_app, name="subject")
 app.add_typer(presets_app, name="presets")
 app.add_typer(image_app, name="image")
+app.add_typer(video_app, name="video")
 
 
 def _die(message: str) -> None:
@@ -651,6 +653,87 @@ def image_models(
         return
     for model in models:
         typer.echo(f"{model['id']}\t{model['name']}")
+
+
+# ---------- video（Playground 视频） ----------
+
+def _run_video(req, json_out: bool) -> None:
+    """跑一次 Playground 视频生成并输出结果（--json 时 stdout 只有 JSON）。"""
+    from charvar import adhoc_video as adhoc_video_service
+
+    try:
+        result = adhoc_video_service.generate(req)
+    except adhoc_video_service.AdhocVideoTimeout as exc:
+        _die(f"超时未完成（作业还在跑）：{exc}\n  可稍后用网页「视频」页续查，或重跑等待")
+        return
+    except adhoc_video_service.AdhocVideoError as exc:
+        _die(str(exc))
+        return
+    except Exception as exc:  # noqa: BLE001 - 网络/后端异常转友好提示
+        _die(f"{type(exc).__name__}: {exc}")
+        return
+    if json_out:
+        typer.echo(result.model_dump_json())
+        return
+    if result.status == "pending":
+        typer.echo(f"已提交（job_id={result.job_id}）")
+        typer.echo(f"  manifest → {result.manifest_path}")
+        return
+    typer.echo(f"完成：{result.video_path}")
+    typer.echo(f"  模型：{result.model or ''}  {result.resolution or ''} {result.duration or ''}s {result.aspect_ratio}")
+    if result.cost is not None:
+        typer.echo(f"  费用：${result.cost:.4f}")
+    typer.echo(f"  用时：{result.duration_ms / 1000:.1f}s  manifest → {result.manifest_path}")
+
+
+@video_app.command("openrouter")
+def video_openrouter(
+    prompt: Optional[str] = typer.Option(None, "--prompt", help="视频提示词"),
+    prompt_file: Optional[str] = typer.Option(
+        None, "--prompt-file", help="提示词文件（- 表示读 stdin）"
+    ),
+    ref: Optional[list[str]] = typer.Option(
+        None, "--ref", help="参考图路径，可重复（最多 4 张；input_references 参考生成）"
+    ),
+    first_frame: Optional[str] = typer.Option(
+        None, "--first-frame", help="首帧图路径（1 张；图生视频 frame_images，主体一致性靠它）"
+    ),
+    aspect: str = typer.Option("9:16", "--aspect", help="画幅：随所选模型枚举（heygen：21:9/16:9/4:3/1:1/3:4/9:16）"),
+    duration: Optional[int] = typer.Option(
+        None, "--duration", help="时长秒数（整数；默认不发送 = 跟随 provider；heygen 支持 5–15）"
+    ),
+    resolution: Optional[str] = typer.Option(
+        None, "--resolution", help="分辨率档（480p/768p/2K…；默认不发送 = 跟随 provider）"
+    ),
+    seed: int = typer.Option(0, "--seed", help="采样种子（0 = 固定复现；换种子出不同片）"),
+    model: Optional[str] = typer.Option(
+        None, "--model", help="模型 slug（默认设置页 / OP_VIDEO_MODEL，兜底 heygen/heygen-video-1）"
+    ),
+    timeout: float = typer.Option(900.0, "--timeout", help="轮询超时秒数（默认 900）"),
+    poll_interval: float = typer.Option(5.0, "--poll-interval", help="轮询间隔秒数（默认 5）"),
+    out: Optional[Path] = typer.Option(None, "--out", "-o", help="另外落一份到这个路径"),
+    json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出到终端"),
+) -> None:
+    """用 OpenRouter 出一段视频（提示词 + 可选首帧/参考图 → 一段 MP4；异步作业）。
+
+    测试默认模型 heygen/heygen-video-1（按秒计费，便宜档 480p $0.02/s）。
+    """
+    from charvar import adhoc_video as adhoc_video_service
+
+    req = adhoc_video_service.VideoRequest(
+        prompt=_read_prompt(prompt, prompt_file),
+        backend="openrouter",
+        reference_paths=[Path(p).expanduser() for p in (ref or [])],
+        first_frame=Path(first_frame).expanduser() if first_frame else None,
+        aspect_ratio=aspect,
+        duration=duration,
+        resolution=resolution,
+        seed=seed,
+        model=model,
+        wait=True,
+        out=out,
+    )
+    _run_video(req, json_out)
 
 
 def main() -> None:

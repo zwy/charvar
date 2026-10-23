@@ -81,6 +81,19 @@ class DreaminaSettings(BaseModel):
     resolution: str = ""
 
 
+class OpenRouterVideoSettings(BaseModel):
+    """OpenRouter 视频生成配置（Playground 视频，``charvar.adhoc_video``）。
+
+    - model 空串 = 用 env ``OP_VIDEO_MODEL``（再缺省 heygen/heygen-video-1）；
+    - API key 与生图同链路（OP_IMAGE_API_KEY / LLM_API_KEY），这里不重复配；
+    - duration / resolution / aspect_ratio 不进配置：枚举随所选模型的目录条目变
+      （supported_durations/supported_resolutions/supported_aspect_ratios），
+      面板/CLI 按枚举逐请求选，默认值由调用方定。
+    """
+
+    model: str = ""
+
+
 class AppSettings(BaseModel):
     comfy_t2i_workflow: str = _DEFAULT_WORKFLOW_T2I
     comfy_edit_workflow: str = _DEFAULT_WORKFLOW_EDIT
@@ -88,6 +101,7 @@ class AppSettings(BaseModel):
     llm: LlmSettings = Field(default_factory=LlmSettings)
     openrouter: OpenRouterSettings = Field(default_factory=OpenRouterSettings)
     dreamina: DreaminaSettings = Field(default_factory=DreaminaSettings)
+    openrouter_video: OpenRouterVideoSettings = Field(default_factory=OpenRouterVideoSettings)
     default_negative_prompt: str = ""
 
 
@@ -120,6 +134,12 @@ def get_settings(conn: sqlite3.Connection) -> AppSettings:
     dreamina = (
         DreaminaSettings.model_validate(dm_raw) if isinstance(dm_raw, dict) else DreaminaSettings()
     )
+    ov_raw = data.get("openrouter_video")
+    openrouter_video = (
+        OpenRouterVideoSettings.model_validate(ov_raw)
+        if isinstance(ov_raw, dict)
+        else OpenRouterVideoSettings()
+    )
     # 迁移：旧的单模型配置（DB 里的 openrouter.model）平移到两个模式；
     # 新字段各自可再覆盖。model 字段本体保留在返回值里，读接口不再展示。
     if not openrouter.t2i_model:
@@ -133,6 +153,7 @@ def get_settings(conn: sqlite3.Connection) -> AppSettings:
         llm=llm,
         openrouter=openrouter,
         dreamina=dreamina,
+        openrouter_video=openrouter_video,
         default_negative_prompt=str(data.get("default_negative_prompt") or ""),
     )
 
@@ -152,6 +173,7 @@ def save_settings(conn: sqlite3.Connection, patch: dict) -> AppSettings:
             "llm",
             "openrouter",
             "dreamina",
+            "openrouter_video",
             "default_negative_prompt",
         ):
             continue
@@ -205,6 +227,19 @@ def dreamina_config(conn: sqlite3.Connection) -> dict[str, str]:
         "model": dreamina_image.resolve_model(ds.model),
         "resolution": dreamina_image.resolve_resolution(ds.resolution),
     }
+
+
+def openrouter_video_config(conn: sqlite3.Connection) -> dict[str, str]:
+    """OpenRouter 视频（Playground 视频）的生效配置：DB > env > 缺省（heygen-video-1）。
+
+    - model 走 openrouter_video.resolve_model 的完整链路（DB 值 > OP_VIDEO_MODEL > 默认）；
+    - duration / resolution / aspect_ratio 不进配置 —— 枚举随所选模型的目录条目变，
+      提交前校验在 charvar.openrouter_video（超枚举 400 白扣一次提交，必须先拦）。
+    """
+    from charvar import openrouter_video
+
+    settings = get_settings(conn)
+    return {"model": openrouter_video.resolve_model(settings.openrouter_video.model)}
 
 
 def llm_overrides(conn: sqlite3.Connection) -> dict[str, str] | None:

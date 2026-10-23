@@ -1597,6 +1597,22 @@ async function loadSettings() {
     await refreshOpenRouterSettingFields(settings);
     $("#set-or-key").value = "";
     $("#set-or-key").placeholder = settings.openrouter_configured ? "已配置（留空保持不变）" : "留空 = OP_IMAGE_API_KEY / LLM_API_KEY";
+    // OpenRouter 视频：模型下拉来自 /videos/models 目录；已存值不在清单里时补一项
+    const orv = settings.openrouter_video || {};
+    let videoCatalog = null;
+    try {
+      videoCatalog = await api("/videos/models");
+    } catch {} // 清单读不到时下拉里只剩「跟随默认」
+    const videoModels = (videoCatalog && videoCatalog.data) || [];
+    const vSel = $("#set-or-video-model");
+    const defaultVideoModel = (videoCatalog && videoCatalog.default_model) || "";
+    const vOptions = [`<option value="">跟随默认（${escapeHtml(defaultVideoModel || "OP_VIDEO_MODEL / heygen/heygen-video-1")}）</option>`]
+      .concat(videoModels.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name || m.id)}</option>`));
+    if (orv.model && !videoModels.some((m) => m.id === orv.model)) {
+      vOptions.push(`<option value="${escapeHtml(orv.model)}">${escapeHtml(orv.model)}（不在当前清单里）</option>`);
+    }
+    vSel.innerHTML = vOptions.join("");
+    vSel.value = orv.model || "";
     // 即梦：model 自由文本（空 = env/CLI 默认）；分辨率档固定 2K/4K 枚举
     const dm = settings.dreamina || {};
     $("#set-dreamina-model").value = dm.model || "";
@@ -1658,6 +1674,10 @@ $("#btn-settings-save").addEventListener("click", async () => {
   patch.dreamina = {
     model: $("#set-dreamina-model").value.trim(),
     resolution: $("#set-dreamina-resolution").value,
+  };
+  // OpenRouter 视频：model 空串 = 落库为空 = 回到 env（OP_VIDEO_MODEL）/ heygen 默认
+  patch.openrouter_video = {
+    model: $("#set-or-video-model").value.trim(),
   };
   try {
     await api("/settings", { method: "PUT", body: JSON.stringify(patch) });
