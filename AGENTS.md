@@ -187,8 +187,11 @@ DB → 仓库对偶：`charvar subject export <id>` 把已入库档案快照成 
 - **配方定义** = `presets/recipes/<slug>.yaml` + `<slug>.md` 成对（`charvar/recipes.py`；文档
   `doc:` 相对 recipes/ 目录，读不到不阻塞）。大类由末步推导：合成配方（末步 video_synth，已支持）/
   生成配方（末步 video_model，⑤期才接 kind）。YAML 严格模式：未知根/步字段显式报错。
-- **线性步骤**：`images`（主体+预设[+服装预设]笛卡尔积建 run，classic 模式；`push: comfyui`
-  自动提交+等待+同步成品，`reference_kinds` 注入 image1..N；`run_id: <既有 run>` = 绑定不建批）→
+- **线性步骤**：`images`（主体+预设[+服装预设]笛卡尔积建 run，classic 缺省、`mode: llm` 走 LLM 改写
+  （硬前提：主体模板+参考图槽位就绪，LLM 输出替代 master 拼接，预设文本只做改写输入）；`push: comfyui`
+  自动提交+等待+同步成品，`reference_kinds` 注入 image1..N；`run_id: <既有 run>` = 绑定不建批；
+  `fixed_background`/`fixed_lighting` 固定背景/光照，覆盖通配符池——轮播类成片跨帧一致用，转面
+  橱窗 turnaround_showcase 即此用法）→
   `overlay`（贴字步：`input`=前面 images 步 label，缺省最近一个）→ `video_synth`
   （presets/video 预设合成本地 MP4；`use_labeled: true` 时同一来源 run 的贴字产物优先
   ——`render_video` 加了可选 `images_dir`，缺省 original/ 不变）。消耗步统一 gate：

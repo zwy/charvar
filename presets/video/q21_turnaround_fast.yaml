@@ -1,0 +1,22 @@
+# 视频合成预设：把 run 里已生成的变体图按此处的顺序/参数合成为一个 MP4。
+# 渲染走本地 ffmpeg（H.264 MP4，短边 = 分辨率档，全部偶数尺寸）。
+# q21_turnaround 的快节奏版：除每张秒数 1.0 → 0.5 外，其余参数与其完全一致。
+name: q21_turnaround_fast
+type: video
+version: 1
+description: 9:16 竖屏 · 每张 0.5 秒快节奏 · 3 景别各顺时针转一圈 · 表情顺序 · 开头 contact sheet 封面 · 背景音乐 轻跳节拍.wav（103s，超长自动截到视频长度）
+aspect: "9:16"            # 16:9 / 9:16 / 4:3 / 3:4 / 1:1
+resolution: 1080p         # 720p / 1080p / 4k（短边 720 / 1080 / 2160）
+fps: 24                   # 每秒帧数（与每张秒数独立设置；帧/张 = 秒 × fps）
+seconds_per_image: 0.5    # 每张展示秒数（0.5 = q21_turnaround 的 2 倍速）
+include_contact_sheet: true
+contact_sheet_seconds: 2.0
+transition: cut           # 硬切（叠化 fade 预留）
+fit: blur                 # blur=模糊背景填满 / contain=纯色留边 / cover=居中裁切
+background: black         # fit=contain 的底色
+order_mode: turnaround    # turnaround=景别组各转一圈+表情顺序 / sequential=按生成顺序
+group_order: [full, chest, head]
+direction: clockwise      # clockwise = front → l45 → l90 → l135 → back → r135 → r90 → r45（从正脸向画面左侧转一圈）
+music: 轻跳节拍.wav        # 背景音乐 = presets/video/music/ 里的文件名；删掉此行 = 无音乐
+music_volume: 1.0         # 音乐音量倍数（0~2）
+music_fade: 1.0           # 视频结尾音乐淡出秒数（0 = 不淡出）

@@ -1,0 +1,30 @@
+# 合成配方：转面橱窗展示（黄裙波波头主体 × q21_default_30 转面集 → q21_turnaround 快节奏 reel）。
+# 配方文档（流程/限制/参数）见同名 turnaround_showcase.md；本 YAML 只是可执行的编排声明。
+# 出图步 LLM 模式 + front 垫图（images 步 mode: llm + reference_kinds，2026-10-24 接入）：
+# 转面视角的文字提示容易被正面先验带偏，LLM 改写保证每条角度描述冗余明确；
+# 编辑链必须真给正面参考图（overrides 注入），不能靠 workflow 内嵌默认图。
+# 固定背景/光照：转面 reel 每张只 0.5 秒，背景/光线跨帧一致是观感硬需求。
+name: turnaround_showcase
+type: recipe
+version: 2
+title: 转面橱窗展示（q21_default_30 转面集 → 每张半秒快节奏 reel）
+doc: turnaround_showcase.md
+subject: yellow_dress_bob
+seed: 0
+steps:
+- kind: images
+  label: 转面图
+  presets: [q21_default_30]
+  subject: yellow_dress_bob
+  mode: llm
+  llm_instructions: "这是一组同一人物的 360° 转面图。每条变体的相机视角必须写得绝对无歧义：正面/左前 45°/左正侧/左后 45°/正背面/右后 45°/右正侧/右前 45° 都要明确写出相机位置和「此时能看到/看不到什么」（如正背面：后脑勺、后背、脚跟；完全看不到脸）。统一单人、同一人物同一服装；画面里禁止出现任何文字、水印或第二个人。"
+  reference_kinds: [front]
+  aspect: '9:16'
+  size: 2k
+  fixed_background: gray
+  fixed_lighting: "cool overcast outdoor light, flat and shadowless"
+  push: comfyui
+- kind: video_synth
+  label: 成片
+  video_preset: q21_turnaround_fast
+  input: 转面图

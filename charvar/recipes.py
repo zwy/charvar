@@ -50,6 +50,7 @@ _STEP_ROOT_KEYS = frozenset(
     {
         "kind", "label", "manual",
         "subject", "presets", "outfit_order", "seed", "count", "sampling",
+        "fixed_background", "fixed_lighting", "mode", "llm_instructions",
         "aspect", "size", "reference_kinds", "push", "workflow", "run_id",
         "overlay", "text_from", "fixed", "input", "video_preset", "music", "use_labeled",
         # ---- ⑤ 生成配方步 ----
@@ -95,6 +96,10 @@ class RecipeStep(BaseModel):
     seed: int | None = None
     count: int | None = None
     sampling: Literal["all", "first", "random"] = "all"
+    fixed_background: str | None = None   # 固定背景（覆盖通配符池，多图跨帧一致）
+    fixed_lighting: str | None = None     # 固定光照（同上）
+    mode: Literal["classic", "llm"] = "classic"  # llm = LLM 改写变体提示词（需模板+参考图就绪）
+    llm_instructions: str | None = None   # mode=llm 时附加给 LLM 的指令（可选）
     aspect: str | None = None          # 出图画幅（进 preferred_aspect_ratio + push 参数）
     size: str | None = None            # charvar 档位 1k/2k（push 时传 ComfyUI 分辨率档）
     reference_kinds: list[str] = Field(default_factory=list)  # 主体档案槽位参考图
@@ -495,6 +500,32 @@ def _images_ready(conn, run_id: str) -> tuple[int, int]:
     return done, len(result.items)
 
 
+def _generate_llm_result(conn, subject, preset, req):
+    """images 步 LLM 模式入口：与生成页同语义（参考图槽位 + 模板校验后才烧 LLM 调用）。"""
+    from charvar import llm, settings_service, storage, subject_images
+    from charvar.llm_compose import generate_llm
+
+    kinds: list[str] = []
+    for kind in req.reference_kinds:
+        if kind not in subject_images.IMAGE_KINDS:
+            raise PresetError(f"未知参考图类型：{kind}（支持 {'/'.join(subject_images.IMAGE_KINDS)}）")
+        if kind not in kinds:
+            kinds.append(kind)
+    if not 1 <= len(kinds) <= 4:
+        raise PresetError("LLM 模式需要 1–4 个参考图类型（reference_kinds）")
+    for kind in kinds:
+        slot = subject_images.get_slot(conn, subject.id, kind, settings_service.get_settings(conn))
+        if not slot.is_ready:
+            raise PresetError(f"参考图未就绪：{kind}（先到主体档案生成或上传，或改走 classic）")
+    template = storage.get_subject_template(conn, subject.id)
+    if not template:
+        raise PresetError(f"主体 {subject.id} 还没有「角色全场景通用提示词模板」（主体档案页载入，LLM 模式必需）")
+    try:
+        return generate_llm(subject, preset, req, template, kinds, config=settings_service.llm_overrides(conn))
+    except llm.LLMError as exc:
+        raise PresetError(f"LLM 改写提示词失败：{exc}", status=502) from exc
+
+
 def _push_comfyui(conn, result, step: RecipeStep) -> None:
     """自动提交 ComfyUI（复用 exporter 原语；配方步不支持 sticker 预设，已在校验层拦）。"""
     import httpx
@@ -552,6 +583,7 @@ def _push_comfyui(conn, result, step: RecipeStep) -> None:
             aspect_ratio=None if step.aspect in (None, "auto") else step.aspect,
             resolution=step.size,
             on_submitted=_on_submitted,
+            overrides=overrides,  # 参考图必须经 overrides 注入（mapping 可选槽位；缺失则节点跑 workflow 内嵌默认图）
         )
     except (httpx.HTTPError, OSError) as exc:
         raise _GateStop(f"ComfyUI 不可达（可手动推送后继续）：{exc}") from exc
@@ -620,8 +652,16 @@ def _run_images_step(conn, recipe: Recipe, state: RecipeRunState, step: RecipeSt
         seed=seed,
         count=step.count,
         sampling=step.sampling,
+        fixed_background=step.fixed_background,
+        fixed_lighting=step.fixed_lighting,
+        reference_kinds=list(step.reference_kinds),
+        mode=step.mode,
+        llm_instructions=step.llm_instructions,
     )
-    result = compose_generate(subject, preset, req)
+    if step.mode == "llm":
+        result = _generate_llm_result(conn, subject, preset, req)
+    else:
+        result = compose_generate(subject, preset, req)
     storage.save_run(conn, result)
     # run_id 即刻写进 step 状态（advance 会在 gate 路径 save_state）：
     # push 失败/中断后重试走「复用既有 run」分支，不重复建批。

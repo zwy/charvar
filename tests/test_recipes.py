@@ -239,6 +239,155 @@ def test_images_step_creates_run_without_push(env):
     assert "成品 0/2 未齐" in state.steps[1].note
 
 
+def test_images_step_fixed_background_lighting(env):
+    """fixed_background/fixed_lighting：images 步透传给 GenerateRequest（覆盖通配符池）。"""
+    from charvar.models import SubjectProfile
+
+    storage.save_subject(env, SubjectProfile(
+        id="demo_witch", name="演示", subject_noun="woman", trigger_word="sw1tch",
+        reference_tag="<image1>",
+    ))
+    recipe = recipes_service.load_recipe("demo_blend")
+    recipe.steps[0].run_id = None
+    recipe.steps[0].fixed_background = "gray"
+    recipe.steps[0].fixed_lighting = "flat and shadowless"
+    state = recipes_service.RecipeRunState(
+        recipe=recipe.name, recipe_run_id=recipes_service._new_recipe_run_id(recipe, 11),
+        created_at="x", seed=11,
+        steps=[recipes_service.StepState(index=i, kind=s.kind, label=s.label,
+                                         manual=recipes_service.manual_default(s))
+               for i, s in enumerate(recipe.steps)],
+    )
+    state = recipes_service.advance(env, state, recipe)
+    assert state.steps[0].status == "done"
+    saved = storage.get_run(env, state.steps[0].outputs["run_id"])
+    assert all(item.background == "gray" for item in saved.items)
+    assert all(item.lighting == "flat and shadowless" for item in saved.items)
+    # 固定值也进提示词（suffix 由 preset 后缀模板渲染）
+    assert "The background is gray." in saved.items[0].prompt
+
+
+def test_images_step_llm_mode(env, monkeypatch):
+    """mode: llm → LLM 改写批次（模板/参考图槽位校验，LLM 结果替代 classic 拼接）。"""
+    import charvar.subject_images as subject_images
+    from charvar.composer import make_run_id
+    from charvar.models import SubjectProfile
+
+    storage.save_subject(env, SubjectProfile(
+        id="demo_witch", name="演示", subject_noun="woman", trigger_word="sw1tch",
+        reference_tag="<image1>",
+    ))
+    recipe = recipes_service.load_recipe("demo_blend")
+    recipe.steps[0].run_id = None
+    recipe.steps[0].mode = "llm"
+    recipe.steps[0].reference_kinds = ["front"]
+    recipe.steps[0].llm_instructions = "角度写极端明确"
+
+    def _state():
+        return recipes_service.RecipeRunState(
+            recipe=recipe.name, recipe_run_id=recipes_service._new_recipe_run_id(recipe, 11),
+            created_at="x", seed=11,
+            steps=[recipes_service.StepState(index=i, kind=s.kind, label=s.label,
+                                             manual=recipes_service.manual_default(s))
+                   for i, s in enumerate(recipe.steps)],
+        )
+
+    # 参考图槽位未就绪 → 该步 failed（校验先于 LLM 调用，不烧 token）
+    state = recipes_service.advance(env, _state(), recipe)
+    assert state.steps[0].status == "failed"
+    assert "参考图未就绪" in (state.steps[0].note or "")
+    # 槽位就绪但没模板也要拦
+    class _Ready:
+        is_ready = True
+    monkeypatch.setattr(subject_images, "get_slot", lambda *a, **kw: _Ready())
+    state = recipes_service.advance(env, _state(), recipe)
+    assert state.steps[0].status == "failed"
+    assert "提示词模板" in (state.steps[0].note or "")
+
+    storage.save_subject_template(env, "demo_witch", "# template body")
+    seen: dict = {}
+
+    def fake_generate_llm(subject, preset, req, template_md, kinds, *, config=None):
+        seen.update(req=req, template_md=template_md, kinds=kinds, config=config)
+        items = [PromptItem(index=i, variant_id=spec.id, prompt=f"LLM 拟的提示词 {i}",
+                            master="", variant_text=spec.text,
+                            background=req.fixed_background, lighting=None, caption="c", meta={})
+                 for i, spec in enumerate(preset.variants)]
+        return GenerateResult(run_id=make_run_id(subject.id, preset.name, req.seed),
+                              subject_id=subject.id, preset=preset.name, seed=req.seed, items=items)
+
+    import charvar.llm_compose as llm_compose
+    monkeypatch.setattr(llm_compose, "generate_llm", fake_generate_llm)
+    state = recipes_service.advance(env, _state(), recipe)
+    assert state.steps[0].status == "done"
+    assert seen["kinds"] == ["front"]
+    assert seen["template_md"] == "# template body"
+    assert seen["req"].mode == "llm"
+    assert seen["req"].llm_instructions == "角度写极端明确"
+    saved = storage.get_run(env, state.steps[0].outputs["run_id"])
+    assert [item.prompt for item in saved.items] == ["LLM 拟的提示词 0", "LLM 拟的提示词 1"]
+
+
+def test_push_comfyui_passes_overrides(env, monkeypatch):
+    """push: comfyui 的参考图必须经 overrides 传给 submit（回归：曾丢失 →
+    mapping 可选槽位不注入，节点按 workflow 内嵌默认图出图）。"""
+    import charvar.assets as assets_mod
+    import charvar.paths as paths_mod
+    from charvar import subject_images
+    from charvar.exporters import comfyui as comfyui_exporter
+    from charvar.models import SubjectProfile
+
+    storage.save_subject(env, SubjectProfile(
+        id="demo_witch", name="演示", subject_noun="woman", trigger_word="sw1tch",
+        reference_tag="<image1>",
+    ))
+    sd = subject_images.subject_dir("demo_witch")
+    sd.mkdir(parents=True, exist_ok=True)
+    Image.new("RGBA", (64, 64), (200, 180, 120, 255)).save(sd / "front.png")
+
+    recipe = recipes_service.load_recipe("demo_blend")
+    recipe.steps[0].run_id = None
+    recipe.steps[0].push = "comfyui"
+    recipe.steps[0].reference_kinds = ["front"]
+    recipe.steps[0].workflow = "fake_edit"
+    state = recipes_service.RecipeRunState(
+        recipe=recipe.name, recipe_run_id=recipes_service._new_recipe_run_id(recipe, 11),
+        created_at="x", seed=11,
+        steps=[recipes_service.StepState(index=i, kind=s.kind, label=s.label,
+                                         manual=recipes_service.manual_default(s))
+               for i, s in enumerate(recipe.steps)],
+    )
+    calls: dict = {}
+    monkeypatch.setattr(paths_mod, "comfy_base_url", lambda: "http://comfy:8188")
+    monkeypatch.setattr(comfyui_exporter, "load_workflow_pair",
+                        lambda name: ({"1": {"class_type": "Stub", "inputs": {}}},
+                                      {"mappings": [{"field": "image", "node_id": "1",
+                                                     "input_key": "image",
+                                                     "required": False, "default": None}]}))
+    monkeypatch.setattr(comfyui_exporter, "upload_image",
+                        lambda base, path, *, remote_name=None: calls.__setitem__(
+                            "remote_name", remote_name) or "demo_witch_front.jpg")
+
+    def fake_submit(result, workflow, mapping, comfy_url=None, overrides=None, wait=False,
+                    aspect_ratio=None, resolution=None, on_submitted=None):
+        calls["overrides"] = dict(overrides or {})
+        calls["workflow_name_shape"] = sorted(workflow.keys())
+        dir_ = original_dir(result.run_id)
+        dir_.mkdir(parents=True, exist_ok=True)
+        for item in result.items:
+            Image.new("RGBA", (320, 320), (90, 90, 90, 255)).save(dir_ / f"{item.index:06d}.png")
+        return []
+
+    monkeypatch.setattr(comfyui_exporter, "submit", fake_submit)
+    monkeypatch.setattr(assets_mod, "sync_run_outputs", lambda *a, **kw: None)
+
+    state = recipes_service.advance(env, state, recipe)
+    assert state.steps[0].status == "done"
+    assert calls["remote_name"] == "demo_witch_front.jpg"
+    # 回归断言：overrides 到达 submit（此前丢失 → 全部节点跑 workflow 内嵌默认图）
+    assert calls["overrides"] == {"image": "demo_witch_front.jpg"}
+
+
 def test_recipe_runs_listing(env):
     state = recipes_service.start_run(env, "demo_blend")
     runs = recipes_service.list_recipe_runs()
