@@ -1,0 +1,51 @@
+{
+  "name": "character-forge",
+  "version": "1.0.0",
+  "updated": "2026-10-25",
+  "description": "角色开发与提示词资产化 Skill：分阶段协助建立单角色提示词资产，交付自包含 Markdown。",
+  "entrypoint": "SKILL.md",
+  "files": {
+    "manifest.json": "版本、文件清单与检查结果记录。",
+    "SKILL.md": "核心入口：两图保底主线、反馈语境判定、双模式、自包含交付门槛。",
+    "README.md": "使用说明：最短路线、两种使用方式、代码块角色、脚本与本地检查用法、版本记录。",
+    "references/workflow.md": "阶段与路由：必选／可选关系、复用已有资产、设定板失败回退、交付门槛。",
+    "references/input-modes.md": "输入模式与基准职责：固定角色延续与用户照片扮演双入口、缺图处理。",
+    "references/quality-checks.md": "验收与证据：四项独立证据字段、交付完整性检查、案例经验泛化限制。",
+    "references/length-and-language.md": "语言、长度与字符预算：语言跟随用户、预算来源、压缩顺序。",
+    "templates/character-document.md": "角色提示词资产文档模板（正式交付主文档）。",
+    "templates/project-state.md": "项目状态模板：必做资产清单、双模式状态、证据字段。",
+    "templates/prompt-record.md": "提示词记录模板（可选深度记录）。",
+    "templates/round-response.md": "每轮回复模板：一轮一目标、完整提交稿。",
+    "examples/tiluo-case.md": "缇珞案例：两条风格路线的工作流示例，非默认角色配置。",
+    "scripts/prompt_budget.py": "字符统计与占位符检查；区分 submit／component／template 代码块。",
+    "tests/run_checks.py": "本地静态检查脚本。",
+    "tests/fixtures/feedback-cases.md": "反馈判定夹具（虚构）。",
+    "tests/fixtures/sample-character-asset.md": "最小角色资产示例（虚构）。",
+    "tests/fixtures/over-budget-submit.md": "超预算提交稿夹具（虚构）。",
+    "tests/fixtures/placeholder-submit.md": "含占位符的提交稿夹具（虚构）。",
+    "tests/regression-matrix.md": "回归测试矩阵评估：T01—T22 的自动／人工／未验证分类与依据。"
+  },
+  "checks": {
+    "command": "python3 tests/run_checks.py",
+    "last_run": "2026-10-25",
+    "result": "passed",
+    "passed": 44,
+    "failed": 0,
+    "note": "由 tests/run_checks.py --record 在实际运行时写入。"
+  },
+  "maintenance": {
+    "version_recorded_in": [
+      "SKILL.md",
+      "README.md",
+      "manifest.json"
+    ],
+    "version_sync": "三处版本号必须一致，由 tests/run_checks.py 校验。",
+    "version_policy": "以当前本地版本为基线递进；本次默认流程与交付门槛发生变化，版本递增并记录行为变更。",
+    "provenance": {
+      "renamed_from": "character-development",
+      "renamed_from_version": "1.2.0",
+      "renamed_on": "2026-10-25",
+      "note": "迁入 charvar 仓库并改名 character-forge，版本号按新身份重置为 1.0.0；技能内容与 1.2.0 保持一致，仅新增与 charvar-skill 的分工说明。"
+    }
+  }
+}

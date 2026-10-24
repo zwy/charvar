@@ -9,7 +9,7 @@
 - 没有热重载：改了 `charvar/**`、`web/app.py` 或直接改环境变量后必须先停再起；只改 `web/static/**` 刷新页面即可。
 - 后台启动使用 screen 会话 `charvar-8710`；stop.sh 优先读 `.charvar-web-8710.pid`，也支持按端口 + 本仓库 cwd 匹配修复前的旧进程。
 - 手动验证：`curl -s --noproxy '*' http://127.0.0.1:8710/api/version`
-- `start.sh` 会顺带跑 `scripts/install_cli.sh`（幂等）：把 `charvar` 装到 `~/.local/bin/`、把 `skills/charvar-skill` 软链到 `~/.claude/skills/`。安装失败不阻断 web 启动。
+- `start.sh` 会顺带跑 `scripts/install_cli.sh`（幂等）：把 `charvar` 装到 `~/.local/bin/`、把 `skills/` 下的 skill 软链到 `~/.claude/skills/`。安装失败不阻断 web 启动。
 
 ## Playground（跨项目调用）
 
@@ -58,6 +58,26 @@
     （`ensurePluginStructure` 会清掉 app 没登记过的东西，所以必须同时写 manifest）。
 - skill 里调 CLI 一律用绝对路径 `~/.local/bin/charvar` —— Desktop 聊天面的 shell 不保证把
   `~/.local/bin` 加进 PATH。
+
+## 仓库里的 skills（`skills/`）
+
+`scripts/install_cli.sh` 按 `SKILL_NAMES` 数组装**所有** skill，装法三处一致
+（全局软链 + 仓库内相对软链 + Claude Desktop 聊天面复制件 + manifest 登记）。
+改名/合并后要把旧名写进 `RETIRED_SKILL_NAMES`，否则新旧两个 skill 描述几乎相同，会抢同一个请求。
+
+| skill | 干什么 | 不干什么 |
+|---|---|---|
+| `charvar-skill` | 按提示词实际出图（ComfyUI / OpenRouter / 即梦）、出视频、主体档案 CLI | 不做角色开发流程 |
+| `character-forge` | 角色开发：全身正面定妆 → 同图半身＋正侧背设定板 → 自包含「角色提示词资产文档」 | **不出图**（默认由用户自己出图并反馈） |
+
+- `skills/character-forge/` 是从独立项目 `character-development`（1.2.0）迁入并改名的，
+  **版本按新身份重置为 1.0.0**（2026-10-25）；技能内容与来源 1.2.0 一致，
+  只在 SKILL.md 末尾加了「与 charvar 的关系」一节说明两个 skill 的分工。
+  旧名 `character-development` 已写进 `RETIRED_SKILL_NAMES` 退役。
+- 它自带静态检查：`python3 skills/character-forge/tests/run_checks.py`（`--record` 回写 manifest）。
+  改了 SKILL.md / README.md / manifest.json 里的**版本号**要三处同步，否则检查会失败。
+- 两个 skill 配套：character-forge 产提示词与资产文档，charvar-skill 负责把提示词变成图。
+  **别把出图逻辑写进 character-forge**，也别把角色开发流程写进 charvar-skill。
 
 ## 预设页（生成工作流，2026-10-24 改造）
 

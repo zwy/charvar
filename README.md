@@ -216,8 +216,12 @@ charvar image models    # 列 OpenRouter 可用模型
 - 不给 `--out` 时产物落 `data/generated/adhoc/{时间戳}/`（图 + 缩略图 + `manifest.json` 记录完整请求）。
 - 命令可全局调用：`./scripts/install_cli.sh` 装到 `~/.local/bin/charvar`（`scripts/start.sh` 会顺带装）。
 
-跨项目用还有一个 skill：`skills/charvar-skill/`（装到 `~/.claude/skills/` 后，
-Claude Code 在任何项目里都能按提示词调用这条生图通路）。
+跨项目用还有两个 skill（`./scripts/install_cli.sh` 一次装全）：
+
+- `skills/charvar-skill/`：按提示词实际出图（ComfyUI / OpenRouter / 即梦），装到 `~/.claude/skills/` 后，
+  Claude Code 在任何项目里都能调用这条生图通路。
+- `skills/character-forge/`：角色开发与提示词资产化 —— 全身正面定妆 → 同图半身＋正侧背设定板 →
+  自包含「角色提示词资产文档」。**它不出图**，默认由你自己出图并反馈；要代出图就转 `charvar-skill`。
 
 ### 网页入口
 
@@ -338,7 +342,7 @@ presets/            q21_default_30、q21_legacy_30、matrix_basic、wildcards/�
 web/                web/app.py（uvicorn 启动）+ web/static/（无构建步骤）
 tests/              pytest：逐字一致性/可复现/子种子/拼接/矩阵/导出/API/adhoc/CLI
 scripts/            start.sh / stop.sh（默认端口 8710）/ install_cli.sh（装全局 CLI + skill）
-skills/             charvar-skill：跨项目调用 charvar 生图能力的 Claude Code skill
+skills/             charvar-skill（出图/出视频）+ character-forge（角色开发与资产文档）
 ```
 
 ## 测试
