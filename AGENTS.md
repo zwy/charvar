@@ -63,20 +63,31 @@
 
 原「生成」页改名「预设」，按 Playground 的交互重排成三步（底层逻辑没大改，是流程重排）：
 
-1. **① 生图设置**：供应商（ComfyUI / OpenRouter / 即梦）+ 该供应商的生图参数 + 参考图。
-2. **② 生成提示词**：主体档案 + 预设（可叠服装预设）+ 生成模式（经典模板 / LLM 优化）。
+1. **① 生图设置**：主体档案 + 供应商（ComfyUI / OpenRouter / 即梦）+ 该供应商的生图参数
+   （画幅 / 分辨率 / 质量 / 模型版本 / **种子** / 负向 / 等待完成）+ 参考图。
+2. **② 生成提示词**：预设（可叠服装预设）+ 生成模式（经典模板 / LLM 优化）+ 模板参数
+   （条数 / 采样 / 分隔符 / 背景光照）；顶部一行只读摘要显示当前主体。
 3. **③ 生成结果**：「推送生图」**单一**按钮（旧的「推送 ComfyUI… / 推送 OpenRouter… / 推送即梦…」三面板已下线），随后是结果表 + 导出。
 
 - **不保留文生图 / 图片编辑切换**：有参考图 = 图片编辑（ComfyUI 走图片编辑 workflow / OpenRouter 走 `i2i` 组 / 即梦走 `image2image`），无参考图 = 纯文生图，后端按「有没有参考图」自动分流。
+- **主体档案只有一个选择器（在①）**：提示词主体与参考图主体必须一致（锁定项说红发、参考图是黑发就出戏）。
+  「从主体档案加入」复用①的主体 + 槽位下拉；**换主体时旧主体的档案参考图自动清掉**
+  （`GenRefs.dropSubjectRefs()`，上传暂存 / 最近生成的不受主体约束，保留）。
 - **参考图来源与 Playground 同源**（`ReferenceSpec`）：`staged_id`（上传暂存）/ `subject_id`+`kind`（主体档案槽位）/ `run_id`（+`index`，最近生成原图；`adhoc_*` 取唯一原图，charvar run 按 index 取第 N 张）。
   **只认 id 不认路径** —— 浏览器永远不能给文件系统路径。
 - **role（分工）**：每张参考图一个 role（`front`/`headshot`/`side`/`behind`/`character_sheet`，缺省 `front`），决定 LLM 锚定句里这张图管哪一摊；主体档案来源自动取槽位 kind 当 role。
 - references 随 `/generate` 存进 run（`GenerateResult.references`），推送生图与单条「重新生成」都按它取图；`regenerate` 优先重放快照里的 references。
 - 旧的 `reference_kinds` 参数与 CLI 调用路径**全部保留**（向后兼容），CLI `charvar gen --outfit` 同一套修复生效。
 - OpenRouter 参数档位按 `data/openrouter/api-response.json` 的 `supported_parameters` 动态加载（同 Playground）；即梦分辨率表放 `web/static/tables.js`（app.js 与 adhoc.js 共用，别再各写一份）。
+- **supported parameters 的几条约定**（两边页面一致）：
+  - ComfyUI 没有 provider 枚举，档位固定 charvar 的 `1k`/`2k`（2k = Qwen 官方 ~4.2MP 像素）。
+  - OpenRouter 的模型**不在面板里选**，跟设置页的 `t2i`/`i2i` 组默认（带参考图 = i2i 组）；分辨率 / 质量取该模型清单的枚举，没有就不显示。
+  - 即梦：模型版本下拉空值 = 跟随设置页（`DREAMINA_IMAGE_MODEL`）；**「跟随设置默认」要真跟随**（空值发出去，后端才用设置页/env），不能名义上跟随、实际发硬编码的 2K。
+  - 即梦 **3.0/3.1 只有 text2image**：带参考图（即 image2image）时从模型下拉里去掉（`DREAMINA_T2I_ONLY_MODELS`，放 `tables.js` 共享）。
+  - 档位选择要记住：切供应商再切回来别重置（`state.comfyTier` / `adhocState.comfyTier` / `state.orResolution`）。
 - ComfyUI 上传的 `remote_name` = `charvar_{run_id}_{index}{suffix}`：`upload_image` 发 `overwrite: true`，同名会互相覆盖。
 - 前端文件：`web/static/genrefs.js`（参考图选择器，导出 `GenRefs`）、`web/static/app.js`（供应商面板 + 推送生图）、`web/static/tables.js`。
-  脚本加载顺序：`tables.js` → `media.js` → `genrefs.js` → `app.js` → `adhoc.js` → `video.js` → `recipes.js`（app.js 的 `init()` 在文件末尾调用，必须在 `GenRefs` 定义之后）。
+  脚本加载顺序：`tables.js` → `media.js` → `genrefs.js` → `app.js` → `adhoc.js` → `video.js` → `recipes.js`（app.js 的 `init()` 在文件末尾调用，必须在 `GenRefs` 定义之后；`tables.js` 必须在 app.js 之前 —— 共享表是全局 const，顺序错了会 TDZ 报错）。
 
 ## 测试
 

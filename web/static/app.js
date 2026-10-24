@@ -19,6 +19,8 @@ const state = {
   dreaminaCliOk: undefined, // 本机有没有 dreamina CLI
   dreaminaDefaults: {}, // 设置页的即梦默认值（模型/分辨率）
   comfySettings: null,
+  comfyTier: "2k", // ComfyUI 分辨率档（记住上次选择，切供应商不丢）
+  orResolution: "", // OpenRouter 分辨率（记住上次选择）
 };
 
 async function api(path, options = {}) {
@@ -130,34 +132,46 @@ function applyGenTierOptions() {
   select.innerHTML =
     `<option value="1k">1k（长边 1024）</option>` +
     `<option value="2k">2k（Qwen 官方 ~4.2MP）</option>`;
-  select.value = "2k";
+  // 记住上次选的档：切走再切回来别重置
+  select.value = state.comfyTier || "2k";
   $("#gen-resolution-field").hidden = false;
   $("#gen-quality-field").hidden = true;
 }
 
-/* 即梦：模型版本下拉 + 分辨率随模型配对（与 Playground 同表） */
+/* 即梦：模型版本下拉 + 分辨率随模型配对（与 Playground 同表）
+   3.0/3.1 只有 text2image —— 带参考图时（即 image2image）不列出来，
+   免得用户选到提交前才被后端拦（后端 validate_model_resolution 仍兜底）。 */
 function applyGenDreaminaOptions() {
   const def = state.dreaminaDefaults || {};
   const defLabel = `跟随设置默认（${def.model || "5.0"} · ${def.resolution || "2K"}）`;
-  const models = Object.keys(DREAMINA_MODEL_RESOLUTIONS);
+  const withRefs = GenRefs.count() > 0;
+  const models = Object.keys(DREAMINA_MODEL_RESOLUTIONS).filter(
+    (m) => !withRefs || !DREAMINA_T2I_ONLY_MODELS.has(m)
+  );
   const sel = $("#gen-model-select");
+  const keep = sel.value;
   sel.innerHTML = [`<option value="">${defLabel}</option>`]
     .concat(models.map((m) => `<option value="${m}">${m}</option>`))
     .join("");
-  sel.value = "";
+  sel.value = models.includes(keep) ? keep : "";
   $("#gen-model-select-field").hidden = false;
   applyGenDreaminaResolutionOptions();
 }
 
+/* 即梦分辨率：模型空（跟随设置）就真跟随 —— 档位仍列出来（按设置页的默认模型配对），
+   但选中的是「跟随设置默认」；显式选了模型才按那个模型列档。
+   后端会校验 model×resolution 组合（3.0/3.1 不能带参考图），前端先拦一道。 */
 function applyGenDreaminaResolutionOptions() {
   const modelValue = $("#gen-model-select").value;
-  const tiers = DREAMINA_MODEL_RESOLUTIONS[modelValue] || DREAMINA_MODEL_RESOLUTIONS["5.0"];
-  const display = tiers.map((t) => String(t).toUpperCase());
+  const def = state.dreaminaDefaults || {};
   const sel = $("#gen-resolution");
-  sel.innerHTML = [`<option value="">跟随设置默认</option>`]
+  const base = modelValue || def.model || "5.0";
+  const tiers = DREAMINA_MODEL_RESOLUTIONS[base] || DREAMINA_MODEL_RESOLUTIONS["5.0"];
+  const display = tiers.map((t) => String(t).toUpperCase());
+  sel.innerHTML = [`<option value="">跟随设置默认（${def.resolution || "2K"}）</option>`]
     .concat(display.map((t) => `<option value="${t}">${t}</option>`))
     .join("");
-  sel.value = display.includes("2K") ? "2K" : display[0];
+  sel.value = modelValue ? (display.includes("2K") ? "2K" : display[0]) : "";
   $("#gen-resolution-field").hidden = false;
   $("#gen-quality-field").hidden = true;
 }
@@ -203,8 +217,10 @@ function applyGenCaps(caps) {
     resSelect.innerHTML = [`<option value="">跟随设置默认</option>`]
       .concat(enums.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`))
       .join("");
+    // 默认 2K（枚举里有，大小写不敏感）；上次选过且还在枚举里就沿用
     const twoK = enums.find((v) => String(v).toLowerCase() === "2k");
-    resSelect.value = twoK || "";
+    const keep = enums.find((v) => v === state.orResolution);
+    resSelect.value = keep || twoK || "";
     $("#gen-resolution-field").hidden = false;
   } else {
     resSelect.innerHTML = `<option value=""></option>`;
@@ -338,8 +354,26 @@ async function init() {
   ).join("");
   $("#gen-aspect").value = "auto";
   $("#gen-aspect").addEventListener("change", updateGenHints);
-  $("#gen-resolution").addEventListener("change", updateGenHints);
+  $("#gen-resolution").addEventListener("change", () => {
+    // 记住这次的档：切供应商再切回来别重置
+    if (state.backend === "comfyui") state.comfyTier = $("#gen-resolution").value;
+    else if (state.backend === "openrouter") state.orResolution = $("#gen-resolution").value;
+    updateGenHints();
+  });
   $("#gen-model-select").addEventListener("change", applyGenDreaminaResolutionOptions);
+  // 主体只有一个选择器（①）：提示词主体与参考图主体必须一致 → 换主体要重刷槽位、
+  // 并清掉旧主体档案的参考图
+  $("#gen-subject").addEventListener("change", async () => {
+    updateGenSubjectHint();
+    await GenRefs.reloadKinds().catch(() => {});
+    const dropped = await GenRefs.dropSubjectRefs();
+    if (dropped) {
+      setStatus(
+        $("#gen-status"),
+        `主体已切换：清掉了 ${dropped} 张旧主体的档案参考图（提示词主体与参考图必须同一个人）`
+      );
+    }
+  });
   GenRefs.mount();
   // 参考图增减会改模式（有图 = 图片编辑）→ 供应商面板要跟着重算
   let genRefCount = 0;
@@ -353,6 +387,8 @@ async function init() {
   if (state.subjects.length) {
     $("#gen-subject").value = state.subjects[0].id;
   }
+  updateGenSubjectHint();
+  await GenRefs.reloadKinds().catch(() => {});
   await refreshComfyWorkflows().catch(() => {});
   await loadComfyWorkflowSettings().catch(() => {});
   await refreshGenBackendPanel().catch(() => {});
@@ -368,7 +404,19 @@ async function loadSubjects() {
     opt.textContent = `${s.id} · ${s.name}`;
     sel.appendChild(opt);
   }
+  updateGenSubjectHint();
   renderSubjectList();
+}
+
+/* ② 只读摘要：提示词用的是①选的那个主体（锁定项 / 模板 / 参考图都跟它走） */
+function updateGenSubjectHint() {
+  const el = $("#gen-subject-hint");
+  if (!el) return;
+  const id = $("#gen-subject").value;
+  const subject = state.subjects.find((s) => s.id === id);
+  el.textContent = id
+    ? `提示词主体：${id}${subject ? `（${subject.name}）` : ""} —— 锁定项、模板与参考图都跟它走（在①改）`
+    : "还没选主体档案 —— 去①选一个（提示词锁定项、模板、参考图都跟它走）";
 }
 
 async function loadOutfits() {

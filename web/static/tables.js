@@ -13,3 +13,7 @@ const DREAMINA_MODEL_RESOLUTIONS = {
   "5.0": ["2k", "4k"],
   "5.0Pro": ["1.5k", "2k", "4k"],
 };
+
+/* 仅文生图的模型版本（3.0/3.1 没有 image2image）：带参考图时不能选。
+   预设页与 Playground 页共用 —— 谁先加载谁都能用（别放单个页面文件里）。 */
+const DREAMINA_T2I_ONLY_MODELS = new Set(["3.0", "3.1"]);

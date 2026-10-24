@@ -18,8 +18,7 @@ const ADHOC_ASPECTS = ["3:4", "1:1", "16:9", "4:3", "9:16", "2:3", "3:2", "21:9"
 const ADHOC_MAX_REFS = 4;
 
 /* 即梦 model_version -> 分辨率枚举在共享文件 tables.js（预设页也用同一张表）。 */
-/* 仅文生图的模型版本（3.0/3.1 没有 image2image），i2i 页签不列。 */
-const DREAMINA_T2I_ONLY_MODELS = new Set(["3.0", "3.1"]);
+/* DREAMINA_T2I_ONLY_MODELS（仅文生图模型）同样在 tables.js。 */
 
 const adhocState = {
   backend: "comfyui", // 一级：后端
@@ -29,6 +28,7 @@ const adhocState = {
   modeModel: "", // 当前模式的默认模型（显示名 + capabilities 来源）
   capsToken: 0, // 后端/模式切换的竞态守卫：只采纳最后一次拉取的能力
   subjectSlots: {}, // subject_id -> slots
+  comfyTier: "2k", // ComfyUI 分辨率档（记住上次选择，切后端不丢）
 };
 
 function adhocBackend() {
@@ -216,21 +216,24 @@ function applyAdhocTierOptions() {
   select.innerHTML =
     `<option value="1k">1k（长边 1024）</option>` +
     `<option value="2k">2k（Qwen 官方 ~4.2MP）</option>`;
-  select.value = "2k";
+  select.value = adhocState.comfyTier || "2k";
   $("#adhoc-resolution-field").hidden = false;
   $("#adhoc-quality-field").hidden = true;
 }
 
-/* 即梦：分辨率选项随所选模型版本配对（_MODEL_RESOLUTIONS） */
+/* 即梦：分辨率选项随所选模型版本配对（_MODEL_RESOLUTIONS）
+   模型空（跟随设置）就真跟随 —— 档位按设置页的默认模型列出来，但选中「跟随设置默认」。 */
 function applyDreaminaResolutionOptions() {
   const modelValue = $("#adhoc-model-select").value;
-  const tiers = DREAMINA_MODEL_RESOLUTIONS[modelValue] || DREAMINA_MODEL_RESOLUTIONS["5.0"];
-  const display = tiers.map((t) => String(t).toUpperCase());
+  const def = adhocState.dreaminaDefaults || {};
   const sel = $("#adhoc-resolution");
-  sel.innerHTML = [`<option value="">跟随设置默认</option>`]
+  const base = modelValue || def.model || "5.0";
+  const tiers = DREAMINA_MODEL_RESOLUTIONS[base] || DREAMINA_MODEL_RESOLUTIONS["5.0"];
+  const display = tiers.map((t) => String(t).toUpperCase());
+  sel.innerHTML = [`<option value="">跟随设置默认（${def.resolution || "2K"}）</option>`]
     .concat(display.map((t) => `<option value="${t}">${t}</option>`))
     .join("");
-  sel.value = display.includes("2K") ? "2K" : display[0];
+  sel.value = modelValue ? (display.includes("2K") ? "2K" : display[0]) : "";
   $("#adhoc-resolution-field").hidden = false;
 }
 
@@ -252,10 +255,13 @@ async function applyAdhocDreaminaOptions() {
   );
   const def = adhocState.dreaminaDefaults || {};
   const defLabel = `跟随设置默认（${def.model || "5.0"} · ${def.resolution || "2K"}）`;
-  $("#adhoc-model-select").innerHTML = [`<option value="">${defLabel}</option>`]
+  const sel = $("#adhoc-model-select");
+  const keep = sel.value;
+  sel.innerHTML = [`<option value="">${defLabel}</option>`]
     .concat(models.map((m) => `<option value="${m}">${m}</option>`))
     .join("");
-  $("#adhoc-model-select").value = "";
+  // 记住上次选的模型版本（切走再切回来别重置）
+  sel.value = models.includes(keep) ? keep : "";
   $("#adhoc-model-select-field").hidden = false;
   applyDreaminaResolutionOptions();
   renderAdhocModelInfo();
@@ -635,5 +641,9 @@ $$("#adhoc-mode .seg").forEach((btn) =>
 );
 
 $("#adhoc-model-select").addEventListener("change", applyDreaminaResolutionOptions);
+$("#adhoc-resolution").addEventListener("change", () => {
+  // ComfyUI 的档位记住，切后端再切回来不重置
+  if (adhocState.backend === "comfyui") adhocState.comfyTier = $("#adhoc-resolution").value;
+});
 
 initAdhoc();

@@ -147,34 +147,16 @@ const GenRefs = (() => {
     }
   }
 
-  /* ---------- 来源：主体档案槽位 ---------- */
-  async function loadSubjectOptions() {
-    const sel = $("#gen-ref-subject");
-    const kindSel = $("#gen-ref-kind");
-    if (!sel) return;
-    try {
-      const subjects = await api("/subjects");
-      sel.innerHTML = subjects.length
-        ? subjects
-            .map(
-              (s) =>
-                `<option value="${escapeHtml(s.id)}">${escapeHtml(s.id)} · ${escapeHtml(s.name)}</option>`
-            )
-            .join("")
-        : `<option value="">（还没有主体档案）</option>`;
-      sel.disabled = !subjects.length;
-      await loadKindOptions();
-    } catch {
-      sel.innerHTML = `<option value="">（加载失败）</option>`;
-    }
-  }
-
+  /* ---------- 来源：主体档案槽位 ----------
+     主体只有一处选择：第 ① 步的「主体档案」（#gen-subject）—— 提示词主体与参考图
+     必须是同一个主体，否则提示词里的锁定项和参考图里的人会对不上。 */
   async function loadKindOptions() {
-    const subjectId = $("#gen-ref-subject").value;
+    const subjectId = ($("#gen-subject") || {}).value || "";
     const kindSel = $("#gen-ref-kind");
     if (!kindSel) return;
     if (!subjectId) {
-      kindSel.innerHTML = `<option value="">（先选主体）</option>`;
+      kindSel.innerHTML = `<option value="">（先在①选主体档案）</option>`;
+      state.subjectSlots[subjectId] = [];
       return;
     }
     try {
@@ -190,10 +172,10 @@ const GenRefs = (() => {
   }
 
   function onAddFromSubject() {
-    const subjectId = $("#gen-ref-subject").value;
+    const subjectId = ($("#gen-subject") || {}).value || "";
     const kind = $("#gen-ref-kind").value;
     if (!subjectId || !kind) {
-      setStatus($("#gen-status"), "先选主体和图片类型（只有就绪的图片能选）", true);
+      setStatus($("#gen-status"), "先在①选主体档案和图片类型（只有就绪的图片能选）", true);
       return;
     }
     const slots = state.subjectSlots[subjectId] || [];
@@ -331,11 +313,22 @@ const GenRefs = (() => {
     }
   }
 
+  /* 主体换了 → 主体档案来源的参考图要清掉：提示词主体与参考图主体必须一致，
+     否则提示词里的锁定项和参考图里的人对不上（上传暂存 / 最近生成的不受主体约束，保留）。 */
+  async function dropSubjectRefs() {
+    const keep = state.references.filter((r) => r.source !== "subject");
+    const dropped = state.references.length - keep.length;
+    if (!dropped) return 0;
+    const removed = state.references.filter((r) => r.source === "subject");
+    state.references = keep;
+    for (const ref of removed) releaseRef(ref);
+    render();
+    return dropped;
+  }
+
   function mount() {
     const file = $("#gen-ref-file");
     if (file) file.addEventListener("change", onUpload);
-    const subject = $("#gen-ref-subject");
-    if (subject) subject.addEventListener("change", loadKindOptions);
     const addBtn = $("#btn-gen-ref-add");
     if (addBtn) addBtn.addEventListener("click", onAddFromSubject);
     const recentBtn = $("#btn-gen-recent-add");
@@ -343,7 +336,7 @@ const GenRefs = (() => {
     const clearBtn = $("#btn-gen-ref-clear");
     if (clearBtn) clearBtn.addEventListener("click", () => clear().catch(() => {}));
     render();
-    loadSubjectOptions().catch(() => {});
+    loadKindOptions().catch(() => {});
   }
 
   return {
@@ -355,6 +348,12 @@ const GenRefs = (() => {
     roleLabel,
     ROLES,
     MAX_REFS,
+    // 主体档案换了 → 参考图的槽位下拉要重刷（主体只有一个选择器，在①）
+    reloadKinds() {
+      return loadKindOptions();
+    },
+    // 换主体时清掉主体档案来源的参考图（旧主体的人跟新主体对不上）
+    dropSubjectRefs,
     onChange(fn) {
       state.onChange = fn;
     },

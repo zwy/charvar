@@ -4,12 +4,14 @@
 <button class="tab active" data-tab="gen">预设</button><button class="tab" data-tab="adhoc">Playground</button><button class="tab" data-tab="video">视频</button><button class="tab" data-tab="recipes">配方</button><button class="tab" data-tab="subjects">主体档案</button><button class="tab" data-tab="runs">历史记录</button><button class="tab" data-tab="settings">设置</button></nav></header>
 <main>
 <section id="tab-gen" class="tab-page active">
-<div class="card"><div class="row-head"><h2>① 生图设置</h2><span class="hint">先定供应商与参考图 —— 第 ③ 步按这套设置出图</span></div>
+<div class="card"><div class="row-head"><h2>① 生图设置</h2><span class="hint">先定主体、供应商与参考图 —— 第 ③ 步按这套设置出图</span></div>
 <div class="adhoc-switch">
 <div class="segmented" id="gen-backend"><button type="button" class="seg active" data-backend="comfyui">ComfyUI</button><button type="button" class="seg" data-backend="openrouter">OpenRouter</button><button type="button" class="seg" data-backend="dreamina">即梦</button></div>
 <span id="gen-model-field" class="hint"></span>
 </div>
 <div class="form-grid">
+<label>主体档案<select id="gen-subject"></select></label>
+<label id="gen-seed-field">种子<input type="number" id="gen-seed" min="0" placeholder="留空 = 随机（0–100000）"></label>
 <label>画幅比例<select id="gen-aspect"></select></label>
 <label id="gen-resolution-field">分辨率<select id="gen-resolution"></select></label>
 <label id="gen-quality-field" hidden>质量档<select id="gen-quality"></select></label>
@@ -24,7 +26,6 @@
 <div class="actions">
 <label class="btn file-btn">上传参考图<input type="file" id="gen-ref-file" accept="image/*" multiple hidden></label>
 <button id="btn-gen-recent-add" type="button">从最近生成加入</button>
-<select id="gen-ref-subject"></select>
 <select id="gen-ref-kind"></select>
 <button id="btn-gen-ref-add" type="button">从主体档案加入</button>
 <button id="btn-gen-ref-clear" type="button">清空参考图</button>
@@ -36,12 +37,11 @@
 <button id="gen-mode-classic" class="seg active" data-mode="classic" type="button">经典模板</button>
 <button id="gen-mode-llm" class="seg" data-mode="llm" type="button">LLM 优化</button>
 </div></div>
+<span id="gen-subject-hint" class="hint"></span>
 <div class="form-grid">
-<label>主体档案<select id="gen-subject"></select></label>
 <label>预设<select id="gen-preset"></select></label>
 <label>服装预设（可选，与预设笛卡尔积）<select id="gen-outfit"><option value="">不用（仅动作/表情预设）</option></select></label>
 <label>组合顺序<select id="gen-outfit-order"><option value="outfit_first">服装优先（每件连播全部动作）</option><option value="pose_first">动作优先（每个动作连播全部服装）</option></select></label>
-<label>种子<input type="number" id="gen-seed" min="0" placeholder="留空 = 随机（0–100000）"></label>
 <label>条数<input type="number" id="gen-count" placeholder="留空 = 预设全部" min="1"></label>
 <label>采样<select id="gen-sampling"><option value="all">all（默认顺序）</option><option value="first">first（取前 N 条）</option><option value="random">random（按种子抽取）</option></select></label>
 <label>拼接分隔符<input type="text" id="gen-separator" value=" "></label>
