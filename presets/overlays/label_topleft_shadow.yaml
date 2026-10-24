@@ -1,0 +1,20 @@
+# 贴字预设：无底板描边款 · 左上角 · 黑字白描边（浅色画面顶部也可读）。
+# 文本来源由调用方传（text_from）；本预设只定义样式。
+name: label_topleft_shadow
+type: overlay
+version: 1
+description: 左上角 · 黑字白描边 · 无底板（浅色顶部画面用）
+position: left_top
+margin_x: 0.04
+margin_y: 0.04
+font: ""            # 空 = 自动（fonts/ > 系统候选）
+size: 0.05
+color: "#111111"
+stroke: 0.004
+stroke_color: "#FFFFFF"
+plate: none
+opacity: 0.92
+rotate: 0.0
+max_width: 0.6
+align: left
+line_gap: 0.14

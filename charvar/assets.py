@@ -64,7 +64,7 @@ def sheet_path(run_id: str, kind: str) -> Path:
 
 
 def resolve_run_asset(run_id: str, scene: str, filename: str) -> Path:
-    if scene not in {"original", "thumbs", "sheets", "videos"}:
+    if scene not in {"original", "thumbs", "sheets", "videos", "labeled"}:
         raise ValueError("非法资产目录")
     path = run_assets_dir(run_id) / scene / safe_filename(filename)
     if not path.exists():
@@ -296,6 +296,10 @@ def image_entry(
     # 缓存穿透：URL 挂上 prompt_id——重新生成换记录后同路径参数变化，浏览器会重新拉图
     version = str((record or {}).get("prompt_id") or "")
     suffix_qs = f"?v={version}" if version else ""
+    labeled = None
+    labeled_candidate = run_assets_dir(run_id) / "labeled" / f"{item_index:06d}.png"
+    if labeled_candidate.exists():
+        labeled = labeled_candidate
     return {
         "item_index": item_index,
         "variant_id": variant_id,
@@ -306,6 +310,7 @@ def image_entry(
         "primary_url": f"/runs/{safe_run_id(run_id)}/comfy-image/{item_index}{suffix_qs}" if (files or original) else None,
         "thumb_url": f"/runs/{safe_run_id(run_id)}/assets/thumbs/{item_index:06d}.webp{suffix_qs}" if (thumb_dir(run_id) / f"{item_index:06d}.webp").exists() else None,
         "original_url": f"/runs/{safe_run_id(run_id)}/assets/original/{original.name}{suffix_qs}" if original else None,
+        "labeled_url": f"/runs/{safe_run_id(run_id)}/assets/labeled/{labeled.name}{suffix_qs}" if labeled else None,
         "text": fallback_text,
         "record": record,
     }

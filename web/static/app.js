@@ -172,7 +172,7 @@ function updateRefsHint() {
 
 /* ---------- 初始加载 ---------- */
 async function init() {
-  await Promise.allSettled([loadSubjects(), loadPresets()]);
+  await Promise.allSettled([loadSubjects(), loadPresets(), loadOutfits()]);
   if (state.subjects.length) {
     $("#gen-subject").value = state.subjects[0].id;
   }
@@ -193,6 +193,22 @@ async function loadSubjects() {
     sel.appendChild(opt);
   }
   renderSubjectList();
+}
+
+async function loadOutfits() {
+  state.outfits = await api("/outfit-presets").catch(() => []);
+  const sel = $("#gen-outfit");
+  sel.innerHTML = "";
+  const blank = document.createElement("option");
+  blank.value = "";
+  blank.textContent = "不用（仅动作/表情预设）";
+  sel.appendChild(blank);
+  for (const o of state.outfits) {
+    const opt = document.createElement("option");
+    opt.value = o.name;
+    opt.textContent = `${o.name}（${o.count} 档）`;
+    sel.appendChild(opt);
+  }
 }
 
 async function loadPresets() {
@@ -257,6 +273,11 @@ $("#btn-generate").addEventListener("click", async () => {
   if ($("#gen-count").value) payload.count = Number($("#gen-count").value);
   if ($("#gen-fixed-bg").value.trim()) payload.fixed_background = $("#gen-fixed-bg").value.trim();
   if ($("#gen-fixed-light").value.trim()) payload.fixed_lighting = $("#gen-fixed-light").value.trim();
+  // 服装组合：选了服装预设才带上（笛卡尔积在服务端展开）
+  if ($("#gen-outfit").value) {
+    payload.outfit_preset = $("#gen-outfit").value;
+    payload.outfit_order = $("#gen-outfit-order") ? $("#gen-outfit-order").value : "outfit_first";
+  }
   const sep = $("#gen-separator").value;
   if (sep !== " ") payload.separator = sep;
   payload.mode = state.genMode;

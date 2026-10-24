@@ -275,6 +275,8 @@ def generate_llm(
                     "tags": spec.tags,
                     "sampling": req.sampling,
                     "preset_type": preset.type,
+                    "outfit": spec.outfit,
+                    "outfit_label": spec.outfit_label,
                     "mode": "llm",
                     "reference_kinds": list(reference_kinds),
                     **aspect_meta(preset),

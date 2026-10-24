@@ -165,15 +165,25 @@ const Media = {
       const imageSrc = item.thumb_url || item.primary_url;
       const promptText = String(item.text || "").trim();
       // 查看提示词 / 复制 / 重新生成（与档案图片槽位同一套弹层：可滚动 pre + 复制全文）
-      const actionsHtml = promptText
+      let actionsHtml = promptText
         ? `<button class="btn-sm" data-prompt-view>查看提示词</button><button class="btn-sm" data-prompt-copy>复制</button><button class="btn-sm" data-regen title="同一提示词换个随机种子，按原出图设置重推 ComfyUI 出一张新图">重新生成</button>`
         : `<span class="hint">（无提示词记录）</span>`;
+      if (item.labeled_url) {
+        actionsHtml =
+          `<button class="btn-sm" data-labeled title="贴字后的成片（labeled/，原图不动）">看贴字图</button>` +
+          actionsHtml;
+      }
       if (imageSrc) {
         card.innerHTML = `<img src="${imageSrc}" alt="${item.variant_id || `图片 ${item.item_index}`}" loading="lazy"><div class="image-meta"><strong>#${String(item.item_index).padStart(3, "0")}</strong><span>${item.variant_id}</span></div><div class="image-actions">${actionsHtml}</div>`;
         card.querySelector("img").addEventListener("click", () =>
           this.showImageModal(item.original_url || item.primary_url, item.variant_id));
       } else {
         card.innerHTML = `<div class="image-placeholder"><strong>#${String(item.item_index).padStart(3, "0")}</strong><span>${item.variant_id}</span><span>${item.status}</span></div><div class="image-actions">${actionsHtml}</div>`;
+      }
+      const labeledBtn = card.querySelector("[data-labeled]");
+      if (labeledBtn) {
+        labeledBtn.addEventListener("click", () =>
+          this.showImageModal(item.labeled_url, `#${String(item.item_index).padStart(3, "0")} ${item.variant_id} · 贴字`));
       }
       const viewBtn = card.querySelector("[data-prompt-view]");
       if (viewBtn) {
@@ -395,6 +405,81 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (error) {
       Media.setStatus(`同步失败：${error.message}`, true);
     }
+  });
+  $("#btn-overlay").addEventListener("click", () => {
+    const runId = Media.currentRunId;
+    if (!runId) return;
+    Media.showPanelModal("贴字（PIL 后处理，不改原图）", (body) => {
+      api("/overlay-presets").then((presets) => {
+        if (!presets || !presets.length) {
+          const empty = document.createElement("p");
+          empty.className = "hint";
+          empty.textContent = "还没有贴字预设：在 presets/overlays/ 放一个 YAML（如 stockings_label_bl.yaml）后再试。";
+          body.appendChild(empty);
+          return;
+        }
+        const label = document.createElement("label");
+        label.innerHTML = `贴字预设<select id="overlay-preset-select"></select>`;
+        const select = label.querySelector("select");
+        for (const p of presets) {
+          const opt = document.createElement("option");
+          opt.value = p.name;
+          opt.textContent = `${p.name}（${p.position}）${p.font_available ? "" : " · 字体不可用"}`;
+          select.appendChild(opt);
+        }
+        body.appendChild(label);
+        const fromLabel = document.createElement("label");
+        fromLabel.innerHTML = `文字来源<select id="overlay-text-from"><option value="outfit_label">服装名（组合变体）</option><option value="pose_tag">动作名</option><option value="variant_id">变体名</option><option value="fixed">固定文本</option></select>`;
+        const fromSel = fromLabel.querySelector("select");
+        body.appendChild(fromLabel);
+        const fixedLabel = document.createElement("label");
+        fixedLabel.innerHTML = `固定文本<input type="text" id="overlay-fixed-text" placeholder="文字来源 = 固定文本时使用">`;
+        const fixedInput = fixedLabel.querySelector("input");
+        fixedLabel.hidden = true;
+        body.appendChild(fixedLabel);
+        fromSel.addEventListener("change", () => {
+          fixedLabel.hidden = fromSel.value !== "fixed";
+        });
+        const hint = document.createElement("div");
+        hint.className = "hint";
+        hint.textContent = "对已完成条目贴字，产物落 labeled/（原图 original/ 不动）；重复应用会覆盖旧贴字图。";
+        body.appendChild(hint);
+        const actions = document.createElement("div");
+        actions.className = "actions";
+        const btn = document.createElement("button");
+        btn.className = "primary";
+        btn.textContent = "开始贴字";
+        const status = document.createElement("span");
+        status.className = "status";
+        actions.appendChild(btn);
+        actions.appendChild(status);
+        body.appendChild(actions);
+        btn.addEventListener("click", async () => {
+          btn.disabled = true;
+          status.classList.remove("error");
+          status.textContent = "贴字中…";
+          try {
+            const info = await api(`/runs/${encodeURIComponent(runId)}/overlay`, {
+              method: "POST",
+              body: JSON.stringify({
+                overlay: select.value,
+                text_from: fromSel.value,
+                fixed: fromSel.value === "fixed" ? fixedInput.value : null,
+              }),
+            });
+            status.classList.remove("error");
+            status.textContent = `完成：贴字 ${info.applied.length} 张${info.skipped.length ? `，跳过 ${info.skipped.length} 张` : ""}`;
+            await Media.loadImages(runId);
+          } catch (error) {
+            status.classList.add("error");
+            status.textContent = "贴字失败：" + error.message;
+            btn.disabled = false;
+          }
+        });
+      }).catch((err) => {
+        body.innerHTML = `<span class="hint">加载贴字预设失败：${escapeHtml(err.message)}</span>`;
+      });
+    });
   });
   $("#btn-video").addEventListener("click", () => {
     const runId = Media.currentRunId;

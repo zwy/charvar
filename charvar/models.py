@@ -77,6 +77,10 @@ class VariantSpec(BaseModel):
     text: str
     tags: list[str] = Field(default_factory=list)
     display_text: DisplayText | None = None
+    # 服装组合（outfit.combine 产物）专用：服装 id + 中文展示名（贴字/展示用）。
+    # YAML 预设不声明这两个字段；由服装组合时程序填入。
+    outfit: str | None = None
+    outfit_label: str | None = None
 
 
 class GenerateRequest(BaseModel):
@@ -95,6 +99,10 @@ class GenerateRequest(BaseModel):
     mode: Literal["classic", "llm"] = "classic"
     reference_kinds: list[str] = Field(default_factory=list)  # 1–4 个主体图类型
     llm_instructions: str | None = None
+    # 服装组合：动作/表情预设 × 服装预设（presets/outfits/）笛卡尔积。
+    # outfit_order 决定变体顺序（也即后续 reel 合成的播放顺序）。
+    outfit_preset: str | None = None
+    outfit_order: Literal["outfit_first", "pose_first"] = "outfit_first"
 
 
 class PromptItem(BaseModel):

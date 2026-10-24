@@ -11,6 +11,8 @@
 <div class="form-grid">
 <label>主体档案<select id="gen-subject"></select></label>
 <label>预设<select id="gen-preset"></select></label>
+<label>服装预设（可选，与预设笛卡尔积）<select id="gen-outfit"><option value="">不用（仅动作/表情预设）</option></select></label>
+<label>组合顺序<select id="gen-outfit-order"><option value="outfit_first">服装优先（每件连播全部动作）</option><option value="pose_first">动作优先（每个动作连播全部服装）</option></select></label>
 <label>种子<input type="number" id="gen-seed" min="0" placeholder="留空 = 随机（0–100000）"></label>
 <label>条数<input type="number" id="gen-count" placeholder="留空 = 预设全部" min="1"></label>
 <label>采样<select id="gen-sampling"><option value="all">all（默认顺序）</option><option value="first">first（取前 N 条）</option><option value="random">random（按种子抽取）</option></select></label>
@@ -109,6 +111,7 @@
       <button id="btn-sync-images">同步图片</button>
       <div class="segmented"><button id="btn-view-images" class="seg active" aria-pressed="true">图片墙</button><button id="btn-view-table" class="seg" aria-pressed="false">表格</button></div>
       <button id="btn-contact-sheet">Contact sheet</button>
+      <button id="btn-overlay">贴字…</button>
       <button id="btn-video">合成视频</button>
       <span id="image-status" class="status"></span>
     </div>

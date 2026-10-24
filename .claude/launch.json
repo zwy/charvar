@@ -5,6 +5,12 @@
       "name": "charvar-web",
       "runtimeExecutable": "./scripts/start.sh",
       "port": 8710
+    },
+    {
+      "name": "charvar-web-fg",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "web.app"],
+      "port": 8710
     }
   ]
 }

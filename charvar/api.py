@@ -46,6 +46,8 @@ from charvar.preset_loader import (
     list_presets,
 )
 from charvar import sticker_policy
+from charvar import outfit as outfit_service
+from charvar import overlay as overlay_service
 from charvar import video as video_service
 
 EXPORT_FORMATS = ("txt", "jsonl", "captions_zip", "captions")
@@ -113,6 +115,14 @@ class VideoRenderRequest(BaseModel):
     preset: str = "q21_turnaround"
     # None/"" = 用预设内置音乐；"none" = 本次不加；其余 = presets/video/music/ 文件名
     music: str | None = None
+
+
+class OverlayApplyRequest(BaseModel):
+    """贴字后处理（presets/overlays/ 预设，PIL 渲染，不改原图）。"""
+    overlay: str
+    text_from: Literal["outfit_label", "pose_tag", "variant_id", "fixed"] = "outfit_label"
+    fixed: str | None = None           # text_from=fixed 的固定文本
+    items: list[int] | None = None     # 缺省 = 全部成品图条目
 
 
 class SubjectImageGenerateRequest(BaseModel):
@@ -260,6 +270,10 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     @app.get("/presets")
     def api_presets() -> list[dict[str, Any]]:
         return list_presets()
+
+    @app.get("/outfit-presets")
+    def api_outfit_presets() -> list[dict[str, Any]]:
+        return outfit_service.list_outfit_presets()
 
     @app.get("/presets/{name}")
     def api_preset_detail(name: str, expand: bool = Query(True, description="展开变体列表")) -> dict[str, Any]:
@@ -670,6 +684,16 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     def api_generate(req: GenerateRequest) -> GenerateResult:
         subject = _resolve_subject(req)
         preset = _preset(req.preset)
+        if req.outfit_preset:
+            if sticker_policy.is_sticker_preset(preset):
+                raise HTTPException(
+                    400, "sticker 预设（带字表情包）不支持服装组合：图片文案与服装段语义冲突"
+                )
+            try:
+                outfit_obj = outfit_service.load_outfit(req.outfit_preset)
+                preset = outfit_service.combine(preset, outfit_obj, req.outfit_order)
+            except PresetError as exc:
+                raise HTTPException(getattr(exc, "status", 400), str(exc)) from exc
         sticker_warnings: list[str] = []
         if sticker_policy.is_sticker_preset(preset):
             # 生成期冲突检查：主体档案锁定项为阻断错误；模板条款作用域无法机械
@@ -1966,6 +1990,29 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         info["run_id"] = run_id
         info["url"] = f"/runs/{run_id}/assets/videos/{info['name']}"
         return info
+
+    # ---- 贴字（presets/overlays/*.yaml，PIL 后处理，不改原图） ----
+
+    @app.get("/overlay-presets")
+    def api_overlay_presets() -> list[dict[str, Any]]:
+        return overlay_service.list_overlay_presets()
+
+    @app.post("/runs/{run_id}/overlay")
+    def api_run_overlay(run_id: str, req: OverlayApplyRequest) -> dict[str, Any]:
+        with _db() as conn:
+            try:
+                return overlay_service.apply_overlay(
+                    conn,
+                    run_id,
+                    overlay=req.overlay,
+                    text_from=req.text_from,
+                    fixed=req.fixed,
+                    items=req.items,
+                )
+            except overlay_service.PresetError as exc:
+                raise HTTPException(getattr(exc, "status", 400), str(exc)) from exc
+            except Exception as exc:  # noqa: BLE001
+                raise HTTPException(500, f"贴字失败：{exc}") from exc
 
     @app.get("/api/version")
     def api_version() -> dict[str, str]:

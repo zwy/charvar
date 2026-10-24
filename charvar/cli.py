@@ -27,6 +27,8 @@ from charvar.exporters import jsonl as jsonl_exporter
 from charvar.exporters import txt as txt_exporter
 from charvar.models import GenerateRequest, SubjectProfile
 from charvar.preset_loader import PresetError, list_presets, load, load_file
+from charvar import outfit as outfit_service
+from charvar import overlay as overlay_service
 
 app = typer.Typer(
     help="角色变体提示词生成器：主体档案 + 预设维度 + 种子稳定的背景/光照 → ComfyUI 提示词",
@@ -347,6 +349,8 @@ def presets_show(
 def gen(
     subject: str = typer.Option(..., "--subject", "-s", help="主体档案 id，或 YAML/JSON 文件路径"),
     preset: str = typer.Option("q21_default_30", "--preset", "-p"),
+    outfit: Optional[str] = typer.Option(None, "--outfit", help="服装预设名（presets/outfits/），与预设笛卡尔积"),
+    outfit_order: str = typer.Option("outfit_first", "--outfit-order", help="组合顺序：outfit_first（默认，每件服装连播全部动作）/pose_first"),
     seed: int = typer.Option(0, "--seed"),
     count: Optional[int] = typer.Option(None, "--count", help="None=预设全部"),
     sampling: str = typer.Option("all", "--sampling", help="all/first/random"),
@@ -370,6 +374,16 @@ def gen(
         preset_obj = load(preset)
     except PresetError as exc:
         _die(str(exc))
+    if outfit:
+        from charvar.sticker_policy import is_sticker_preset
+
+        if is_sticker_preset(preset_obj):
+            _die("sticker 预设（带字表情包）不支持服装组合：图片文案与服装段语义冲突")
+        try:
+            outfit_obj = outfit_service.load_outfit(outfit)
+            preset_obj = outfit_service.combine(preset_obj, outfit_obj, outfit_order)
+        except PresetError as exc:
+            _die(str(exc))
     if sampling not in ("all", "first", "random"):
         _die("sampling 只支持 all/first/random")
 
@@ -471,6 +485,51 @@ def serve(
     from web.app import app as webapp
 
     uvicorn.run(webapp, host=host, port=port, log_level="info")
+
+
+# ---------- overlay（贴字后处理） ----------
+
+@app.command("overlay")
+def overlay_cmd(
+    run_id: str = typer.Argument(..., help="run_id（历史记录里的生成轮次）"),
+    overlay: str = typer.Option(..., "--overlay", "-l", help="贴字预设名（presets/overlays/）"),
+    text_from: str = typer.Option(
+        "outfit_label", "--text-from",
+        help="outfit_label（服装组合的中文 label）/ pose_tag / variant_id / fixed",
+    ),
+    text: Optional[str] = typer.Option(None, "--text", help="固定文本（--text-from fixed 时）"),
+    items: Optional[str] = typer.Option(None, "--items", help="只处理这些条目序号（逗号分隔；缺省全部）"),
+    json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出"),
+) -> None:
+    """对已生成 run 贴字（PIL 后处理；产物落 labeled/，原图不动）。"""
+    if text_from not in overlay_service.TEXT_SOURCES:
+        _die(f"text_from 只支持 {'/'.join(overlay_service.TEXT_SOURCES)}")
+    indexes = None
+    if items:
+        try:
+            indexes = [int(v) for v in str(items).split(",") if v.strip()]
+        except ValueError:
+            _die("--items 需要逗号分隔的条目序号（如 --items 0,1,2）")
+    try:
+        with storage.connect() as conn:
+            info = overlay_service.apply_overlay(
+                conn,
+                run_id,
+                overlay=overlay,
+                text_from=text_from,
+                fixed=text,
+                items=indexes,
+            )
+    except PresetError as exc:
+        _die(str(exc))
+    if json_out:
+        typer.echo(json.dumps(info, ensure_ascii=False, indent=2))
+    else:
+        typer.echo(f"贴字 {len(info['applied'])} 张（overlay={info['overlay']} · text_from={text_from}）")
+        for s in info["skipped"]:
+            typer.echo(f"  跳过 #{s['item_index']:03d}：{s['reason']}")
+        if info["applied"]:
+            typer.echo(f"产物目录：{info['applied'][0]['labeled_url'].rsplit('/', 1)[0]}".replace("/assets/labeled/", "/labeled/"))
 
 
 # ---------- image（Playground） ----------

@@ -297,6 +297,8 @@ def generate(subject: SubjectProfile, preset: Preset, req: GenerateRequest) -> G
                     "tags": spec.tags,
                     "sampling": req.sampling,
                     "preset_type": preset.type,
+                    "outfit": spec.outfit,
+                    "outfit_label": spec.outfit_label,
                     "rear_angle": spec.angle in REAR_ANGLES if spec.angle else False,
                     **aspect_meta(preset),
                     **sticker_meta(preset, spec),

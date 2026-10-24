@@ -152,3 +152,30 @@
 DB → 仓库对偶：`charvar subject export <id>` 把已入库档案快照成 `presets/subjects/<id>.yaml` +
 `<id>.md`（模板逐字、无改写）。**DB 是运行时真源，仓库靠 export 保持镜像**——直接在 DB/网页建档后
 要记得 export，仓库里没有备份的档案清库即失。
+
+## 服装预设与贴字（2026-10-24 接入）
+
+都是出图后的组合能力，服务于「视频配方」的合成流水线（出图批 → 贴字 → 本地合成 reel）。
+
+- **服装预设** = `presets/outfits/*.yaml`（`charvar/outfit.py`）：每条 = 英文服装描述段 `text`
+  + 中文 `label`（贴字/展示用）+ 可选 `caption_tags`（id → 英文 caption token，缺省 = id）。
+  子目录家族，**不进主预设下拉**（`list_presets` 只扫 presets/*.yaml 顶层）。
+- **跨预设笛卡尔积**：出图请求带 `outfit_preset`（+ `outfit_order`：`outfit_first`/`pose_first`，
+  缺省 outfit_first = 每件服装连播全部动作）。服装段**追加在动作段之后**——服装段必须短
+  （白裙丝袜动作预设实测：前置长文本把动作稀释到 14%，动作不执行；这条红线对服装段同样成立，
+  建议每条 ≤200 字符，先小批验证动作还成立）。变体 id = `{outfit_id}__{pose_id}`
+  （pose_first 时反序），caption 在 pose 之后插 outfit token，meta 带 `outfit`/`outfit_label`。
+  语义：`POST /generate`（带 outfit_preset）= `charvar gen --outfit … --outfit-order …`，
+  网页生成页「服装预设 + 组合顺序」同源。变体顺序就是后续 reel 合成的播放顺序。
+- **贴字** = `presets/overlays/*.yaml`（`charvar/overlay.py`，PIL 确定性后处理，**不改原图**）：
+  产物落 `<data>/generated/<run_id>/labeled/{index:06d}.png`（scene 白名单加了 labeled）。
+  字段：position/margin_x/y/font/size（短边占比）/color/stroke/plate=pill/opacity/rotate/
+  max_width（超宽换行，CJK 按字、拉丁按词）/align/line_gap。文本来源 `text_from` =
+  `outfit_label` / `pose_tag` / `variant_id` / `fixed`。
+  语义：`POST /runs/{id}/overlay` = `charvar overlay <run_id> --overlay <preset> [--text-from …] [--items 0,1]`。
+- **字体**：解析顺序 = `presets/overlays/fonts/` 里的文件 > 系统候选（macOS PingFang /
+  Hiragino、Linux Noto CJK、Windows 雅黑）；`font: ""` = 自动。要跨机稳定就把字体文件放进
+  `fonts/`，**只放可再分发的开源字体（OFL 系安全）；花字/美术字体的版权要单独确认**。
+- 与 **sticker（带字表情包）** 是两套机制：sticker 的字是提示词驱动（模型原生画字，
+  `charvar/sticker_policy.py` 的 display_text/lettering）；贴字是确定性 PIL 后处理。
+  两者共存不冲突；**sticker 预设拒绝服装组合**（语义冲突，400）。

@@ -1,0 +1,25 @@
+# 贴字预设：丝袜名 · 左下角 · 白字黑描边 + 半透明黑圆角底板（橱窗展示默认款）。
+# 渲染走 PIL（charvar/overlay.py，确定性后处理，不改原图——原图在 original/ 不动）。
+# 字体解析：presets/overlays/fonts/ 里的文件优先，font 留空 = 自动落到系统字体
+# （macOS PingFang / Linux Noto / Windows 雅黑，都带 CJK）；要跨机稳定请把字体
+# 文件放进 fonts/（注意版权：只放可再分发的开源字体，OFL 系安全）。
+name: stockings_label_bl
+type: overlay
+version: 1
+description: 左下角 · 白字黑描边 · 半透明黑底板 · 贴服装中文 label（丝袜橱窗默认款）
+position: left_bottom
+margin_x: 0.05
+margin_y: 0.045
+font: ""            # 空 = 自动（fonts/ > 系统候选）
+size: 0.045         # 字号 = 短边占比
+color: "#FFFFFF"
+stroke: 0.003
+stroke_color: "#000000"
+plate: pill
+plate_color: "#00000099"
+plate_padding: 0.014
+opacity: 1.0
+rotate: 0.0
+max_width: 0.6      # 超宽自动换行（画面宽占比）
+align: left
+line_gap: 0.14
