@@ -29,12 +29,19 @@ EOF
 chmod +x "$LAUNCHER"
 
 # skill 软链：全局（其他项目）+ 仓库内（本项目）
+# 软链替换用 ln -sfn 原地覆盖：目标常是「指向本仓库目录的软链」，
+# 对软链做 rm -rf 在部分 rm 实现/包装器（回收站 shim）下会误伤或卡住，
+# ln -sfn 只换链接本身，不碰被指向的目录。
 install_skill_link() {
   local target="$1"
   local source="$2"
   mkdir -p "$(dirname "$target")"
-  rm -rf "$target"
-  ln -s "$source" "$target"
+  if [ -L "$target" ]; then
+    ln -sfn "$source" "$target"
+  else
+    rm -rf "$target"
+    ln -s "$source" "$target"
+  fi
 }
 
 if [ -d "$SKILL_SRC" ]; then

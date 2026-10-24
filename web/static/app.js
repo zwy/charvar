@@ -290,6 +290,9 @@ $("#btn-generate").addEventListener("click", async () => {
     if (!payload.reference_kinds.length) {
       return setStatus($("#gen-status"), "LLM 模式需要选择 1–4 张参考图", true);
     }
+    // 提示词语言：any=不做强制性限制（后端缺省）/ zh=强制中文 / en=强制英文
+    const llmLanguage = $("#gen-llm-language").value;
+    if (llmLanguage) payload.llm_language = llmLanguage;
     if ($("#gen-llm-instructions").value.trim()) {
       payload.llm_instructions = $("#gen-llm-instructions").value.trim();
     }

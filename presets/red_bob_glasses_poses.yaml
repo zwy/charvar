@@ -1,0 +1,70 @@
+# charvar 三动作预设｜红发眼镜女人（熟女通用手部动作三式）
+# 用途：**与服装无关**的静态动作预设。熟女套装里有西装、牛仔裤、连衣裙，
+#   都没有可提的裙摆——白裙丝袜那套「持裙展开三式」无法通用，本预设三个动作
+#   只用手部与手臂，不依赖裙装、不依赖口袋、不依赖任何单件服饰。
+# 三个动作：双手抱头（拉伸感，适合针织/毛衣）／双手叉腰（干练，适合西装/衬衫）／
+#   单手撩发（柔和，适合裙装/吊带）——三种手臂形态覆盖三类服装。
+#
+# ★ master_template 刻意**不含** {style_lock_sentence}{identity_lock_sentence}{outfit_lock_sentence}。
+#   实测（白裙丝袜那轮，见 subject/白裙丝袜女人_角色开发/动作预设/）：把主体档案锁定项
+#   放在动作段前面，ComfyUI 的 Qwen-Image-Edit 会把动作段稀释到 14%，动作**不执行**。
+#   身份、画风、服装、鞋全部由 front 参考图承担，动作段独占提示词。
+#
+# 动作段为单行双引号标量：折叠写法（>-）会在断行处把「，臀」之类拆出空格，normalize 不清这个。
+# 三个动作都是正面全身竖构图，画幅 auto（full → 2:3 竖版）。
+# caption 标签一律英文（仓库约定，训练信号不中英夹杂；动作段中文不进 caption）。
+# tags 的最后一项为动作标识，不是表情标签。参考图用 front 一张。
+# 单侧动作（hair_touch_one_hand）的抬起手锁到**画面左侧**；相对角色＝允许镜像，
+#   模型每张可挑不同的手，锁到画面位置才有可复现性。
+# 动作卡与测试记录见 image-engine：subject/红发眼镜女人_角色开发/动作预设/
+#
+# 本文件由 image-engine 的 subject/红发眼镜女人_角色开发/生成动作预设.py 生成，
+# 改动作段请改脚本后重跑，不要手改（保持与动作卡、prompt-v1.md 逐字一致）。
+
+name: red_bob_glasses_poses
+type: list
+version: 1
+master_template: 'Create an image of the {subject_noun} from {reference_tag}. One character only, no duplicated or repeated figure, no multi-view panel, no character sheet layout, no split screen.'
+suffix_template: The background is {background}. The lighting is {lighting}.
+backgrounds_ref: wildcards/backgrounds_v2.yaml
+lighting_ref: wildcards/lighting_v2.yaml
+caption_background_suffix: false
+reference_order:
+- front
+caption_tags:
+  expression: {}
+  pose:
+    hands_on_head: standing with both hands clasped on top of the head
+    hands_on_hips: standing with both hands on the hips
+    hair_touch_one_hand: standing with one hand raised to the hair beside the ear
+variants:
+- id: hands_on_head
+  text: "人物正面朝向镜头站立，双脚分开与肩同宽，脚掌平踩地面，脚尖朝前，两腿伸直，重心均匀分布在双脚上。躯干直立，骨盆正对镜头，双肩水平。双臂向上抬起，上臂从肩部向斜外上方伸出，与躯干约成一百一十度角，肘部明显高于头顶；两肘向左右斜上方分开，肘尖之间横向距离约为两个肩宽。前臂从肘部向内上方弯曲，两前臂在头顶正上方靠拢，双手在头顶正上方交叠相扣贴在一起，手背朝上。头部完全露在两臂之间，不被手臂遮挡，面部朝向镜头，目光看向镜头。人物从双手到脚底完整入画，双手不接触画面上边缘，头发与双脚都不接触画面边缘。"
+  framing: full
+  angle: front
+  expression: null
+  pose: hands_on_head
+  tags:
+  - full
+  - action
+  - hands_on_head
+- id: hands_on_hips
+  text: "人物正面朝向镜头站立，双脚分开与肩同宽，脚掌平踩地面，脚尖朝前，两腿伸直，重心均匀分布在双脚上。躯干直立，骨盆正对镜头，双肩水平。双臂向身体两侧打开，上臂从肩部向斜外下方伸出约四十五度，离开躯干，两侧臂下留出可见空隙；肘部向外侧弯曲约九十度，前臂从肘部向内上方斜收回到腰侧。两只手分别按在两侧髋骨上，手掌贴在胯部，手指尖朝前、拇指朝后，手在腰线略下方的位置。两肘明显在躯干轮廓之外，两肘之间横向距离约为三个肩宽。头正对镜头，目光看向镜头。人物从头顶到脚底完整入画，头发与双脚都不接触画面边缘。"
+  framing: full
+  angle: front
+  expression: null
+  pose: hands_on_hips
+  tags:
+  - full
+  - action
+  - hands_on_hips
+- id: hair_touch_one_hand
+  text: "人物正面朝向镜头站立，双脚分开与肩同宽，脚掌平踩地面，脚尖朝前，两腿伸直，重心均匀分布在双脚上。躯干直立，骨盆正对镜头，双肩水平。画面左侧的手臂抬起：上臂从肩部向斜外上方伸出约六十度，肘部明显高于肩部，前臂从肘部向内上方弯曲，手掌抬到耳朵与颞侧之间的高度，手指轻触耳后的头发。画面右侧的手臂自然垂落在身侧，臂干贴住大腿外侧，手掌落在大腿外侧，手指放松，手与腰线之间有可见距离。头正对镜头，目光看向镜头。人物从头顶到脚底完整入画，头发与双脚都不接触画面边缘。"
+  framing: full
+  angle: front
+  expression: null
+  pose: hair_touch_one_hand
+  tags:
+  - full
+  - action
+  - hair_touch_one_hand

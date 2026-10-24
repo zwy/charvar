@@ -12,6 +12,7 @@ import json
 import sqlite3
 
 from charvar import llm
+from charvar import outfit as outfit_service
 from charvar.caption import build_caption
 from charvar.composer import (
     _apply_sampling,
@@ -63,6 +64,21 @@ def collect_intent(subject: SubjectProfile, preset: Preset, req: GenerateRequest
         )
         variant_raw = render(spec.text, {"subject_noun": subject.subject_noun, "name": subject.name})
         variant_text, _ = expand_inline(variant_raw, rng)
+        outfit_text: str | None = None
+        if spec.outfit_text:
+            # 服装组合：动作段与服装段分列。合并文本里服装段夹在动作文本尾部时，
+            # 模型会把它当成「参考图自带服装」整段丢弃（实测 LLM 模式 24/24 条丢服装），
+            # 所以动作段单独喂、服装段走独立字段 + 显式规则 + 程序兜底补写。
+            pose_raw = render(
+                spec.action_text if spec.action_text is not None else spec.text,
+                {"subject_noun": subject.subject_noun, "name": subject.name},
+            )
+            pose_text, _ = expand_inline(pose_raw, rng)
+            outfit_raw = render(
+                spec.outfit_text, {"subject_noun": subject.subject_noun, "name": subject.name}
+            )
+            outfit_text, _ = expand_inline(outfit_raw, rng)
+            variant_text = pose_text
         intent = {
             "id": spec.id,
             "text": variant_text,
@@ -74,6 +90,9 @@ def collect_intent(subject: SubjectProfile, preset: Preset, req: GenerateRequest
             "lighting": lighting,
             "framing_guard": closeup_framing_guard(spec.framing) or None,
         }
+        if outfit_text:
+            intent["outfit"] = outfit_text
+            intent["outfit_label"] = spec.outfit_label
         if is_sticker_preset(preset):
             # 只带策略标签（英文）进 LLM 输入；display_text/lettering 由程序按原文附加，
             # 不进 intents（LLM 不翻译、不改写、不复制中文文案）
@@ -119,16 +138,20 @@ def _rewrite_once(
     *,
     text_policy: str = "forbid",
     composition_policy: str = "legacy",
+    language: str = "any",
     rejected: dict[str, list[str]] | None = None,
 ) -> None:
     """改写一批 intent 并把 {id: prompt} 并入 rewritten；截断时先抢救半截 JSON。
 
     required_label（sticker）：LLM 输出若自带绘字相关内容（禁字句/中文/绘字指令），
     该条不被收录并记入 rejected → 视同缺失交补调重试；不能全局替换后蒙混过关。
+
+    language：改写输出的语言（zh/en/any），透传给提示词构造。
     """
     messages = build_rewrite_messages(
         subject, template_md, refs, chunk, instructions,
         text_policy=text_policy, composition_policy=composition_policy,
+        language=language,
     )
     try:
         data = llm.chat_json(
@@ -171,6 +194,7 @@ def rewrite_prompts(
     max_per_call: int = 30,
     text_policy: str = "forbid",
     composition_policy: str = "legacy",
+    language: str = "any",
 ) -> dict[str, str]:
     """一次（或分批）chat_json 调用，返回 {variant_id: prompt}。
 
@@ -191,6 +215,7 @@ def rewrite_prompts(
         common = {
             "text_policy": text_policy,
             "composition_policy": composition_policy,
+            "language": language,
             "rejected": rejected,
         }
         _rewrite_once(subject, template_md, refs, instructions, chunk, rewritten, config, **common)
@@ -225,9 +250,21 @@ def generate_llm(
 
     sticker（required_label）：改写结果先 normalize，再由共享编译器按 spec 的
     display_text 原文追加唯一 lettering block（与 classic 相同，中文不改写）。
+
+    llm_language（zh/en/any）：改写输出的语言。sticker 强制英文——中文文案由
+    程序按 display_text 原文追加，LLM 段一旦输出中文就会被 sticker 禁字规则判为
+    不合格（反复补调也救不回来），所以「中文」在 sticker 下被忽略并给出声明。
     """
     sticker = is_sticker_preset(preset)
     intents = collect_intent(subject, preset, req)
+    warnings: list[str] = []
+    language = str(getattr(req, "llm_language", "any") or "any")
+    if sticker and language == "zh":
+        language = "en"
+        warnings.append(
+            "带字表情包预设：中文文案由程序按原文追加，LLM 改写段不能输出中文 —— "
+            "已忽略「提示词语言＝中文」，本支按英文改写。"
+        )
     rewritten = rewrite_prompts(
         subject,
         template_md,
@@ -237,11 +274,18 @@ def generate_llm(
         config=config,
         text_policy=getattr(preset, "text_policy", "forbid"),
         composition_policy=getattr(preset, "composition_policy", "legacy"),
+        language=language,
     )
     items: list[PromptItem] = []
+    missing_outfit: list[str] = []
     for i, intent in enumerate(intents):
         spec = _spec_by_id(preset, intent["id"])
         prompt = normalize(rewritten[intent["id"]])
+        outfit_text = str(intent.get("outfit") or "").strip()
+        if outfit_text and not outfit_service.outfit_covered(prompt, outfit_text):
+            # 兜底：模型没把这套衣服写进提示词 → 由程序按原文补写（插在背景/光照句前）。
+            prompt = outfit_service.insert_outfit_sentence(prompt, outfit_text)
+            missing_outfit.append(spec.id)
         if sticker:
             prompt = req.separator.join(
                 part
@@ -284,12 +328,20 @@ def generate_llm(
                 },
             )
         )
+    if missing_outfit:
+        warnings.append(
+            f"{len(missing_outfit)}/{len(intents)} 条变体的服装描述没在 LLM 改写结果里体现，"
+            "已由程序按服装预设原文补写（服装以原文为准）。变体："
+            + "、".join(missing_outfit[:5])
+            + ("…" if len(missing_outfit) > 5 else "")
+        )
     return GenerateResult(
         run_id=make_run_id(subject.id, preset.name, req.seed),
         subject_id=subject.id,
         preset=preset.name,
         seed=req.seed,
         items=items,
+        warnings=warnings,
     )
 
 

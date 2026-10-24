@@ -770,7 +770,8 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                 raise HTTPException(502, f"LLM 改写提示词失败：{exc}") from exc
             except (ValueError, PresetError) as exc:
                 raise HTTPException(400, str(exc)) from exc
-            result.warnings = result_warnings
+            # 合并而不是覆盖：generate_llm 自己也可能带声明（如 sticker 忽略「中文」）
+            result.warnings = [*result_warnings, *(result.warnings or [])]
             storage.save_run(conn, result)
         return result
 

@@ -172,6 +172,9 @@ def combine(
                 expression=pose.expression,
                 pose=pose.pose,
                 text=f"{pose.text} {item.text.strip()}".strip(),
+                # 分列留档：text 是合并文本（classic 模式直接拼），LLM 模式取这两段分开喂。
+                action_text=pose.text,
+                outfit_text=item.text.strip(),
                 tags=[*pose.tags, item.id],
                 outfit=item.id,
                 outfit_label=item.label,
@@ -198,3 +201,59 @@ def combine(
         preferred_aspect_ratio=pose_preset.preferred_aspect_ratio,
         variants=merged_specs,
     )
+
+
+# ---- LLM 模式：服装是否已落实到提示词里的校验与补写 ----
+
+# 服装描述段的实词（≥4 字符、去停用词）——用来判断改写结果里有没有这套衣服。
+_OUTFIT_STOPWORDS = frozenset(
+    """
+    with that this from into and the are was were been being they them their there here
+    worn wear wearing also plus over under near around each other such which while
+    about above below very more most some any all both same than then when where
+    """.split()
+)
+
+# 背景/光照句在句首（改写段的固定顺序是 姿态→表情→背景/光照）。
+# 只认句首，避免命中锚定句里的 "...camera angle, background, and lighting"。
+_SENTENCE_TAIL_RE = re.compile(
+    r"(?<=[.!?]\s)(?=(?:The\s+)?[Bb]ackground\b|(?:The\s+)?[Ll]ighting\b|背景|光照)"
+)
+
+
+def outfit_keywords(text: str) -> list[str]:
+    """服装描述段的内容词（判定「这套衣服写进去了没有」用）。"""
+    words = re.findall(r"[A-Za-z0-9][A-Za-z0-9\-']*", (text or "").lower())
+    return [w for w in words if len(w) >= 4 and w not in _OUTFIT_STOPWORDS]
+
+
+def outfit_covered(prompt: str, outfit_text: str) -> bool:
+    """提示词里是否已落实这套服装（内容词覆盖率 ≥ 50%）。
+
+    LLM 逐字抄服装原文时覆盖率 100%；整段被丢弃时接近 0%。
+    阈值取 50%：改写过的说法（换同义词）也能过，只有真丢了才会低于阈值。
+    """
+    keys = outfit_keywords(outfit_text)
+    if not keys:
+        return True
+    low = (prompt or "").lower()
+    hit = 0
+    for word in keys:
+        base = word[:-1] if len(word) > 4 and word.endswith("s") else word
+        if word in low or base in low:
+            hit += 1
+    return hit * 2 >= len(keys)
+
+
+def insert_outfit_sentence(prompt: str, outfit_text: str) -> str:
+    """把服装句补进提示词：优先插在背景/光照句之前（与 LLM 自己的排布一致），
+    找不到句首锚点就追加到末尾。"""
+    sentence = (outfit_text or "").strip().rstrip(".")
+    if not sentence:
+        return prompt
+    match = _SENTENCE_TAIL_RE.search(prompt)
+    if match:
+        head = prompt[: match.start()].rstrip()
+        tail = prompt[match.start():].lstrip()
+        return f"{head} {sentence}. {tail}".strip()
+    return f"{prompt.rstrip()} {sentence}.".strip()

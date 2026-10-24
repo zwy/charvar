@@ -119,6 +119,19 @@
   LLM 重写成英文，语言无所谓。目标后端要纯英文提示词时（SD 类老模型）建议仍写英文。
   导入/校验工具不得把非 ASCII 锁定项当错误。
 - 主体档案的 Markdown 模板上限 24,000 字符（LLM 输入截断阈值，`charvar.llm_prompts._TEMPLATE_MAX_CHARS`）；超长模板尾部会被静默截掉，别指望模型看到。
+- **LLM 改写的输出语言**（`GenerateRequest.llm_language`，网页「生成参数 → LLM 优化 → 提示词语言」）：
+  `zh`=强制中文 / `en`=强制英文 / `any`=**不做强制性限制（缺省）**。措辞差异集中在
+  `charvar/llm_prompts.py` 的 `_LANG_PHRASES`（锚定句/视角规范/全身句/framing_guard/背景光照
+  怎么采用）。**`en` 分支的系统提示词必须与旧版逐字一致**——改 `_LANG_PHRASES["en"]` 或
+  `_prompt_string_rule` 时要用旧文件做字节级对比。
+  - 改写管线注入的材料**全是英文**（视角规范句、背景/光照池、参考图锚定句），所以
+    `zh` 不是"禁止英文"而是"把这些英文材料译写成中文再采用"；`any` 只是不写语言规定，
+    实际多数仍出英文（跟随注入材料）。
+  - **即梦字数**：英文改写实测 1656–2538 字符，**超即梦 text2image 上限 1592**（`dreamina_image.validate_prompt`
+    提交前就拒，白扣一次提交费）；中文改写实测 527–636 字符，稳过。推即梦时选 `zh`。
+  - **带字表情包预设强制英文**（`text_policy=required_label`）：中文文案由程序按 display_text
+    原文追加，LLM 段出中文会被 sticker 禁字规则判为不合格（补调也救不回来）。此时选「中文」
+    会被忽略并在 run 的 `warnings` 声明——`api.py` 的 warnings 是**合并**不是覆盖。
 - Playground（`charvar/adhoc.py`）的红线：参考图槽位名从 mapping 读（`image`/`image2`/…），不许写死节点 id；ComfyUI 上传的 remote_name 必须带唯一前缀（`upload_image` 发 `overwrite: true`，同名会互相覆盖 → 队列里的旧 prompt 取到新图）；`--out` 指定的文件后缀与内容必须一致（不一致时转格式，别让后缀骗人）；adhoc 不读 `settings.image_sizes`（那是主体档案槽位的尺寸）；不引入随机源（seed 由调用方显式给）。
 - Playground 的 run_id 直接拼进文件路径（`/adhoc/{run_id}/image` 直接 serve 磁盘文件）：
   `charvar.adhoc.run_dir()` 用自己的正则校验（`^adhoc_[A-Za-z0-9_.-]+$` 且不含 `..`），
@@ -169,6 +182,23 @@ DB → 仓库对偶：`charvar subject export <id>` 把已入库档案快照成 
   （pose_first 时反序），caption 在 pose 之后插 outfit token，meta 带 `outfit`/`outfit_label`。
   语义：`POST /generate`（带 outfit_preset）= `charvar gen --outfit … --outfit-order …`，
   网页生成页「服装预设 + 组合顺序」同源。变体顺序就是后续 reel 合成的播放顺序。
+- **LLM 模式（mode=llm）下的服装是另一条通路，别退回合并文本的写法**（2026-10-24 修）：
+  实测 run `white_skirt_stockings_red_bob_glasses_poses_mature_milf_outfits_s58201…`
+  的 24 条改写提示词**全部没有服装**——LLM 把服装段当成「参考图自带服装」整段丢弃
+  （锚定句当时写着 "copy the complete outfit … from <image1>"，两套服装指令互相矛盾）。
+  现在三件事同时做，缺一件就复发：
+  1. **动作段与服装段分列**：`outfit.combine` 把 `action_text`/`outfit_text` 分别留在
+     VariantSpec 上（`text` 仍是合并文本给 classic 用）；`collect_intent` 只把动作段塞进
+     intent 的 `text`，服装走独立字段 `outfit`（+`outfit_label`）。
+  2. **锚定句在服装模式下换一套**（`REFERENCE_ROLE_CLAUSES_OUTFIT`）：参考图只提供
+     身份/体型/画风，**不再**说「copy the complete outfit from <image1>」——否则
+     参考图自带的白裙丝袜和服装预设互相打架。
+  3. **程序兜底**：改写完用 `outfit.outfit_covered`（内容词覆盖率 ≥50%）查这套衣服在不在
+     提示词里，不在就用 `outfit.insert_outfit_sentence` 按原文补写（插在背景/光照句之前），
+     并在 run 的 `warnings` 声明补了几条。
+  服装段**任何语言模式下都逐字保留英文原文**（zh 分支的中文规则开了这个例外）——
+  换装描述译写容易走样，程序兜底补写的也是英文原文。
+  没有服装组合时，英文分支系统提示词**逐字不变**（有快照回归测试）。
 - **贴字** = `presets/overlays/*.yaml`（`charvar/overlay.py`，PIL 确定性后处理，**不改原图**）：
   产物落 `<data>/generated/<run_id>/labeled/{index:06d}.png`（scene 白名单加了 labeled）。
   字段：position/margin_x/y/font/size（短边占比）/color/stroke/plate=pill/opacity/rotate/

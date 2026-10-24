@@ -59,7 +59,7 @@ def test_rewrite_system_rules():
     subject = _subject()
     intents = [{"id": "chest_l45", "angle": "l45", "framing": "chest"}]
     msgs = build_rewrite_messages(
-        subject, "# 模板", [{"kind": "headshot", "tag": "<image1>"}], intents
+        subject, "# 模板", [{"kind": "headshot", "tag": "<image1>"}], intents, language="en"
     )
     system = msgs[0]["content"]
     # 身份以参考图为准（不复述整段角色设定）；锚定句全批一致；背面省略表情
@@ -97,7 +97,8 @@ def test_rewrite_messages_carry_role_anchor():
 
     refs = [{"kind": "headshot", "tag": "<image1>"}, {"kind": "front", "tag": "<image2>"}]
     msgs = build_rewrite_messages(
-        _subject(), "# 模板", refs, [{"id": "full_front", "angle": "front", "framing": "full"}]
+        _subject(), "# 模板", refs, [{"id": "full_front", "angle": "front", "framing": "full"}],
+        language="en",
     )
     user = msgs[1]["content"]
     assert "【参考图分工锚定句】" in user
@@ -119,7 +120,8 @@ def test_rewrite_messages_policy_branches(silver_witch):
     legacy_intent = {"id": "full_front", "text": "front facing full body", "framing": "full",
                      "angle": "front", "expression": None, "background": "bg",
                      "lighting": "light", "framing_guard": None}
-    legacy = build_rewrite_messages(silver_witch, "# 模板", [{"kind": "front", "tag": "<image1>"}], [legacy_intent])
+    legacy = build_rewrite_messages(silver_witch, "# 模板", [{"kind": "front", "tag": "<image1>"}],
+                                    [legacy_intent], language="en")
     legacy_user = legacy[1]["content"]
     # 旧系统词与规范注入逐字保持：全身句 + 视角规范 + 遮挡 + no text 尾句
     assert "One character only, no text." in legacy_user
@@ -134,7 +136,8 @@ def test_rewrite_messages_policy_branches(silver_witch):
                       "composition_policy": "variant"}
     sticker = build_rewrite_messages(silver_witch, "# 模板",
                                      [{"kind": "front", "tag": "<image1>"}], [sticker_intent],
-                                     text_policy="required_label", composition_policy="variant")
+                                     text_policy="required_label", composition_policy="variant",
+                                     language="en")
     sticker_user = sticker[1]["content"]
     # variant 构图：不注入全身句与角度规范；保留身份一致性（遮挡/镜像）条款
     assert FULL_BODY_CAMERA_SENTENCE not in sticker_user

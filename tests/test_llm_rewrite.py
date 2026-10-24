@@ -432,3 +432,127 @@ def test_rewrite_still_missing_after_retry_raises(monkeypatch):
         llm_compose.rewrite_prompts(
             SubjectProfile(id="s", name="n", subject_noun="person"), "", _intents(["a", "b"]), []
         )
+
+
+# ---------- 提示词语言（zh / en / any） ----------
+
+def _capture_system_prompt(monkeypatch, captured: list[str], preset_name: str):
+    """mock LLM：把每次请求的 system 提示词记进 captured，并按预设的 id 返回变体。"""
+    from charvar import llm
+    from charvar.preset_loader import load
+
+    ids = [v.id for v in load(preset_name).variants]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content.decode())
+        messages = body.get("messages") or []
+        captured.append(messages[0]["content"] if messages else "")
+        content = json.dumps(
+            {"variants": [{"id": vid, "prompt": f"Rewritten {vid}"} for vid in ids]},
+            ensure_ascii=False,
+        )
+        return httpx.Response(200, json={"choices": [{"message": {"content": content}}], "usage": {}})
+
+    class FakeClient:
+        def __init__(self, **kw):
+            self._inner = httpx.Client(transport=httpx.MockTransport(handler))
+
+        def __enter__(self):
+            return self._inner
+
+        def __exit__(self, *args):
+            self._inner.close()
+
+    monkeypatch.setattr(llm, "_http_client", lambda **kw: FakeClient(**kw))
+
+
+def _gen_with_language(client, monkeypatch, language, preset_name="three_pose_pack"):
+    captured: list[str] = []
+    _capture_system_prompt(monkeypatch, captured, preset_name)
+    _ready_subject(client)
+    payload = {
+        "subject_id": "demo_witch",
+        "preset": preset_name,
+        "seed": 7,
+        "mode": "llm",
+        "reference_kinds": ["character_sheet"],
+    }
+    if language is not None:
+        payload["llm_language"] = language
+    resp = client.post("/generate", json=payload)
+    assert resp.status_code == 200, resp.text
+    return resp.json(), captured[0]
+
+
+def test_llm_language_zh_forces_chinese(client, monkeypatch):
+    result, system = _gen_with_language(client, monkeypatch, "zh")
+    assert len(result["items"]) == 3
+    assert "完整中文提示词" in system
+    assert "中文字符串" in system
+    assert "译写成中文" in system
+    assert "英文字符串" not in system
+
+
+def test_llm_language_en_keeps_english_branch(client, monkeypatch):
+    _, system = _gen_with_language(client, monkeypatch, "en")
+    assert "完整英文提示词" in system
+    assert "英文字符串" in system
+    assert "不出现中文" in system
+    # 英文分支逐字抄英文材料
+    assert "逐字采用给定的 background 与 lighting" in system
+
+
+def test_llm_language_any_has_no_language_mandate(client, monkeypatch):
+    _, system = _gen_with_language(client, monkeypatch, "any")
+    assert "为每条变体重写一条完整提示词" in system
+    assert "中文字符串" not in system
+    assert "英文字符串" not in system
+    # 不限定语言：英文材料逐字或译写均可
+    assert "逐字采用或译写均可" in system
+
+
+def test_llm_language_default_is_any(client, monkeypatch):
+    """不传 llm_language → 缺省「不做强制性限制」（后端默认 any）。"""
+    result, system = _gen_with_language(client, monkeypatch, None)
+    assert "为每条变体重写一条完整提示词" in system
+    assert "英文字符串" not in system
+
+
+def test_llm_language_invalid_rejected(client, monkeypatch):
+    _mock_llm(monkeypatch)
+    _ready_subject(client)
+    resp = client.post(
+        "/generate",
+        json={
+            "subject_id": "demo_witch",
+            "preset": "three_pose_pack",
+            "mode": "llm",
+            "reference_kinds": ["character_sheet"],
+            "llm_language": "fr",
+        },
+    )
+    assert resp.status_code == 422, resp.text
+
+
+def test_sticker_ignores_chinese_language_with_warning(client, monkeypatch):
+    """带字表情包：中文文案由程序追加，LLM 段不能出中文 → 忽略「中文」并声明。"""
+    captured: list[str] = []
+    _capture_system_prompt(monkeypatch, captured, "chat_replies_v1_12")
+    _ready_subject(client)
+    resp = client.post(
+        "/generate",
+        json={
+            "subject_id": "demo_witch",
+            "preset": "chat_replies_v1_12",
+            "seed": 3,
+            "mode": "llm",
+            "reference_kinds": ["character_sheet"],
+            "llm_language": "zh",
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    result = resp.json()
+    assert any("提示词语言" in w for w in result["warnings"]), result["warnings"]
+    # 实际仍按英文改写
+    assert "英文字符串" in captured[0]
+    assert "中文字符串" not in captured[0]

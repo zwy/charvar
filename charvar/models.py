@@ -81,6 +81,11 @@ class VariantSpec(BaseModel):
     # YAML 预设不声明这两个字段；由服装组合时程序填入。
     outfit: str | None = None
     outfit_label: str | None = None
+    # 服装组合：动作原文与服装英文描述段分列。text 仍是两段合并后的完整文本
+    # （classic 模式照旧直接拼）；分列是为了 LLM 模式能把服装单独喂给模型
+    # ——合并时服装段夹在动作文本尾部，模型常把它当成「参考图自带服装」整段丢弃。
+    action_text: str | None = None
+    outfit_text: str | None = None
 
 
 class GenerateRequest(BaseModel):
@@ -99,6 +104,11 @@ class GenerateRequest(BaseModel):
     mode: Literal["classic", "llm"] = "classic"
     reference_kinds: list[str] = Field(default_factory=list)  # 1–4 个主体图类型
     llm_instructions: str | None = None
+    # LLM 改写的输出语言（仅 mode=llm 生效）：
+    #   zh  = 强制中文（中文模板/即梦等中文优先的后端）
+    #   en  = 强制英文（SD 类只认英文的老模型）
+    #   any = 不做强制性限制（缺省）：提示词里不写语言规定，输出语言由模型自行决定
+    llm_language: Literal["zh", "en", "any"] = "any"
     # 服装组合：动作/表情预设 × 服装预设（presets/outfits/）笛卡尔积。
     # outfit_order 决定变体顺序（也即后续 reel 合成的播放顺序）。
     outfit_preset: str | None = None

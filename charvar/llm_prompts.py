@@ -158,6 +158,29 @@ REFERENCE_ROLE_CLAUSES: dict[str, str] = {
     ),
 }
 
+# 服装组合（outfit 预设）专用：参考图**不再**提供服装——服装由服装预设给定。
+# 参考图里那套衣服（主体自己的白裙丝袜/西装等）与服装预设必须二选一，
+# 两边都写会让模型跟着参考图穿，服装预设等于没生效（实测：整批 24/24 条丢服装）。
+REFERENCE_ROLE_CLAUSES_OUTFIT: dict[str, str] = {
+    "character_sheet": (
+        "keep the whole identity and art style exactly as shown in {tag}"
+    ),
+    "headshot": (
+        "copy the face, feature proportions, hair, skin tone, and headwear exactly as "
+        "they appear in {tag}"
+    ),
+    "front": (
+        "copy the body shape and proportions from {tag}"
+    ),
+    "side": (
+        "use {tag} as the direction reference for the true side profile and for "
+        "side-of-body details such as hair flow and one-sided markings"
+    ),
+    "behind": (
+        "use {tag} for the back of the head and the rear silhouette"
+    ),
+}
+
 REFERENCE_TAIL_SENTENCE: str = (
     "Take only the character's identity from the reference images and create a new pose, "
     "camera angle, background, and lighting. One character only, no text."
@@ -204,15 +227,21 @@ DRAFT_SCHEMA: dict = {
 }
 
 
-def reference_anchor_sentence(refs: list[dict], *, text_policy: str = "forbid") -> str:
+def reference_anchor_sentence(
+    refs: list[dict], *, text_policy: str = "forbid", outfit_mode: bool = False
+) -> str:
     """按勾选的参考图顺序生成逐图分工锚定句；无参考图 → 空串（改写省略锚定句）。
 
     text_policy 旧默认 forbid → 旧尾句（One character only, no text）；
     required_label（sticker）→ 尾句换成「唯一允许的文字是程序附加的指定文案」。
+
+    outfit_mode（服装组合）→ 分句换成「参考图不管服装」的版本：服装由服装预设给定，
+    参考图只提供身份/体型/画风。两套都要会给模型两个互相矛盾的服装指令。
     """
     clauses = []
+    table = REFERENCE_ROLE_CLAUSES_OUTFIT if outfit_mode else REFERENCE_ROLE_CLAUSES
     for ref in refs or []:
-        clause = REFERENCE_ROLE_CLAUSES.get(str(ref.get("kind") or ""))
+        clause = table.get(str(ref.get("kind") or ""))
         if not clause:
             continue
         clauses.append(clause.format(tag=ref.get("tag") or "<image1>"))
@@ -279,6 +308,94 @@ def draft_subject_image_prompt_messages(
     ]
 
 
+# ---- LLM 改写的输出语言 ----
+# zh=强制中文 / en=强制英文 / any=不做强制性限制（提示词里根本不写语言规定，
+# 输出语言由模型自行决定，实际会跟随模板与意图的语言）。
+LANGUAGE_CHOICES = ("zh", "en", "any")
+LANGUAGE_LABELS = {"zh": "中文", "en": "英文", "any": "不限语言"}
+
+
+def _rewrite_lead(language: str) -> str:
+    """「为每条变体重写一条完整…提示词」的定语（any → 不带定语）。"""
+    adj = {"zh": "中文", "en": "英文"}.get(language, "")
+    return f"为每条变体重写一条完整{adj}提示词"
+
+
+def _prompt_string_rule(language: str, *, sticker: bool, outfit: bool = False) -> str:
+    """「每条 prompt 为一个…字符串」这条硬规则。
+
+    en 分支逐字保持旧文案（不含中文 / 不出现中文的措辞不动），只是把
+    「不出现中文」这句在 sticker 下省掉——sticker 的禁中文字句已单独规定。
+
+    outfit=True（服装组合）：服装描述逐字保留英文原文（换装描述译写容易走样，
+    且程序兜底补写用的也是英文原文），所以中文分支要开一个例外。
+    """
+    if language == "zh":
+        if outfit:
+            return (
+                "- 每条 prompt 为一个中文字符串（专有名词、标签可保留原文），"
+                "不出现英文整句、【】小节标题或 {{}} 占位符；只输出提示词本身；"
+                "唯一的例外是 outfit 字段的服装描述——它逐字保留英文原文；\n"
+            )
+        return (
+            "- 每条 prompt 为一个中文字符串（专有名词、标签可保留原文），"
+            "不出现英文整句、【】小节标题或 {{}} 占位符；只输出提示词本身；\n"
+        )
+    if language == "en":
+        if sticker:
+            return (
+                "- 每条 prompt 为一个英文字符串，不出现【】小节标题或 {{}} 占位符；"
+                "只输出提示词本身；\n"
+            )
+        return (
+            "- 每条 prompt 为一个英文字符串，不出现中文、【】小节标题或 {{}} 占位符；"
+            "只输出提示词本身；\n"
+        )
+    return "- 每条 prompt 为一个提示词字符串，不出现【】小节标题或 {{}} 占位符；只输出提示词本身；\n"
+
+
+def _json_example(language: str) -> str:
+    placeholder = {"zh": "chinese prompt", "en": "english prompt"}.get(language, "prompt")
+    return f'只输出 JSON：{{"variants": [{{"id": "<variant_id>", "prompt": "<{placeholder}>"}}]}}'
+
+
+# 改写管线注入的材料全是英文（参考图锚定句、视角规范、framing_guard、
+# 背景/光照），所以「强制中文」= 让 LLM 把这些英文材料译写成中文再采用，
+# 而不是逐字抄英文。三种模式的措辞差异集中在这里：
+#   en  = 逐字抄英文（旧行为，逐字不变）
+#   zh  = 译写成中文后采用，语义不得改变
+#   any = 不限定语言，逐字或译写均可
+#   锚定句分句对应不得增删这一条三种模式都一样。
+_LANG_PHRASES: dict[str, dict[str, str]] = {
+    "en": {
+        "anchor": "逐字采用给定的【参考图分工锚定句】整句，不得改写、增删分句；",
+        "anchor_same": "该锚定句在本批所有变体中逐字相同；",
+        "angle": "按【视角规范】里对应 angle 的英文语句写身体朝向、头部朝向与视线；",
+        "full_body": "必须包含【视角规范】中的全身完整入镜句；",
+        "guard": "必须纳入给定的 framing_guard 句子以阻断下半身；",
+        "bg": "逐字采用给定的 background 与 lighting，不改写。",
+    },
+    "zh": {
+        "anchor": "采用给定【参考图分工锚定句】的语义写成中文，分句对应，不得增删分句；",
+        "anchor_same": "该锚定句在本批所有变体中语义一致；",
+        "angle": "按【视角规范】里对应 angle 的语句写身体朝向、头部朝向与视线"
+        "（规范句是英文，请译写成中文，语义不得改变）；",
+        "full_body": "必须包含【视角规范】中全身完整入镜句的中文译文；",
+        "guard": "必须纳入给定 framing_guard 句子的中文译文以阻断下半身；",
+        "bg": "把给定的 background 与 lighting 译成中文后采用，语义不改写。",
+    },
+    "any": {
+        "anchor": "采用给定【参考图分工锚定句】的语义（逐字采用或译写均可），不得增删分句；",
+        "anchor_same": "该锚定句在本批所有变体中语义一致；",
+        "angle": "按【视角规范】里对应 angle 的语句写身体朝向、头部朝向与视线"
+        "（逐字采用或译写均可，语义不得改变）；",
+        "full_body": "必须包含【视角规范】中全身完整入镜句的等价表述（逐字或译写均可）；",
+        "guard": "必须纳入给定 framing_guard 句子的等价表述以阻断下半身；",
+        "bg": "采用给定的 background 与 lighting，语义不改写（逐字或译写均可）。",
+    },
+}
+
+
 def build_rewrite_messages(
     subject: SubjectProfile,
     template_md: str,
@@ -288,6 +405,7 @@ def build_rewrite_messages(
     *,
     text_policy: str = "forbid",
     composition_policy: str = "legacy",
+    language: str = "any",
 ) -> list[dict]:
     """批量改写变体提示词的 messages（chat_json → {"variants": [{"id","prompt"}...]}）。
 
@@ -299,8 +417,17 @@ def build_rewrite_messages(
     policy=required_label（sticker）：LLM 只写英文画面描述（身份/动作/构图/绘字留白），
     最终中文文案由程序按 display_text 原文附加，因此意图里的 display_text/content 不进 LLM 输入；
     composition_policy=variant 时不注入全身站姿/固定正面头身同步等通用规范（构图以各条 text 为准）。
+
+    language：改写输出的语言。zh=强制中文 / en=强制英文 / any=不做强制性限制（缺省，
+    提示词里不出现任何语言规定，输出语言由模型自行决定）。sticker 强制 en——中文文案由
+    程序按 display_text 原文追加，LLM 段一旦输出中文就会被 sticker 的禁字规则判为不合格。
     """
     sticker = text_policy == "required_label"
+    if sticker:
+        # 中文绘字由程序追加，LLM 段输出中文会被 sticker 禁字规则判为不合格 → 强制英文
+        language = "en"
+    # 服装组合：意图里带 outfit 字段（服装预设的英文描述段）→ 锚定句与规则都要变。
+    outfit_mode = any(str(i.get("outfit") or "").strip() for i in intents)
     ref_lines = "\n".join(
         f"- {r['tag']}：{KIND_LABELS.get(r['kind'], r['kind'])}（{r['kind']}）"
         for r in refs
@@ -309,7 +436,7 @@ def build_rewrite_messages(
         system = (
             "你是角色图像提示词改写器（带字表情包预设）。输入：角色档案、角色全场景通用提示词模板（权威人设依据）、"
             "若干参考图说明（每张有 <imageN> 标签与用途），以及一批变体的结构化意图。\n"
-            "为每条变体重写一条完整英文提示词，句子顺序固定：\n"
+            f"{_rewrite_lead(language)}，句子顺序固定：\n"
             "1) 参考图锚定：逐字采用给定的【参考图分工锚定句】整句，不得改写、增删分句；"
             "该锚定句在本批所有变体中逐字相同；\n"
             "2) 姿态与构图：意图 text 是本条构图的唯一权威（趴倒/探头/跳跃等都照写），"
@@ -325,40 +452,44 @@ def build_rewrite_messages(
             "（正常/精简、多套服装）或双主体分段；\n"
             "- 保留自然解剖与身份一致性：被遮挡的细节按视角自然隐藏，不强行转体/错开肢体展示；"
             "不对称细节（痣、挑染、纹样）在左右朝向互换时保持贴身位置，不镜像；\n"
-            "- 每条 prompt 为一个英文字符串，不出现【】小节标题或 {{}} 占位符；只输出提示词本身；\n"
-            "- 必须为输入列表中的每个 id 各输出一条，不得增删。\n"
-            '只输出 JSON：{"variants": [{"id": "<variant_id>", "prompt": "<english prompt>"}]}'
+            + _prompt_string_rule(language, sticker=True)
+            + "- 必须为输入列表中的每个 id 各输出一条，不得增删。\n"
+            + _json_example(language)
         )
     else:
+        phrase = _LANG_PHRASES.get(language, _LANG_PHRASES["any"])
         system = (
             "你是角色图像提示词改写器。输入：角色档案、角色全场景通用提示词模板（权威人设依据）、"
             "若干参考图说明（每张有 <imageN> 标签与用途），以及一批变体的结构化意图。\n"
-            "为每条变体重写一条完整英文提示词，句子顺序固定：\n"
-            "1) 参考图锚定：逐字采用给定的【参考图分工锚定句】整句，不得改写、增删分句；"
-            "没有参考图时省略该句；该锚定句在本批所有变体中逐字相同；\n"
+            f"{_rewrite_lead(language)}，句子顺序固定：\n"
+            "1) 参考图锚定：" + phrase["anchor"] + "没有参考图时省略该句；"
+            + phrase["anchor_same"] + "\n"
             "2) 目标景别：采用意图 text 的景别/构图描述（full=全身 / chest=胸部以上 / head=头部特写）；\n"
-            "3) 躯干/头部/视线：按【视角规范】里对应 angle 的英文语句写身体朝向、头部朝向与视线；"
-            "意图 text 中的朝向与姿态语义必须保留，不得削弱或反转；\n"
+            "3) 躯干/头部/视线：" + phrase["angle"] + "意图 text 中的朝向与姿态语义必须保留，不得削弱或反转；\n"
             "4) 目标表情：按意图 expression 写；angle 为 back 时省略表情句；l135/r135 只保留面部部分可见"
             "的说明，不细写眉眼嘴；\n"
-            "5) 背景/光照：逐字采用给定的 background 与 lighting，不改写。\n"
+            "5) 背景/光照：" + phrase["bg"] + "\n"
             "硬性规则：\n"
             "- 不在每条提示词里复述模板的整段角色设定，身份细节交给参考图；不混合模板的多个版本"
             "（正常/精简、多套服装）或双主体分段；\n"
-            "- framing=full 时必须包含【视角规范】中的全身完整入镜句；framing 为 chest/head 时必须纳入"
-            "给定的 framing_guard 句子以阻断下半身；\n"
+            "- framing=full 时" + phrase["full_body"] + "framing 为 chest/head 时"
+            + phrase["guard"] + "\n"
             "- 被遮挡的细节按视角自然隐藏，不强行转体/错开肢体展示；不对称细节（痣、挑染、纹样）在"
             "左右朝向互换时保持贴身位置，不镜像；\n"
-            "- 每条 prompt 为一个英文字符串，不出现中文、【】小节标题或 {{}} 占位符；只输出提示词本身；\n"
-            "- 必须为输入列表中的每个 id 各输出一条，不得增删。\n"
-            '只输出 JSON：{"variants": [{"id": "<variant_id>", "prompt": "<english prompt>"}]}'
+            + _prompt_string_rule(language, sticker=False, outfit=outfit_mode)
+            + ("- 服装：每条意图的 outfit 字段是该变体必须穿着的服装（英文原文）。"
+               "必须在该条 prompt 里完整写出这套服装，逐字采用 outfit 原文，"
+               "不改写、不省略、不换用参考图里那套衣服；写在姿态/表情句之后、背景/光照句之前；\n"
+               if outfit_mode else "")
+            + "- 必须为输入列表中的每个 id 各输出一条，不得增删。\n"
+            + _json_example(language)
         )
     user_parts = [
         f"【角色档案】\n{_profile_payload(subject)}",
         f"【角色全场景通用提示词模板】\n{_clip_template(template_md) or '（未提供模板）'}",
         f"【参考图说明】\n{ref_lines or '（无参考图）'}",
     ]
-    anchor = reference_anchor_sentence(refs, text_policy=text_policy)
+    anchor = reference_anchor_sentence(refs, text_policy=text_policy, outfit_mode=outfit_mode)
     if anchor:
         user_parts.append(f"【参考图分工锚定句】（逐字采用，全批相同）\n{anchor}")
     # display_text / lettering 是绘字段来源，不进 LLM 输入（防止改写或复制中文文案）
