@@ -519,3 +519,6 @@ td .caption { color: var(--muted); }
 @media (max-width: 720px) {
   .workflow-grid { grid-template-columns: 1fr; }
 }
+/* 预设页的参考图卡：带「分工」下拉，不是整块点选 */
+#gen-ref-list .ref-pick { cursor: default; }
+#gen-ref-list .ref-role { width: 100%; font-size: 11px; padding: 3px 4px; border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; }

@@ -36,7 +36,7 @@ from charvar.exporters import jsonl as jsonl_exporter
 from charvar.exporters import txt as txt_exporter
 from charvar.llm_compose import generate_llm
 from charvar.llm_prompts import DRAFT_SCHEMA, draft_subject_image_prompt_messages
-from charvar.models import GenerateRequest, GenerateResult, PromptItem, SubjectProfile
+from charvar.models import GenerateRequest, GenerateResult, PromptItem, ReferenceSpec, SubjectProfile
 from charvar.preset_loader import (
     ListPreset,
     MatrixPreset,
@@ -75,7 +75,8 @@ class ComfyQueueRequest(BaseModel):
     aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
     resolution: Literal["1k", "2k"] | None = None
     overrides: dict[str, Any] = Field(default_factory=dict)
-    reference_kinds: list[str] = Field(default_factory=list, description="主体图参考（LLM 模式），按序注入 image/image2/…")
+    reference_kinds: list[str] = Field(default_factory=list, description="主体图参考（兼容旧调用），按序注入 image/image2/…")
+    references: list[ReferenceSpec] = Field(default_factory=list, description="参考图（Playground 式来源 + role 分工）；给了它就不看 reference_kinds")
 
 
 class OpenRouterQueueRequest(BaseModel):
@@ -88,7 +89,8 @@ class OpenRouterQueueRequest(BaseModel):
 
     aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
     resolution: str | None = Field(default=None, description="charvar 档位（1k/2k）或模型声明枚举值（1K/1.5K/2K/4K…）；空 = 用设置页/env 的模式默认")
-    reference_kinds: list[str] = Field(default_factory=list, description="主体图参考，按序对应提示词里的 the first/second… reference image")
+    reference_kinds: list[str] = Field(default_factory=list, description="主体图参考（兼容旧调用），按序对应提示词里的 the first/second… reference image")
+    references: list[ReferenceSpec] = Field(default_factory=list, description="参考图（Playground 式来源 + role 分工）；给了它就不看 reference_kinds")
     model: str | None = Field(default=None, description="覆盖默认模型（按模式取设置页/OP_IMAGE_T2I_MODEL、OP_IMAGE_I2I_MODEL）")
     seed: int | None = Field(default=None, description="覆盖种子；缺省用条目自带的稳定子种子")
     quality: str | None = Field(default=None, description="质量档；只在模型清单声明 quality 时生效，空 = 用模式默认")
@@ -175,7 +177,8 @@ class DreaminaQueueRequest(BaseModel):
 
     aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
     resolution: str | None = Field(default=None, description="2k/4k（5.0Pro 另有 1.5k）；空 = 用设置页/env 默认")
-    reference_kinds: list[str] = Field(default_factory=list, description="主体图参考：带 = image2image，不带 = text2image")
+    reference_kinds: list[str] = Field(default_factory=list, description="主体图参考（兼容旧调用）：带 = image2image，不带 = text2image")
+    references: list[ReferenceSpec] = Field(default_factory=list, description="参考图（Playground 式来源 + role 分工）；给了它就不看 reference_kinds")
     model: str | None = Field(default=None, description="即梦 model_version；空 = 设置页/env（DREAMINA_IMAGE_MODEL）默认 5.0")
     seed: int | None = Field(default=None, description="仅存档；即梦不暴露 seed")
 
@@ -199,7 +202,7 @@ class Message(BaseModel):
     detail: str
 
 
-class AdhocReferenceSpec(BaseModel):
+class AdhocReferenceSpec(ReferenceSpec):
     """一张参考图的来源：上传暂存（staged_id）、主体档案（subject_id + kind）
 
     或 Playground「最近生成」的原图（run_id，服务端从该 run 的 original/
@@ -207,10 +210,87 @@ class AdhocReferenceSpec(BaseModel):
     顺序即提示词里 ``<image1>`` / ``<image2>`` 的顺序。
     """
 
-    staged_id: str | None = None
-    subject_id: str | None = None
-    kind: str | None = None
-    run_id: str | None = None
+
+# 参考图在提示词里的分工（role）：与主体档案的图片槽位同名，
+# 决定 LLM 改写的锚定句里这张图管哪一摊；缺省按 front 处理。
+REFERENCE_ROLES = ("character_sheet", "headshot", "front", "side", "behind")
+DEFAULT_REFERENCE_ROLE = "front"
+
+
+def _reference_paths_from_specs(
+    specs: list[ReferenceSpec],
+) -> tuple[list[Path], list[str], list[str]]:
+    """参考图规格 → (本地文件路径, role 列表, 暂存 id 列表)。
+
+    三种来源与 Playground 同源：上传暂存（staged_id）、主体档案槽位
+    （subject_id + kind）、最近生成的原图（run_id；adhoc run 取唯一原图，
+    charvar run 按 index 取第几张）。role 缺省 front。
+    不接受任意路径 —— 那是把文件读权限开给了浏览器。
+    """
+    paths: list[Path] = []
+    roles: list[str] = []
+    staged_ids: list[str] = []
+    for spec in specs:
+        role = (spec.role or "").strip() or DEFAULT_REFERENCE_ROLE
+        if role not in REFERENCE_ROLES:
+            raise HTTPException(
+                400, f"参考图分工不合法：{role}（支持 {' / '.join(REFERENCE_ROLES)}）"
+            )
+        if spec.staged_id:
+            try:
+                paths.append(adhoc_service.staged_reference(spec.staged_id))
+            except adhoc_service.AdhocError as exc:
+                raise HTTPException(400, str(exc)) from exc
+            staged_ids.append(spec.staged_id)
+        elif spec.subject_id and spec.kind:
+            if spec.kind not in subject_images.IMAGE_KINDS:
+                raise HTTPException(
+                    400, f"未知图片类型：{spec.kind}（支持 {'/'.join(subject_images.IMAGE_KINDS)}）"
+                )
+            local = subject_images.find_reference_file(spec.subject_id, spec.kind)
+            if local is None:
+                raise HTTPException(
+                    400, f"参考图不存在：{spec.subject_id} / {spec.kind}（请先在主体档案里生成或上传）"
+                )
+            # 走预处理过的压缩版（长边 1536 / JPEG q88），与 ComfyUI 上传同一份
+            subject_dir = subject_images.subject_dir(spec.subject_id)
+            paths.append(reference_images.prepared_reference(local, subject_dir, spec.kind))
+        elif spec.run_id:
+            paths.append(_run_reference_file(spec.run_id, spec.index))
+        else:
+            raise HTTPException(
+                400, "参考图缺少来源：需要 staged_id / subject_id+kind / run_id 之一"
+            )
+        roles.append(role)
+    return paths, roles, staged_ids
+
+
+def _run_reference_file(run_id: str, index: int | None = None) -> Path:
+    """最近生成的原图 → 本地文件。
+
+    adhoc run（Playground）original/ 下只有一个文件；charvar run 按条目顺序
+    取第 index 张（缺省第一张）。文件名由服务端从 run 目录定 —— 不收浏览器给的路径。
+    """
+    run_id = str(run_id or "").strip()
+    if not run_id:
+        raise HTTPException(400, "参考图缺少 run_id")
+    if run_id.startswith("adhoc_"):
+        try:
+            return adhoc_service.original_file(run_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except adhoc_service.AdhocError as exc:
+            raise HTTPException(400, str(exc)) from exc
+    try:
+        files = assets.list_originals(run_id)
+    except ValueError as exc:
+        raise HTTPException(400, f"非法 run_id：{run_id}") from exc
+    if not files:
+        raise HTTPException(400, f"这次生成没有原图可用：{run_id}")
+    position = 0 if index is None else int(index)
+    if position < 0 or position >= len(files):
+        raise HTTPException(400, f"这次生成没有第 {position + 1} 张原图（共 {len(files)} 张）")
+    return files[position]
 
 
 class AdhocGenerateRequest(BaseModel):
@@ -720,11 +800,17 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             sticker_warnings = issues["warnings"]
         if req.mode == "llm":
             return _generate_llm_mode(subject, req, preset, sticker_warnings)
+        # 参考图先校验（来源合法 / 文件在 / role 合法）：经典模式也要当场报错，
+        # 别等到第 ③ 步推送生图才发现这张图选不出来。
+        if req.references:
+            _reference_paths_from_specs(req.references)
         try:
             result = compose_generate(subject, preset, req)
         except (ValueError, PresetError) as exc:
             raise HTTPException(400, str(exc)) from exc
         result.warnings = sticker_warnings
+        # 参考图规格存进结果：推送生图时按它取图（页面刷新也不丢）
+        result.references = [spec.model_dump() for spec in req.references]
         with _db() as conn:
             storage.save_run(conn, result)
         return result
@@ -734,19 +820,27 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     ) -> GenerateResult:
         if not req.subject_id:
             raise HTTPException(400, "LLM 模式需要 subject_id：参考图来自主体档案的图片槽位")
-        kinds: list[str] = []
-        for kind in req.reference_kinds:
-            if kind not in subject_images.IMAGE_KINDS:
-                raise HTTPException(400, f"未知参考图类型：{kind}（支持 {'/'.join(subject_images.IMAGE_KINDS)}）")
-            if kind not in kinds:
-                kinds.append(kind)
-        if not 1 <= len(kinds) <= 4:
-            raise HTTPException(400, "LLM 模式需要 1–4 个参考图类型（reference_kinds）")
+        # 参考图：新流程给 references（Playground 式来源 + role 分工），
+        # 提示词阶段只用 role 定锚定句分工；没给就回退旧的 reference_kinds。
+        roles: list[str] = []
+        if req.references:
+            _paths, roles, _staged = _reference_paths_from_specs(req.references)
+            if not 1 <= len(roles) <= 4:
+                raise HTTPException(400, "LLM 模式需要 1–4 张参考图")
+        else:
+            for kind in req.reference_kinds:
+                if kind not in subject_images.IMAGE_KINDS:
+                    raise HTTPException(400, f"未知参考图类型：{kind}（支持 {'/'.join(subject_images.IMAGE_KINDS)}）")
+                if kind not in roles:
+                    roles.append(kind)
+            if not 1 <= len(roles) <= 4:
+                raise HTTPException(400, "LLM 模式需要 1–4 个参考图类型（reference_kinds）")
         with _db() as conn:
-            for kind in kinds:
-                slot = subject_images.get_slot(conn, subject.id, kind, settings_service.get_settings(conn))
-                if not slot.is_ready:
-                    raise HTTPException(400, f"参考图未就绪：{kind}（请先在主体档案里生成或上传）")
+            if not req.references:
+                for kind in roles:
+                    slot = subject_images.get_slot(conn, subject.id, kind, settings_service.get_settings(conn))
+                    if not slot.is_ready:
+                        raise HTTPException(400, f"参考图未就绪：{kind}（请先在主体档案里生成或上传）")
             template = storage.get_subject_template(conn, subject.id)
             if not template:
                 raise HTTPException(400, f"主体 {subject.id} 还没有上传「角色全场景通用提示词模板」")
@@ -763,7 +857,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                     preset,
                     req,
                     template,
-                    kinds,
+                    roles,
                     config=settings_service.llm_overrides(conn),
                 )
             except llm.LLMError as exc:
@@ -772,6 +866,8 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                 raise HTTPException(400, str(exc)) from exc
             # 合并而不是覆盖：generate_llm 自己也可能带声明（如 sticker 忽略「中文」）
             result.warnings = [*result_warnings, *(result.warnings or [])]
+            # 参考图规格存进结果：推送生图时按它取图（页面刷新也不丢）
+            result.references = [spec.model_dump() for spec in req.references]
             storage.save_run(conn, result)
         return result
 
@@ -831,7 +927,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         *,
         workload: str | None,
         negative_prompt: str | None,
-        reference_kinds: list[str],
+        reference_paths: list[Path],
         aspect_ratio: str | None,
         resolution: str | None,
         comfy_url: str | None,
@@ -850,7 +946,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             # 自动选择：入了参考图 = 图片编辑；否则文生图（选型依据统一在「设置」页）
             settings = settings_service.get_settings(conn)
             workload_name = (
-                settings.comfy_edit_workflow if reference_kinds else settings.comfy_t2i_workflow
+                settings.comfy_edit_workflow if reference_paths else settings.comfy_t2i_workflow
             )
             if not workload_name:
                 raise HTTPException(
@@ -898,28 +994,18 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                         "或清空负向输入（继承默认会注入空负向以清掉 workflow 内置禁字默认）"
                     ))
                 overrides["negative_prompt"] = effective
-        if reference_kinds:
-            # LLM 模式：把选定的主体档案图上传到 ComfyUI input，按序注入 image/image2/…
-            # 按选择顺序对应 <image1>..<image4>；未选中的槽位由 mapping on_missing 从 payload 摘除
+        if reference_paths:
+            # 把参考图上传到 ComfyUI input，按序注入 image/image2/…（对应 <image1>..）
+            # remote_name 必须唯一：upload_image 发 overwrite: true，同名会互相覆盖
             base = paths.comfy_base_url(comfy_url)
-            seen: list[str] = []
-            subject_dir = subject_images.subject_dir(result.subject_id)
-            for kind in reference_kinds:
-                if kind not in subject_images.IMAGE_KINDS or kind in seen:
-                    continue
-                seen.append(kind)
-                local = subject_images.find_reference_file(result.subject_id, kind)
-                if local is None:
-                    raise HTTPException(400, f"参考图不存在：{kind}（请先在主体档案里生成或上传）")
-                # 上传压缩版（长边 1536 / JPEG q88），与 OpenRouter 通路共用同一份
-                prepared = reference_images.prepared_reference(local, subject_dir, kind)
+            for index, prepared in enumerate(reference_paths):
                 try:
                     remote = comfyui_exporter.upload_image(
-                        base, prepared, remote_name=f"{result.subject_id}_{kind}{prepared.suffix}"
+                        base, prepared, remote_name=f"charvar_{result.run_id}_{index}{prepared.suffix}"
                     )
                 except (httpx.HTTPError, ValueError) as exc:
                     raise HTTPException(502, f"上传参考图到 ComfyUI 失败：{exc}") from exc
-                overrides["image" if len(seen) == 1 else f"image{len(seen)}"] = remote
+                overrides["image" if index == 0 else f"image{index + 1}"] = remote
 
         def _on_submitted(item, prompt_id: str, prefix: str) -> None:
             storage.save_comfy_submission(
@@ -952,12 +1038,15 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             result = storage.get_run(conn, run_id)
             if result is None:
                 raise HTTPException(404, f"生成记录不存在：{run_id}")
+            reference_paths = _resolve_run_references(
+                req.references, req.reference_kinds, result.subject_id
+            )
             workload_name, submissions = _submit_to_comfy(
                 conn,
                 result,
                 workload=req.workload,
                 negative_prompt=req.negative_prompt,
-                reference_kinds=req.reference_kinds,
+                reference_paths=reference_paths,
                 aspect_ratio=req.aspect_ratio,
                 resolution=req.resolution,
                 comfy_url=req.comfy_url,
@@ -972,6 +1061,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                 "aspect_ratio": req.aspect_ratio,
                 "resolution": req.resolution,
                 "reference_kinds": list(req.reference_kinds),
+                "references": [spec.model_dump() for spec in req.references],
                 "comfy_url": req.comfy_url,
             })
         ok_count = sum(1 for s in submissions if s.get("ok"))
@@ -1005,6 +1095,21 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                 raise HTTPException(400, f"参考图不存在：{kind}（请先在主体档案里生成或上传）")
             paths.append(reference_images.prepared_reference(local, subject_dir, kind))
         return paths
+
+    def _resolve_run_references(
+        references: list[ReferenceSpec],
+        reference_kinds: list[str],
+        subject_id: str,
+    ) -> list[Path]:
+        """推送生图时的参考图 → 本地文件列表。
+
+        新流程（references，Playground 式来源）优先；没给就回退旧接口的
+        主体档案槽位（reference_kinds），老调用不受影响。
+        """
+        if references:
+            paths, _roles, _staged = _reference_paths_from_specs(references)
+            return paths
+        return _openrouter_reference_paths(subject_id, reference_kinds)
 
     def _openrouter_prompt(item: PromptItem, reference_paths: list[Path]) -> str:
         """条目提示词 → OpenRouter 提示词。
@@ -1083,7 +1188,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         *,
         aspect_ratio: str | None,
         resolution: str | None,
-        reference_kinds: list[str],
+        reference_paths: list[Path],
         model: str | None,
         seed: int | None,
         quality: str | None = None,
@@ -1092,17 +1197,15 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
 
         单条失败不中断整批（与 ComfyUI 批量入队同一语义）。
         """
-        mcfg = settings_service.openrouter_mode_config(conn)["t2i" if not reference_kinds else "i2i"]
+        mcfg = settings_service.openrouter_mode_config(conn)["t2i" if not reference_paths else "i2i"]
         # 模式对齐 ComfyUI：带参考图 = 图片编辑（i2i / edit workflow），否则文生图（t2i）；
         # 参数默认链：请求显式 > 设置页/env 的模式默认，枚举校验留给 openrouter_image
         effective_model = openrouter_image.resolve_model(
-            (model or "").strip() or mcfg["model"], mode="i2i" if reference_kinds else "t2i"
+            (model or "").strip() or mcfg["model"], mode="i2i" if reference_paths else "t2i"
         )
         effective_resolution = (resolution or "").strip() or mcfg["resolution"]
         effective_quality = (quality or "").strip() or mcfg["quality"]
         api_key = openrouter_image.resolve_api_key(settings_service.get_settings(conn).openrouter.api_key or None)
-        reference_paths = _openrouter_reference_paths(result.subject_id, reference_kinds)
-
         entries: list[dict[str, Any]] = []
         with ThreadPoolExecutor(max_workers=_OPENROUTER_CONCURRENCY) as pool:
             futures = {
@@ -1132,12 +1235,15 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             result = storage.get_run(conn, run_id)
             if result is None:
                 raise HTTPException(404, f"生成记录不存在：{run_id}")
+            reference_paths = _resolve_run_references(
+                req.references, req.reference_kinds, result.subject_id
+            )
             model, entries = _submit_to_openrouter(
                 conn,
                 result,
                 aspect_ratio=req.aspect_ratio,
                 resolution=req.resolution,
-                reference_kinds=req.reference_kinds,
+                reference_paths=reference_paths,
                 model=req.model,
                 seed=req.seed,
                 quality=req.quality,
@@ -1150,6 +1256,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                 "aspect_ratio": req.aspect_ratio,
                 "resolution": req.resolution,
                 "reference_kinds": list(req.reference_kinds),
+                "references": [spec.model_dump() for spec in req.references],
                 "quality": req.quality,
             })
         ok_count = sum(1 for e in entries if e.get("ok"))
@@ -1232,7 +1339,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         *,
         aspect_ratio: str | None,
         resolution: str | None,
-        reference_kinds: list[str],
+        reference_paths: list[Path],
         model: str | None,
     ) -> tuple[str, list[dict[str, Any]]]:
         """批量走即梦生图：小并发（_DREAMINA_CONCURRENCY），逐条落盘。
@@ -1242,8 +1349,6 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         mcfg = settings_service.dreamina_config(conn)
         effective_model = (model or "").strip() or mcfg["model"]
         effective_resolution = (resolution or "").strip() or mcfg["resolution"]
-        reference_paths = _openrouter_reference_paths(result.subject_id, reference_kinds)
-
         entries: list[dict[str, Any]] = []
         with ThreadPoolExecutor(max_workers=_DREAMINA_CONCURRENCY) as pool:
             futures = {
@@ -1269,12 +1374,15 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             result = storage.get_run(conn, run_id)
             if result is None:
                 raise HTTPException(404, f"生成记录不存在：{run_id}")
+            reference_paths = _resolve_run_references(
+                req.references, req.reference_kinds, result.subject_id
+            )
             model, entries = _submit_to_dreamina(
                 conn,
                 result,
                 aspect_ratio=req.aspect_ratio,
                 resolution=req.resolution,
-                reference_kinds=req.reference_kinds,
+                reference_paths=reference_paths,
                 model=req.model,
             )
             # 快照本次最终生效的入队参数（图片墙单条「重新生成」原样重放，种子除外）
@@ -1284,6 +1392,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                 "aspect_ratio": req.aspect_ratio,
                 "resolution": req.resolution,
                 "reference_kinds": list(req.reference_kinds),
+                "references": [spec.model_dump() for spec in req.references],
             })
         ok_count = sum(1 for e in entries if e.get("ok"))
         return {
@@ -1726,6 +1835,13 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             meta = item.meta or {}
             # 快照缺失（老 run）回退：LLM 模式生成时 meta 已带 reference_kinds
             reference_kinds = list(queued.get("reference_kinds") or []) or list(meta.get("reference_kinds") or [])
+            # 参考图：优先用快照里的新规格（Playground 式来源），否则回退旧的主体槽位
+            queued_references = [
+                ReferenceSpec.model_validate(spec) for spec in (queued.get("references") or [])
+            ]
+            reference_paths = _resolve_run_references(
+                queued_references, reference_kinds, result.subject_id
+            )
 
             if queued.get("provider") == "dreamina":
                 # 即梦通路：同一提示词 + 同一画幅/参考图重出一张。
@@ -1736,7 +1852,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                     item,
                     aspect_ratio=queued.get("aspect_ratio"),
                     resolution=(str(queued.get("resolution") or "")).strip() or mcfg["resolution"],
-                    reference_paths=_openrouter_reference_paths(result.subject_id, reference_kinds),
+                    reference_paths=reference_paths,
                     model=(str(queued.get("model") or "")).strip() or mcfg["model"],
                 )
                 if not entry.get("ok"):
@@ -1765,7 +1881,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                 # OpenRouter 通路：同一提示词 + 同一画幅/参考图，只换种子重出一张。
                 # provider 不保证同种子出同图（实测两次同参请求返回不同图），
                 # 种子只是尽量可复现。快照里的是当时的请求参数，模式默认在此重放一遍。
-                mode = "i2i" if reference_kinds else "t2i"
+                mode = "i2i" if reference_paths else "t2i"
                 mcfg = settings_service.openrouter_mode_config(conn)[mode]
                 model = openrouter_image.resolve_model(
                     (str(queued.get("model") or "")).strip() or mcfg["model"], mode=mode
@@ -1775,7 +1891,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                     item,
                     aspect_ratio=queued.get("aspect_ratio"),
                     resolution=(str(queued.get("resolution") or "")).strip() or mcfg["resolution"],
-                    reference_paths=_openrouter_reference_paths(result.subject_id, reference_kinds),
+                    reference_paths=reference_paths,
                     model=model,
                     api_key=openrouter_image.resolve_api_key(
                         settings_service.get_settings(conn).openrouter.api_key or None
@@ -1812,7 +1928,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                     single,
                     workload=queued.get("workload"),
                     negative_prompt=queued.get("negative_prompt"),
-                    reference_kinds=reference_kinds,
+                    reference_paths=reference_paths,
                     aspect_ratio=queued.get("aspect_ratio"),
                     resolution=queued.get("resolution"),
                     comfy_url=req.comfy_url,

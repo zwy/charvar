@@ -1,9 +1,37 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>charvar · 角色变体提示词生成器</title><link rel="stylesheet" href="/static/style.css"><link rel="icon" type="image/svg+xml" href="/static/favicon.svg"><link rel="alternate icon" type="image/png" sizes="1024x1024" href="/static/icon.png"><link rel="apple-touch-icon" href="/static/icon.png"></head><body>
 <header class="topbar"><div class="brand">charvar <span class="sub">角色变体提示词生成器</span></div><nav>
-<button class="tab active" data-tab="gen">生成</button><button class="tab" data-tab="adhoc">Playground</button><button class="tab" data-tab="video">视频</button><button class="tab" data-tab="recipes">配方</button><button class="tab" data-tab="subjects">主体档案</button><button class="tab" data-tab="runs">历史记录</button><button class="tab" data-tab="settings">设置</button></nav></header>
+<button class="tab active" data-tab="gen">预设</button><button class="tab" data-tab="adhoc">Playground</button><button class="tab" data-tab="video">视频</button><button class="tab" data-tab="recipes">配方</button><button class="tab" data-tab="subjects">主体档案</button><button class="tab" data-tab="runs">历史记录</button><button class="tab" data-tab="settings">设置</button></nav></header>
 <main>
-<section id="tab-gen" class="tab-page active"><div class="card"><h2>生成参数</h2>
+<section id="tab-gen" class="tab-page active">
+<div class="card"><div class="row-head"><h2>① 生图设置</h2><span class="hint">先定供应商与参考图 —— 第 ③ 步按这套设置出图</span></div>
+<div class="adhoc-switch">
+<div class="segmented" id="gen-backend"><button type="button" class="seg active" data-backend="comfyui">ComfyUI</button><button type="button" class="seg" data-backend="openrouter">OpenRouter</button><button type="button" class="seg" data-backend="dreamina">即梦</button></div>
+<span id="gen-model-field" class="hint"></span>
+</div>
+<div class="form-grid">
+<label>画幅比例<select id="gen-aspect"></select></label>
+<label id="gen-resolution-field">分辨率<select id="gen-resolution"></select></label>
+<label id="gen-quality-field" hidden>质量档<select id="gen-quality"></select></label>
+<label id="gen-model-select-field" hidden>模型版本<select id="gen-model-select"></select></label>
+<label id="gen-negative-field">负向提示词<input type="text" id="gen-negative" placeholder="留空 = 用 workflow 默认"></label>
+<label class="check" id="gen-wait-field"><input type="checkbox" id="gen-wait"> 等待完成并记录输出文件名</label>
+</div>
+<span id="gen-dim-preview" class="hint"></span>
+<span id="gen-caps-hint" class="hint"></span>
+<div class="form-field"><div class="field-label">参考图（最多 4 张，按顺序对应提示词里的 &lt;image1&gt;、&lt;image2&gt;…）</div>
+<div id="gen-ref-list" class="ref-grid"></div>
+<div class="actions">
+<label class="btn file-btn">上传参考图<input type="file" id="gen-ref-file" accept="image/*" multiple hidden></label>
+<button id="btn-gen-recent-add" type="button">从最近生成加入</button>
+<select id="gen-ref-subject"></select>
+<select id="gen-ref-kind"></select>
+<button id="btn-gen-ref-add" type="button">从主体档案加入</button>
+<button id="btn-gen-ref-clear" type="button">清空参考图</button>
+</div>
+<span id="gen-ref-hint" class="hint"></span></div>
+</div>
+<div class="card"><div class="row-head"><h2>② 生成提示词</h2><span class="hint">提示词生成后可在第 ③ 步推送生图</span></div>
 <div class="form-field gen-mode-row"><div class="field-label">生成模式</div><div class="segmented">
 <button id="gen-mode-classic" class="seg active" data-mode="classic" type="button">经典模板</button>
 <button id="gen-mode-llm" class="seg" data-mode="llm" type="button">LLM 优化</button>
@@ -22,11 +50,7 @@
 <label>固定背景（留空随机）<input type="text" id="gen-fixed-bg" list="bg-options"><datalist id="bg-options"></datalist></label>
 <label>固定光照（留空随机）<input type="text" id="gen-fixed-light" list="light-options"><datalist id="light-options"></datalist></label>
 </div>
-<div id="gen-sticker-hint" class="comfy-panel" hidden><span class="hint">含指定中文文字：模型原生出字、须人工验字；出图按预设 1:1 方图（推送面板“继承默认”会注入空负向，确保无内置禁字默认）；参考图建议「全身正面」一张。</span></div>
-<div id="gen-refs-panel" class="comfy-panel" hidden>
-<div class="form-field"><div class="field-label">参考图（最多 4 张，来自所选主体的档案图片）</div><div id="gen-refs" class="ref-grid"></div><span class="hint">灰掉的类型还没有就绪的图片：去「主体档案」生成或上传。</span></div>
-<span id="gen-refs-hint" class="hint"></span>
-</div>
+<div id="gen-sticker-hint" class="comfy-panel" hidden><span class="hint">含指定中文文字：模型原生出字、须人工验字；出图按预设 1:1 方图（负向提示词留空时会自动注入空负向，确保无内置禁字默认）；参考图建议「全身正面」一张。</span></div>
 <div id="gen-llm-panel" class="comfy-panel" hidden>
 <label>提示词语言<select id="gen-llm-language">
 <option value="any" selected>不做强制性限制（默认）</option>
@@ -34,85 +58,17 @@
 <option value="en">强制英文</option>
 </select></label>
 <label class="span2">附加要求（可选，拼进 LLM 改写指令）<input type="text" id="gen-llm-instructions" placeholder="例如：保持浅景深，避免出现文字"></label>
-<span class="hint">LLM 模式要求：主体已上传「通用提示词模板」，且所选参考图已就绪；出图走图片编辑 workflow。</span>
+<span class="hint">LLM 模式要求：主体已上传「通用提示词模板」；参考图决定提示词里的分工（全身正面/半身/侧面/背面/设定图），按第 ① 步选好的顺序编号。</span>
 <span class="hint">提示词语言：默认「不做强制性限制」= 提示词里不写语言规定，输出语言由模型自行决定（实际跟随模板语言）。「强制中文」会让模型把视角规范、背景光照等英文材料译写成中文 —— 适合即梦（中文原生、有字数上限）。「强制英文」是旧行为。带字表情包预设只能按英文改写（中文文案由程序按原文追加）。</span>
 </div>
-<div class="actions"><button id="btn-generate" class="primary">生成变体</button><span id="gen-status" class="status"></span></div></div>
+<div class="actions"><button id="btn-generate" class="primary">生成提示词</button><span id="gen-status" class="status"></span></div></div>
 <div class="card" id="rounds-bar" hidden>
 <div class="rounds-row"><div class="field-label">轮次</div><div id="rounds-list" class="chip-row"></div><span class="hint" id="rounds-hint">点击切换查看；出图中自动同步</span></div>
 </div>
-<div class="card" id="result-card" hidden><div class="row-head"><h2>生成结果 <span id="result-summary"></span></h2><div class="actions">
+<div class="card" id="result-card" hidden><div class="row-head"><h2>③ 生成结果 <span id="result-summary"></span></h2><div class="actions">
 <button id="btn-copy-prompts">复制全部提示词</button><button id="btn-copy-captions">复制全部 caption</button>
-<a id="dl-txt" class="btn" hidden>下载 TXT</a><a id="dl-jsonl" class="btn" hidden>下载 JSONL</a><a id="dl-zip" class="btn" hidden>下载 captions.zip</a><button id="btn-toggle-comfy">推送 ComfyUI…</button><button id="btn-toggle-openrouter">推送 OpenRouter…</button><button id="btn-toggle-dreamina">推送即梦…</button></div></div>
-<div id="comfy-panel" class="comfy-panel" hidden><div class="form-grid">
-<label>ComfyUI 地址<input type="text" id="comfy-url" value="http://127.0.0.1:8188"></label>
-<div class="form-field"><div class="field-label">Workflow（自动选择）</div><span id="comfy-workflow-hint" class="hint"></span></div>
-<div class="form-field">
-<div class="field-label">画幅比例</div>
-<div id="comfy-aspect" class="chip-row">
-<button id="comfy-aspect-auto" class="chip active" data-ratio="auto" type="button" data-label="智能">智能</button>
-<button id="comfy-aspect-1-1" class="chip" data-ratio="1:1" type="button" data-label="1:1">1:1</button>
-<button id="comfy-aspect-3-4" class="chip" data-ratio="3:4" type="button" data-label="3:4">3:4</button>
-<button id="comfy-aspect-16-9" class="chip" data-ratio="16:9" type="button" data-label="16:9">16:9</button>
-<button id="comfy-aspect-4-3" class="chip" data-ratio="4:3" type="button" data-label="4:3">4:3</button>
-<button id="comfy-aspect-9-16" class="chip" data-ratio="9:16" type="button" data-label="9:16">9:16</button>
-<button id="comfy-aspect-2-3" class="chip" data-ratio="2:3" type="button" data-label="2:3">2:3</button>
-<button id="comfy-aspect-3-2" class="chip" data-ratio="3:2" type="button" data-label="3:2">3:2</button>
-<button id="comfy-aspect-21-9" class="chip" data-ratio="21:9" type="button" data-label="21:9">21:9</button>
-</div>
-</div>
-<label>分辨率档位<select id="comfy-resolution">
-<option value="1k">1K（长边 1024）</option><option value="2k">2K（官方像素 ~4.2MP）</option></select></label>
-<span id="comfy-dim-preview" class="hint"></span>
-<label class="span2">负向提示词（mapping 需配 field=negative_prompt）
-<select id="comfy-negative-mode"><option value="inherit">继承默认（workflow 内置 / 景别回退）</option><option value="custom">自定义（可清空 = 明确不用负向）</option></select>
-<input type="text" id="comfy-negative" placeholder="自定义负向提示词；留空 = 明确注入空负向" disabled></label>
-<label class="check"><input type="checkbox" id="comfy-wait"> 等待完成并记录输出文件名</label>
-</div><div class="actions"><button id="btn-comfy-status">检查连接</button><button id="btn-comfy-queue" class="primary">逐条入队</button><span class="hint">workflow 必须是 ComfyUI「导出 (API)」格式 + 同名 mapping.json。</span></div><pre id="comfy-result" class="log"></pre></div>
-<div id="openrouter-panel" class="comfy-panel" hidden><div class="form-grid">
-<div class="form-field"><div class="field-label">模型</div><span id="openrouter-model-hint" class="hint"></span></div>
-<div class="form-field">
-<div class="field-label">画幅比例</div>
-<div id="openrouter-aspect" class="chip-row">
-<button id="openrouter-aspect-auto" class="chip active" data-ratio="auto" type="button" data-label="智能">智能</button>
-<button id="openrouter-aspect-1-1" class="chip" data-ratio="1:1" type="button" data-label="1:1">1:1</button>
-<button id="openrouter-aspect-3-4" class="chip" data-ratio="3:4" type="button" data-label="3:4">3:4</button>
-<button id="openrouter-aspect-16-9" class="chip" data-ratio="16:9" type="button" data-label="16:9">16:9</button>
-<button id="openrouter-aspect-4-3" class="chip" data-ratio="4:3" type="button" data-label="4:3">4:3</button>
-<button id="openrouter-aspect-9-16" class="chip" data-ratio="9:16" type="button" data-label="9:16">9:16</button>
-<button id="openrouter-aspect-2-3" class="chip" data-ratio="2:3" type="button" data-label="2:3">2:3</button>
-<button id="openrouter-aspect-3-2" class="chip" data-ratio="3:2" type="button" data-label="3:2">3:2</button>
-<button id="openrouter-aspect-21-9" class="chip" data-ratio="21:9" type="button" data-label="21:9">21:9</button>
-</div>
-</div>
-<label>分辨率档位<select id="openrouter-resolution">
-<option value="1k">1K（长边 1024）</option><option value="2k">2K（官方像素 ~4.2MP）</option></select></label>
-<label>质量档<select id="openrouter-quality" hidden></select></label>
-<span id="openrouter-dim-preview" class="hint"></span>
-<span id="openrouter-caps-hint" class="hint"></span>
-<label class="span2">参考图（沿用生成页勾选，按序对应提示词里的 the first/second… reference image）<span id="openrouter-refs-hint" class="hint"></span></label>
-</div><div class="actions"><button id="btn-openrouter-queue" class="primary">推送生图</button><span class="hint">并发 4 路；单张 1K 约 15 秒、2K 约 30 秒。OpenRouter 不支持负向提示词，也没有负向提示词栏。</span></div><pre id="openrouter-result" class="log"></pre></div>
-<div id="dreamina-panel" class="comfy-panel" hidden><div class="form-grid">
-<div class="form-field"><div class="field-label">模型版本</div><span id="dreamina-model-hint" class="hint"></span></div>
-<div class="form-field">
-<div class="field-label">画幅比例</div>
-<div id="dreamina-aspect" class="chip-row">
-<button id="dreamina-aspect-auto" class="chip active" data-ratio="auto" type="button" data-label="智能">智能</button>
-<button id="dreamina-aspect-1-1" class="chip" data-ratio="1:1" type="button" data-label="1:1">1:1</button>
-<button id="dreamina-aspect-3-4" class="chip" data-ratio="3:4" type="button" data-label="3:4">3:4</button>
-<button id="dreamina-aspect-16-9" class="chip" data-ratio="16:9" type="button" data-label="16:9">16:9</button>
-<button id="dreamina-aspect-4-3" class="chip" data-ratio="4:3" type="button" data-label="4:3">4:3</button>
-<button id="dreamina-aspect-9-16" class="chip" data-ratio="9:16" type="button" data-label="9:16">9:16</button>
-<button id="dreamina-aspect-2-3" class="chip" data-ratio="2:3" type="button" data-label="2:3">2:3</button>
-<button id="dreamina-aspect-3-2" class="chip" data-ratio="3:2" type="button" data-label="3:2">3:2</button>
-<button id="dreamina-aspect-21-9" class="chip" data-ratio="21:9" type="button" data-label="21:9">21:9</button>
-</div>
-</div>
-<label>分辨率档<select id="dreamina-resolution">
-<option value="">跟随设置默认</option><option value="2K">2K</option><option value="4K">4K</option><option value="1.5K">1.5K（仅 5.0Pro）</option></select></label>
-<span id="dreamina-dim-preview" class="hint"></span>
-<label class="span2">参考图（沿用生成页勾选；带参考图自动走 image2image）<span id="dreamina-refs-hint" class="hint"></span></label>
-</div><div class="actions"><button id="btn-dreamina-queue" class="primary">推送生图</button><span class="hint">每张消耗即梦积分/权益，单张 2K 约 60 秒。即梦不暴露 seed，也没有负向提示词。</span></div><pre id="dreamina-result" class="log"></pre></div>
+<a id="dl-txt" class="btn" hidden>下载 TXT</a><a id="dl-jsonl" class="btn" hidden>下载 JSONL</a><a id="dl-zip" class="btn" hidden>下载 captions.zip</a><button id="btn-push-image" class="primary">推送生图</button></div></div>
+<pre id="push-result" class="log" hidden></pre>
 <div class="media-toolbar">
       <button id="btn-sync-images">同步图片</button>
       <div class="segmented"><button id="btn-view-images" class="seg active" aria-pressed="true">图片墙</button><button id="btn-view-table" class="seg" aria-pressed="false">表格</button></div>
@@ -320,4 +276,4 @@
 <div class="card"><div class="row-head"><h2>最近生成</h2><div class="actions"><button id="btn-video-recent-refresh">刷新</button></div></div>
 <div id="video-recent" class="image-grid"></div></div>
 </section>
-</main><script src="/static/media.js"></script><script src="/static/app.js"></script><script src="/static/adhoc.js"></script><script src="/static/video.js"></script><script src="/static/recipes.js"></script></body></html>
+</main><script src="/static/tables.js"></script><script src="/static/media.js"></script><script src="/static/genrefs.js"></script><script src="/static/app.js"></script><script src="/static/adhoc.js"></script><script src="/static/video.js"></script><script src="/static/recipes.js"></script></body></html>

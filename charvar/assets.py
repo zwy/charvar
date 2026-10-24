@@ -42,6 +42,22 @@ def original_dir(run_id: str) -> Path:
     return run_assets_dir(run_id) / "original"
 
 
+_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
+
+
+def list_originals(run_id: str) -> list[Path]:
+    """run 的原图列表（按文件名排序 = 条目顺序）。
+
+    给「参考图从最近生成加入」用：按 index 取第几张。不认 run_id 以外的路径。
+    """
+    directory = original_dir(safe_run_id(run_id))
+    if not directory.is_dir():
+        return []
+    return sorted(
+        p for p in directory.iterdir() if p.is_file() and p.suffix.lower() in _IMAGE_SUFFIXES
+    )
+
+
 def thumb_dir(run_id: str) -> Path:
     return run_assets_dir(run_id) / "thumbs"
 

@@ -18,9 +18,39 @@
 
 | 页面 | 说明 |
 |---|---|
-| 生成 | 生成参数 + 结果表（每条可点击复制）+ 全量导出 + ComfyUI 入队 |
+| 预设 | 三步工作流：① 生图设置（供应商 + 参数 + 参考图）→ ② 生成提示词（经典模板 / LLM 优化）→ ③ 推送生图（单一按钮，结果表 + 导出） |
+| Playground | 给一段提示词直接出一张图（跨项目调用通路） |
+| 视频 | OpenRouter 视频模型直出（异步作业） |
+| 配方 | 配方定义 / 运行 / 检查点续跑 |
 | 主体档案 | 档案列表 + 详情表单 + 粘贴 YAML 导入 |
 | 历史记录 | 历次生成，查看 / 删除，导出链接长期有效 |
+| 设置 | LLM / 主体图尺寸 / workflow / OpenRouter / 即梦 / 视频模型 |
+
+## 预设页（生成工作流）
+
+原「生成」页改名「预设」——这页的本质是**基于预设批量生产图片**，流程按 Playground 的交互重排成三步：
+
+1. **① 生图设置**：选生图供应商（ComfyUI / OpenRouter / 即梦）+ 该供应商的生图参数 + 参考图。
+   - **不再区分文生图 / 图片编辑**：有参考图 = 图片编辑（ComfyUI 走图片编辑 workflow、OpenRouter 走 `i2i` 组、即梦走 `image2image`），没参考图 = 纯文生图，后端按「有没有参考图」自动分流。
+   - 参数档位跟随模型能力：OpenRouter 按 `data/openrouter/api-response.json` 里该模型的 `supported_parameters` 动态加载分辨率 / 质量档，不支持的档整个不显示（即梦档位见 `web/static/tables.js` 共享表）。
+   - 画幅 / 分辨率 / 负向提示词 / 「等待完成并记录输出文件名」都在这一卡。
+2. **② 生成提示词**：选主体档案 + 预设（可叠服装预设）+ 生成模式（经典模板 / LLM 优化）→「生成提示词」。LLM 模式需要 1–4 张参考图来定锚定句分工。
+3. **③ 生成结果**：「推送生图」单一按钮，按第 ① 步选的供应商走对应通路（原先的「推送 ComfyUI… / 推送 OpenRouter… / 推送即梦…」三个面板已合并下线），随后是结果表 + 导出。
+
+### 参考图：三种来源 + 分工（role）
+
+参考图的选择逻辑与 Playground 同源，三种来源：
+
+| 来源 | 传什么 | 说明 |
+|---|---|---|
+| 上传暂存 | `staged_id` | 网页上传后落暂存池（`/adhoc/references`） |
+| 主体档案 | `subject_id` + `kind` | 档案里的图片槽位（front / headshot / side / behind / character_sheet） |
+| 最近生成 | `run_id`（+ `index`） | Playground「最近生成」的原图，或某次 charvar 运行的第 N 张原图 |
+
+- **只认 id，不认路径** —— 浏览器永远给不了文件系统路径（那是把文件读权限开给浏览器）。
+- 每张参考图带一个 **role（分工）**：决定这张图在 LLM 改写的锚定句里管哪一摊（`front` / `headshot` / `side` / `behind` / `character_sheet`），缺省 `front`；主体档案来源自动取槽位 kind 当 role。
+- 参考图规格随 `/generate` 存进 run（`GenerateResult.references`），推送生图和单条「重新生成」都按它取图，页面刷新不丢。
+- ComfyUI 上传的 `remote_name` 带 run_id（`charvar_{run_id}_{index}.jpg`）——`upload_image` 发 `overwrite: true`，同名会互相覆盖。
 
 ## ComfyUI 配置（.env）
 
@@ -34,7 +64,7 @@ COMFYUI_WORKFLOWS_DIR=./data/workflows
 - `.env` 不进 git（`.env.example` 给模板）；已存在的环境变量优先。
 - 请求一律绕过代理直连（trust_env=False），shell 的 `ALL_PROXY` 不影响内网调用。
 - workflow 采用与 `shared/comfy_client` 相同的成对约定：`data/workflows/{name}.json` + `{name}.mapping.json`；mapping 格式见 `presets/comfy_mapping.example.json`（`mappings` 列表 + `output_nodes`）。
-- 网页「生成 → 推送 ComfyUI」面板与 CLI 共用这套配置。
+- 网页「预设页 → ① 生图设置 → ③ 推送生图」与 CLI 共用这套配置。
 - 推送前可选择 `智能 / 1:1 / 3:4 / 16:9 / 4:3 / 9:16 / 2:3 / 3:2 / 21:9` 与 `1K / 2K`；`智能` 会按景别使用全身 `2:3`、胸像/头像/表情 `3:4`。
 - **2K 用 Qwen-Image-2.1 官方像素**（面积恒定 ~4.2MP，如 16:9 = 2752×1536、1:1 = 2048×2048）——模型原生的就是这个尺寸；早期按「长边 2048」算的 2K 只有原生面积的 56%，图会糊。4K 档已下线：远超模型 2K 训练尺寸会丢提示词遵循度。
 
@@ -49,7 +79,7 @@ OP_IMAGE_TIMEOUT=300                 # 秒，可选
 ```
 
 - 写 `.env`，或在网页「设置 → OpenRouter 生图」填模型 / Key（DB 设置优先于环境变量）。Key 读接口永远掩码，留空 = 用环境变量。
-- 网页「生成结果 → 推送 OpenRouter…」面板：画幅比例、参考图沿用生成页勾选。分辨率/质量档位按当前模型的能力动态显示（模型不支持就整个不显示，避免给出选了也不生效的选项）。
+- 网页「预设页 → ① 生图设置」切到 OpenRouter：画幅比例、分辨率/质量档位按当前模型的能力动态显示（模型不支持就整个不显示，避免给出选了也不生效的选项）；参考图取第 ① 步选的那几张，有参考图 = 图片编辑（`i2i` 组），无参考图 = 文生图（`t2i` 组）。第 ③ 步「推送生图」按这里的选择走 OpenRouter 通路。
 - 网页「主体档案 → 档案图片」每个槽位卡片上有「用 OpenRouter 生成」按钮：跟 ComfyUI 的「生成」按钮并列，两条通路互不影响，槽位状态机和落盘位置完全一样（`data/subjects/{id}/{kind}.{ext}`）。两步流程也一致——先就绪「人物半身像＋三视图」，其余 4 种以它为参考图。槽位徽章会标出这张图是哪个后端出的（已生成（OpenRouter））。
 - 模型清单在 `data/openrouter/api-response.json`（可点设置页「拉取模型清单」强制刷新）。**清单是参数能力的唯一标准**——每个模型的 `supported_parameters` 决定它能用哪些参数、用哪些枚举值。面板按它生成可选项。
 - 产物落在和 ComfyUI 同一个目录（`data/generated/{run_id}/original/`），图片墙 / contact sheet / 合成视频全部复用；单条「重新生成」按上次用的通路（provider）重放。
@@ -255,11 +285,12 @@ LLM 优化模式（`mode=llm`）下服装走的是独立通路：服装段作为
 | GET | `/presets` | 预设列表（名称/类型/条数） |
 | GET | `/presets/{name}?expand=false` | 预设详情（可展开变体列表） |
 | GET/POST/PUT/DELETE | `/subjects[/{id}]` | 主体档案 CRUD |
-| POST | `/generate` | body = GenerateRequest，返回 GenerateResult，自动存历史 |
+| POST | `/generate` | body = GenerateRequest（可带 `references` 参考图规格），返回 GenerateResult，自动存历史 |
 | GET | `/runs`、`/runs/{run_id}`、`DELETE /runs/{run_id}` | 历史记录 |
 | GET | `/runs/{run_id}/export?format=txt\|jsonl\|captions_zip` | 导出（`&download=1` 触发下载） |
-| GET/POST | `/runs/{run_id}/comfyui` | 查看 ComfyUI 提交记录 / 逐条入队（`workload` + 可选 `wait`） |
-| POST | `/runs/{run_id}/openrouter` | 推送 OpenRouter 在线生图（`aspect_ratio` / `resolution` / `quality` / `reference_kinds` / `model`），并发 4 路同步出图 |
+| GET/POST | `/runs/{run_id}/comfyui` | 查看 ComfyUI 提交记录 / 逐条入队（`workload` + 可选 `wait` / `references`） |
+| POST | `/runs/{run_id}/openrouter` | 推送 OpenRouter 在线生图（`aspect_ratio` / `resolution` / `quality` / `references` / `reference_kinds` / `model`），并发 4 路同步出图 |
+| POST | `/runs/{run_id}/dreamina` | 推送即梦出图（`aspect_ratio` / `resolution` / `references`），走本机 `dreamina` CLI |
 | GET | `/openrouter/models` | OpenRouter 可用生图模型清单（`?refresh=1` 强制重新拉取） |
 | GET | `/openrouter/capabilities` | 某模型的参数能力（按模型清单推导，供面板动态生成可选项） |
 | GET | `/comfy/workflows`、`/comfy/status` | workflows 目录清单 / ComfyUI 连接检查 |

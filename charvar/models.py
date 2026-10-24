@@ -88,6 +88,28 @@ class VariantSpec(BaseModel):
     outfit_text: str | None = None
 
 
+class ReferenceSpec(BaseModel):
+    """参考图规格：来源 + 在提示词里的分工（role）。
+
+    来源三种（与 Playground 同源）：
+    - ``staged_id``：上传暂存的图（``/adhoc/references`` 暂存池）；
+    - ``subject_id`` + ``kind``：主体档案的图片槽位；
+    - ``run_id``：Playground「最近生成」的原图。
+
+    ``role`` 决定这张图在 LLM 改写的锚定句里管哪一摊
+    （front/headshot/side/behind/character_sheet，同 ``subject_images.IMAGE_KINDS``）；
+    缺省按 ``front`` 处理。不接受任意路径 —— 那是把文件读权限开给了浏览器。
+    """
+
+    staged_id: str | None = None
+    subject_id: str | None = None
+    kind: str | None = None
+    run_id: str | None = None
+    role: str | None = None
+    # charvar run 的第几张原图（run_id 来源时用；缺省第 1 张）
+    index: int | None = None
+
+
 class GenerateRequest(BaseModel):
     subject_id: str | None = None
     subject: SubjectProfile | None = None
@@ -102,7 +124,10 @@ class GenerateRequest(BaseModel):
     separator: str = " "
     # LLM 优化模式（需求 §生成优化）：LLM 结果完全替代 master_template 拼接
     mode: Literal["classic", "llm"] = "classic"
-    reference_kinds: list[str] = Field(default_factory=list)  # 1–4 个主体图类型
+    reference_kinds: list[str] = Field(default_factory=list)  # 1–4 个主体图类型（兼容旧调用）
+    # 参考图（新流程，Playground 式来源）：提示词阶段只用 role 定锚定句分工，
+    # 出图阶段按来源解析成本地文件。给了它就不再用 reference_kinds。
+    references: list[ReferenceSpec] = Field(default_factory=list)
     llm_instructions: str | None = None
     # LLM 改写的输出语言（仅 mode=llm 生效）：
     #   zh  = 强制中文（中文模板/即梦等中文优先的后端）
@@ -135,3 +160,5 @@ class GenerateResult(BaseModel):
     items: list[PromptItem]
     # 生成期非阻断提示（如 sticker 模板里疑似禁字条款需人工确认）；旧记录缺省为空
     warnings: list[str] = Field(default_factory=list)
+    # 本次用的参考图规格（来源 + role）：推送生图时按它取图，页面刷新也不丢
+    references: list[dict] = Field(default_factory=list)
