@@ -69,19 +69,44 @@ main { max-width: 1180px; margin: 20px auto; padding: 0 20px; }
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
-  padding: 18px 20px;
-  margin-bottom: var(--sp-4);
+  padding: 14px 16px;
+  margin-bottom: var(--sp-3);
 }
-/* 卡片内纵向节奏线：块与块之间一律一层 --sp-4。
-   显式 margin 只写在「要更紧的组内」（面板/表单区/工具条），别再给卡片直接子元素手写 margin ——
-   手写值和这条叠起来（或彼此抵消成 0）正是历史上多处「0 间距」的根源。 */
-.card > * + * { margin-top: var(--sp-4); }
+/* 卡片内纵向节奏线：块与块之间一律一层 --sp-3（比原先的 --sp-4 紧一档，
+   页面从"一叠松散卡片"变成"一张紧凑表单"）。显式 margin 只写在「要更紧的组内」
+   （面板/表单区/工具条），别再给卡片直接子元素手写 margin。 */
+.card > * + * { margin-top: var(--sp-3); }
 .card h2 { margin: 0; font-size: 15px; }
+/* 预设页分组：组间一条细分隔线 + 组标题。标题右侧可放一句状态（如「已选 0 张」） */
+.gen-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.gen-group + .gen-group {
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line);
+}
+.gen-group-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.gen-group-title .hint { font-weight: 400; }
+/* 「生成模式」行：小标题 + 分段控件同一行 */
+.gen-mode-row { display: flex; align-items: center; gap: var(--sp-2); margin-bottom: var(--sp-2); }
 .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: var(--sp-3) var(--sp-4);
+  gap: var(--sp-2) var(--sp-4);
 }
+/* 只有两个字段的组（主体与种子）：固定 2 列，宽屏下别在 4 列栅格里留两个空位 */
+.form-grid-2 { grid-template-columns: repeat(2, minmax(220px, 1fr)); }
 label { display: flex; flex-direction: column; gap: var(--sp-1); font-size: 12px; color: var(--muted); }
 label input, label select, label textarea {
   font: inherit;
@@ -443,6 +468,19 @@ td .caption { color: var(--muted); }
 
 /* LLM 模式参考图选择 */
 .ref-grid { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+/* 没选参考图时的空态占位（虚线框，别让整块区空着看不出是干什么的） */
+.ref-empty {
+  width: 100%;
+  min-height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-panel);
+  background: #fafbfd;
+  color: var(--muted);
+  font-size: 12px;
+}
 .ref-pick { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); padding: var(--sp-2); border: 1px solid var(--line); border-radius: var(--radius-panel); background: #fff; cursor: pointer; min-width: 92px; }
 .ref-pick img { width: auto; height: auto; max-width: 120px; max-height: 96px; object-fit: contain; border-radius: 6px; background: #f4f6f9; cursor: zoom-in; }
 .ref-pick .ref-thumb-empty { width: 72px; height: 96px; border-radius: 6px; background: #f4f6f9; border: 1px dashed var(--line); }
@@ -491,7 +529,7 @@ td .caption { color: var(--muted); }
 .segmented .seg {
   border: 0;
   background: transparent;
-  padding: 5px 14px;
+  padding: 4px 12px;
   min-height: 0;
   border-radius: var(--radius-ctl);
   cursor: pointer;
@@ -511,14 +549,18 @@ td .caption { color: var(--muted); }
 /* 窄屏：双列固定栅格塌成单列，span2 会产生幽灵轨道，一并放开 */
 @media (max-width: 500px) {
   .form-grid { grid-template-columns: 1fr; }
+  .form-grid-2 { grid-template-columns: 1fr; }
   label.span2, .full-row { grid-column: auto; }
   .topbar { flex-wrap: wrap; gap: 8px 24px; padding: 10px 16px; }
   main { margin: 12px auto; padding: 0 12px; }
-  .card { padding: 14px 16px; }
+  .card { padding: 12px 14px; }
 }
 @media (max-width: 720px) {
   .workflow-grid { grid-template-columns: 1fr; }
 }
 /* 预设页的参考图卡：带「分工」下拉，不是整块点选 */
 #gen-ref-list .ref-pick { cursor: default; }
+/* 卡名可能很长（主体 id / 槽位名），别把整张卡撑成一条横幅 */
+#gen-ref-list .ref-pick { max-width: 240px; }
+#gen-ref-list .ref-name { white-space: normal; word-break: break-word; text-align: center; line-height: 1.4; }
 #gen-ref-list .ref-role { width: 100%; font-size: 11px; padding: 3px 4px; border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; }

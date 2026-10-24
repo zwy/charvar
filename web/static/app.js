@@ -238,80 +238,82 @@ function applyGenCaps(caps) {
   updateGenHints();
 }
 
+/* 供应商切换后，segmented 右边那行说明：当前生效的 workflow / 模型 / 枚举。
+   只放「控件里看不到」的信息，其余一律不留。 */
 function renderGenModelInfo() {
   const el = $("#gen-model-field");
   if (!el) return;
+  el.hidden = false;
   if (state.backend === "comfyui") {
-    el.hidden = true;
+    const workload = autoWorkload();
+    el.textContent = workload
+      ? `workflow：${workload}`
+      : "未配置 workflow —— 去「设置」页选";
     return;
   }
   if (state.backend === "openrouter") {
     const mode = genBackendMode();
     const model = state.modeModel || "";
     const label = mode === "i2i" ? "图片编辑" : "文生图";
-    el.innerHTML = model
-      ? `当前走${label}：模型 <code>${escapeHtml(model)}</code>（跟随设置页，面板不选模型）`
-      : `当前走${label}：设置页 / OP_IMAGE_${mode.toUpperCase()}_MODEL 还没配模型`;
-    if (state.caps && state.caps.supports_references === false) {
-      el.innerHTML += `；⚠ 该模型不支持参考图输入，参考图不会发送`;
+    const caps = state.caps;
+    const bits = [];
+    if (caps && caps.resolutions && caps.resolutions.length) {
+      bits.push(`分辨率 ${caps.resolutions.join("/")}`);
     }
+    if (caps && caps.qualities && caps.qualities.length) {
+      bits.push(`质量 ${caps.qualities.join("/")}`);
+    }
+    el.textContent = model
+      ? `${label}：${model}${bits.length ? " · " + bits.join(" · ") : ""}`
+      : `${label}：设置页还没配模型`;
+    if (caps && caps.supports_references === false) el.textContent += " · ⚠ 不支持参考图";
     return;
   }
-  const cliNote = state.dreaminaCliOk === false ? "；⚠ 未找到 dreamina CLI（需安装并 dreamina login）" : "";
-  el.innerHTML =
-    `即梦共用一组设置：带参考图 = image2image，不带 = text2image；模型下拉空值 = 跟随设置页/env（模型默认 5.0，分辨率默认 2K）${cliNote}`;
+  // 即梦：当前生效的模型版本与分辨率档（都可能是「跟随设置」）
+  const def = state.dreaminaDefaults || {};
+  const model = $("#gen-model-select").value;
+  const res = $("#gen-resolution").value;
+  const cliNote = state.dreaminaCliOk === false ? " · ⚠ 未找到 dreamina CLI" : "";
+  el.textContent =
+    `即梦：${model || `跟随设置（${def.model || "5.0"}）`} · ${res || `跟随设置（${def.resolution || "2K"}）`}${cliNote}`;
 }
 
+/* 参数网格下方那行：只说「当前会出多大的图」——比例与像素。 */
 function updateGenHints() {
   const presetRatio = (currentPresetMeta() || {}).preferred_aspect_ratio;
   const ratio = $("#gen-aspect").value;
   const hint = $("#gen-dim-preview");
-  if (hint && ratio) {
-    if (state.backend === "dreamina") {
-      hint.textContent = ratio === "auto"
-        ? (presetRatio ? `智能（当前预设指定 ${presetRatio}）：自动按预设比例出图` : "智能：按条目自带的画幅出图（没有则 3:4）。")
-        : `输出比例 ${ratio}（像素以即梦侧为准）`;
-    } else {
-      const tier = $("#gen-resolution").value;
-      if (ratio === "auto") {
-        hint.textContent = presetRatio
-          ? `智能（当前预设指定 ${presetRatio}）：自动采用预设比例；手动选择其他比例不被无声覆盖`
-          : "智能：全身 2:3，胸像/头像/表情 3:4。以上按长边档位计算。";
-      } else {
-        const parts = ratio.split(":").map((n) => Number(n.trim()));
-        if (parts.length !== 2 || parts.some((n) => !Number.isFinite(n) || n <= 0)) {
-          hint.textContent = "比例无效";
-        } else if (state.backend === "comfyui" && tier === "2k" && QWEN_2K_SIZES[ratio]) {
-          const [w, h] = QWEN_2K_SIZES[ratio];
-          hint.textContent = `当前输出 ${w} × ${h}px（Qwen 官方 2K 像素，面积 ~4.2MP）`;
-        } else {
-          const longSide = parseLongSide(tier) || 1024;
-          const [w, h] = parts;
-          const shortSide = Math.max(64, Math.round((longSide * Math.min(w, h)) / Math.max(w, h) / 64) * 64);
-          hint.textContent = `当前输出 ${w >= h ? longSide : shortSide} × ${h >= w ? longSide : shortSide}px`;
-        }
-      }
-    }
+  if (!hint) return;
+  if (!ratio) {
+    hint.textContent = "";
+    return;
   }
-  const capsHint = $("#gen-caps-hint");
-  if (capsHint) {
-    if (state.backend === "openrouter") {
-      const caps = state.caps;
-      const notes = [];
-      if (caps && caps.resolutions && caps.resolutions.length) notes.push(`分辨率枚举：${caps.resolutions.join(" / ")}`);
-      if (caps && caps.qualities && caps.qualities.length) notes.push(`质量枚举：${caps.qualities.join(" / ")}`);
-      if (caps && caps.supports_references === false) notes.push("该模型不支持参考图");
-      notes.push("空档 = 跟随设置默认（设置页没配 = 不发该参数）");
-      capsHint.textContent = notes.join("｜");
-    } else if (state.backend === "comfyui") {
-      const workload = autoWorkload();
-      capsHint.textContent = workload
-        ? (GenRefs.count()
-            ? `已选 ${GenRefs.count()} 张参考图 → 图片编辑 workflow：${workload}`
-            : `未选参考图 → 文生图 workflow：${workload}`)
-        : "未配置 workflow：先在「设置」页选好（文生图 / 图片编辑）workflow";
+  if (state.backend === "dreamina") {
+    hint.textContent =
+      ratio === "auto"
+        ? presetRatio
+          ? `按预设比例 ${presetRatio}（像素以即梦侧为准）`
+          : "按条目自带画幅（没有则 3:4）"
+        : `输出比例 ${ratio}（像素以即梦侧为准）`;
+    return;
+  }
+  const tier = $("#gen-resolution").value;
+  if (ratio === "auto") {
+    hint.textContent = presetRatio
+      ? `按预设比例 ${presetRatio}（手动选其他比例不被无声覆盖）`
+      : "按景别：全身 2:3，胸像/头像/表情 3:4";
+  } else {
+    const parts = ratio.split(":").map((n) => Number(n.trim()));
+    if (parts.length !== 2 || parts.some((n) => !Number.isFinite(n) || n <= 0)) {
+      hint.textContent = "比例无效";
+    } else if (state.backend === "comfyui" && tier === "2k" && QWEN_2K_SIZES[ratio]) {
+      const [w, h] = QWEN_2K_SIZES[ratio];
+      hint.textContent = `当前输出 ${w} × ${h}px（Qwen 官方 2K 像素，面积 ~4.2MP）`;
     } else {
-      capsHint.textContent = "即梦：每张消耗积分/权益，单张 2K 约 60 秒；不暴露 seed，也没有负向提示词。";
+      const longSide = parseLongSide(tier) || 1024;
+      const [w, h] = parts;
+      const shortSide = Math.max(64, Math.round((longSide * Math.min(w, h)) / Math.max(w, h) / 64) * 64);
+      hint.textContent = `当前输出 ${w >= h ? longSide : shortSide} × ${h >= w ? longSide : shortSide}px`;
     }
   }
 }
@@ -364,7 +366,6 @@ async function init() {
   // 主体只有一个选择器（①）：提示词主体与参考图主体必须一致 → 换主体要重刷槽位、
   // 并清掉旧主体档案的参考图
   $("#gen-subject").addEventListener("change", async () => {
-    updateGenSubjectHint();
     await GenRefs.reloadKinds().catch(() => {});
     const dropped = await GenRefs.dropSubjectRefs();
     if (dropped) {
@@ -387,7 +388,6 @@ async function init() {
   if (state.subjects.length) {
     $("#gen-subject").value = state.subjects[0].id;
   }
-  updateGenSubjectHint();
   await GenRefs.reloadKinds().catch(() => {});
   await refreshComfyWorkflows().catch(() => {});
   await loadComfyWorkflowSettings().catch(() => {});
@@ -404,19 +404,7 @@ async function loadSubjects() {
     opt.textContent = `${s.id} · ${s.name}`;
     sel.appendChild(opt);
   }
-  updateGenSubjectHint();
   renderSubjectList();
-}
-
-/* ② 只读摘要：提示词用的是①选的那个主体（锁定项 / 模板 / 参考图都跟它走） */
-function updateGenSubjectHint() {
-  const el = $("#gen-subject-hint");
-  if (!el) return;
-  const id = $("#gen-subject").value;
-  const subject = state.subjects.find((s) => s.id === id);
-  el.textContent = id
-    ? `提示词主体：${id}${subject ? `（${subject.name}）` : ""} —— 锁定项、模板与参考图都跟它走（在①改）`
-    : "还没选主体档案 —— 去①选一个（提示词锁定项、模板、参考图都跟它走）";
 }
 
 async function loadOutfits() {

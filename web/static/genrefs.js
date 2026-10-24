@@ -39,6 +39,13 @@ const GenRefs = (() => {
     const box = $("#gen-ref-list");
     if (!box) return;
     box.innerHTML = "";
+    if (!state.references.length) {
+      // 空态：虚线占位框，别让整块区空着看不出是干什么的
+      const empty = document.createElement("div");
+      empty.className = "ref-empty";
+      empty.textContent = "暂无参考图";
+      box.appendChild(empty);
+    }
     state.references.forEach((ref, index) => {
       const el = document.createElement("div");
       el.className = "ref-pick active";
@@ -81,19 +88,10 @@ const GenRefs = (() => {
   }
 
   function renderHint() {
-    const hint = $("#gen-ref-hint");
-    if (!hint) return;
+    // 参考图组标题右侧：只报数量（说明文字在别处不再重复）
     const count = state.references.length;
-    const parts = [];
-    parts.push(
-      count
-        ? `已选 ${count} 张：${state.references
-            .map((r, i) => `<image${i + 1}>（${roleLabel(r.role)}）`)
-            .join("、")}`
-        : "未选参考图 —— 不选就按纯文生图处理（ComfyUI 走文生图 workflow / OpenRouter 走 t2i 配置组 / 即梦走 text2image）"
-    );
-    if (count >= MAX_REFS) parts.push(`已达上限 ${MAX_REFS} 张`);
-    hint.innerHTML = parts.map(escapeHtml).join("；");
+    const el = $("#gen-ref-count");
+    if (el) el.textContent = `已选 ${count} 张`;
   }
 
   function releaseRef(ref) {

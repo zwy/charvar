@@ -66,8 +66,8 @@
 1. **① 生图设置**：主体档案 + 供应商（ComfyUI / OpenRouter / 即梦）+ 该供应商的生图参数
    （画幅 / 分辨率 / 质量 / 模型版本 / **种子** / 负向 / 等待完成）+ 参考图。
 2. **② 生成提示词**：预设（可叠服装预设）+ 生成模式（经典模板 / LLM 优化）+ 模板参数
-   （条数 / 采样 / 分隔符 / 背景光照）；顶部一行只读摘要显示当前主体。
-3. **③ 生成结果**：「推送生图」**单一**按钮（旧的「推送 ComfyUI… / 推送 OpenRouter… / 推送即梦…」三面板已下线），随后是结果表 + 导出。
+   （条数 / 采样 / 分隔符 / 背景光照）。
+3. **③ 生成结果**：「推送生图」**单一**按钮（旧的「推送 ComfyUI… / 推送 OpenRouter… / 推送即梦…」三面板已下线），随后是结果表 + 导出。卡标题行给当前批的只读摘要（主体 · 预设 · 种子 · 条数）。
 
 - **不保留文生图 / 图片编辑切换**：有参考图 = 图片编辑（ComfyUI 走图片编辑 workflow / OpenRouter 走 `i2i` 组 / 即梦走 `image2image`），无参考图 = 纯文生图，后端按「有没有参考图」自动分流。
 - **主体档案只有一个选择器（在①）**：提示词主体与参考图主体必须一致（锁定项说红发、参考图是黑发就出戏）。
@@ -88,6 +88,22 @@
 - ComfyUI 上传的 `remote_name` = `charvar_{run_id}_{index}{suffix}`：`upload_image` 发 `overwrite: true`，同名会互相覆盖。
 - 前端文件：`web/static/genrefs.js`（参考图选择器，导出 `GenRefs`）、`web/static/app.js`（供应商面板 + 推送生图）、`web/static/tables.js`。
   脚本加载顺序：`tables.js` → `media.js` → `genrefs.js` → `app.js` → `adhoc.js` → `video.js` → `recipes.js`（app.js 的 `init()` 在文件末尾调用，必须在 `GenRefs` 定义之后；`tables.js` 必须在 app.js 之前 —— 共享表是全局 const，顺序错了会 TDZ 报错）。
+
+### 预设页的视觉分组与文案（2026-10-24 Superdesign 变体 A）
+
+- **分组容器** = `.gen-group`（flex column + gap sp-2），组标题 `.gen-group-title`；组间用
+  `margin-top sp-3 + padding-top sp-3 + 1px 分隔线`，**不要**给 `.card` 的直接子元素手写 margin
+  （原 CSS 注释里的节奏纪律）。① 拆三组（主体与种子 / 供应商参数 / 参考图），② 拆两组（预设与服装 / 提示词参数）。
+- **间距只在 4/8/12/16 阶梯内收紧**：`.card` padding `14px 16px`、`.card > * + *` 用 sp-3、
+  `.form-grid` 行距 sp-2（列距仍 sp-4）；`.segmented .seg` padding `4px 12px`。500px 断点要同步。
+- **灰字只写「控件里看不到的信息」**：当前生效的 workflow / 模型 / 枚举、当前输出像素、已选参考图数量。
+  **删掉**复述控件含义的说明、描述「先做 A 再做 B」的导航文案、重复当前主体的摘要行
+  （`#gen-subject-hint` 已删；`#gen-ref-hint` 换成 `#gen-ref-count`，空态用 `.ref-empty` 虚线框）。
+- 参考图条目宽度限 `max-width: 240px` + 名字换行；「随机背景 / 随机光照」两个 checkbox 挪到
+  固定背景 / 固定光照之后单独成行（`label.check` 是行内排版，跟普通 label 同排时底边会错位）。
+- `.gen-mode-row`（小标题 + 分段控件同一行）、`.form-grid-2`（只有两个字段的组固定 2 列）也是这轮加的。
+- 视觉方向与文案策略固化在 `.superdesign/design-system.md`（Superdesign 工具产出）+ `.superdesign/init/*.md`；
+  **改预设页的分组 / 间距 / 文案前先读 design-system.md**，别自创一套。
 
 ## 测试
 
