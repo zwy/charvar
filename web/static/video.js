@@ -661,6 +661,8 @@ function renderVideoResult(s) {
     player.poster = s.poster_url || "";
     const dl = $("#video-dl-video");
     dl.href = s.video_url;
+    // URL 末段是 "video"，不显式给文件名的话存下来会叫 "video"（无扩展名）
+    dl.download = `${s.run_id}.mp4`;
     dl.hidden = false;
     const manifest = $("#video-dl-manifest");
     manifest.href = `/videos/${encodeURIComponent(s.run_id)}/manifest`;
@@ -754,6 +756,14 @@ function buildVideoRecentCard(rec) {
       });
     });
     actions.appendChild(openBtn);
+    // 下载 MP4：与「生成结果 → 合成视频」卡同一个做法（media.js 的下载链接）。
+    // URL 末段是 "video"，所以显式给文件名，否则存下来没有扩展名。
+    const dl = document.createElement("a");
+    dl.className = "btn";
+    dl.href = `/videos/${encodeURIComponent(rec.run_id)}/video`;
+    dl.download = `${rec.run_id}.mp4`;
+    dl.textContent = "下载 MP4";
+    actions.appendChild(dl);
   }
   const reuseBtn = document.createElement("button");
   reuseBtn.textContent = "复用提示词";
