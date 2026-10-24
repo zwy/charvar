@@ -199,6 +199,8 @@ DB → 仓库对偶：`charvar subject export <id>` 把已入库档案快照成 
 - **检查点**：step.manual 缺省 images=False、overlay/video_synth=True。执行到 pending 的
   manual 步停（status=waiting）；`--continue` / `POST /recipe-runs/{id}/continue` 批准当前
   manual 步推进，之后的 manual 步再停；failed 步 continue 直接重试。
+  **`--continue` 是「续跑已有运行」——首次必须不带它**（`charvar recipes run <名>` 建运行并停在
+  首个检查点），否则报「没有可继续的运行」。
 - **状态**：`data/generated/recipe_runs/<recipe_id>/manifest.json`（recipe_id 白名单
   `^recipe_[A-Za-z0-9_.-]+$` 且无 `..`，同 adhoc 严格度），**不建 DB 表**、不落 runs 表；
   配方定义改版（步数不一致）时 continue 拒绝，要求重建。
