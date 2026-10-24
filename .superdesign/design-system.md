@@ -70,9 +70,15 @@ Hard-coded (not tokens, but part of the language): `#eef0f4` segmented track,
 Scale `--sp-1: 4px` · `--sp-2: 8px` · `--sp-3: 12px` · `--sp-4: 16px`.
 
 **The governing rhythm rule:** inside a card, every direct child is separated by exactly
-one `--sp-4` layer (`.card > * + * { margin-top: var(--sp-4); }`). Denser groups declare
+one `--sp-3` layer (`.card > * + * { margin-top: var(--sp-3); }`). Denser groups declare
 their own tighter gap explicitly (`.comfy-panel` → `--sp-3`, `.form-field` → `--sp-1`).
 Never hand-write a margin on a card's direct child.
+
+**Grouping is one mechanism, app-wide:** `.form-section` (flex column, `--sp-2` gap) with
+`.form-section-title`, separated by a 1px rule + `--sp-3` padding. Every page that has more
+than one cluster of controls uses it — preset page, Playground, video, subject profile.
+A page that is one card per topic (settings, recipes, history) does not need groups.
+Do not introduce a second grouping class.
 
 **This round's direction: tighten the vertical rhythm.** The current 16px layer between
 every card child, combined with 18px card padding, makes the preset page read as a long
@@ -129,13 +135,20 @@ For drafts in this project:
   remove it rather than restating it more neatly.
 - **Keep only hints that carry information the user cannot get from the control itself**:
   current effective value / resolution (e.g. "当前输出 1696 × 2528px"), which backend
-  model is active, which workflow will be used, and irreversible consequences.
+  model is active, which workflow will be used, and irreversible consequences (a hard
+  limit that fails the request, a staged file that expires, per-second billing, credits
+  spent).
 - **One hint per block, at most.** Not a paragraph of hints stacked under a control.
 - **No hints that describe navigation** ("第 ③ 步推送生图", "在①改") — the three numbered
   card titles already convey the flow.
+- **No hints that describe implementation** — output paths, manifest files, which
+  database table a run lands in, CLI equivalents. That belongs in the README.
 - Prefer a short, concrete sentence over a hedged clause. "带参考图 = 图片编辑" beats
   "有参考图 = 图片编辑（ComfyUI 走图片编辑 workflow / OpenRouter 走 i2i 组 / 即梦走
   image2image）".
+- **Empty states are frames, not sentences.** A dashed `.ref-empty` panel reading
+  "暂无参考图" says more than a paragraph, and stays true when the buttons below it
+  already explain how to add one.
 
 ## Non-negotiable functional content
 

@@ -58,7 +58,7 @@ function applyAdhocPanel() {
   const t2iHint = $("#adhoc-refs-t2i-hint");
   t2iHint.hidden = !(!i2i && adhocState.references.length);
   if (!t2iHint.hidden) {
-    t2iHint.textContent = `已选 ${adhocState.references.length} 张参考图不随文生图发送；切到「图片编辑」后生效（暂存文件 24 小时后自动清理）`;
+    t2iHint.textContent = `已选 ${adhocState.references.length} 张参考图不随文生图发送；切到「图片编辑」后生效（暂存 24 小时后清理）`;
   }
 
   if (isComfy) {
@@ -184,28 +184,24 @@ function renderAdhocModelInfo() {
 }
 
 function updateAdhocHints() {
-  const hint = $("#adhoc-ref-hint");
-  if (hint) {
-    const refs = adhocState.references;
-    const parts = [];
-    parts.push(
-      refs.length
-        ? `已选 ${refs.length} 张：${refs.map((r, i) => `<image${i + 1}>`).join("、")}`
-        : "未选参考图"
-    );
+  // 参考图组标题右侧：只报数量 + 控件里看不到的限制
+  const refs = adhocState.references;
+  const count = refs.length;
+  const el = $("#adhoc-ref-count");
+  if (el) {
+    const parts = [`已选 ${count} 张`];
     const caps = adhocState.caps;
     if (adhocState.backend === "openrouter" && caps && caps.supports_references === false) {
-      parts.push(`当前模型 ${caps.model} 只支持文生图，参考图不会发送`);
+      parts.push("该模型只支持文生图，参考图不会发送");
     }
-    if (refs.length >= ADHOC_MAX_REFS) parts.push(`已达上限 ${ADHOC_MAX_REFS} 张`);
-    hint.innerHTML = parts.map(escapeHtml).join("；");
+    if (count >= ADHOC_MAX_REFS) parts.push(`已达上限 ${ADHOC_MAX_REFS} 张`);
+    el.textContent = parts.join(" · ");
   }
   const t2iHint = $("#adhoc-refs-t2i-hint");
-  const count = adhocState.references.length;
   const isT2i = adhocState.mode !== "i2i";
   t2iHint.hidden = !isT2i || !count;
   if (!t2iHint.hidden) {
-    t2iHint.textContent = `已选 ${count} 张参考图不随文生图发送；切到「图片编辑」后生效（暂存文件 24 小时后自动清理）`;
+    t2iHint.textContent = `已选 ${count} 张参考图不随文生图发送；切到「图片编辑」后生效（暂存 24 小时后清理）`;
   }
 }
 
@@ -271,6 +267,13 @@ async function applyAdhocDreaminaOptions() {
 function renderAdhocRefs() {
   const box = $("#adhoc-ref-list");
   box.innerHTML = "";
+  if (!adhocState.references.length) {
+    // 空态：虚线占位框，跟预设页的参考图区一致
+    const empty = document.createElement("div");
+    empty.className = "ref-empty";
+    empty.textContent = "暂无参考图";
+    box.appendChild(empty);
+  }
   adhocState.references.forEach((ref, index) => {
     const el = document.createElement("div");
     el.className = "ref-pick";

@@ -175,20 +175,9 @@ function applyVideoMode() {
   $("#video-frame-block").hidden = !mode.frame;
   $("#video-refs-block").hidden = !mode.refs;
   const refs = videoState.references;
-  const frameRef = videoState.firstFrame;
-  const hint = $("#video-ref-hint");
-  if (hint) {
-    const parts = [];
-    parts.push(refs.length
-      ? `已选 ${refs.length} 张：${refs.map((r, i) => `<image${i + 1}>`).join("、")}`
-      : "未选参考图");
-    if (!mode.refs && frameRef) {
-      parts.push(`${refs.length} 张参考图随「文生视频」发送；想带参考图请切回该页签`);
-    }
-    if (mode.refs && !refs.length && !frameRef) {
-      parts.push("上传图、从最近生成选，或从主体档案选就绪的图");
-    }
-    hint.textContent = parts.join(" · ");
+  const el = $("#video-ref-count");
+  if (el) {
+    el.textContent = `已选 ${refs.length} 张`;
   }
 }
 
@@ -203,7 +192,10 @@ function renderVideoFrame() {
   box.innerHTML = "";
   const ref = videoState.firstFrame;
   if (!ref) {
-    box.innerHTML = `<span class="hint">未选首帧：上传一张、从最近生成选，或从主体档案选「全身正面」</span>`;
+    const empty = document.createElement("div");
+    empty.className = "ref-empty";
+    empty.textContent = "未选首帧";
+    box.appendChild(empty);
     return;
   }
   const el = document.createElement("div");
@@ -225,6 +217,12 @@ function renderVideoFrame() {
 function renderVideoRefs() {
   const box = $("#video-ref-list");
   box.innerHTML = "";
+  if (!videoState.references.length) {
+    const empty = document.createElement("div");
+    empty.className = "ref-empty";
+    empty.textContent = "暂无参考图";
+    box.appendChild(empty);
+  }
   videoState.references.forEach((ref, index) => {
     const el = document.createElement("div");
     el.className = "ref-pick";
@@ -343,6 +341,12 @@ $("#btn-video-ref-clear").addEventListener("click", async () => {
 function renderVideoVrefs() {
   const box = $("#video-vref-list");
   box.innerHTML = "";
+  if (!videoState.videoReferences.length) {
+    const empty = document.createElement("div");
+    empty.className = "ref-empty";
+    empty.textContent = "暂无参考视频";
+    box.appendChild(empty);
+  }
   videoState.videoReferences.forEach((ref, index) => {
     const el = document.createElement("div");
     el.className = "ref-pick";

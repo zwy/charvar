@@ -5,15 +5,15 @@
 <main>
 <section id="tab-gen" class="tab-page active">
 <div class="card"><div class="row-head"><h2>① 生图设置</h2></div>
-<div class="gen-group">
-<div class="gen-group-title">主体与种子</div>
+<div class="form-section">
+<div class="form-section-title">主体与种子</div>
 <div class="form-grid form-grid-2">
 <label>主体档案<select id="gen-subject"></select></label>
 <label id="gen-seed-field">种子<input type="number" id="gen-seed" min="0" placeholder="留空 = 随机（0–100000）"></label>
 </div>
 </div>
-<div class="gen-group">
-<div class="gen-group-title">供应商参数</div>
+<div class="form-section">
+<div class="form-section-title">供应商参数</div>
 <div class="adhoc-switch">
 <div class="segmented" id="gen-backend"><button type="button" class="seg active" data-backend="comfyui">ComfyUI</button><button type="button" class="seg" data-backend="openrouter">OpenRouter</button><button type="button" class="seg" data-backend="dreamina">即梦</button></div>
 <span id="gen-model-field" class="hint"></span>
@@ -28,8 +28,8 @@
 </div>
 <span id="gen-dim-preview" class="hint"></span>
 </div>
-<div class="gen-group">
-<div class="gen-group-title"><span>参考图</span><span id="gen-ref-count" class="hint"></span></div>
+<div class="form-section">
+<div class="form-section-title"><span>参考图</span><span id="gen-ref-count" class="hint"></span></div>
 <div id="gen-ref-list" class="ref-grid"></div>
 <div class="actions">
 <label class="btn file-btn">上传参考图<input type="file" id="gen-ref-file" accept="image/*" multiple hidden></label>
@@ -41,8 +41,8 @@
 </div>
 </div>
 <div class="card"><div class="row-head"><h2>② 生成提示词</h2></div>
-<div class="gen-group">
-<div class="gen-group-title">预设与服装</div>
+<div class="form-section">
+<div class="form-section-title">预设与服装</div>
 <div class="gen-mode-row"><span class="field-label">生成模式</span><div class="segmented">
 <button id="gen-mode-classic" class="seg active" data-mode="classic" type="button">经典模板</button>
 <button id="gen-mode-llm" class="seg" data-mode="llm" type="button">LLM 优化</button>
@@ -53,8 +53,8 @@
 <label>组合顺序<select id="gen-outfit-order"><option value="outfit_first">服装优先（每件连播全部动作）</option><option value="pose_first">动作优先（每个动作连播全部服装）</option></select></label>
 </div>
 </div>
-<div class="gen-group">
-<div class="gen-group-title">提示词参数</div>
+<div class="form-section">
+<div class="form-section-title">提示词参数</div>
 <div class="form-grid">
 <label>条数<input type="number" id="gen-count" placeholder="留空 = 预设全部" min="1"></label>
 <label>采样<select id="gen-sampling"><option value="all">all（默认顺序）</option><option value="first">first（取前 N 条）</option><option value="random">random（按种子抽取）</option></select></label>
@@ -115,7 +115,7 @@
 <details class="import-box"><summary>粘贴 YAML 导入档案</summary><textarea id="s-yaml" rows="8" placeholder="id: silver_witch&#10;name: 银白女巫&#10;subject_noun: woman&#10;trigger_word: sw1tch&#10;style_lock: [the original illustration style]&#10;identity_lock: [long silver-white hair]&#10;outfit_lock: [the black witch robe]"></textarea><div class="actions"><button id="btn-subject-import">解析并保存</button></div></details></div>
 <div class="card" id="subject-images-card" hidden><h2>档案图片（生成变体时可作参考图）</h2>
 <div class="slot-toolbar">
-<span class="hint">两步流程：先就绪「人物半身像＋三视图」（生成或上传），再生成 / 上传其余 4 种。</span>
+<span class="hint">先就绪「人物半身像＋三视图」，再生成 / 上传其余 4 种。</span>
 <div class="actions">
 <label class="check seed-inline">统一种子<input type="number" id="slot-seed" value="0"></label>
 <button id="btn-slot-seed-random" type="button" class="btn-sm" title="随机生成一个种子（0–100000）">随机种子</button>
@@ -125,14 +125,13 @@
 </div>
 <div id="subject-image-slots" class="slot-grid"></div></div>
 <div class="card" id="template-card" hidden><h2>角色全场景通用提示词模板</h2>
-<span class="hint">markdown 文档，LLM 生成角色相关提示词时的参考资料；每个主体一份。</span>
+<span class="hint">markdown · LLM 改写时的参考资料</span>
 <div class="actions"><button id="btn-template-edit" class="primary">编辑模板（弹窗）</button><label class="btn file-btn">从 .md 文件载入<input type="file" id="template-file" accept=".md,.markdown,.txt" hidden></label><span id="template-status" class="status"></span></div>
 <div id="template-md-view" class="md-view" hidden></div></div>
 </section>
 <section id="tab-recipes" class="tab-page">
 <div class="card"><div class="row-head"><h2>视频配方</h2><div class="actions"><button id="btn-recipes-refresh">刷新</button></div></div>
 <div class="table-wrap"><table id="recipes-table"><thead><tr><th>配方</th><th>标题</th><th>类别</th><th>步骤链</th><th>操作</th></tr></thead><tbody></tbody></table></div>
-<span class="hint">配方定义在 presets/recipes/（yaml + md 成对）；运行状态落 data/generated/recipe_runs/（不进数据库）。</span>
 </div>
 <div class="card" id="recipe-detail-card" hidden><div class="row-head"><h2 id="recipe-detail-title">配方详情</h2><div class="actions"><label class="check">种子<input type="number" id="recipe-run-seed" placeholder="配方默认"></label><button id="btn-recipe-run" class="primary">开始运行</button><button id="btn-recipe-doc">查看文档</button></div></div>
 <div id="recipe-steps" class="chip-row"></div>
@@ -140,7 +139,7 @@
 <div class="card"><div class="row-head"><h2>配方运行</h2><div class="actions"><button id="btn-recipe-runs-refresh">刷新</button></div></div>
 <div class="table-wrap"><table id="recipe-runs-table"><thead><tr><th>配方运行</th><th>配方</th><th>状态</th><th>种子</th><th>时间</th><th>操作</th></tr></thead><tbody></tbody></table></div></div>
 </section>
-<section id="tab-runs" class="tab-page"><div class="card"><h2>生成历史</h2><div class="table-wrap"><table id="runs-table"><thead><tr><th>run_id</th><th>主体</th><th>预设</th><th>种子</th><th>条数</th><th>ComfyUI</th><th>时间</th><th>操作</th></tr></thead><tbody></tbody></table></div><div class="actions"><button id="btn-runs-refresh">刷新</button></div></div></section>
+<section id="tab-runs" class="tab-page"><div class="card"><div class="row-head"><h2>生成历史</h2><div class="actions"><button id="btn-runs-refresh">刷新</button></div></div><div class="table-wrap"><table id="runs-table"><thead><tr><th>run_id</th><th>主体</th><th>预设</th><th>种子</th><th>条数</th><th>ComfyUI</th><th>时间</th><th>操作</th></tr></thead><tbody></tbody></table></div></div></section>
 <section id="tab-settings" class="tab-page">
 <div class="card"><h2>LLM</h2><div class="form-grid">
 <label>Base URL<input type="text" id="set-llm-base" placeholder="留空 = 环境变量 LLM_BASE_URL"></label>
@@ -152,7 +151,7 @@
 <div class="card"><h2>生图 Workflow</h2><div class="workflow-grid">
 <label>文生图 workflow（主体图：三视图）<select id="set-t2i"></select></label>
 <label>图片编辑 workflow（LLM 模式变体 / 档案单图）<select id="set-edit"></select></label>
-<p class="form-note">提示：主体图各槽位一律按「主体图默认尺寸」的画幅 × 分辨率注入宽高出图，文生图（三视图）与图片编辑（其余 4 槽）都生效；参考图只提供外观，不决定画幅。</p>
+<p class="form-note">各槽位一律按「主体图默认尺寸」的画幅 × 分辨率出图，参考图只提供外观。</p>
 </div></div>
 <div class="card"><h2>OpenRouter 生图</h2>
 <div class="or-mode-grid">
@@ -175,7 +174,7 @@
 <label>API Key<input type="password" id="set-or-key" placeholder="留空 = OP_IMAGE_API_KEY / LLM_API_KEY" autocomplete="off"></label>
 <div class="actions"><button id="btn-or-models-refresh">拉取模型清单</button><span id="or-models-status" class="status"></span></div>
 </div>
-<p class="form-note">提示：模型选完会按 api-response.json 里该模型的 supported_parameters 动态加载分辨率/质量档；该模型不支持的档会自动收起并重置为空。两个模式对齐 ComfyUI 的文生图 / 图片编辑 workflow：带参考图的生图（档案其余 4 槽、批量推送勾了参考图、Playground 带参考图）走「图片编辑」这组。分辨率/质量留空 = 用请求显式值 > 设置页 > env（OP_IMAGE_T2I_* / OP_IMAGE_I2I_*）的默认，且值要在所选模型声明的枚举里才真正发送。API Key 留空 = 用环境变量；同一家的 OpenRouter key 可以直接复用 LLM_API_KEY。OpenRouter 不支持负向提示词，参考图按勾选顺序对应提示词里的 the first/second… reference image。</p>
+<p class="form-note">分辨率 / 质量档按所选模型的 supported_parameters 动态加载，不支持的档不显示。留空 = 用请求显式值 &gt; 这里 &gt; env。API Key 留空 = 用环境变量。</p>
 </div>
 <div class="card"><h2>即梦 Dreamina 生图</h2>
 <div class="form-grid">
@@ -183,22 +182,23 @@
 <label>分辨率档<select id="set-dreamina-resolution">
 <option value="">（跟随 env 默认）</option><option value="2K">2K</option><option value="4K">4K</option></select></label>
 </div>
-<p class="form-note">提示：即梦走本机官方 <code>dreamina</code> CLI，鉴权用 <code>dreamina login</code> 的登录态（这里没有 API Key）。即梦的模型都有编辑能力，不区分文生图 / 图片编辑配置组：带参考图自动走 image2image，不带走 text2image，共用这一组配置。即梦不暴露 seed；提示词上限 text2image 约 1600 字符、image2image 约 2000 字符（超限会硬失败）；生成消耗即梦积分/权益（仅限会员）。分辨率留空 = 请求显式值 > 设置页 > env（DREAMINA_IMAGE_RESOLUTION，默认 2K）。</p>
+<p class="form-note">走本机 <code>dreamina</code> CLI 登录态，没有 API Key。不暴露 seed；提示词上限 text2image 约 1600 字符、image2image 约 2000 字符（超限硬失败）。生成消耗即梦积分。</p>
 <span id="dreamina-cli-status" class="hint"></span>
 </div>
 <div class="card"><h2>OpenRouter 视频</h2>
 <div class="form-grid">
 <label>默认模型<select id="set-or-video-model"></select></label>
 </div>
-<p class="form-note">提示：「视频」页的默认模型（生效链：请求显式 &gt; 这里 &gt; <code>OP_VIDEO_MODEL</code> &gt; heygen/heygen-video-1）。时长/分辨率/画幅不在这里配 —— 枚举随所选模型的目录条目变，在视频页逐条选。API key 与生图共用（OP_IMAGE_API_KEY / LLM_API_KEY）。</p>
+<p class="form-note">生效链：请求显式 &gt; 这里 &gt; <code>OP_VIDEO_MODEL</code>。时长 / 分辨率 / 画幅在「视频」页逐条选。API key 与生图共用。</p>
 </div>
 <div class="card settings-save"><div class="actions">
 <button id="btn-settings-save" class="primary">保存设置</button><span id="settings-status" class="status"></span>
-<span class="hint">一次保存本页全部设置：LLM / 主体图默认尺寸 / 生图 workflow / OpenRouter / 即梦。改完记得点这里，别的卡片没有各自的保存按钮。</span>
+<span class="hint">一次保存本页全部设置。</span>
 </div></div>
 </section>
-<section id="tab-adhoc" class="tab-page"><div class="card"><h2>Playground</h2>
-<p class="form-note">给一段提示词直接出一张图：不进主体档案槽位、不跑预设批量、不落生成历史。产物落在 <code>data/generated/adhoc/</code>，同目录有 manifest.json 记录完整请求。CLI 是同一条通路：<code>charvar image comfyui|openrouter|dreamina</code>。</p>
+<section id="tab-adhoc" class="tab-page"><div class="card"><div class="row-head"><h2>Playground</h2><span class="hint">给一段提示词出一张图 · 不入档案、不进历史</span></div>
+<div class="form-section">
+<div class="form-section-title">供应商与参数</div>
 <div class="adhoc-switch">
 <div class="segmented" id="adhoc-backend"><button type="button" class="seg active" data-backend="comfyui">ComfyUI</button><button type="button" class="seg" data-backend="openrouter">OpenRouter</button><button type="button" class="seg" data-backend="dreamina">即梦</button></div>
 <div class="segmented seg-sm" id="adhoc-mode"><button type="button" class="seg active" data-mode="t2i">文生图</button><button type="button" class="seg" data-mode="i2i">图片编辑</button></div>
@@ -211,9 +211,14 @@
 <label id="adhoc-quality-field" hidden>质量档<select id="adhoc-quality"></select></label>
 <label id="adhoc-seed-field">种子<input type="number" id="adhoc-seed" placeholder="留空 = 随机；填数值 = 固定复现"></label>
 <label id="adhoc-negative-field">负向提示词<input type="text" id="adhoc-negative" placeholder="留空 = 用 workflow 默认"></label>
-<label class="span2">提示词<textarea id="adhoc-prompt" rows="5" placeholder="a red apple on a wooden table"></textarea></label>
 </div>
-<div class="form-field" id="adhoc-refs-block" hidden><div class="field-label">参考图（最多 4 张，按顺序对应提示词里的 &lt;image1&gt;、&lt;image2&gt;）</div>
+</div>
+<div class="form-section">
+<div class="form-section-title">提示词</div>
+<label aria-label="提示词"><textarea id="adhoc-prompt" rows="5" placeholder="a red apple on a wooden table"></textarea></label>
+</div>
+<div class="form-section" id="adhoc-refs-block" hidden>
+<div class="form-section-title"><span>参考图</span><span id="adhoc-ref-count" class="hint"></span></div>
 <div id="adhoc-ref-list" class="ref-grid"></div>
 <div class="actions">
 <label class="btn file-btn">上传参考图<input type="file" id="adhoc-ref-file" accept="image/*" multiple hidden></label>
@@ -223,8 +228,8 @@
 <button id="btn-adhoc-ref-add" type="button">从主体档案加入</button>
 <button id="btn-adhoc-ref-clear" type="button">清空参考图</button>
 </div>
-<span id="adhoc-ref-hint" class="hint"></span></div>
-<div id="adhoc-refs-t2i-hint" class="hint full-row" hidden></div>
+</div>
+<div id="adhoc-refs-t2i-hint" class="hint" hidden></div>
 <div class="actions"><button id="btn-adhoc-generate" class="primary">出图</button><span id="adhoc-status" class="status"></span></div>
 </div>
 <div class="card" id="adhoc-result-card" hidden><div class="row-head"><h2>结果 <span id="adhoc-result-summary"></span></h2><div class="actions">
@@ -236,8 +241,9 @@
 <div class="card"><div class="row-head"><h2>最近生成</h2><div class="actions"><button id="btn-adhoc-recent-refresh">刷新</button></div></div>
 <div id="adhoc-recent" class="image-grid"></div></div>
 </section>
-<section id="tab-video" class="tab-page"><div class="card"><h2>视频</h2>
-<p class="form-note">给一段提示词直接出一段视频（OpenRouter 视频通路，异步作业）：不进主体档案槽位、不跑预设批量、不落生成历史。产物在 <code>data/generated/adhoc_video/</code>，manifest 记录请求与作业 id。按秒计费：面板有费用预估，提交前看一眼。CLI 是同一条通路：<code>charvar video openrouter</code>。</p>
+<section id="tab-video" class="tab-page"><div class="card"><div class="row-head"><h2>视频</h2><span class="hint">给一段提示词出一段视频 · 按秒计费，提交前看一眼费用预估</span></div>
+<div class="form-section">
+<div class="form-section-title">模式与参数</div>
 <div class="adhoc-switch">
 <div class="segmented" id="video-mode"><button type="button" class="seg active" data-mode="t2v">文生视频</button><button type="button" class="seg" data-mode="i2v">图生视频（首帧）</button></div>
 <span id="video-model-field" class="hint"></span>
@@ -248,9 +254,15 @@
 <label>分辨率档<select id="video-resolution"></select></label>
 <label>时长<select id="video-duration"></select></label>
 <label id="video-seed-field">种子<input type="number" id="video-seed" placeholder="留空 = 随机；填数值 = 固定复现"></label>
-<label class="span2">提示词<textarea id="video-prompt" rows="5" placeholder="a young woman performs a graceful solo dance ..."></textarea></label>
 </div>
-<div class="form-field" id="video-frame-block" hidden><div class="field-label">首帧图（图生视频；1 张 —— 用单人全身正面照，多人物拼图会出多人）</div>
+</div>
+<div class="form-section">
+<div class="form-section-title">提示词</div>
+<label aria-label="提示词"><textarea id="video-prompt" rows="5" placeholder="a young woman performs a graceful solo dance ..."></textarea></label>
+</div>
+<div class="form-section" id="video-frame-block" hidden>
+<div class="form-section-title">首帧图</div>
+<span class="hint">用单人全身正面照 —— 多人物拼图会出多人</span>
 <div id="video-frame-list" class="ref-grid"></div>
 <div class="actions">
 <label class="btn file-btn">上传首帧<input type="file" id="video-frame-file" accept="image/*" hidden></label>
@@ -260,8 +272,9 @@
 <button id="btn-video-frame-add" type="button">从主体档案加入</button>
 <button id="btn-video-frame-clear" type="button">移除首帧</button>
 </div>
-<span id="video-frame-hint" class="hint"></span></div>
-<div class="form-field" id="video-refs-block"><div class="field-label">参考图（最多 4 张，按顺序对应提示词里的 &lt;image1&gt;、&lt;image2&gt;；图生视频页签不发送参考图）</div>
+</div>
+<div class="form-section" id="video-refs-block">
+<div class="form-section-title"><span>参考图</span><span id="video-ref-count" class="hint"></span></div>
 <div id="video-ref-list" class="ref-grid"></div>
 <div class="actions">
 <label class="btn file-btn">上传参考图<input type="file" id="video-ref-file" accept="image/*" multiple hidden></label>
@@ -271,8 +284,10 @@
 <button id="btn-video-ref-add" type="button">从主体档案加入</button>
 <button id="btn-video-ref-clear" type="button">清空参考图</button>
 </div>
-<span id="video-ref-hint" class="hint"></span></div>
-<div class="form-field" id="video-vrefs-block"><div class="field-label">参考视频（≤2 条，mp4/mov/webm ≤48MB；仅 Seedance gen2+ 系列接 video_url，其它 provider 忽略）</div>
+</div>
+<div class="form-section" id="video-vrefs-block">
+<div class="form-section-title">参考视频</div>
+<span class="hint">≤2 条 · mp4/mov/webm ≤48MB · 仅 Seedance gen2+ 接 video_url，其它 provider 忽略</span>
 <div id="video-vref-list" class="ref-grid"></div>
 <div class="actions">
 <label class="btn file-btn">上传参考视频<input type="file" id="video-vref-file" accept="video/mp4,video/webm,video/quicktime,video/mpeg" hidden></label>
