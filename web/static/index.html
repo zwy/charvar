@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>charvar · 角色变体提示词生成器</title><link rel="stylesheet" href="/static/style.css"><link rel="icon" type="image/svg+xml" href="/static/favicon.svg"><link rel="alternate icon" type="image/png" sizes="1024x1024" href="/static/icon.png"><link rel="apple-touch-icon" href="/static/icon.png"></head><body>
 <header class="topbar"><div class="brand">charvar <span class="sub">角色变体提示词生成器</span></div><nav>
-<button class="tab active" data-tab="gen">生成</button><button class="tab" data-tab="adhoc">Playground</button><button class="tab" data-tab="video">视频</button><button class="tab" data-tab="subjects">主体档案</button><button class="tab" data-tab="runs">历史记录</button><button class="tab" data-tab="settings">设置</button></nav></header>
+<button class="tab active" data-tab="gen">生成</button><button class="tab" data-tab="adhoc">Playground</button><button class="tab" data-tab="video">视频</button><button class="tab" data-tab="recipes">配方</button><button class="tab" data-tab="subjects">主体档案</button><button class="tab" data-tab="runs">历史记录</button><button class="tab" data-tab="settings">设置</button></nav></header>
 <main>
 <section id="tab-gen" class="tab-page active"><div class="card"><h2>生成参数</h2>
 <div class="form-field gen-mode-row"><div class="field-label">生成模式</div><div class="segmented">
@@ -152,6 +152,17 @@
 <div class="actions"><button id="btn-template-edit" class="primary">编辑模板（弹窗）</button><label class="btn file-btn">从 .md 文件载入<input type="file" id="template-file" accept=".md,.markdown,.txt" hidden></label><span id="template-status" class="status"></span></div>
 <div id="template-md-view" class="md-view" hidden></div></div>
 </section>
+<section id="tab-recipes" class="tab-page">
+<div class="card"><div class="row-head"><h2>视频配方</h2><div class="actions"><button id="btn-recipes-refresh">刷新</button></div></div>
+<div class="table-wrap"><table id="recipes-table"><thead><tr><th>配方</th><th>标题</th><th>类别</th><th>步骤链</th><th>操作</th></tr></thead><tbody></tbody></table></div>
+<span class="hint">配方定义在 presets/recipes/（yaml + md 成对）；运行状态落 data/generated/recipe_runs/（不进数据库）。</span>
+</div>
+<div class="card" id="recipe-detail-card" hidden><div class="row-head"><h2 id="recipe-detail-title">配方详情</h2><div class="actions"><label class="check">种子<input type="number" id="recipe-run-seed" placeholder="配方默认"></label><button id="btn-recipe-run" class="primary">开始运行</button><button id="btn-recipe-doc">查看文档</button></div></div>
+<div id="recipe-steps" class="chip-row"></div>
+<pre id="recipe-doc" class="log" hidden></pre></div>
+<div class="card"><div class="row-head"><h2>配方运行</h2><div class="actions"><button id="btn-recipe-runs-refresh">刷新</button></div></div>
+<div class="table-wrap"><table id="recipe-runs-table"><thead><tr><th>配方运行</th><th>配方</th><th>状态</th><th>种子</th><th>时间</th><th>操作</th></tr></thead><tbody></tbody></table></div></div>
+</section>
 <section id="tab-runs" class="tab-page"><div class="card"><h2>生成历史</h2><div class="table-wrap"><table id="runs-table"><thead><tr><th>run_id</th><th>主体</th><th>预设</th><th>种子</th><th>条数</th><th>ComfyUI</th><th>时间</th><th>操作</th></tr></thead><tbody></tbody></table></div><div class="actions"><button id="btn-runs-refresh">刷新</button></div></div></section>
 <section id="tab-settings" class="tab-page">
 <div class="card"><h2>LLM</h2><div class="form-grid">
@@ -296,4 +307,4 @@
 <div class="card"><div class="row-head"><h2>最近生成</h2><div class="actions"><button id="btn-video-recent-refresh">刷新</button></div></div>
 <div id="video-recent" class="image-grid"></div></div>
 </section>
-</main><script src="/static/media.js"></script><script src="/static/app.js"></script><script src="/static/adhoc.js"></script><script src="/static/video.js"></script></body></html>
+</main><script src="/static/media.js"></script><script src="/static/app.js"></script><script src="/static/adhoc.js"></script><script src="/static/video.js"></script><script src="/static/recipes.js"></script></body></html>

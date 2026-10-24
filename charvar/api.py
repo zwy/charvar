@@ -48,6 +48,7 @@ from charvar.preset_loader import (
 from charvar import sticker_policy
 from charvar import outfit as outfit_service
 from charvar import overlay as overlay_service
+from charvar import recipes as recipes_service
 from charvar import video as video_service
 
 EXPORT_FORMATS = ("txt", "jsonl", "captions_zip", "captions")
@@ -123,6 +124,10 @@ class OverlayApplyRequest(BaseModel):
     text_from: Literal["outfit_label", "pose_tag", "variant_id", "fixed"] = "outfit_label"
     fixed: str | None = None           # text_from=fixed 的固定文本
     items: list[int] | None = None     # 缺省 = 全部成品图条目
+
+
+class RecipeRunRequest(BaseModel):
+    seed: int | None = None            # 缺省 = 配方级 seed
 
 
 class SubjectImageGenerateRequest(BaseModel):
@@ -2013,6 +2018,80 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                 raise HTTPException(getattr(exc, "status", 400), str(exc)) from exc
             except Exception as exc:  # noqa: BLE001
                 raise HTTPException(500, f"贴字失败：{exc}") from exc
+
+    # ---- 配方（presets/recipes/*.yaml + 线性执行器，状态落盘不建表） ----
+
+    @app.get("/recipes")
+    def api_recipes() -> list[dict[str, Any]]:
+        return recipes_service.list_recipes()
+
+    @app.get("/recipes/{name}")
+    def api_recipe_detail(name: str) -> dict[str, Any]:
+        try:
+            recipe = recipes_service.load_recipe(name)
+        except recipes_service.PresetError as exc:
+            raise HTTPException(getattr(exc, "status", 400), str(exc)) from exc
+        try:
+            doc = recipes_service.read_doc(name)
+        except recipes_service.PresetError as exc:
+            raise HTTPException(getattr(exc, "status", 400), str(exc)) from exc
+        return {
+            "name": recipe.name,
+            "type": recipe.type,
+            "version": recipe.version,
+            "title": recipe.title,
+            "category": recipes_service.category_of(recipe),
+            "subject": recipe.subject,
+            "seed": recipe.seed,
+            "doc": doc,
+            "steps": [
+                {
+                    "index": i,
+                    "label": s.label,
+                    "kind": s.kind,
+                    "manual": recipes_service.manual_default(s),
+                    "presets": s.presets,
+                    "push": s.push,
+                    "overlay": s.overlay,
+                    "video_preset": s.video_preset,
+                    "text_from": s.text_from,
+                    "run_id": s.run_id,
+                }
+                for i, s in enumerate(recipe.steps)
+            ],
+        }
+
+    @app.post("/recipes/{name}/run")
+    def api_recipe_run(name: str, req: RecipeRunRequest) -> dict[str, Any]:
+        # 同步执行（auto 步里 push 可能阻塞几分钟 —— 与 /runs/{id}/video 的 ffmpeg 合成同类）
+        with _db() as conn:
+            try:
+                return recipes_service.start_run(conn, name, seed=req.seed).model_dump()
+            except recipes_service.PresetError as exc:
+                raise HTTPException(getattr(exc, "status", 400), str(exc)) from exc
+            except Exception as exc:  # noqa: BLE001
+                raise HTTPException(500, f"配方执行失败：{exc}") from exc
+
+    @app.get("/recipe-runs")
+    def api_recipe_runs() -> list[dict[str, Any]]:
+        return recipes_service.list_recipe_runs()
+
+    @app.get("/recipe-runs/{run_id}")
+    def api_recipe_run_state(run_id: str) -> dict[str, Any]:
+        try:
+            return recipes_service.read_state(run_id).model_dump()
+        except recipes_service.PresetError as exc:
+            raise HTTPException(getattr(exc, "status", 400), str(exc)) from exc
+
+    @app.post("/recipe-runs/{run_id}/continue")
+    def api_recipe_run_continue(run_id: str) -> dict[str, Any]:
+        with _db() as conn:
+            try:
+                return recipes_service.advance_state(conn, run_id).model_dump()
+            except recipes_service.PresetError as exc:
+                raise HTTPException(getattr(exc, "status", 400), str(exc)) from exc
+            except Exception as exc:  # noqa: BLE001
+                raise HTTPException(500, f"配方继续失败：{exc}") from exc
 
     @app.get("/api/version")
     def api_version() -> dict[str, str]:

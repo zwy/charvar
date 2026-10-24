@@ -40,6 +40,8 @@ image_app = typer.Typer(help="Playground：给一段提示词直接出一张图"
 video_app = typer.Typer(help="Playground 视频：给一段提示词直接出一段视频（OpenRouter，异步作业）", no_args_is_help=True)
 app.add_typer(subject_app, name="subject")
 app.add_typer(presets_app, name="presets")
+recipes_app = typer.Typer(help="视频配方：线性步骤执行器（出图批 → 贴字 → 本地合成）", no_args_is_help=True)
+app.add_typer(recipes_app, name="recipes")
 app.add_typer(image_app, name="image")
 app.add_typer(video_app, name="video")
 
@@ -530,6 +532,91 @@ def overlay_cmd(
             typer.echo(f"  跳过 #{s['item_index']:03d}：{s['reason']}")
         if info["applied"]:
             typer.echo(f"产物目录：{info['applied'][0]['labeled_url'].rsplit('/', 1)[0]}".replace("/assets/labeled/", "/labeled/"))
+
+
+# ---------- recipes（视频配方执行器） ----------
+
+@recipes_app.command("list")
+def recipes_list() -> None:
+    from charvar import recipes as recipes_service
+
+    items = recipes_service.list_recipes()
+    if not items:
+        _die("没有找到任何配方（presets/recipes/*.yaml）")
+    for r in items:
+        if r.get("error"):
+            typer.secho(f"{r['name']}　配置错误：{r['error']}", fg=typer.colors.RED)
+            continue
+        steps = " → ".join(f"{s['label']}({s['kind']})" + ("［manual］" if s["manual"] else "") for s in r["steps"])
+        typer.echo(f"{r['name']}　{r['title'] or '-'}　类别 {r['category']}　步骤：{steps}")
+
+
+@recipes_app.command("status")
+def recipes_status(
+    run_id: Optional[str] = typer.Argument(None, help="配方 run_id；缺省列最近运行"),
+    json_out: bool = typer.Option(False, "--json"),
+) -> None:
+    """查看配方运行状态（缺省 = 列最近 20 次）。"""
+    from charvar import recipes as recipes_service
+
+    if run_id:
+        try:
+            state = recipes_service.read_state(run_id)
+        except PresetError as exc:
+            _die(str(exc))
+        states = [state]
+    else:
+        states = []
+        for row in recipes_service.list_recipe_runs()[:20]:
+            states.append(recipes_service.read_state(row["recipe_run_id"]))
+        if not states:
+            typer.echo("（还没有配方运行：先 charvar recipes run <配方名>）")
+    if json_out:
+        typer.echo(json.dumps([s.model_dump() for s in states], ensure_ascii=False, indent=2))
+        return
+    for state in states:
+        typer.echo(f"{state.recipe_run_id}　{state.status}　种子 {state.seed}")
+        for st in state.steps:
+            mark = {"pending": "·", "done": "✓", "failed": "✗"}.get(st.status, "?")
+            line = f"  {mark} {st.label}（{st.kind}）{st.status}"
+            if st.note:
+                line += f"　{st.note}"
+            typer.echo(line)
+
+
+@recipes_app.command("run")
+def recipes_run(
+    name: str = typer.Argument(..., help="配方名（presets/recipes/<name>.yaml）"),
+    seed: Optional[int] = typer.Option(None, "--seed", help="种子（缺省 = 配方级 seed）"),
+    continue_run: bool = typer.Option(False, "--continue", help="继续该配方最近一次未完成的运行（人工过目后）"),
+    json_out: bool = typer.Option(False, "--json", help="状态以 JSON 输出"),
+) -> None:
+    """启动 / 继续一次配方运行。状态落 data/generated/recipe_runs/<id>/manifest.json。"""
+    from charvar import recipes as recipes_service
+
+    with storage.connect() as conn:
+        try:
+            if continue_run:
+                runs = [r for r in recipes_service.list_recipe_runs() if r["recipe"] == name]
+                if not runs:
+                    _die(f"配方 {name} 没有可继续的运行（先不带 --continue 跑一次）")
+                state = recipes_service.advance_state(conn, runs[0]["recipe_run_id"])
+            else:
+                state = recipes_service.start_run(conn, name, seed=seed)
+        except PresetError as exc:
+            _die(str(exc))
+    if json_out:
+        typer.echo(json.dumps(state.model_dump(), ensure_ascii=False, indent=2))
+        return
+    typer.echo(f"配方运行 {state.recipe_run_id}　状态：{state.status}")
+    for st in state.steps:
+        mark = {"pending": "·", "done": "✓", "failed": "✗"}.get(st.status, "?")
+        line = f"  {mark} {st.label}（{st.kind}）{st.status}"
+        if st.note:
+            line += f"　{st.note}"
+        typer.echo(line)
+    if state.status == "waiting":
+        typer.echo("→ 停在人工检查点：过目/推送成品后执行 charvar recipes run %s --continue" % name)
 
 
 # ---------- image（Playground） ----------

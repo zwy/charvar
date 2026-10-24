@@ -268,9 +268,10 @@ def safe_run_id(run_id: str) -> str:
     return assets.safe_run_id(run_id)
 
 
-def _find_original(run_id: str, item_index: int) -> Path | None:
+def _find_original(run_id: str, item_index: int, images_dir: Path | None = None) -> Path | None:
+    base = images_dir if images_dir is not None else assets.original_dir(run_id)
     for suffix in [".png", ".jpg", ".jpeg", ".webp"]:
-        path = assets.original_dir(run_id) / f"{item_index:06d}{suffix}"
+        path = base / f"{item_index:06d}{suffix}"
         if path.exists():
             return path
     return None
@@ -318,8 +319,13 @@ def render_video(
     *,
     music_override: str | None = None,
     timeout: float = 900.0,
+    images_dir: Path | None = None,
 ) -> dict[str, Any]:
-    """把 run 里已有原图按预设顺序合成 MP4，返回产物信息。"""
+    """把 run 里已有原图按预设顺序合成 MP4，返回产物信息。
+
+    images_dir：可选源目录（缺省 original/）。配方执行器的贴字产物（labeled/）
+    从这里进；不传走老语义，现有调用零影响。
+    """
     fps = preset.fps
     frames_per_image = max(1, round(preset.seconds_per_image * fps))
     seconds_per_image = frames_per_image / fps
@@ -335,7 +341,7 @@ def render_video(
     skipped: list[int] = []
     used_images = 0
     for item_index in resolve_order(result.items, preset):
-        path = _find_original(run_id, item_index)
+        path = _find_original(run_id, item_index, images_dir)
         if path is None:
             skipped.append(item_index)
             continue

@@ -178,7 +178,10 @@ def normalize(text: str) -> str:
 
 def make_run_id(subject_id: str, preset_name: str, seed: int) -> str:
     stamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
-    return f"{subject_id}_{preset_name}_s{seed}_{stamp}"
+    # run_id 要过 assets.safe_run_id（[A-Za-z0-9_.-]）；组合预设名（a+b）里的 + 转下划线，
+    # 预设显示名保持原样（GenerateResult.preset 不动）。
+    safe_name = re.sub(r"[^A-Za-z0-9_.-]", "_", preset_name)
+    return f"{subject_id}_{safe_name}_s{seed}_{stamp}"
 
 
 def _apply_sampling(specs: list[VariantSpec], req: GenerateRequest) -> list[VariantSpec]:

@@ -60,6 +60,10 @@ $$(".tab").forEach((btn) => {
     if (btn.dataset.tab === "runs") loadRuns();
     if (btn.dataset.tab === "settings") loadSettings();
     if (btn.dataset.tab === "gen") renderRefPickers();
+    if (btn.dataset.tab === "recipes") {
+      loadRecipes().catch(() => {});
+      loadRecipeRuns().catch(() => {});
+    }
   });
 });
 

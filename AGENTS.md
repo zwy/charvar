@@ -179,3 +179,26 @@ DB → 仓库对偶：`charvar subject export <id>` 把已入库档案快照成 
 - 与 **sticker（带字表情包）** 是两套机制：sticker 的字是提示词驱动（模型原生画字，
   `charvar/sticker_policy.py` 的 display_text/lettering）；贴字是确定性 PIL 后处理。
   两者共存不冲突；**sticker 预设拒绝服装组合**（语义冲突，400）。
+
+## 视频配方（2026-10-24 接入）
+
+- **配方定义** = `presets/recipes/<slug>.yaml` + `<slug>.md` 成对（`charvar/recipes.py`；文档
+  `doc:` 相对 recipes/ 目录，读不到不阻塞）。大类由末步推导：合成配方（末步 video_synth，已支持）/
+  生成配方（末步 video_model，⑤期才接 kind）。YAML 严格模式：未知根/步字段显式报错。
+- **线性步骤**：`images`（主体+预设[+服装预设]笛卡尔积建 run，classic 模式；`push: comfyui`
+  自动提交+等待+同步成品，`reference_kinds` 注入 image1..N；`run_id: <既有 run>` = 绑定不建批）→
+  `overlay`（贴字步：`input`=前面 images 步 label，缺省最近一个）→ `video_synth`
+  （presets/video 预设合成本地 MP4；`use_labeled: true` 时同一来源 run 的贴字产物优先
+  ——`render_video` 加了可选 `images_dir`，缺省 original/ 不变）。消耗步统一 gate：
+  来源 run 成品没齐停在 waiting 并写原因，不算失败。
+- **检查点**：step.manual 缺省 images=False、overlay/video_synth=True。执行到 pending 的
+  manual 步停（status=waiting）；`--continue` / `POST /recipe-runs/{id}/continue` 批准当前
+  manual 步推进，之后的 manual 步再停；failed 步 continue 直接重试。
+- **状态**：`data/generated/recipe_runs/<recipe_id>/manifest.json`（recipe_id 白名单
+  `^recipe_[A-Za-z0-9_.-]+$` 且无 `..`，同 adhoc 严格度），**不建 DB 表**、不落 runs 表；
+  配方定义改版（步数不一致）时 continue 拒绝，要求重建。
+- 入口同语义三处：`charvar recipes list|run|status`（`--continue` 续最近一次）、
+  `/recipes` `/recipes/{name}` `/recipes/{name}/run` `/recipe-runs*` API、
+  顶栏「配方」页签（`web/static/recipes.js`：列表/详情/文档/开始运行/检查点继续/成片预览）。
+  示例配方：`presets/recipes/stockings_showcase.yaml`（自动推 ComfyUI，跑一次会真出 27 张图——
+  **跑之前想清楚**；demo 不真跑，测试里全链用绑定 run 的临时配方验证过）。

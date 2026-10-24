@@ -1,0 +1,38 @@
+# 合成配方：丝袜橱窗展示（黄裙波波头主体 × 白裙丝袜动作预设 × 8 档丝袜）。
+# 配方文档（流程/限制/参数）见同名 stockings_showcase.md；本 YAML 只是可执行的编排声明。
+# 画幅 9:16 + 2k（推 ComfyUI 时走 Qwen 官方像素表 1536×2752）；变体顺序 = reel 播放顺序。
+# 出图步 classic 模式：动作段中文逐字进提示词，服装段英文追加在动作段之后。
+name: stockings_showcase
+type: recipe
+version: 1
+title: 丝袜橱窗展示（3 动作 × 8 丝袜 + 贴名 + reel）
+doc: stockings_showcase.md
+subject: yellow_dress_bob
+seed: 2449
+steps:
+- kind: images
+  label: 主图
+  presets: [white_skirt_stockings_poses]
+  subject: yellow_dress_bob
+  reference_kinds: [front]
+  aspect: '9:16'
+  size: 2k
+  push: comfyui
+- kind: images
+  label: 主图24
+  presets: [white_skirt_stockings_poses, stockings_8]
+  subject: yellow_dress_bob
+  reference_kinds: [front]
+  aspect: '9:16'
+  size: 2k
+  push: comfyui
+- kind: overlay
+  label: 贴丝袜名
+  overlay: stockings_label_bl
+  input: 主图24
+  text_from: outfit_label
+- kind: video_synth
+  label: 成片
+  video_preset: reel_adaptive
+  input: 主图24
+  use_labeled: true

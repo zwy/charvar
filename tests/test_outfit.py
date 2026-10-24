@@ -166,13 +166,20 @@ rules:
 
 
 def test_generate_run_and_meta(silver_witch, tmp_path, monkeypatch):
-    """组合走 composer.generate：caption 带 outfit token，meta 带服装与中文 label。"""
+    """组合走 composer.generate：caption 带 outfit token，meta 带服装与中文 label。
+
+    run_id 里组合名的 + 必须已消毒（assets.safe_run_id 只认字母数字 _ . -）——
+    否则推送 ComfyUI 落盘那一刻才炸。
+    """
     outfit = outfit_service.parse_outfit_file(_write_outfit(tmp_path))
     combined = outfit_service.combine(_pose_preset(), outfit, "outfit_first")
     req = GenerateRequest(subject=silver_witch, seed=7)
     result = generate(silver_witch, combined, req)
     assert result.preset == "demo_pose+demo_outfits"
-    assert "+demo_outfits" in result.run_id
+    from charvar.assets import safe_run_id
+
+    safe_run_id(result.run_id)  # 不抛 = 合法
+    assert "+" not in result.run_id
     assert len(result.items) == 4
     item = result.items[0]
     assert "sheer black pantyhose" in item.caption
