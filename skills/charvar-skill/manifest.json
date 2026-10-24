@@ -1,0 +1,18 @@
+{
+  "name": "charvar-skill",
+  "version": "1.0.0",
+  "updated": "2026-10-25",
+  "description": "按提示词实际出图/出视频的 Claude Code skill：ComfyUI、OpenRouter、即梦三条通路 + 主体档案 CLI。",
+  "entrypoint": "SKILL.md",
+  "files": {
+    "manifest.json": "版本、文件清单与检查结果记录。",
+    "SKILL.md": "核心入口：三条生图通路、视频、主体档案命令与排错表。",
+    "references/cli.md": "完整 CLI 参数参考。"
+  },
+  "checks": {
+    "command": "python3 -m pytest tests/test_skills.py",
+    "last_run": "2026-10-25",
+    "result": "passed",
+    "note": "本 skill 无自带脚本；由仓库级 tests/test_skills.py 校验 frontmatter、版本同步与文件清单。"
+  }
+}

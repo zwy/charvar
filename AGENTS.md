@@ -61,6 +61,10 @@
 
 ## 仓库里的 skills（`skills/`）
 
+**开发或改 skill 前先读 `docs/skill 开发规范.md`** —— 包结构、frontmatter、渐进披露、
+版本三处同步、兄弟 skill 去重、测试分类（哪些机器查得到、哪些只能人工核）。
+规范里 ✅ 的部分由 `tests/test_skills.py` 自动校验（`python3 -m pytest -q` 会跑）。
+
 `scripts/install_cli.sh` 按 `SKILL_NAMES` 数组装**所有** skill，装法三处一致
 （全局软链 + 仓库内相对软链 + Claude Desktop 聊天面复制件 + manifest 登记）。
 改名/合并后要把旧名写进 `RETIRED_SKILL_NAMES`，否则新旧两个 skill 描述几乎相同，会抢同一个请求。
@@ -76,6 +80,8 @@
   旧名 `character-development` 已写进 `RETIRED_SKILL_NAMES` 退役。
 - 它自带静态检查：`python3 skills/character-forge/tests/run_checks.py`（`--record` 回写 manifest）。
   改了 SKILL.md / README.md / manifest.json 里的**版本号**要三处同步，否则检查会失败。
+  该脚本已接进仓库门禁（`tests/test_skills.py` 会调起它），交付前跑 `python3 -m pytest -q` 即可，
+  **不用**单独记着跑。
 - 两个 skill 配套：character-forge 产提示词与资产文档，charvar-skill 负责把提示词变成图。
   **别把出图逻辑写进 character-forge**，也别把角色开发流程写进 charvar-skill。
 

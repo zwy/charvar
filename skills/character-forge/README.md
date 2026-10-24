@@ -143,6 +143,9 @@ python3 scripts/prompt_budget.py my-prompt.txt --budget 2000 --strict --language
 python3 tests/run_checks.py
 ```
 
+> 在 charvar 仓库里，这个脚本已被仓库级门禁接住（`tests/test_skills.py` 会调起它），
+> 交付前跑 `python3 -m pytest -q` 即可，不必单独记着跑。单独跑它主要用于调试。
+
 覆盖可自动化的部分：Python 语法、Markdown 内部链接、占位符与超预算判定、交付模板中两项基础图的位置、是否残留互相冲突的旧交付条件、错误的字符换算与计费表述是否已清除、证据字段与双模式入口是否在文档中、文件存在且非空、示例资产中标注的字符数是否与实际测量一致、manifest 与实际文件是否一致、三处版本号是否同步。
 
 全部通过返回 0，有失败返回 1。夹具在 `tests/fixtures/`，均为明确标注的虚构内容。
