@@ -374,3 +374,79 @@ def test_list_recent_fields(env, monkeypatch):
     assert records[0]["duration"] == 5
     assert records[0]["resolution"] == "480p"
     assert records[0]["has_video"] is True
+
+
+# ---------- ⑤⑥：参考视频（video_url）与暂存视频池、cancelled/expired 终态 ----------
+
+
+def test_generate_video_reference_passthrough(env, monkeypatch):
+    calls = _stub_openrouter(monkeypatch)
+    _fake_poster(monkeypatch)
+    clip = env / "clip.mp4"
+    clip.write_bytes(_mp4_bytes())
+    result = adhoc_video.generate(_req(reference_video_paths=[clip]))
+    assert result.status == "ready"
+    body = calls["submit"][0]
+    parts = body["input_references"]
+    assert parts[0]["type"] == "video_url"
+    assert parts[0]["video_url"]["url"].startswith("data:video/mp4;base64,")
+    manifest = adhoc_video.read_manifest(result.run_id)
+    assert manifest["request"]["reference_video_paths"] == [str(clip)]
+
+
+def test_generate_video_reference_rejected_not_a_video(env):
+    bogus = env / "oops.mp4"
+    bogus.write_bytes(b"plain text")
+    with pytest.raises(adhoc_video.AdhocVideoError):
+        adhoc_video.validate(_req(reference_video_paths=[bogus]))
+
+
+def test_too_many_video_references_rejected(env):
+    clips = []
+    for _ in range(3):
+        p = env / "c.mp4"
+        p.write_bytes(_mp4_bytes())
+        clips.append(p)
+    req = _req(reference_video_paths=clips)
+    with pytest.raises(adhoc_video.AdhocVideoError) as exc_info:
+        adhoc_video.validate(req)
+    assert "2" in str(exc_info.value)
+
+
+def test_last_frame_passthrough(env, monkeypatch):
+    calls = _stub_openrouter(monkeypatch)
+    _fake_poster(monkeypatch)
+    entry = dict(openrouter_video.video_model_entry("heygen/heygen-video-1"))
+    entry["supported_frame_images"] = ["first_frame", "last_frame"]
+    monkeypatch.setattr(openrouter_video, "video_model_entry", lambda mid: entry)
+    last = _png(env / "last.png")
+    adhoc_video.generate(_req(last_frame=last))
+    body = calls["submit"][0]
+    assert body["frame_images"][0]["frame_type"] == "last_frame"
+
+
+def test_staged_video_reference_roundtrip_and_cleanup(env, monkeypatch):
+    calls = _stub_openrouter(monkeypatch)
+    _fake_poster(monkeypatch)
+    saved = adhoc_video.save_staged_video_reference(_mp4_bytes(), "clip.mp4")
+    assert saved.parent.name == "_vrefs"
+    assert adhoc_video.staged_video_reference(saved.stem) == saved
+    req = _req(reference_video_paths=[saved], staged_video_ref_ids=[saved.stem])
+    result = adhoc_video.generate(req)
+    assert result.status == "ready"
+    assert not saved.exists()  # ready 后清掉
+    body = calls["submit"][0]
+    assert body["input_references"][0]["type"] == "video_url"
+
+
+def test_staged_video_reference_bad_id(env):
+    with pytest.raises(adhoc_video.AdhocVideoError):
+        adhoc_video.staged_video_reference("../evil")
+
+
+def test_refresh_treats_cancelled_as_terminal(env, monkeypatch):
+    _stub_openrouter(monkeypatch, poll_payloads=[{"status": "cancelled", "error": "Job was cancelled"}])
+    pending = adhoc_video.generate(_req(wait=False))
+    summary = adhoc_video.refresh(pending.run_id)
+    assert summary["status"] == "failed"
+    assert "cancelled" in summary["error"].lower() or "cancel" in summary["error"].lower()

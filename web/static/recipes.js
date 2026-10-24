@@ -155,9 +155,16 @@ function showRecipeRun(runId) {
         });
         modalActions.appendChild(contBtn);
       } else if (state.status === "done") {
+        // 成片预览：video_synth 吃 runs 资产（assets/videos/<name>），video_model 吃
+        // adhoc_video 的 /videos/<run>/video；两处都可能有（生成配方里成片 = 最后一步）。
+        const vidModel = state.steps.find((s) => s.kind === "video_model" && s.outputs && s.outputs.video_url);
         const vid = state.steps.find((s) => s.outputs && s.outputs.video && s.outputs.video.name);
-        if (vid && vid.outputs.run_id) {
-          const url = `/runs/${encodeURIComponent(vid.outputs.run_id)}/assets/videos/${encodeURIComponent(vid.outputs.video.name)}`;
+        const url = vidModel
+          ? vidModel.outputs.video_url
+          : vid && vid.outputs.run_id
+          ? `/runs/${encodeURIComponent(vid.outputs.run_id)}/assets/videos/${encodeURIComponent(vid.outputs.video.name)}`
+          : "";
+        if (url) {
           const player = document.createElement("video");
           player.controls = true;
           player.muted = true;
@@ -167,7 +174,7 @@ function showRecipeRun(runId) {
           const dl = document.createElement("a");
           dl.className = "btn";
           dl.href = url;
-          dl.download = vid.outputs.video.name;
+          dl.download = vidModel ? vidModel.outputs.video_run_id : vid.outputs.video.name;
           dl.textContent = "下载成片";
           body.appendChild(dl);
         }
@@ -178,7 +185,7 @@ function showRecipeRun(runId) {
 }
 
 function KIND_LABEL(kind) {
-  const map = { images: "出图", overlay: "贴字", video_synth: "本地合成", video_model: "模型出片" };
+  const map = { images: "出图", adhoc_image: "单图", overlay: "贴字", video_synth: "本地合成", video_model: "模型出片" };
   return map[kind] || kind;
 }
 

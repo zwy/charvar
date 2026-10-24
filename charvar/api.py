@@ -230,13 +230,20 @@ class AdhocGenerateRequest(BaseModel):
     wait: bool = True
 
 
+class StagedVideoRefSpec(BaseModel):
+    """一条参考视频的来源（v1 只认「上传暂存」；配方里的视频素材走 refs 通道）。"""
+
+    staged_id: str
+
+
 class VideoGenerateRequest(BaseModel):
     """网页「视频」页的请求（与 CLI ``charvar video`` 同一套参数；OpenRouter 作业通路）。
 
     视频是异步作业：本端点只提交（202 + job id），前端按 /videos/{run_id}/status 轮询。
     首帧图 = 图生视频（frame_images）；参考图 = 参考生成（input_references）；
     两者同给时首帧优先（官方语义）。都只认「上传暂存 / 主体档案就绪图 /
-    Playground 最近生成原图」三种来源。
+    Playground 最近生成原图」三种来源。参考视频 = input_references 的 video_url
+    （Seedance gen2+ 才接，≤2 条，只认上传暂存）。
     """
 
     prompt: str
@@ -247,6 +254,7 @@ class VideoGenerateRequest(BaseModel):
     seed: int = 0
     first_frame: AdhocReferenceSpec | None = None
     references: list[AdhocReferenceSpec] = Field(default_factory=list)
+    video_references: list[StagedVideoRefSpec] = Field(default_factory=list)
 
 
 def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
@@ -1577,6 +1585,33 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         except adhoc_video_service.AdhocVideoError as exc:
             raise HTTPException(404, str(exc)) from exc
 
+    @app.post("/videos/video-references")
+    def api_video_reference_upload_video(file: UploadFile) -> dict[str, Any]:
+        """上传一条参考视频 → 暂存并返回 id（input_references 的 video_url；Seedance gen2+）。"""
+        data = file.file.read()
+        try:
+            path = adhoc_video_service.save_staged_video_reference(data, file.filename or "")
+        except adhoc_video_service.AdhocVideoError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        adhoc_video_service.prune_staged_video_references()
+        return {"id": path.stem, "name": file.filename or path.name, "path": str(path)}
+
+    @app.delete("/videos/video-references/{ref_id}")
+    def api_video_reference_delete_video(ref_id: str) -> dict[str, Any]:
+        try:
+            adhoc_video_service.staged_video_reference(ref_id).unlink(missing_ok=True)
+        except adhoc_video_service.AdhocVideoError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        return {"ok": True}
+
+    @app.get("/videos/video-reference/{ref_id}")
+    def api_video_reference_file_video(ref_id: str) -> FileResponse:
+        """暂存参考视频的预览/试放（提交成功并成片后会被清掉，404 是正常的）。"""
+        try:
+            return FileResponse(adhoc_video_service.staged_video_reference(ref_id))
+        except adhoc_video_service.AdhocVideoError as exc:
+            raise HTTPException(404, str(exc)) from exc
+
     @app.post("/videos/generate")
     def api_video_generate(req: VideoGenerateRequest) -> dict[str, Any]:
         """Playground 视频：给一段提示词出一段视频（异步作业，提交即返回）。
@@ -1587,6 +1622,14 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         first_frames, first_staged = (
             _video_reference_spec_paths([req.first_frame]) if req.first_frame else ([], [])
         )
+        video_ref_paths: list[Path] = []
+        video_staged_ids: list[str] = []
+        for spec in req.video_references:
+            try:
+                video_ref_paths.append(adhoc_video_service.staged_video_reference(spec.staged_id))
+            except adhoc_video_service.AdhocVideoError as exc:
+                raise HTTPException(400, str(exc)) from exc
+            video_staged_ids.append(spec.staged_id)
         video_req = adhoc_video_service.VideoRequest(
             prompt=req.prompt,
             model=(req.model or "").strip() or None,
@@ -1596,8 +1639,10 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             seed=req.seed,
             first_frame=first_frames[0] if first_frames else None,
             reference_paths=reference_paths,
+            reference_video_paths=video_ref_paths,
             wait=False,
             staged_ref_ids=staged_ids + first_staged,
+            staged_video_ref_ids=video_staged_ids,
         )
         try:
             result = adhoc_video_service.generate(video_req, db_path)
@@ -2056,6 +2101,16 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                     "video_preset": s.video_preset,
                     "text_from": s.text_from,
                     "run_id": s.run_id,
+                    "backend": s.backend,
+                    "model": s.model,
+                    "duration": s.duration,
+                    "resolution": s.resolution,
+                    "frame_from": s.frame_from,
+                    "frame_index": s.frame_index,
+                    "frame_ref": s.frame_ref,
+                    "reference_labels": s.reference_labels,
+                    "video_ref_labels": s.video_ref_labels,
+                    "video_from": s.video_from,
                 }
                 for i, s in enumerate(recipe.steps)
             ],

@@ -295,6 +295,13 @@
 <button id="btn-video-ref-clear" type="button">清空参考图</button>
 </div>
 <span id="video-ref-hint" class="hint"></span></div>
+<div class="form-field" id="video-vrefs-block"><div class="field-label">参考视频（≤2 条，mp4/mov/webm ≤48MB；仅 Seedance gen2+ 系列接 video_url，其它 provider 忽略）</div>
+<div id="video-vref-list" class="ref-grid"></div>
+<div class="actions">
+<label class="btn file-btn">上传参考视频<input type="file" id="video-vref-file" accept="video/mp4,video/webm,video/quicktime,video/mpeg" hidden></label>
+<button id="btn-video-vref-clear" type="button">清空参考视频</button>
+</div>
+</div>
 <div class="actions"><button id="btn-video-generate" class="primary">生成视频</button><span id="video-status" class="status"></span>
 <span class="hint" id="video-cost-hint"></span></div>
 </div>

@@ -69,9 +69,12 @@ class VideoRequest(BaseModel):
     aspect_ratio: str = "9:16"
     seed: int = 0
     first_frame: Path | None = None  # 首帧图（图生视频，单张）
+    last_frame: Path | None = None  # 尾帧图（first+last 模型；首尾成对或单独给）
     reference_paths: list[Path] = Field(default_factory=list)  # 参考图 ≤4
+    reference_video_paths: list[Path] = Field(default_factory=list)  # 参考视频 ≤2（Seedance gen2+）
     wait: bool = True  # CLI 用（阻塞到成品）；web 恒传 wait=False 走轮询
     staged_ref_ids: list[str] = Field(default_factory=list)  # web 暂存参考图 id，ready 时清理
+    staged_video_ref_ids: list[str] = Field(default_factory=list)  # web 暂存参考视频 id，ready 时清理
     out: Path | None = None
 
     def request_model(self) -> str:
@@ -154,6 +157,11 @@ def poster_file(run_id: str) -> Path:
 
 _STAGED_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp"}
 
+# 参考视频暂存（同款四件套的一个小变体）：实际容器按魔数判；上限 48MB
+# （base64 后 ~64MB 的请求体，别把 web 请求打爆）
+_VIDEO_MAX_BYTES = 48 * 1024 * 1024
+_VIDEO_REF_CAP = 2
+
 
 def save_staged_reference(data: bytes, filename: str = "") -> Path:
     """把上传的图存到暂存目录，返回路径。
@@ -204,6 +212,71 @@ def clear_staged_references(ref_ids: list[str]) -> None:
 def prune_staged_references(max_age_s: float = 24 * 3600) -> int:
     """清掉过期未用的暂存图，返回删掉几个（用户传了图没点生成就走了的兜底）。"""
     directory = refs_dir()
+    if not directory.is_dir():
+        return 0
+    now = time.time()
+    removed = 0
+    for path in directory.iterdir():
+        if not path.is_file():
+            continue
+        try:
+            if now - path.stat().st_mtime < max_age_s:
+                continue
+        except OSError:
+            continue
+        path.unlink(missing_ok=True)
+        removed += 1
+    return removed
+
+
+# ---------- 暂存参考视频（网页上传；图池之外独立目录，互不误删） ----------
+
+
+def video_refs_dir() -> Path:
+    """暂存参考视频目录：``<adhoc_video>/_vrefs/``。"""
+    return video_root() / "_vrefs"
+
+
+def save_staged_video_reference(data: bytes, filename: str = "") -> Path:
+    """把上传的视频存进暂存目录，按魔数判后缀（mp4/mov/mpeg/webm 之外直接拒）。"""
+    if not data:
+        raise AdhocVideoError("参考视频是空的")
+    if len(data) > _VIDEO_MAX_BYTES:
+        raise AdhocVideoError(
+            f"参考视频超过 {_VIDEO_MAX_BYTES // (1024 * 1024)}MB 上限（收到 {len(data) // (1024 * 1024)}MB）"
+        )
+    ext = openrouter_video.sniff_video_ext(data)
+    if ext == "bin":
+        raise AdhocVideoError("参考视频不是可识别的容器（mp4/mov/mpeg/webm）")
+    target = video_refs_dir() / f"{uuid.uuid4().hex}{'.mov' if ext == 'mov' else '.' + ext}"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(data)
+    return target
+
+
+def staged_video_reference(ref_id: str) -> Path:
+    """按 id 取暂存视频路径（非法 id 报错）。"""
+    if not re.fullmatch(r"[0-9a-f]{32}", str(ref_id or "")):
+        raise AdhocVideoError(f"非法参考视频 id：{ref_id}")
+    matches = sorted(video_refs_dir().glob(f"{ref_id}.*"))
+    for path in matches:
+        if path.suffix.lower() in (".mp4", ".mov", ".mpeg", ".mpg", ".webm") and path.is_file():
+            return path
+    raise AdhocVideoError(f"参考视频不存在或已清理：{ref_id}")
+
+
+def clear_staged_video_references(ref_ids: list[str]) -> None:
+    """删掉用完的暂存视频（成片 ready 时调用，失败时保留以便重试）。"""
+    for ref_id in ref_ids or []:
+        try:
+            staged_video_reference(ref_id).unlink(missing_ok=True)
+        except AdhocVideoError:
+            continue
+
+
+def prune_staged_video_references(max_age_s: float = 24 * 3600) -> int:
+    """清掉过期未用的暂存视频，返回删掉几个。"""
+    directory = video_refs_dir()
     if not directory.is_dir():
         return 0
     now = time.time()
@@ -296,8 +369,11 @@ def _new_manifest(req: VideoRequest, run_id: str, *, job_id: str = "", model: st
             "aspect_ratio": req.aspect_ratio,
             "seed": req.seed,
             "first_frame": str(req.first_frame or ""),
+            "last_frame": str(req.last_frame or ""),
             "reference_paths": [str(p) for p in req.reference_paths],
+            "reference_video_paths": [str(p) for p in req.reference_video_paths],
             "staged_ref_ids": list(req.staged_ref_ids),
+            "staged_video_ref_ids": list(req.staged_video_ref_ids),
             "out": str(req.out or ""),
         },
         "job": {"id": job_id, "status": "pending", "model": model},
@@ -344,12 +420,24 @@ def validate(req: VideoRequest) -> None:
     for path in req.reference_paths:
         if not Path(path).exists():
             raise AdhocVideoError(f"参考图不存在：{path}")
+    if len(req.reference_video_paths) > _VIDEO_REF_CAP:
+        raise AdhocVideoError(f"参考视频最多 {_VIDEO_REF_CAP} 条，收到 {len(req.reference_video_paths)} 条")
+    for path in req.reference_video_paths:
+        # 存在性 + 容器魔数都校验：把图片或别的文件当视频发出去只会烧一次提交费
+        if not Path(path).exists():
+            raise AdhocVideoError(f"参考视频不存在：{path}")
+        try:
+            openrouter_video.sniff_video_ref(Path(path))
+        except _ORError as exc:
+            raise AdhocVideoError(str(exc)) from exc
     if req.first_frame is not None and not Path(req.first_frame).exists():
         raise AdhocVideoError(f"首帧图不存在：{req.first_frame}")
+    if req.last_frame is not None and not Path(req.last_frame).exists():
+        raise AdhocVideoError(f"尾帧图不存在：{req.last_frame}")
 
 
-def _prepare_images(req: VideoRequest, run_dir: Path) -> tuple[Path | None, list[Path]]:
-    """首帧 + 参考图统一预处理（长边 1536 / JPEG q88 / 透明白底合成）。
+def _prepare_images(req: VideoRequest, run_dir: Path) -> tuple[Path | None, Path | None, list[Path]]:
+    """首帧 + 尾帧 + 参考图统一预处理（长边 1536 / JPEG q88 / 透明白底合成）。
 
     走 ``charvar.reference_images`` —— 不写新的压缩逻辑；编码成 data URL 在
     ``openrouter_video.build_body`` 里走 ``openrouter_image.encode_reference``。
@@ -360,12 +448,17 @@ def _prepare_images(req: VideoRequest, run_dir: Path) -> tuple[Path | None, list
         first_frame = reference_images.prepare_reference(
             Path(req.first_frame), cache_dir / "frame0.jpg"
         )
+    last_frame: Path | None = None
+    if req.last_frame is not None:
+        last_frame = reference_images.prepare_reference(
+            Path(req.last_frame), cache_dir / "frame_last.jpg"
+        )
     prepared: list[Path] = []
     for index, source in enumerate(req.reference_paths):
         prepared.append(
             reference_images.prepare_reference(Path(source), cache_dir / f"ref{index}.jpg")
         )
-    return first_frame, prepared
+    return first_frame, last_frame, prepared
 
 
 def _rewrite_prompt(prompt: str, has_images: bool) -> str:
@@ -447,8 +540,14 @@ def _submit(req: VideoRequest, run_id: str, db_path: Path | None) -> dict[str, A
         raise AdhocVideoError(
             "缺少 OpenRouter API Key：请设置 OP_IMAGE_API_KEY / LLM_API_KEY，或在「设置」页配置"
         )
-    first_frame, refs = _prepare_images(req, run_dir)
-    has_images = first_frame is not None or bool(refs)
+    first_frame, last_frame, refs = _prepare_images(req, run_dir)
+    # 参考视频不预处理（无压缩逻辑可用；原样 data URL 发），但先把魔数验一遍
+    for source in req.reference_video_paths:
+        try:
+            openrouter_video.sniff_video_ref(Path(source))
+        except _ORError as exc:
+            raise AdhocVideoError(str(exc)) from exc
+    has_images = first_frame is not None or bool(refs) or last_frame is not None
     prompt = _rewrite_prompt(req.prompt, has_images)
     try:
         body = openrouter_video.build_body(
@@ -459,7 +558,9 @@ def _submit(req: VideoRequest, run_id: str, db_path: Path | None) -> dict[str, A
             aspect_ratio=req.aspect_ratio,
             seed=req.seed,
             first_frame_path=first_frame,
+            last_frame_path=last_frame,
             reference_paths=refs,
+            reference_videos=list(req.reference_video_paths),
         )
         job = openrouter_video.submit(body, api_key=api_key)
     except _ORError as exc:
@@ -514,8 +615,9 @@ def _finalize(
         result.manifest_path = str(run_dir / "manifest.json")
         manifest["result"] = result.model_dump()
         manifest = _mark(run_dir, manifest, status="ready", error="")
-        # 暂存参考图用完了清掉（首帧也可能来自暂存）
+        # 暂存参考图/视频用完了清掉（首帧也可能来自暂存）
         clear_staged_references(list(request.get("staged_ref_ids") or []))
+        clear_staged_video_references(list(request.get("staged_video_ref_ids") or []))
     else:
         error = payload.get("error")
         error = str(error) if error else "OpenRouter 视频作业失败"
@@ -547,7 +649,7 @@ def refresh(run_id: str, db_path: Path | None = None) -> dict[str, Any]:
         return summary
     status_now = str(payload.get("status") or "")
     job["status"] = status_now or job.get("status") or ""
-    if status_now in ("completed", "failed"):
+    if status_now in ("completed", "failed", "cancelled", "expired"):
         submitted = float(manifest.get("submitted_at") or time.time())
         try:
             manifest = _finalize(run_id, manifest, payload, submitted)

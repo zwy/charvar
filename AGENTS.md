@@ -20,9 +20,11 @@
 
 - `charvar/adhoc_video.py` 是「给一段提示词出一段视频」的同构通路，这一轮只接 OpenRouter
   （`charvar/openrouter_video.py` 客户端）；`charvar/video.py` 是另一回事（静态图轮播合成）。
-- CLI：`charvar video openrouter`（`--prompt`/`--first-frame`/`--ref`/`--aspect`/`--duration`/
+- CLI：`charvar video openrouter`（`--prompt`/`--first-frame`/`--ref`/`--video-ref`/`--aspect`/`--duration`/
   `--resolution`/`--seed`/`--model`/`--out`/`--json`）与 `charvar video models`。
   产物落 `data/generated/adhoc_video/{id}/`（original/ 成片 + thumbs/ 海报帧 + manifest.json）。
+  参考视频（`--video-ref`，≤2）与首帧/参考图同给时官方语义 frame_images 优先；
+  参考视频只有 Seedance gen2+ 系认（其它 provider 忽略）。
 - **网页入口**：顶栏「视频」页签（`web/static/video.js`），后端 `/videos/*`（`charvar/api.py`），
   同一套 `charvar/adhoc_video.py`；改参数名/输出格式时 CLI、网页、skill 三处同步。
 - 视频是**异步作业**（`POST /api/v1/videos` → 202 + job id → 轮询 → `…/content` 下载）：
@@ -202,3 +204,63 @@ DB → 仓库对偶：`charvar subject export <id>` 把已入库档案快照成 
   顶栏「配方」页签（`web/static/recipes.js`：列表/详情/文档/开始运行/检查点继续/成片预览）。
   示例配方：`presets/recipes/stockings_showcase.yaml`（自动推 ComfyUI，跑一次会真出 27 张图——
   **跑之前想清楚**；demo 不真跑，测试里全链用绑定 run 的临时配方验证过）。
+
+## 生成配方与参考视频（2026-10-24 ⑤⑥ 接入）
+
+配方执行器新增两类**生成步**（`charvar/recipes.py`），配方大类由末步推导：
+末步 `video_model` = 生成配方（OpenRouter 视频模型直出）；其余 = 合成配方。
+
+- **`adhoc_image` 步**（单图，Playground 通路 `charvar.adhoc`）：`prompt` 必填
+  （原样使用，不做模板替换）+ `backend`（comfyui/openrouter/dreamina，缺省
+  openrouter）+ `model`/`aspect`/`resolution`/`quality`（仅 openrouter）/
+  `negative_prompt`（仅 comfyui）/`seed`（缺省配方级种子）/`workflow`（comfyui）。
+  参考图 = `reference_labels`（引用配方 `refs:`，见下）。产物落
+  `data/generated/adhoc/<id>/`，outputs 记 `image_run_id` + `/adhoc/<id>/image`；
+  retry 幂等（产物在就复用，不重复生成）。
+- **`video_model` 步**（OpenRouter 视频异步作业，`charvar.adhoc_video`）：
+  `prompt` 必填 + `model`/`duration`/`resolution`/`aspect`（不发送=留空）/
+  `seed`。帧：`frame_from`（前面 images/adhoc_image/overlay 步 label）+
+  `frame_index`（缺省 0）或 `frame_ref`（配方 refs 静态图）；`frame_slot`
+  first_frame 缺省 / last_frame；`last_frame_from`(+`last_frame_index`) 补尾帧。
+  参考素材：`reference_labels`（refs → input_references 图）+
+  `video_ref_labels`（video_refs → input_references 的 video_url，Seedance
+  gen2+ 才接）+ `video_from`（前面 video_synth/video_model 步的成片 → video_url）。
+  异步语义：提交（`adhoc_video.generate(wait=False)`，run_id 即刻进 outputs）
+  → 轮询 `adhoc_video.refresh` 直到 ready/failed 或超出 `wait_s`（缺省 300s；
+  超时转 waiting，作业本身在 OpenRouter 继续，continue 续查不重复提交）。
+  作业 failed → 步 failed；continue **清掉死作业重新提交**（重新计费，之前
+  的失败原因在 outputs.previous_error… 失败 manifest 留在 Playground 列表）。
+  提交被拒（枚举/key 错）= PresetError → failed，continue 前先修配置。
+- **refs / video_refs**（配方级素材声明，步内按 `label` 引用；label 全局唯一）：
+  - `refs:` 条目 `{from: subject|run|asset, …}` —— subject 必须配配方级
+    `subject:`（槽位图走 prepared_reference 缓存）；run 取
+    `original/{index:06d}.*`（`index: 0` 缺省）；asset =
+    `presets/recipes/assets/<单文件名>`（禁路径穿越；图片后缀）。
+  - `video_refs:` 条目同形但不允许 subject —— asset 视频或 `run` =
+    **adhoc_video 作业**（`video_file()`，成片 original/ 下唯一文件）。
+  - 缺素材/作业未完 → _GateStop（waiting 可 continue）；素材路径非法 → 解析期 400。
+- 配方示例：`presets/recipes/model_clip_demo.yaml`（生成配方：adhoc_image 首
+  帧[comfyui] → video_model 直出，heygen 480p $0.02/s）——两步都缺省 manual，
+  `run` 一次停 2 次检查点；真跑要 OpenRouter key。
+
+**参考视频通路（⑥，打在 Playground 视频上）**：
+
+- `openrouter_video.build_body` 增 `reference_videos`（→ `input_references` 的
+  `{"type":"video_url","video_url":{"url": data:…|https…}}`；官方只收
+  mp4/mpeg/mov/webm，按 ftyp/EBML 魔数嗅探、原文件 base64 上限 48MB）与
+  `last_frame_path`（frame_type=last_frame，first+last 成对或单给；模型声明
+  supported_frame_images 不含则 ParamError）；`input_references` 合计 ≤4 项。
+- `adhoc_video.VideoRequest` 增 `reference_video_paths` / `last_frame` /
+  `staged_video_ref_ids`；**参考视频不做图像预处理**（没有压缩逻辑，原样发），
+  提交前 existence+魔数双校验。
+- 暂存视频池 = `data/generated/adhoc_video/_vrefs/`（与 `_refs` 图池分开，互不
+  误删）：`save_staged_video_reference` / `staged_video_reference` /
+  `clear_staged_video_references` / `prune_staged_video_references`（24h 兜底）。
+- 入口同语义三处：CLI `charvar video openrouter --video-ref <file>`（可重复
+  ≤2）；网页「视频」页参考视频区（上传暂存 ≤2，t2v/i2v 都发）；
+  `/videos/video-references`+{ref_id} 暂存四件套与 `/videos/generate` 的
+  `video_references:[{staged_id}]`。配方里走 `video_refs`+`video_ref_labels`/
+  `video_from`（见上）。
+- **终态语义修正**：OpenRouter 官方 202 语义 cancelled/expired 也是终态 ——
+  `openrouter_video._TERMINAL_FAIL`（wait_for_job）与 `adhoc_video.refresh`
+  都按 failed 收尾并记 error，不会无限轮询。

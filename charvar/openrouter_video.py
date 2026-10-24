@@ -23,6 +23,7 @@ import json
 import logging
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -49,7 +50,7 @@ _LIST_MODELS_TIMEOUT_S = 60.0
 _MAX_REFERENCES = 4
 
 _TERMINAL_OK = "completed"
-_TERMINAL_FAIL = "failed"
+_TERMINAL_FAIL = ("failed", "cancelled", "expired")  # 官方 202 语义：cancelled/expired 也是终态
 
 
 class OpenRouterVideoError(RuntimeError):
@@ -260,6 +261,50 @@ def supports_first_frame(entry: dict[str, Any]) -> bool:
     return not frame_types or "first_frame" in frame_types
 
 
+def supports_last_frame(entry: dict[str, Any]) -> bool:
+    frame_types = _str_list(entry, "supported_frame_images")
+    return not frame_types or "last_frame" in frame_types
+
+
+# ---------- 视频参考（input_references 里的 video_url；Seedance gen2+ 才接） ----------
+
+_VIDEO_MIME = {
+    "mp4": "video/mp4",
+    "mov": "video/mov",
+    "webm": "video/webm",
+    "mpeg": "video/mpeg",
+    "mpg": "video/mpeg",
+}
+
+
+def sniff_video_ref(path: Path) -> str:
+    """参考视频文件的容器格式 → mime（官方仅收 mp4/mpeg/mov/webm）。
+
+    按魔数判，不按后缀（后缀骗人的例子生图侧已经踩过）：MP4/MOV 是 ftyp 盒子，
+    MKV/WebM 是 EBML 魔数。
+    """
+    head = path.read_bytes()[:12]
+    if len(head) >= 8 and head[4:8] == b"ftyp":
+        brand = bytes(head[8:12]).lower()
+        return "video/mov" if brand.startswith(b"qt") else "video/mp4"
+    if head.startswith(b"\x1a\x45\xdf\xa3"):
+        return "video/webm"
+    raise OpenRouterVideoParamError(
+        f"参考视频不是可识别的容器（mp4/mov/mpeg/webm）：{path.name}"
+    )
+
+
+def encode_video_reference(path: Any) -> str:
+    """参考视频 → data URL（本地文件；远程 URL 由调用方直接当 url 传）。"""
+    source = Path(path)
+    if not source.exists():
+        raise OpenRouterVideoParamError(f"参考视频不存在：{source}")
+    mime = sniff_video_ref(source)
+    import base64
+
+    return f"data:{mime};base64,{base64.b64encode(source.read_bytes()).decode('ascii')}"
+
+
 # ---------- 请求体 ----------
 
 
@@ -272,7 +317,9 @@ def build_body(
     aspect_ratio: str | None = None,
     seed: int | None = None,
     first_frame_path: Any = None,
+    last_frame_path: Any = None,
     reference_paths: list[Any] | None = None,
+    reference_videos: list[Any] | None = None,
 ) -> dict[str, Any]:
     """组装 ``POST /api/v1/videos`` 请求体；提交前按目录枚举校验（超枚举 400 白扣钱）。
 
@@ -280,10 +327,12 @@ def build_body(
     - resolution / aspect_ratio：值在模型枚举内才发，枚举外直接 ParamError；
     - seed：目录标 ``seed: false`` 的模型不发（如 avatar-iv）；目录没收录的模型
       照发，被 provider 拒收时由 :func:`submit` 自动降级；
-    - first_frame_path：单张首帧 → ``frame_images``（frame_type=first_frame）；
-      模型声明了 supported_frame_images 且不含 first_frame → ParamError；
-    - reference_paths：``input_references``（与首帧同给时 frame_images 优先，
-      这里不拦，由 provider 语义裁决）。
+    - first_frame_path / last_frame_path：成对或单独的首帧/尾帧图 →
+      ``frame_images``（frame_type=first_frame/last_frame）；模型声明了
+      supported_frame_images 且不含对应档 → ParamError；
+    - reference_paths / reference_videos：``input_references``（与首帧同给时
+      frame_images 优先，这里不拦，由 provider 语义裁决）。图按 data URL 发；
+      视频（Seedance gen2+ 才接）按 magic 嗅探容器后编码进 video_url data URL。
     """
     if not prompt or not prompt.strip():
         raise OpenRouterVideoParamError("prompt 不能为空")
@@ -330,25 +379,45 @@ def build_body(
     if seed is not None and (not entry or entry.get("seed")):
         body["seed"] = openrouter_image.normalize_seed(seed)
 
-    if first_frame_path is not None:
-        if not supports_first_frame(entry):
+    if first_frame_path is not None or last_frame_path is not None:
+        if first_frame_path is not None and not supports_first_frame(entry):
             raise OpenRouterVideoParamError(
                 f"模型 {model} 不支持首帧图（图生视频），请去掉首帧或换模型"
             )
-        body["frame_images"] = [
-            {
-                "type": "image_url",
-                "image_url": {"url": openrouter_image.encode_reference(first_frame_path)},
-                "frame_type": "first_frame",
-            }
-        ]
+        if last_frame_path is not None and not supports_last_frame(entry):
+            raise OpenRouterVideoParamError(
+                f"模型 {model} 不支持尾帧图（last_frame），请去掉尾帧或换模型"
+            )
+        frames: list[dict[str, Any]] = []
+        if first_frame_path is not None:
+            frames.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": openrouter_image.encode_reference(first_frame_path)},
+                    "frame_type": "first_frame",
+                }
+            )
+        if last_frame_path is not None:
+            frames.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": openrouter_image.encode_reference(last_frame_path)},
+                    "frame_type": "last_frame",
+                }
+            )
+        body["frame_images"] = frames
 
-    refs = list(reference_paths or [])[:_MAX_REFERENCES]
-    if refs:
-        body["input_references"] = [
-            {"type": "image_url", "image_url": {"url": openrouter_image.encode_reference(p)}}
-            for p in refs
-        ]
+    parts: list[dict[str, Any]] = []
+    for p in list(reference_paths or [])[:_MAX_REFERENCES]:
+        parts.append({"type": "image_url", "image_url": {"url": openrouter_image.encode_reference(p)}})
+    for v in list(reference_videos or []):
+        parts.append({"type": "video_url", "video_url": {"url": encode_video_reference(v)}})
+    if len(parts) > _MAX_REFERENCES:
+        raise OpenRouterVideoParamError(
+            f"input_references 最多 {_MAX_REFERENCES} 项（图+视频合计），收到 {len(parts)}"
+        )
+    if parts:
+        body["input_references"] = parts
     return body
 
 
@@ -468,7 +537,7 @@ def wait_for_job(
     while True:
         payload = poll(job_id, api_key=api_key)
         status = str(payload.get("status") or "")
-        if status in (_TERMINAL_OK, _TERMINAL_FAIL):
+        if status in (_TERMINAL_OK, *_TERMINAL_FAIL):
             return payload
         if time.monotonic() >= deadline:
             name = timeout_error or TimeoutError

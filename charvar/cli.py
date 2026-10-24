@@ -841,6 +841,9 @@ def video_openrouter(
     ref: Optional[list[str]] = typer.Option(
         None, "--ref", help="参考图路径，可重复（最多 4 张；input_references 参考生成）"
     ),
+    video_ref: Optional[list[str]] = typer.Option(
+        None, "--video-ref", help="参考视频路径，可重复（≤2 条 mp4/mov/webm；Seedance gen2+ 才接）"
+    ),
     first_frame: Optional[str] = typer.Option(
         None, "--first-frame", help="首帧图路径（1 张；图生视频 frame_images，主体一致性靠它）"
     ),
@@ -870,6 +873,7 @@ def video_openrouter(
         prompt=_read_prompt(prompt, prompt_file),
         backend="openrouter",
         reference_paths=[Path(p).expanduser() for p in (ref or [])],
+        reference_video_paths=[Path(p).expanduser() for p in (video_ref or [])],
         first_frame=Path(first_frame).expanduser() if first_frame else None,
         aspect_ratio=aspect,
         duration=duration,

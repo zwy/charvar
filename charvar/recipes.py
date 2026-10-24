@@ -3,20 +3,28 @@
 配方 = 一步列表的编排声明（2026-10-24 方案定稿）：
 - ``images``      主体档案 + 预设（可带服装预设笛卡尔积）建 run（classic 模式）；
                   ``push: comfyui`` 时自动提交并等待 + 同步成品（复用 exporter/assets 原语）；
+- ``adhoc_image`` 单图（Playground 通路，charvar.adhoc）：独立提示词出一张图
+                  （openrouter/comfyui/dreamina），用于配方自带的首帧/参考图；
 - ``overlay``     贴字预设对指定 images 步的成品图贴字（PIL 后处理，落 labeled/，原图不动）；
-- ``video_synth`` 本地 ffmpeg 合成（presets/video/*.yaml），可吃贴字产物（labeled/）。
+- ``video_synth`` 本地 ffmpeg 合成（presets/video/*.yaml），可吃贴字产物（labeled/）；
+- ``video_model`` 视频模型直出（Playground 视频通路，charvar.adhoc_video）：首帧（或尾帧）
+                  来自前面出图/贴字/单图步或配方 refs，参考视频/图片来自配方 refs，
+                  OpenRouter 异步作业（提交 → 轮询，wait_s 超时转 waiting 可续查）。
 
-大类由末步推导：末步 video_model → 生成配方（⑤期接入 kind）；其余 → 合成配方。
+大类由末步推导：末步 video_model → 生成配方；其余 → 合成配方。
 人工检查点：step.manual（缺省 images=False、其余 True）——执行到 pending 的
 manual 步就停在 waiting；人工过目后 advance 继续。
 
 状态全部落盘 ``data/generated/recipe_runs/<id>/manifest.json``，不建 DB 表；
-出图步产生的 run 仍是普通 runs（复用现有推送/图墙/同步全套）。
+出图步产生的 run 仍是普通 runs（复用现有推送/图墙/同步全套）；
+adhoc_image / video_model 步的产物落各自的 adhoc 目录（不进 runs 表），outputs 里
+记 run_id 与对外 URL。
 """
 from __future__ import annotations
 
 import json
 import re
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -28,6 +36,8 @@ from charvar import paths
 from charvar.preset_loader import VALID_ASPECT_RATIOS, PresetError
 
 TEXT_FROM_VALUES = ("outfit_label", "pose_tag", "variant_id", "fixed")
+
+_VIDEO_BACKENDS = ("comfyui", "openrouter", "dreamina")
 
 # 配方 run_id 直接拼进磁盘路径：与 adhoc.run_dir 同一严格白名单（另拦 ..）
 _RECIPE_RUN_ID_RE = re.compile(r"^recipe_[A-Za-z0-9_.-]+$")
@@ -42,19 +52,29 @@ _STEP_ROOT_KEYS = frozenset(
         "subject", "presets", "outfit_order", "seed", "count", "sampling",
         "aspect", "size", "reference_kinds", "push", "workflow", "run_id",
         "overlay", "text_from", "fixed", "input", "video_preset", "music", "use_labeled",
+        # ---- ⑤ 生成配方步 ----
+        "prompt", "backend", "model", "duration", "resolution", "quality",
+        "negative_prompt", "reference_labels", "video_ref_labels",
+        "frame_from", "frame_index", "frame_ref", "frame_slot",
+        "last_frame_from", "last_frame_index", "video_from", "wait_s",
     }
 )
 
 
 class RecipeRef(BaseModel):
-    """配方自带的参考图/参考视频声明（⑤期 video_model 步消费；先占位校验）。"""
+    """配方自带的参考图/参考视频声明；步内按 label 引用（reference_labels 等）。
+
+    refs = 图片素材；video_refs = 视频素材（video_model 步消费，video_url 通路，
+    Seedance gen2+ 才接）。subject 来源只有图片（档案里没有视频槽位）。
+    """
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     source: Literal["subject", "run", "asset"] = Field(alias="from")
     slot: str | None = None       # source=subject：主体档案槽位（front/...）
-    run_id: str | None = None     # source=run：历史生成原图
-    path: str | None = None       # source=asset：配方素材（presets/recipes/assets/<name>/）
+    run_id: str | None = None     # source=run：历史生成原图（图片）或 adhoc_video 作业成片（视频）
+    path: str | None = None       # source=asset：配方素材（presets/recipes/assets/<file>）
+    index: int = 0                # source=run（图片）：original/ 里第几个条目
     label: str | None = None
 
 
@@ -63,9 +83,9 @@ class RecipeStep(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["images", "overlay", "video_synth"]
+    kind: Literal["images", "adhoc_image", "overlay", "video_synth", "video_model"]
     label: str | None = None
-    # None = 按 kind 缺省：images False（自动推进），其余 True（人工过目后继续）
+    # None = 按 kind 缺省：images False（自动推进），其余 True（人工过目/消费前确认）
     manual: bool | None = None
 
     # ---- images 步 ----
@@ -92,6 +112,27 @@ class RecipeStep(BaseModel):
     video_preset: str | None = None
     music: str | None = None           # 合成音乐文件名覆盖（缺省 = 视频预设内置）
     use_labeled: bool = True           # 输入 run 有贴字产物时优先用 labeled/
+
+    # ---- adhoc_image 步（单图；Playground 通路） ----
+    prompt: str | None = None          # 原样使用，不做模板替换
+    backend: Literal["comfyui", "openrouter", "dreamina"] = "openrouter"
+    model: str | None = None           # 空 = 设置页/env 默认链
+    resolution: str | None = None      # charvar 档位或 provider 枚举；空 = 跟随默认
+    quality: str | None = None         # 仅 OpenRouter 生效
+    negative_prompt: str | None = None # 仅 ComfyUI 生效
+    reference_labels: list[str] = Field(default_factory=list)  # recipe.refs 的 label
+
+    # ---- video_model 步（OpenRouter 异步作业） ----
+    duration: int | None = None        # 秒；None = 不发
+    frame_from: str | None = None      # 前面 images/adhoc_image/overlay 步的 label
+    frame_index: int = Field(default=0, ge=0)
+    frame_ref: str | None = None       # 或直接用 recipe.refs 的静态图当帧
+    frame_slot: Literal["first_frame", "last_frame"] = "first_frame"
+    last_frame_from: str | None = None # 尾帧（首个+尾帧模型）；同 frame_from 的解法
+    last_frame_index: int = Field(default=0, ge=0)
+    video_ref_labels: list[str] = Field(default_factory=list)  # recipe.video_refs 的 label
+    video_from: str | None = None      # 前面 video_synth/video_model 步的成片 → 参考视频
+    wait_s: float = Field(default=300.0, gt=0)  # 提交后轮询等待；超时转 waiting 可续查
 
 
 class Recipe(BaseModel):
@@ -166,16 +207,39 @@ def _validate_recipe(recipe: Recipe, path: Path) -> None:
             f"配方 {path.name} 的 name 非法：{recipe.name!r}"
             "（只允许字母/数字/下划线/连字符，且以字母或数字开头）"
         )
-    labels: list[str] = []
-    kinds_seen: set[str] = set()
+    # 素材 label 全局唯一（refs + video_refs 同一命名空间，步内引用按 label 查）
+    ref_labels: dict[str, None] = {}
+    for list_name, refs in (("refs", recipe.refs), ("video_refs", recipe.video_refs)):
+        for i, ref in enumerate(refs):
+            if ref.label:
+                if ref.label in ref_labels:
+                    raise PresetError(f"配方 {path.name} 的 {list_name}[{i}] label 重复：{ref.label!r}")
+                ref_labels[ref.label] = None
+    # ref 形态校验：subject 只能出图（档案里没有视频槽位）；video_refs 的 run 必须是 adhoc_video 作业
+    for list_name, refs in (("refs", recipe.refs), ("video_refs", recipe.video_refs)):
+        for ref in refs:
+            source_name = f"配方 {path.name} 的 {list_name}"
+            if ref.source == "subject" and not ref.slot:
+                raise PresetError(f"{source_name} 里有 source=subject 但缺 slot")
+            if ref.source == "subject" and not recipe.subject:
+                raise PresetError(f"{source_name} 里有 source=subject 但配方没有 subject")
+            if ref.source == "run" and not ref.run_id:
+                raise PresetError(f"{source_name} 里有 source=run 但缺 run_id")
+            if ref.source == "asset" and not ref.path:
+                raise PresetError(f"{source_name} 里有 source=asset 但缺 path")
+            if list_name == "video_refs" and ref.source == "subject":
+                raise PresetError(f"{source_name} 不支持 source=subject（主体档案没有视频；用 asset 或 run）")
+
+    images_seen = False
+    labels: list[str] = []  # 当前步**之前**的步 label（video_model 的引用必须指向前置步）
+    by_label: dict[str, RecipeStep] = {}
     for i, step in enumerate(recipe.steps):
         label = step.label or f"step{i}"
         step.label = label
-        if label in labels:
+        if label in by_label:
             raise PresetError(f"配方 {path.name} 的步骤 label 重复：{label}（input 按 label 引用，必须唯一）")
-        labels.append(label)
         if step.kind in ("overlay", "video_synth"):
-            if "images" not in kinds_seen:
+            if not images_seen:
                 raise PresetError(f"配方 {path.name} 的 {label} 需要 input 前置 labels 步骤（本步之前没有 images 步骤）")
         if step.kind == "images":
             if not step.run_id and not step.presets:
@@ -185,21 +249,54 @@ def _validate_recipe(recipe: Recipe, path: Path) -> None:
                 f"配方 {path.name} 的 {label} aspect 非法：{step.aspect!r}"
                 f"（只支持 {'/'.join(VALID_ASPECT_RATIOS)}，YAML 里记得加引号）"
             )
+        if step.kind in ("adhoc_image", "video_model") and step.aspect == "auto":
+            raise PresetError(f"配方 {path.name} 的 {label}：该步画幅不支持 auto（写具体档位或留空）")
         if step.size is not None and step.size not in ("1k", "2k"):
             raise PresetError(f"配方 {path.name} 的 {label} size 只支持 1k/2k，当前 {step.size!r}")
         if step.kind == "overlay" and not step.overlay:
             raise PresetError(f"配方 {path.name} 的 {label}：overlay 必填（贴字预设名）")
         if step.kind == "video_synth" and not step.video_preset:
             raise PresetError(f"配方 {path.name} 的 {label}：video_preset 必填（presets/video/ 预设名）")
-        kinds_seen.add(step.kind)
-    # ref 占位：声明但不校验深语义（消费方在⑤期；这里挡非法引用形态）
-    for ref in [*recipe.refs, *recipe.video_refs]:
-        if ref.source == "subject" and not ref.slot:
-            raise PresetError(f"配方 {path.name} 的 refs 里有 source=subject 但缺 slot")
-        if ref.source == "run" and not ref.run_id:
-            raise PresetError(f"配方 {path.name} 的 refs 里有 source=run 但缺 run_id")
-        if ref.source == "asset" and not ref.path:
-            raise PresetError(f"配方 {path.name} 的 refs 里有 source=asset 但缺 path")
+        if step.kind == "adhoc_image":
+            if not (step.prompt or "").strip():
+                raise PresetError(f"配方 {path.name} 的 {label}：prompt 必填（单图步的原样提示词）")
+            for lab in step.reference_labels:
+                if lab not in ref_labels:
+                    raise PresetError(f"配方 {path.name} 的 {label}：reference_labels 里没有 {lab!r}（refs 里未声明）")
+        if step.kind == "video_model":
+            if not (step.prompt or "").strip():
+                raise PresetError(f"配方 {path.name} 的 {label}：prompt 必填（描述要生成什么动态）")
+            if step.frame_from and step.frame_ref:
+                raise PresetError(f"配方 {path.name} 的 {label}：frame_from 与 frame_ref 不能同给（首帧只有一个来源）")
+            for lab in step.reference_labels:
+                if lab not in ref_labels:
+                    raise PresetError(f"配方 {path.name} 的 {label}：reference_labels 里没有 {lab!r}（refs 里未声明）")
+            for lab in step.video_ref_labels:
+                if lab not in ref_labels:
+                    raise PresetError(f"配方 {path.name} 的 {label}：video_ref_labels 里没有 {lab!r}（video_refs 里未声明）")
+            if step.frame_ref and step.frame_ref not in ref_labels:
+                raise PresetError(f"配方 {path.name} 的 {label}：frame_ref {step.frame_ref!r}（refs 里未声明）")
+            # 帧来源：必须是本步之前、能产图的步骤（images/adhoc_image/overlay）
+            # 影片来源：必须是本步之前、能产视频的步骤（video_synth/video_model）
+            for source_label, allowed, field_name in (
+                (step.frame_from, ("images", "adhoc_image", "overlay"), "frame_from"),
+                (step.last_frame_from, ("images", "adhoc_image", "overlay"), "last_frame_from"),
+                (step.video_from, ("video_synth", "video_model"), "video_from"),
+            ):
+                if source_label is None:
+                    continue
+                target = by_label.get(source_label)
+                if target is None:
+                    raise PresetError(
+                        f"配方 {path.name} 的 {label}：{field_name} 引用的步骤不存在或不在本步之前：{source_label!r}"
+                    )
+                if target.kind not in allowed:
+                    raise PresetError(
+                        f"配方 {path.name} 的 {label}：{field_name} 不能指向 {target.kind} 步（{source_label}）"
+                    )
+        images_seen = images_seen or step.kind == "images"
+        labels.append(label)
+        by_label[label] = step
 
 
 def parse_recipe_file(path: Path) -> Recipe:
@@ -618,10 +715,313 @@ def _run_video_synth_step(conn, recipe: Recipe, state: RecipeRunState, step: Rec
     }
 
 
+_IMAGE_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp")
+_VIDEO_SUFFIXES = (".mp4", ".mov", ".mpeg", ".mpg", ".webm")
+# video_model 步提交后的轮询节奏（测试里 monkeypatch 这个常量提速）
+_VIDEO_POLL_INTERVAL_S = 5.0
+
+
+def _conn_db_path(conn) -> Path | None:
+    """调用方打开的 DB 文件路径（PRAGMA database_list）；转传 adhoc 通路保证设置同源。
+
+    内存库/读不到时回 None（adhoc 侧落到默认 data 目录库）。
+    """
+    try:
+        for row in conn.execute("PRAGMA database_list"):
+            if str(row[1]) == "main":
+                file_name = str(row[2] or "")
+                return Path(file_name) if file_name else None
+    except Exception:  # noqa: BLE001 - 拿不到就用默认库
+        pass
+    return None
+
+
+def _recipe_asset_path(recipe_name: str, path: str, *, video: bool) -> Path:
+    """配方素材 → ``presets/recipes/assets/<file>``；只允许单文件名（禁路径穿越）。
+
+    缺文件/类型不对是「把文件放好就能解决」的状态 → _GateStop（waiting，可 continue）。
+    """
+    if not path or "/" in path or "\\" in path or ".." in path:
+        raise PresetError(f"配方 {recipe_name} 的素材路径不合法：{path!r}（只允许 assets/ 下一个文件名）")
+    target = recipes_dir() / "assets" / path
+    if not target.exists():
+        raise _GateStop(f"配方素材不存在：presets/recipes/assets/{path}（放好文件后 continue）")
+    suffix = target.suffix.lower()
+    expected = _VIDEO_SUFFIXES if video else _IMAGE_SUFFIXES
+    if suffix not in expected:
+        raise _GateStop(f"配方素材类型不对：{path}（要 {'/'.join(expected)}）")
+    return target
+
+
+def _resolve_ref_image(conn, recipe: Recipe, label: str) -> Path:
+    """``recipe.refs`` 的 label → 本地图片路径（主体槽位 / run 条目 / 配方素材）。"""
+    ref = next((r for r in recipe.refs if r.label == label), None)
+    if ref is None:
+        raise PresetError(f"配方 {recipe.name}：refs 里没有 label {label!r}")
+    if ref.source == "asset":
+        return _recipe_asset_path(recipe.name, str(ref.path), video=False)
+    if ref.source == "run":
+        from charvar.assets import original_dir
+
+        run_id = str(ref.run_id or "")
+        for suffix in _IMAGE_SUFFIXES:
+            candidate = original_dir(run_id) / f"{int(ref.index):06d}{suffix}"
+            if candidate.exists():
+                return candidate
+        raise _GateStop(f"参考图不存在：run {run_id} 第 {ref.index} 条（成品出齐后再 continue）")
+    # subject：archive 槽位图，走预处理缓存（与 ComfyUI push / OpenRouter 发送同一份）
+    from charvar import reference_images, subject_images
+
+    subject_id = str(recipe.subject or "")
+    local = subject_images.find_reference_file(subject_id, str(ref.slot))
+    if local is None:
+        raise _GateStop(
+            f"主体档案 {subject_id or '（未设）'} 没有 {ref.slot} 槽位图（先在主体档案生成/上传，或去掉该 ref）"
+        )
+    return reference_images.prepared_reference(
+        local, subject_images.subject_dir(subject_id), str(ref.slot)
+    )
+
+
+def _resolve_ref_video(recipe: Recipe, label: str) -> Path:
+    """``recipe.video_refs`` 的 label → 本地视频路径（配方素材 / Playground 视频作业成片）。"""
+    ref = next((r for r in recipe.video_refs if r.label == label), None)
+    if ref is None:
+        raise PresetError(f"配方 {recipe.name}：video_refs 里没有 label {label!r}")
+    if ref.source == "asset":
+        return _recipe_asset_path(recipe.name, str(ref.path), video=True)
+    from charvar import adhoc_video
+
+    try:
+        return adhoc_video.video_file(str(ref.run_id))
+    except adhoc_video.AdhocVideoError as exc:
+        raise PresetError(f"配方 {recipe.name} 的参考视频 run_id 不合法：{exc}") from exc
+    except FileNotFoundError as exc:
+        raise _GateStop(f"参考视频不存在：adhoc_video {ref.run_id}（作业成片后 continue）") from exc
+
+
+def _produce_frame(conn, state: RecipeRunState, source_label: str, item_index: int) -> Path:
+    """``frame_from`` 步的产物图（run original / 贴字 labeled / 单图 original）。"""
+    target = next((s for s in state.steps if s.label == source_label), None)
+    if target is None or target.status != "done":
+        raise _GateStop(f"首帧来源步骤 {source_label or '?'} 未完成")
+    if target.kind == "adhoc_image":
+        from charvar import adhoc as adhoc_service
+
+        run_id = str(target.outputs.get("image_run_id") or "")
+        try:
+            return adhoc_service.original_file(run_id)
+        except (FileNotFoundError, adhoc_service.AdhocError) as exc:
+            raise _GateStop(f"单图产物不存在：{run_id}（{exc}）") from exc
+    if target.kind == "overlay":
+        directory = Path(str(target.outputs.get("overlay_dir") or ""))
+        for suffix in _IMAGE_SUFFIXES:
+            candidate = directory / f"{item_index:06d}{suffix}"
+            if candidate.exists():
+                return candidate
+        raise _GateStop(f"贴字产物不存在：{directory}/{item_index:06d}.*（重跑贴字步后 continue）")
+    from charvar.assets import original_dir
+
+    run_id = str(target.outputs.get("run_id") or "")
+    for suffix in _IMAGE_SUFFIXES:
+        candidate = original_dir(run_id) / f"{item_index:06d}{suffix}"
+        if candidate.exists():
+            return candidate
+    raise _GateStop(f"首帧图不存在：run {run_id} 第 {item_index} 条（成品没出齐？先推送同步再 continue）")
+
+
+def _produce_video(state: RecipeRunState, source_label: str) -> Path:
+    """``video_from`` 步的成片（本地合成 videos/ / 模型成片 adhoc_video original/）。"""
+    target = next((s for s in state.steps if s.label == source_label), None)
+    if target is None or target.status != "done":
+        raise _GateStop(f"参考视频来源步骤 {source_label or '?'} 未完成")
+    if target.kind == "video_model":
+        from charvar import adhoc_video
+
+        run_id = str(target.outputs.get("video_run_id") or "")
+        try:
+            return adhoc_video.video_file(run_id)
+        except (FileNotFoundError, adhoc_video.AdhocVideoError) as exc:
+            raise _GateStop(f"模型成片不存在：{run_id}（{exc}）") from exc
+    run_id = str(target.outputs.get("run_id") or "")
+    name = str((target.outputs.get("video") or {}).get("name") or "")
+    if not run_id or not name:
+        raise _GateStop(f"来源步骤 {source_label} 没有可复用的成片")
+    from charvar.assets import resolve_run_asset
+
+    try:
+        return resolve_run_asset(run_id, "videos", name)
+    except (ValueError, FileNotFoundError) as exc:
+        raise _GateStop(f"成片文件不存在：{run_id}/videos/{name}（{exc}）") from exc
+
+
+def _run_adhoc_image_step(conn, recipe: Recipe, state: RecipeRunState, step: RecipeStep, st: StepState) -> dict[str, Any]:
+    """单图步（Playground 通路）：一张独立提示词图，用作首帧/参考图。"""
+    from charvar import adhoc as adhoc_service
+
+    run_id = str(st.outputs.get("image_run_id") or "")
+    if run_id:
+        try:
+            adhoc_service.original_file(run_id)
+            return {"image_run_id": run_id, "image_url": f"/adhoc/{run_id}/image",
+                    "note": "复用已有单图（要重出请删配方运行重建）"}
+        except (FileNotFoundError, adhoc_service.AdhocError):
+            pass  # 产物被清了（或 run_id 脏）：走重新生成
+
+    reference_paths = [_resolve_ref_image(conn, recipe, lab) for lab in step.reference_labels]
+    req = adhoc_service.AdhocRequest(
+        prompt=str(step.prompt or ""),
+        backend=step.backend,
+        model=step.model,
+        negative_prompt=step.negative_prompt,
+        quality=step.quality,
+        reference_paths=reference_paths,
+        aspect_ratio=str(step.aspect or "3:4"),
+        resolution=step.resolution or "",
+        seed=int(step.seed) if step.seed is not None else int(recipe.seed),
+        workflow=step.workflow,
+        wait=True,
+    )
+    try:
+        result = adhoc_service.generate(req, _conn_db_path(conn))
+    except adhoc_service.AdhocError as exc:
+        raise PresetError(f"{step.label}：{exc}") from exc
+    new_run_id = Path(result.manifest_path).parent.name
+    return {
+        "image_run_id": new_run_id,
+        "image_url": f"/adhoc/{new_run_id}/image",
+        "width": result.width,
+        "height": result.height,
+        "model": result.model,
+        "cost": result.cost,
+    }
+
+
+def _submit_video_job(conn, recipe: Recipe, state: RecipeRunState, step: RecipeStep) -> tuple[str, str]:
+    """解析帧/参考资料并提交 OpenRouter 视频作业，返回 (adhoc_video run_id, job_id)。"""
+    from charvar import adhoc_video
+
+    frame_path: Path | None = None
+    last_frame_path: Path | None = None
+    if step.frame_ref:
+        frame_path = _resolve_ref_image(conn, recipe, step.frame_ref)
+    if step.frame_from:
+        produced = _produce_frame(conn, state, step.frame_from, step.frame_index)
+        if step.frame_slot == "first_frame":
+            frame_path = produced
+        else:
+            last_frame_path = produced
+    if step.last_frame_from:
+        last_frame_path = _produce_frame(conn, state, step.last_frame_from, step.last_frame_index)
+    reference_paths = [_resolve_ref_image(conn, recipe, lab) for lab in step.reference_labels]
+    reference_video_paths = [_resolve_ref_video(recipe, lab) for lab in step.video_ref_labels]
+    if step.video_from:
+        reference_video_paths.append(_produce_video(state, step.video_from))
+
+    req = adhoc_video.VideoRequest(
+        prompt=str(step.prompt or ""),
+        backend="openrouter",
+        model=step.model,
+        duration=step.duration,
+        resolution=step.resolution,
+        aspect_ratio=str(step.aspect or ""),
+        seed=int(step.seed) if step.seed is not None else int(recipe.seed),
+        first_frame=frame_path,
+        last_frame=last_frame_path,
+        reference_paths=reference_paths,
+        reference_video_paths=reference_video_paths,
+        wait=False,  # 提交即返回 pending；轮询在 _run_video_model_step 的循环里
+    )
+    try:
+        adhoc_video.validate(req)
+    except adhoc_video.AdhocVideoError as exc:
+        raise PresetError(f"{step.label}：{exc}") from exc
+    try:
+        result = adhoc_video.generate(req, _conn_db_path(conn))
+    except (adhoc_video.AdhocVideoError, adhoc_video._ORError) as exc:
+        # 提交被拒（枚举/参数/key）：failed；continue 重试（先修配置）
+        raise PresetError(f"{step.label}：视频提交失败：{exc}") from exc
+    manifest_job = ""
+    try:
+        manifest_job = str((adhoc_video.read_manifest(result.run_id).get("job") or {}).get("id") or "")
+    except Exception:  # noqa: BLE001 - manifest 读不到不挡后续轮询
+        pass
+    return result.run_id, manifest_job
+
+
+def _run_video_model_step(conn, recipe: Recipe, state: RecipeRunState, step: RecipeStep, st: StepState) -> dict[str, Any]:
+    """视频模型直出步：异步作业（提交 → 轮询；wait_s 超时转 waiting，continue 续查）。
+
+    已有提交就不再提交（幂等）：refresh 到终态收尾；作业失败 → 步 failed
+    （continue 清掉死作业重新提交）；作业没好 → gate 等待。
+    """
+    from charvar import adhoc_video
+
+    db_path = _conn_db_path(conn)
+    run_id = str(st.outputs.get("video_run_id") or "")
+    summary: dict[str, Any] | None = None
+    if run_id:
+        try:
+            summary = dict(adhoc_video.refresh(run_id, db_path))
+        except FileNotFoundError:
+            summary = None  # manifest 被清了：当从未提交过
+        except adhoc_video.AdhocVideoError as exc:
+            raise PresetError(f"{step.label}：{exc}") from exc
+        status = str((summary or {}).get("status") or "")
+        if status == "ready":
+            return _video_model_outputs(run_id, summary or {})
+        if status == "failed":
+            # 死作业不复用：记下原因，continue 重新提交
+            st.outputs = {"previous_error": str((summary or {}).get("error") or "作业失败")}
+            run_id, summary = "", None
+    if not run_id:
+        run_id, job_id = _submit_video_job(conn, recipe, state, step)
+        st.outputs = {"video_run_id": run_id, "job_id": job_id}
+        summary = dict(adhoc_video.refresh(run_id, db_path))
+
+    wait_s = float(step.wait_s or 300.0)
+    deadline = time.monotonic() + wait_s
+    while True:
+        status = str((summary or {}).get("status") or "")
+        if status == "ready":
+            return _video_model_outputs(run_id, summary or {})
+        if status == "failed":
+            raise adhoc_video.AdhocVideoError(
+                str((summary or {}).get("error") or "OpenRouter 视频作业失败")
+            )
+        if time.monotonic() >= deadline:
+            raise _GateStop(
+                f"视频作业仍在生成（job {str((summary or {}).get('job_id') or run_id)}，"
+                f"已等 {wait_s:.0f}s，作业本身继续）——稍后 continue 续查"
+            )
+        time.sleep(_VIDEO_POLL_INTERVAL_S)
+        summary = dict(adhoc_video.refresh(run_id, db_path))
+
+
+def _video_model_outputs(run_id: str, summary: dict[str, Any]) -> dict[str, Any]:
+    from charvar import adhoc_video
+
+    try:
+        result = (adhoc_video.read_manifest(run_id).get("result") or {})
+    except Exception:  # noqa: BLE001 - manifest 读不到就只给 URL
+        result = {}
+    return {
+        "video_run_id": run_id,
+        "video_url": f"/videos/{run_id}/video",
+        "poster_url": f"/videos/{run_id}/poster",
+        "model": summary.get("model") or None,
+        "cost": result.get("cost"),
+        "duration": result.get("duration"),
+        "resolution": result.get("resolution"),
+    }
+
+
 _HANDLERS = {
     "images": _run_images_step,
+    "adhoc_image": _run_adhoc_image_step,
     "overlay": _run_overlay_step,
     "video_synth": _run_video_synth_step,
+    "video_model": _run_video_model_step,
 }
 
 
@@ -654,7 +1054,11 @@ def advance(conn, state: RecipeRunState, recipe: Recipe | None = None, *, approv
                 handler = _HANDLERS.get(step.kind)
                 if handler is None:
                     raise PresetError(f"本程序还不支持 {step.kind} 步骤（后续期接入）")
-                st.outputs.update(handler(conn, recipe, state, step, st))
+                # 先取返回值再 update：images/video_model 步**内部会重新赋值 st.outputs**
+                # （run_id 即刻落盘那条），如果写成 st.outputs.update(handler(...))，
+                # update 会落在赋值前的旧 dict 上（Python 先求值接收者）——改动会丢。
+                handler_result = handler(conn, recipe, state, step, st)
+                st.outputs.update(handler_result)
                 extra_note = str(st.outputs.get("note") or "")
                 st.status = "done"
                 st.note = extra_note

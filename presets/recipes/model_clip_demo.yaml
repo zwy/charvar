@@ -1,0 +1,29 @@
+---
+name: model_clip_demo
+type: recipe
+version: 1
+title: 生成配方示例：单图首帧 → 模型直出一段视频
+doc: model_clip_demo.md
+seed: 0
+steps:
+  - kind: adhoc_image
+    label: 首帧图
+    prompt: >-
+      full body front portrait of a young woman in a white summer dress,
+      standing straight, soft gray studio background, clean lighting,
+      single person, no text
+    backend: comfyui
+    aspect: "9:16"
+
+  - kind: video_model
+    label: 直出片段
+    prompt: >-
+      the young woman in the white dress turns slowly and smiles at the
+      camera, gentle motion, soft indoor light, static camera
+    frame_from: 首帧图
+    frame_slot: first_frame
+    model: heygen/heygen-video-1
+    duration: 5
+    resolution: 480p
+    aspect: "9:16"
+    wait_s: 300

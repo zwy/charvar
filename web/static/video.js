@@ -15,6 +15,7 @@ const videoState = {
   mode: "t2v",
   catalog: null,
   references: [],
+  videoReferences: [],
   firstFrame: null,
   activeRun: null,
   pollTimer: null,
@@ -337,6 +338,77 @@ $("#btn-video-ref-clear").addEventListener("click", async () => {
   }
 });
 
+/* ---------- 参考视频（≤2 条；Seedance gen2+ 接 video_url，其它 provider 忽略） ---------- */
+
+function renderVideoVrefs() {
+  const box = $("#video-vref-list");
+  box.innerHTML = "";
+  videoState.videoReferences.forEach((ref, index) => {
+    const el = document.createElement("div");
+    el.className = "ref-pick";
+    const preview = document.createElement("video");
+    preview.muted = true;
+    preview.preload = "metadata";
+    preview.src = `/videos/video-reference/${encodeURIComponent(ref.id)}`;
+    el.appendChild(preview);
+    const name = document.createElement("span");
+    name.className = "ref-name";
+    name.textContent = ref.name || `参考视频 ${index + 1}`;
+    el.appendChild(name);
+    const badge = document.createElement("span");
+    badge.className = "badge";
+    badge.textContent = `#v${index + 1}`;
+    el.appendChild(badge);
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "btn-sm";
+    del.textContent = "移除";
+    del.addEventListener("click", async () => {
+      const ref0 = videoState.videoReferences[index];
+      if (ref0 && ref0.type === "staged") {
+        try {
+          await api(`/videos/video-references/${encodeURIComponent(ref0.id)}`, { method: "DELETE" });
+        } catch { /* 已清理 */ }
+      }
+      videoState.videoReferences.splice(index, 1);
+      renderVideoVrefs();
+    });
+    el.appendChild(del);
+    box.appendChild(el);
+  });
+}
+
+$("#video-vref-file").addEventListener("change", async (ev) => {
+  const files = Array.from(ev.target.files || []);
+  ev.target.value = "";
+  for (const file of files) {
+    if (videoState.videoReferences.length >= 2) {
+      setStatus($("#video-status"), "参考视频最多 2 条", true);
+      break;
+    }
+    try {
+      const out = await apiUpload("/videos/video-references", file);
+      videoState.videoReferences.push({ type: "staged", id: out.id, name: out.name || file.name });
+    } catch (err) {
+      setStatus($("#video-status"), `上传失败：${err.message}`, true);
+    }
+  }
+  renderVideoVrefs();
+});
+
+$("#btn-video-vref-clear").addEventListener("click", async () => {
+  const refs = videoState.videoReferences.slice();
+  videoState.videoReferences = [];
+  renderVideoVrefs();
+  for (const ref of refs) {
+    if (ref.type === "staged") {
+      try {
+        await api(`/videos/video-references/${encodeURIComponent(ref.id)}`, { method: "DELETE" });
+      } catch { /* 已清理 */ }
+    }
+  }
+});
+
 /* ---------- 主体档案选图（首帧 / 参考图各一对下拉） ---------- */
 
 async function loadVideoKindOptions(subjectId, kindSel) {
@@ -486,6 +558,7 @@ $("#btn-video-generate").addEventListener("click", async () => {
             ? { run_id: ref.run_id }
             : { subject_id: ref.subject_id, kind: ref.kind })
       : [],
+    video_references: videoState.videoReferences.map((ref) => ({ staged_id: ref.id })),
     first_frame: videoState.mode === "i2v" && videoState.firstFrame
       ? (videoState.firstFrame.type === "staged"
           ? { staged_id: videoState.firstFrame.id }
@@ -565,9 +638,11 @@ function dropVideoRefsSent() {
   const usedTypes = new Set(["staged", "subject"]);
   const freed = videoState.references.filter((r) => usedTypes.has(r.type));
   videoState.references = [];
+  videoState.videoReferences = [];
   videoState.firstFrame = null;
   freed.forEach(releaseVideoRef);
   renderVideoFrame();
+  renderVideoVrefs();
   applyVideoMode();
 }
 
@@ -712,6 +787,7 @@ $("#btn-video-recent-refresh").addEventListener("click", loadVideoRecent);
 function initVideo() {
   renderVideoFrame();
   renderVideoRefs();
+  renderVideoVrefs();
   applyVideoMode();
   $("#video-model").addEventListener("change", applyVideoEnums);
   $("#video-duration").addEventListener("change", updateVideoCostHint);

@@ -370,3 +370,94 @@ def test_submit_degrades_on_not_supported_for_this_model(env):
     assert job.job_id == "job-6"
     assert len(attempts) == 2
     assert "input_references" not in attempts[1]
+
+
+# ---------- ⑤⑥：尾帧 / 参考视频（input_references video_url） ----------
+
+
+def _ftyp_bytes(brand=b"isom"):
+    return b"\x00\x00\x00\x20ftyp" + brand + b"\x00\x00\x02\x00isomiso2\x00" + b"\x00" * 16
+
+
+def test_video_reference_becomes_video_url_part(env):
+    p = env / "clip.mp4"
+    p.write_bytes(_ftyp_bytes())
+    body = openrouter_video.build_body(
+        prompt="p", model="heygen/heygen-video-1", reference_videos=[p],
+    )
+    parts = body["input_references"]
+    assert parts[0]["type"] == "video_url"
+    assert parts[0]["video_url"]["url"].startswith("data:video/mp4;base64,")
+
+
+def test_video_reference_rejects_unknown_container(env):
+    p = env / "clip.txt"
+    p.write_bytes(b"not a video at all")
+    with pytest.raises(openrouter_video.OpenRouterVideoParamError):
+        openrouter_video.build_body(
+            prompt="p", model="heygen/heygen-video-1", reference_videos=[p],
+        )
+
+
+def test_image_and_video_refs_mixed(env):
+    img = env / "a.png"
+    Image.new("RGB", (16, 16)).save(img, format="PNG")
+    vid = env / "b.mp4"
+    vid.write_bytes(_ftyp_bytes())
+    body = openrouter_video.build_body(
+        prompt="p", model="heygen/heygen-video-1",
+        reference_paths=[img], reference_videos=[vid],
+    )
+    types = [p["type"] for p in body["input_references"]]
+    assert types == ["image_url", "video_url"]
+    # 参考视频按原始容器发（不进图片预处理）
+    assert body["input_references"][1]["video_url"]["url"].startswith("data:video/mp4;base64,")
+
+
+def test_combined_references_capped_at_four(env):
+    imgs = []
+    for i in range(3):
+        p = env / f"m{i}.png"
+        Image.new("RGB", (16, 16)).save(p, format="PNG")
+        imgs.append(p)
+    vids = []
+    for i in range(2):
+        p = env / f"v{i}.mp4"
+        p.write_bytes(_ftyp_bytes())
+        vids.append(p)
+    with pytest.raises(openrouter_video.OpenRouterVideoParamError):
+        openrouter_video.build_body(
+            prompt="p", model="heygen/heygen-video-1",
+            reference_paths=imgs, reference_videos=vids,
+        )
+
+
+def test_last_frame_supported_and_rejected(env, monkeypatch):
+    entry = dict(_entry(env))
+    entry["supported_frame_images"] = ["first_frame", "last_frame"]
+    monkeypatch.setattr(openrouter_video, "video_model_entry", lambda mid: entry)
+    last = env / "last.png"
+    Image.new("RGB", (16, 16)).save(last, format="PNG")
+    body = openrouter_video.build_body(
+        prompt="p", model="heygen/heygen-video-1", last_frame_path=last,
+    )
+    assert body["frame_images"][0]["frame_type"] == "last_frame"
+
+    entry["supported_frame_images"] = ["first_frame"]
+    monkeypatch.setattr(openrouter_video, "video_model_entry", lambda mid: entry)
+    with pytest.raises(openrouter_video.OpenRouterVideoParamError):
+        openrouter_video.build_body(
+            prompt="p", model="heygen/heygen-video-1", last_frame_path=last,
+        )
+
+
+def test_sniff_video_ref_formats(tmp_path):
+    mp4 = tmp_path / "a.mp4"
+    mp4.write_bytes(_ftyp_bytes())
+    mov = tmp_path / "b.mov"
+    mov.write_bytes(_ftyp_bytes(b"qt  "))
+    webm = tmp_path / "c.webm"
+    webm.write_bytes(b"\x1a\x45\xdf\xa3" + b"\x00" * 20)
+    assert openrouter_video.sniff_video_ref(mp4) == "video/mp4"
+    assert openrouter_video.sniff_video_ref(mov) == "video/mov"
+    assert openrouter_video.sniff_video_ref(webm) == "video/webm"
