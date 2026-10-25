@@ -461,3 +461,29 @@ def test_sniff_video_ref_formats(tmp_path):
     assert openrouter_video.sniff_video_ref(mp4) == "video/mp4"
     assert openrouter_video.sniff_video_ref(mov) == "video/mov"
     assert openrouter_video.sniff_video_ref(webm) == "video/webm"
+
+
+# ---------- pricing_hints：列表用的每秒价提示 ----------
+
+def test_pricing_hints_heygen_dollars_per_second():
+    entry = {"pricing_skus": {"duration_seconds_480p": "0.02", "duration_seconds_2k": "0.1"},
+             "supported_resolutions": ["480p", "2K"]}
+    assert openrouter_video.pricing_hints(entry) == ["480p $0.0200/s", "2K $0.1000/s"]
+
+
+def test_pricing_hints_grok_cents_per_second():
+    entry = {"pricing_skus": {"cents_per_video_output_second_480p": "2"},
+             "supported_resolutions": ["480p"]}
+    assert openrouter_video.pricing_hints(entry) == ["480p $0.0200/s"]
+
+
+def test_pricing_hints_skips_tier_without_own_sku():
+    """没有自己 SKU 的档位宁可不出价 —— 兜底会把别的档位的价标错。"""
+    entry = {"pricing_skus": {"duration_seconds_480p": "0.02"},
+             "supported_resolutions": ["480p", "1080p"]}
+    assert openrouter_video.pricing_hints(entry) == ["480p $0.0200/s"]
+
+
+def test_pricing_hints_empty_when_no_pricing():
+    assert openrouter_video.pricing_hints({}) == []
+    assert openrouter_video.pricing_hints({"pricing_skus": {}}) == []

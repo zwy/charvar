@@ -1,4 +1,4 @@
-# charvar image 命令参考
+# charvar image / video 命令参考
 
 完整参数说明。日常用 `SKILL.md` 里的速查即可。
 
@@ -84,7 +84,49 @@ https://jimeng.jianying.com/cli | bash`）并完成 `dreamina login`（登录态
 列 OpenRouter 可用的生图模型（`id<TAB>名称`）。加 `--json` 输出 JSON。
 读本地缓存 `data/openrouter/api-response.json`，无缓存时才联网拉。
 
-## 产物落盘
+## charvar video openrouter
+
+用 OpenRouter 出一段视频。**异步作业**：提交成功就按秒计费，所以提交前先想清楚
+时长、分辨率和画幅。
+
+| 参数 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `--prompt` | str | — | 视频提示词 |
+| `--prompt-file` | str | — | 提示词文件路径；`-` 表示读 stdin |
+| `--first-frame` | path | — | 首帧图（1 张）。图生视频，**主体一致性靠它** |
+| `--ref` | list | — | 参考图路径，可重复，最多 4 张（`input_references`） |
+| `--video-ref` | list | — | 参考视频路径，可重复，≤2 条 mp4/mov/webm |
+| `--aspect` | str | `9:16` | 画幅；合法值随所选模型变（heygen：21:9/16:9/4:3/1:1/3:4/9:16） |
+| `--duration` | int | 不发送 | 时长秒数；合法值随模型变（heygen 支持 5–15） |
+| `--resolution` | str | 不发送 | 分辨率档（480p/768p/2K…）；合法值随模型变 |
+| `--seed` | int | `0` | 采样种子（0 = 固定复现） |
+| `--model` | str | 设置页/`OP_VIDEO_MODEL`/兜底 `heygen/heygen-video-1` | 模型 slug |
+| `--timeout` | float | `900` | 轮询超时秒数；超时作业**仍在跑**（网页可续查） |
+| `--poll-interval` | float | `5` | 轮询间隔秒数 |
+| `--out` / `-o` | path | — | 另外落一份到这个路径 |
+| `--json` | flag | — | 结果以 JSON 输出到终端 |
+
+**首帧图与参考图不是一回事。**
+
+- `--first-frame` = `frame_images`，**图生视频**。主体一致性能保住，**用单人全身正面照**。
+  别用 character_sheet（四视图拼图会出多人）。
+- `--ref` = `input_references`（≤4 张），只做风格／内容参考。
+- 两者同给时官方语义**首帧优先**。
+- `--video-ref` 只有 Seedance gen2+ 系认，其它 provider 忽略。
+
+时长／分辨率／画幅**超枚举会在提交前被拒**（不扣费），所以提交前先列一次目录：
+
+```bash
+~/.local/bin/charvar video models
+~/.local/bin/charvar video models --json     # 原始目录
+~/.local/bin/charvar video models --refresh   # 忽略本地缓存重拉
+```
+
+输出里每个模型带**时长／分辨率／画幅枚举**和**按秒价目**（`480p $0.0200/s` 这类）。
+价目来自 `pricing_skus`，各 provider 键名不同（heygen 美元/秒、grok 美分/秒），
+charvar 已统一换算成美元/秒。
+
+## 产物落盘（生图）
 
 不给 `--out` 时：
 
@@ -97,6 +139,19 @@ data/generated/adhoc/{时间戳}_{短id}/
 ```
 
 Playground **不落 runs 表** —— 不进生成历史、不进图片墙。
+
+## 产物落盘（视频）
+
+不给 `--out` 时：
+
+```
+data/generated/adhoc_video/{id}/
+├── original/000000.mp4    ← 成片
+├── thumbs/000000.jpg      ← 海报帧
+└── manifest.json          ← 完整请求 + 作业 id，便于复现与续查
+```
+
+视频同样**不落 runs 表**。暂存参考图在 `_refs/`，参考视频在 `_vrefs/`。
 
 ## JSON 输出格式
 
@@ -134,6 +189,8 @@ Playground **不落 runs 表** —— 不进生成历史、不进图片墙。
 | `OP_IMAGE_T2I_MODEL` | 文生图默认模型（默认 `meta/muse-image`） |
 | `OP_IMAGE_T2I_RESOLUTION` / `OP_IMAGE_T2I_QUALITY` | 文生图分辨率/质量默认（模型声明枚举时才发送） |
 | `OP_IMAGE_I2I_MODEL` / `OP_IMAGE_I2I_RESOLUTION` / `OP_IMAGE_I2I_QUALITY` | 图片编辑（带参考图）默认模型 / 分辨率 / 质量 |
+| `OP_VIDEO_MODEL` | 视频默认模型（默认 `heygen/heygen-video-1`；设置页 DB 值优先） |
+| `OP_VIDEO_TIMEOUT` | 视频单次提交轮询超时秒数 |
 | `DREAMINA_IMAGE_MODEL` | 即梦 model_version 默认（默认 5.0） |
 | `DREAMINA_IMAGE_RESOLUTION` | 即梦分辨率档默认（2K/4K，默认 2K；小写大写都收） |
 | `DREAMINA_IMAGE_TIMEOUT` | 即梦单次生图总等待预算秒数（默认 300） |

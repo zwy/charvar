@@ -9,7 +9,7 @@ import json
 import pytest
 from typer.testing import CliRunner
 
-from charvar import cli, openrouter_image, storage
+from charvar import cli, openrouter_image, openrouter_video, storage
 from charvar.models import SubjectProfile
 
 runner = CliRunner()
@@ -341,3 +341,82 @@ def test_dreamina_error_is_friendly(monkeypatch, tmp_path):
     result = runner.invoke(cli.app, ["image", "dreamina", "--prompt", "p"])
     assert result.exit_code == 1
     assert "内容违规" in _stderr(result)
+
+
+# ---------- video models ----------
+
+def _fake_video_models(monkeypatch, models=None):
+    """打桩 openrouter_video.list_models，返回视频模型目录。"""
+    calls: list = []
+
+    def fake_list_models(*, force_refresh=False):
+        calls.append(force_refresh)
+        return models if models is not None else {
+            "data": [
+                {
+                    "id": "heygen/heygen-video-1",
+                    "name": "HeyGen: HeyGen Video",
+                    "supported_durations": [5, 10, 15],
+                    "supported_resolutions": ["480p", "768p", "2K"],
+                    "supported_aspect_ratios": ["16:9", "9:16"],
+                    "pricing_skus": {
+                        "duration_seconds_480p": "0.02",
+                        "duration_seconds_768p": "0.036",
+                        "duration_seconds_2k": "0.1",
+                    },
+                },
+                {
+                    "id": "x-ai/grok-imagine-video-1.5-lite",
+                    "name": "Grok Imagine Video",
+                    "supported_durations": [5, 10],
+                    "supported_resolutions": ["480p"],
+                    "supported_aspect_ratios": ["16:9"],
+                    "pricing_skus": {
+                        "cents_per_video_output_second_480p": "2",
+                        "cents_per_image_input": "1",
+                    },
+                },
+            ]
+        }
+
+    monkeypatch.setattr(openrouter_video, "list_models", fake_list_models)
+    return calls
+
+
+def test_video_models_lists_enums_and_prices(monkeypatch):
+    calls = _fake_video_models(monkeypatch)
+    result = runner.invoke(cli.app, ["video", "models"])
+    assert result.exit_code == 0, result.output
+    assert "heygen/heygen-video-1" in result.stdout
+    # 枚举：提交前要照着填，超枚举会被拒
+    assert "480p, 768p, 2K" in result.stdout
+    assert "5, 10, 15" in result.stdout
+    # 价格：heygen 美元/秒、grok 美分/秒，两套键名都要读对
+    assert "480p $0.0200/s" in result.stdout
+    assert "2K $0.1000/s" in result.stdout
+    assert calls
+
+
+def test_video_models_json_is_pure_json(monkeypatch):
+    _fake_video_models(monkeypatch)
+    result = runner.invoke(cli.app, ["video", "models", "--json"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.stdout)
+    assert data["data"][0]["id"] == "heygen/heygen-video-1"
+
+
+def test_video_models_refresh_passes_force_refresh(monkeypatch):
+    calls = _fake_video_models(monkeypatch)
+    result = runner.invoke(cli.app, ["video", "models", "--refresh"])
+    assert result.exit_code == 0, result.output
+    assert calls == [True]
+
+
+def test_video_models_handles_fetch_error(monkeypatch):
+    def boom(*, force_refresh=False):
+        raise openrouter_video.OpenRouterVideoFetchError("网络不通")
+
+    monkeypatch.setattr(openrouter_video, "list_models", boom)
+    result = runner.invoke(cli.app, ["video", "models"])
+    assert result.exit_code == 1
+    assert "视频模型目录" in _stderr(result)

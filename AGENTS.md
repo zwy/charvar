@@ -75,13 +75,16 @@
 | `character-forge` | 角色开发：全身正面定妆 → 同图半身＋正侧背设定板 → 自包含「角色提示词资产文档」 | **不出图**（默认由用户自己出图并反馈） |
 
 - `skills/character-forge/` 是从独立项目 `character-development`（1.2.0）迁入并改名的，
-  **版本按新身份重置为 1.0.0**（2026-10-25）；技能内容与来源 1.2.0 一致，
-  只在 SKILL.md 末尾加了「与 charvar 的关系」一节说明两个 skill 的分工。
+  **版本按新身份重置为 1.0.0**（2026-10-25），现为 **1.1.0**（规范对齐体检后的修正）。
+  改名那次技能内容与来源 1.2.0 一致，只在 SKILL.md 末尾加了「与 charvar 的关系」一节说明两个 skill 的分工。
   旧名 `character-development` 已写进 `RETIRED_SKILL_NAMES` 退役。
 - 它自带静态检查：`python3 skills/character-forge/tests/run_checks.py`（`--record` 回写 manifest）。
   改了 SKILL.md / README.md / manifest.json 里的**版本号**要三处同步，否则检查会失败。
   该脚本已接进仓库门禁（`tests/test_skills.py` 会调起它），交付前跑 `python3 -m pytest -q` 即可，
   **不用**单独记着跑。
+- **交付校验的坑**：交付模板里提示词代码块预设为 `text template`（不计入预算），
+  填完必须改成 `text submit`；`prompt_budget.py` 校验文档里的提示词块**必须加 `--markdown`**，
+  不加会把整份文档当一条提示词而误判失败。这两条都在 character-forge 的模板与 SKILL.md 里写明了。
 - 两个 skill 配套：character-forge 产提示词与资产文档，charvar-skill 负责把提示词变成图。
   **别把出图逻辑写进 character-forge**，也别把角色开发流程写进 charvar-skill。
 

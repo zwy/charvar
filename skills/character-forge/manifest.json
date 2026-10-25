@@ -1,6 +1,6 @@
 {
   "name": "character-forge",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "updated": "2026-10-25",
   "description": "角色开发与提示词资产化 Skill：分阶段协助建立单角色提示词资产，交付自包含 Markdown。",
   "entrypoint": "SKILL.md",
@@ -29,7 +29,7 @@
     "command": "python3 tests/run_checks.py",
     "last_run": "2026-10-25",
     "result": "passed",
-    "passed": 44,
+    "passed": 63,
     "failed": 0,
     "note": "由 tests/run_checks.py --record 在实际运行时写入。"
   },
@@ -40,12 +40,24 @@
       "manifest.json"
     ],
     "version_sync": "三处版本号必须一致，由 tests/run_checks.py 校验。",
-    "version_policy": "以当前本地版本为基线递进；本次默认流程与交付门槛发生变化，版本递增并记录行为变更。",
+    "version_policy": "以当前本地版本为基线递进；默认流程或交付门槛变化时版本递增并记录行为变更；改名或迁仓库时版本按新身份重置并记 provenance。",
     "provenance": {
       "renamed_from": "character-development",
       "renamed_from_version": "1.2.0",
       "renamed_on": "2026-10-25",
       "note": "迁入 charvar 仓库并改名 character-forge，版本号按新身份重置为 1.0.0；技能内容与 1.2.0 保持一致，仅新增与 charvar-skill 的分工说明。"
     }
-  }
+  },
+  "history": [
+    {
+      "version": "1.1.0",
+      "date": "2026-10-25",
+      "note": "规范对齐体检：修正交付校验流程（围栏角色 + --markdown）、即梦字符预算口径（image2image 2000 / text2image 约 1600）、回归矩阵覆盖范围高估；新增 S3 规格副本一致性与夹具字符数两项检查。"
+    },
+    {
+      "version": "1.0.0",
+      "date": "2026-10-25",
+      "note": "自 character-development 1.2.0 迁入并改名，版本按新身份重置；内容与来源一致。"
+    }
+  ]
 }

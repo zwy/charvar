@@ -630,6 +630,33 @@ def estimate_cost(
     return round(cost, 4)
 
 
+def pricing_hints(entry: dict[str, Any]) -> list[str]:
+    """按各分辨率档给出「每秒价」提示（美元/秒），给 CLI 列表用。
+
+    复用 :func:`estimate_cost` 的键名语义（heygen 系美元/秒、grok 系美分/秒），
+    但**只对目录里有独立 SKU 的档位出价** —— 没有对应 SKU 的档位宁可不说，
+    也不走 estimate_cost 的模糊兜底（兜底会把别的档位的价标到这一档头上）。
+    """
+    skus = entry.get("pricing_skus")
+    if not isinstance(skus, dict) or not skus:
+        return []
+    out: list[str] = []
+    for res in entry.get("supported_resolutions") or []:
+        tier = str(res).strip().lower()
+        if not tier:
+            continue
+        has_own_sku = (
+            f"duration_seconds_{tier}" in skus
+            or f"cents_per_video_output_second_{tier}" in skus
+        )
+        if not has_own_sku:
+            continue
+        cost = estimate_cost(entry, seconds=1, resolution=tier)
+        if cost is not None:
+            out.append(f"{res} ${cost:.4f}/s")
+    return out
+
+
 def sniff_video_ext(data: bytes) -> str:
     """按魔数嗅探视频容器，返回扩展名（mp4/webm/mov/bin）。"""
     # MP4/MOV：偏移 4 起是 ftyp 盒子；MOV 常见 brand qt

@@ -200,8 +200,8 @@ def validate_prompt(prompt: str, *, has_reference: bool) -> str:
     if len(text) > limit:
         raise DreaminaParamError(
             f"提示词 {len(text)} 字符超过即梦"
-            f"{'image2image' if has_reference else 'text2image'}上限约 {limit + 8} 字符，"
-            "上游会硬失败；请先压缩提示词"
+            f"{'image2image' if has_reference else 'text2image'}上限 {limit} 字符"
+            f"（上游硬上限约 {limit + 8}，留了余量防计数口径差异）；请先压缩提示词"
         )
     return text
 

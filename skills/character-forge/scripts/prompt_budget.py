@@ -26,10 +26,11 @@ EN_EXPANSION_BASIS = (
 )
 
 # Info-string roles and whether the block counts against the budget.
+# BUDGET_ROLES：计入字符预算的块。
+# PLACEHOLDER_ROLES：占位符算失败的块 —— 只限 submit（内部组件与模板的占位符
+# 本来就要保留，不能算交付失败）。
 BUDGET_ROLES = ("submit",)
 PLACEHOLDER_ROLES = ("submit",)
-# Roles whose placeholders are intentional and must not fail a strict run.
-TEMPLATE_ROLES = ("template",)
 
 FENCE = re.compile(r"^```(?P<info>[^\n]*)\n(?P<body>.*?)^```[^\S\n]*(?:\n|$)", re.M | re.S)
 PLACEHOLDER = re.compile(r"\{\{[^{}\n]+\}\}|【全局固定前缀】|\[GLOBAL_PREFIX\]")

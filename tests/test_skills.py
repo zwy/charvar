@@ -224,3 +224,71 @@ def test_install_script_covers_every_skill():
             f"{skill_dir.name} 不在 install_cli.sh 的 SKILL_NAMES 里 —— "
             "它不会被装到任何 Agent"
         )
+
+
+def _typer_commands(app) -> tuple[set[str], set[str]]:
+    """枚举 typer app 的命令与子命令组。
+
+    返回 ``(可用命令, 组名)``：可用命令 = 顶层命令 + 「组 子命令」；
+    组名单独返回，用来判断两段式写法（``charvar image models``）的第一个词
+    到底是不是一个组。
+    """
+    commands: set[str] = set()
+    groups: set[str] = set()
+    for cmd in app.registered_commands:
+        name = cmd.name or (cmd.callback.__name__.replace("_", "-") if cmd.callback else "")
+        if name:
+            commands.add(name)
+    for group in app.registered_groups:
+        gname = group.name or ""
+        if gname:
+            groups.add(gname)
+        for cmd in group.typer_instance.registered_commands:
+            cname = cmd.name or (cmd.callback.__name__.replace("_", "-") if cmd.callback else "")
+            if gname and cname:
+                commands.add(f"{gname} {cname}")
+    return commands, groups
+
+
+def _strip_frontmatter(text: str) -> str:
+    """去掉 YAML frontmatter —— description 是路由文案，不是命令文档。"""
+    match = FRONTMATTER_RE.match(text)
+    return text[match.end():] if match else text
+
+
+def test_documented_commands_exist():
+    """文档里写的每条 charvar 命令都必须真的存在。
+
+    这条专门防「skill 教 agent 去跑一条不存在的命令」——那种错外部 agent
+    照着跑只会拿到 "No such command"，而且没人会怀疑文档。
+    """
+    from charvar import cli
+
+    commands, groups = _typer_commands(cli.app)
+    assert commands, "没枚举到任何 CLI 命令"
+
+    docs = [
+        ROOT / "AGENTS.md",
+        ROOT / "README.md",
+        ROOT / "skills" / "charvar-skill" / "SKILL.md",
+        *sorted((ROOT / "skills" / "charvar-skill" / "references").glob("*.md")),
+    ]
+    mentioned: set[str] = set()
+    for path in docs:
+        if not path.is_file():
+            continue
+        text = _strip_frontmatter(path.read_text(encoding="utf-8"))
+        # 两段式：只有第一个词真是组名时才算一条命令（滤掉 "subject-profile tasks"）
+        for group, sub in re.findall(r"\bcharvar ([a-z][a-z0-9-]*) ([a-z][a-z0-9-]*)", text):
+            if group in groups:
+                mentioned.add(f"{group} {sub}")
+        # 单段式：顶层命令或组名
+        for word in re.findall(r"\bcharvar ([a-z][a-z0-9-]*)\b", text):
+            if word in commands or word in groups:
+                mentioned.add(word)
+
+    missing = sorted(m for m in mentioned if m not in commands and m not in groups)
+    assert not missing, (
+        f"文档里写了不存在的 CLI 命令：{missing}\n"
+        f"（实际存在的：{sorted(commands)}）"
+    )

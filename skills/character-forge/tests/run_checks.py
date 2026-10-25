@@ -210,19 +210,58 @@ def main():
           f"readme={readme_version.group(1) if readme_version else None} manifest={manifest_version}")
 
     # --- 15. Stated character counts match actual measurement --------------
-    # Walks the sample asset: every "- 字符数：N" line must match the
-    # measured length of the submit block it describes.
-    asset_path = ROOT / "tests/fixtures/sample-character-asset.md"
-    asset_text = asset_path.read_text(encoding="utf-8")
-    code, out, err = run_budget(["tests/fixtures/sample-character-asset.md", "--markdown", "--budget", str(BUDGET)])
-    measured = [item["characters"] for item in json.loads(out)["items"] if item["role"] == "submit"]
-    stated = [int(n) for n in re.findall(r"字符数：(\d+)", asset_text)]
-    normal = re.search(r"正常版 (\d+)；精简版 (\d+)", asset_text)
-    if normal:
-        stated += [int(normal.group(1)), int(normal.group(2))]
-    check(stated == measured,
-          "stated character counts in the sample asset match the measured counts",
-          f"stated={stated} measured={measured}")
+    # Every fixture that states a character count must match what the budget
+    # script actually measures for that fixture's submit blocks.
+    for fixture in sorted((ROOT / "tests" / "fixtures").glob("*.md")):
+        rel = str(fixture.relative_to(ROOT))
+        code, out, err = run_budget([rel, "--markdown", "--budget", str(BUDGET)])
+        if code == 2:
+            continue  # 没有 text 代码块的夹具，跳过
+        measured = [item["characters"] for item in json.loads(out)["items"] if item["role"] == "submit"]
+        text = fixture.read_text(encoding="utf-8")
+        stated = [int(n) for n in re.findall(r"字符数：(\d+)", text)]
+        stated += [int(n) for n in re.findall(r"长度\s*(?:约\s*)?(\d+)\s*字符", text)]
+        normal = re.search(r"正常版 (\d+)；精简版 (\d+)", text)
+        if normal:
+            stated += [int(normal.group(1)), int(normal.group(2))]
+        if not stated:
+            continue
+        check(sorted(stated) == sorted(measured),
+              f"stated character counts match the measured counts: {rel}",
+              f"stated={stated} measured={measured}")
+
+    # --- 16. S3 设定板规格：多份副本必须一致 -------------------------------
+    # 这段规格在四处各有一份，是**有意的重复**：交付模板必须自包含
+    # （接手者不装本技能也要读懂，见 quality-checks.md 第 5 节），
+    # 夹具必须有具体实例才能压测 prompt_budget.py。
+    # 代价是改一处容易漏掉其余几处 —— 这里用断言把它钉住。
+    s3_copies = {
+        "SKILL.md": "SKILL.md",
+        "references/workflow.md": "references/workflow.md",
+        "templates/character-document.md": "templates/character-document.md",
+        "tests/fixtures/sample-character-asset.md": "tests/fixtures/sample-character-asset.md",
+    }
+    s3_texts = {name: read(rel) for name, rel in s3_copies.items()}
+    s3_markers = [
+        "完整展示头部与双肩", "上身自然裁至腰部附近",
+        "标准正面", "标准右侧面", "标准背面",
+        "三个全身等比例", "顶端与脚底", "不重叠",
+        "左侧半身单独放大", "四个描绘是同一个角色",
+        "不回头露五官", "配件跟随人物解剖侧",
+    ]
+    for marker in s3_markers:
+        missing = [name for name, text in s3_texts.items() if marker not in text]
+        check(not missing,
+              f"S3 规格在四份副本中一致: {marker}",
+              "缺于 " + ", ".join(missing))
+
+    # 这三条只在 SKILL.md 与 workflow.md 里（模板与夹具未复述），
+    # 但两处必须同时有 —— 少一处就是规格漂移。
+    for marker in ["缩小头部", "延续同一套衣服", "允许自然遮挡"]:
+        for rel in ("SKILL.md", "references/workflow.md"):
+            check(marker in read(rel),
+                  f"S3 规格在 SKILL.md 与 workflow.md 一致: {marker}",
+                  f"{rel} 里没有")
 
     print("\n".join(notes))
     if failures:

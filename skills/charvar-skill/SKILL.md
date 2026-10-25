@@ -5,7 +5,7 @@ description: Generate images with the charvar project's ComfyUI, OpenRouter, or 
 
 # charvar 生图
 
-版本：1.0.0  
+版本：1.1.0  
 更新：2026-10-25
 
 通过 charvar 项目的 CLI 出图。三条后端：**comfyui**（本机/局域网 ComfyUI）、
@@ -76,7 +76,7 @@ cat prompt.md | ~/.local/bin/charvar image comfyui --prompt-file - --out out.png
 | `--prompt` / `--prompt-file` | 提示词，二选一；`--prompt-file -` 读 stdin |
 | `--ref` | 参考图路径，可重复，最多 4 张 |
 | `--aspect` | `1:1` `3:4` `16:9` `4:3` `9:16` `2:3` `3:2` `21:9`（默认 `3:4`） |
-| `--resolution` | `1k` `2k`（默认 `1k`）或模型声明枚举值（512/1K/1.5K/2K/4K…；OpenRouter 通路）。即梦通路收 2k/4k/1.5k，空 = 设置页/env 默认 2k。2K 是 Qwen 官方像素，面积恒定 ~4.2MP |
+| `--resolution` | `1k` `2k`（默认 `1k`）或模型声明枚举值（512/1K/1.5K/2K/4K…；OpenRouter 通路）。即梦通路收 `1k`（仅 3.0/3.1 文生图）`2k` `4k` `1.5k`（5.0Pro），空 = 设置页/env 默认 2k。**2K 的像素表只对 ComfyUI 成立**（Qwen-Image-2.1 官方像素，面积恒定 ~4.2MP）；OpenRouter 通路走通用长边归一，别拿 Qwen 像素表去推算 |
 | `--seed` | 采样种子，默认 `0`（固定复现）；要新图就换种子。**即梦通路没有 `--seed`**（即梦不暴露 seed） |
 | `--out` | 产物路径 |
 | `--json` | 结果以 JSON 输出（给脚本消费时用） |
@@ -144,8 +144,9 @@ exit 0 = 通过，exit 1 = 有问题单。完整参数与 `--json` 字段见 `re
 - 即梦的前置：本机装好官方 CLI 并登录过 —— `dreamina -h` 能跑、`dreamina user_credit`
   能返回积分就算就绪；没登录时先让用户手动跑 `dreamina login`（CLI 打印的授权 URL
   建议用户手动在浏览器打开完成授权）。
-- 即梦提示词有硬上限：text2image 约 1600 字符、image2image（带参考图）约 2000 字符，
-  超限上游硬失败；charvar 会在提交前报错。
+- 即梦提示词有硬上限：**text2image 1592 字符、image2image（带参考图）1992 字符**。
+  charvar 在提交前就拦（超了不会白扣即梦积分）；上游硬上限是 1600 / 2000，
+  charvar 留了 8 字符余量防字节／码点计数口径差异 —— **按 1592 / 1992 写，别按 1600 / 2000**。
 
 ## 排错
 
@@ -156,6 +157,12 @@ exit 0 = 通过，exit 1 = 有问题单。完整参数与 `--json` 字段见 `re
 | OpenRouter 报 key 缺失 | 设 `OP_IMAGE_API_KEY` 或 `LLM_API_KEY` |
 | 即梦报登录态无效 | 让用户手动跑 `dreamina login`（授权 URL 手动在浏览器打开），别由 agent 代登 |
 | 即梦报找不到 dreamina CLI | 跑 `curl -s https://jimeng.jianying.com/cli \| bash` 安装，或设 `DREAMINA_CLI` 指向可执行文件 |
-| 即梦报提示词超限 | text2image 1600 / image2image 2000 字符（约），先压缩提示词 |
+| 即梦报提示词超限 | text2image 1592 / image2image 1992 字符（上游硬上限是 1600 / 2000，charvar 留了余量），先压缩提示词 |
 | 参考图超 4 张 | ComfyUI edit workflow 只有 4 个参考图槽位 |
 | workflow 找不到 | `data/workflows/` 里没有该名字；用 `--workflow` 给 JSON 路径 |
+
+## 版本记录
+
+1.1.0（2026-10-25）：规范对齐体检后的修正。补上 `references/cli.md` 缺失的视频章节 —— 此前 SKILL.md 说「完整参数见 `references/cli.md`」，但该文件里一条 `charvar video` 命令都没有；另补 `OP_VIDEO_MODEL` / `OP_VIDEO_TIMEOUT` 两个环境变量。**即梦提示词上限改成可执行数字**：此前写「约 1600 / 2000」，但 charvar 实际在 **1592 / 1992** 就拦（上游硬上限 1600 / 2000，留了 8 字符余量防字节／码点计数口径差异），照 1600 写会被拒。`--resolution` 一行补明 **2K 像素表只对 ComfyUI 成立**（OpenRouter 通路走通用长边归一，别拿 Qwen 像素表推算）。
+
+1.0.0（2026-10-25）：补齐 `manifest.json` 与版本号，使两个 skill 结构统一（此前 charvar-skill 没有 manifest，版本纪律无从校验）。

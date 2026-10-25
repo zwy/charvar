@@ -886,6 +886,51 @@ def video_openrouter(
     _run_video(req, json_out)
 
 
+@video_app.command("models")
+def video_models(
+    refresh: bool = typer.Option(False, "--refresh", help="忽略本地缓存，强制拉取最新目录"),
+    json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出到终端"),
+) -> None:
+    """列 OpenRouter 可用的视频模型及其合法枚举。
+
+    提交前先跑这个：时长／分辨率／画幅超枚举会在提交阶段被拒，
+    而视频按秒计费，提交成功就开始计费。
+    """
+    from charvar import openrouter_video
+
+    try:
+        data = openrouter_video.list_models(force_refresh=refresh)
+    except openrouter_video.OpenRouterVideoError as exc:
+        _die(f"读 OpenRouter 视频模型目录失败：{exc}")
+        return
+
+    if json_out:
+        typer.echo(json.dumps(data, ensure_ascii=False))
+        return
+
+    items = [m for m in (data.get("data") or []) if isinstance(m, dict)]
+    if not items:
+        typer.echo("（目录为空）")
+        return
+    for model in items:
+        model_id = str(model.get("id") or "").strip()
+        if not model_id:
+            continue
+        typer.echo(f"{model_id}\t{str(model.get('name') or model_id)}")
+        for label, key in (
+            ("时长", "supported_durations"),
+            ("分辨率", "supported_resolutions"),
+            ("画幅", "supported_aspect_ratios"),
+        ):
+            values = model.get(key)
+            if isinstance(values, list) and values:
+                typer.echo(f"    {label}：{', '.join(str(v) for v in values)}")
+        pricing = openrouter_video.pricing_hints(model)
+        if pricing:
+            typer.echo(f"    价格：{'、'.join(pricing)}")
+        typer.echo("")
+
+
 def main() -> None:
     """console script 入口（pyproject.toml 声明 charvar.cli:main）。"""
     app()
