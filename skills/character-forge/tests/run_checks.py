@@ -327,6 +327,32 @@ def main():
               f"交付模板不含流水账章节: {needle}",
               "模板里出现了这个章节")
 
+    # --- 23. 媒介归固定前缀，风格只写一次 -----------------------------------
+    for rel in ("SKILL.md", "README.md", "templates/character-document.md"):
+        body = read(rel)
+        check("媒介" in body and "画面主体" in body,
+              f"媒介归固定前缀规则写明: {rel}",
+              "规则文本缺失")
+
+    # 正例夹具：风格句进固定前缀，场景段不重复风格细节，前缀不含画面主体
+    fx = read("tests/fixtures/sample-delivery.md")
+    fx_blocks = [b.rstrip("\n") for b in
+                 re.findall(r"^```text[^\n]*\n(.*?)^```", fx, re.M | re.S)]
+    if len(fx_blocks) == 3:
+        fx_prefix, fx_scene_a, fx_scene_c = fx_blocks
+        check("卡通插画风" in fx_prefix,
+              "正例夹具的风格句在固定前缀里",
+              "固定前缀里没有风格句")
+        check("轮廓用深棕色的粗线条" not in fx_scene_a
+              and "轮廓用深棕色的粗线条" not in fx_scene_c,
+              "正例夹具的场景段不重复风格细节",
+              "场景段里仍有风格细节")
+        check("角色设定板" not in fx_prefix and "人物全身立绘" not in fx_prefix,
+              "正例夹具的固定前缀不含画面主体",
+              "固定前缀里出现了画面主体")
+    else:
+        check(False, "正例夹具的代码块结构可解析", f"找到 {len(fx_blocks)} 个块")
+
     print("\n".join(notes))
     if failures:
         print("\n".join(failures))

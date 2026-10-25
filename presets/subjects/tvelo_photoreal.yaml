@@ -1,59 +1,38 @@
-# 由 `charvar subject export` 导出的 DB 快照（2026-10-22 06:21:35），模板逐字在同名 .md。
+# 本文件由 `charvar subject derive` 生成（LLM 抽取 + 引用核对 + 审计），可人工修订。
+# 来源模板：tvelo_photoreal.md（sha256:728a0b8cf6d8）
+# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-10-25 12:35 UTC
+# 起草 2 轮 · 审计 2 轮 · 审计通过 · 引用核对：25/25 条命中，无需修复
+# 2026-10-25 人工修订：模板的 3.1／3.2 画幅声明改为交付图实际比例（2:3／16:9），身份条目未变。模板指纹已更新。
 id: tvelo_photoreal
 name: 缇珞
 subject_noun: woman
 reference_tag: <image1>
 style_lock:
-- realistic photographic portrayal of a performer in finished costume makeup, like
-  a film character shot on set
-- natural facial features, bone structure, body proportions and perspective without
-  exaggerated stylization
-- fine natural skin texture, natural skin-tone variation, real hair strands and restrained
-  retouching
-- uniform fabric, leather boot surface and metal badge materials clearly distinguishable,
-  face, ears, neck and hands showing one consistent skin tone
-- no illustration lines or brush strokes, no 3D game rendering, no wax-like plastic
-  skin
+- 采用真实人物摄影表现，像演员完成角色造型后拍摄的照片
+- 五官、骨骼、身体与透视符合自然真人比例
+- 保留细微皮肤纹理、自然肤色变化、真实发丝与克制修饰，皮肤、头发、制服织物、金属徽章和靴面材质可区分
+- 人物与环境均为真实摄影质感，不混入插画排线、笔触或游戏渲染
 identity_lock:
-- adult female natural physique, full bust, defined waist, coordinated shoulders, chest, pelvis
-  and limbs, upright, no exaggerated proportions, no bust enlargement, waist narrowing or leg
-  lengthening
-- soft upper face, narrowing jaw, small chin not pointy, light ivory skin with a faint
-  warm-pink cheek tint, face, ears, neck and hands in one base skin tone shifting with
-  the scene light
-- blue almond eyes of natural eyeball placement and eye spacing, natural iris size with
-  realistic iris texture, slightly low upper lids, upward-tilted outer corners and a little
-  soft catchlight
-- black angled eyebrows with real hair flow and upswept tips, small nose with natural
-  bridge, nostrils and volume, coral-red lips with subtle lip lines
-- light makeup with a thin eyeliner at the lash roots, no added lashes, blush or lipstick
-- black short bob with neat straight bangs, rounded crown and back of the head, jaw-length
-  sides, inward-curling ends, back hair above the nape, strand gaps, visible hairline,
-  soft flyaways
-- pointed Vulcan ears with real ear contours, cartilage folds and skin texture, naturally
-  connected to the head and shown or hidden by the angle
-- 《星际迷航》同人设定中的成年瓦肯女舰员，原创同人角色而非原作舰组成员，不绑定具体年龄数值、军衔、职务、星舰、年代、血统细节或原作人物关系，也不根据黄色制服推定职业或级别
-- 真人基准已确认脸、肤色、年龄感与蓝色眼睛，保持这一年龄感，不按插画或制服改写
-- 英文创作名 T’Velo 指同一个角色，与中文名缇珞等价
-- calm, composed default bearing with a slight scrutinizing feel, specific brow, eye
-  and mouth states decided by the scene
+- 《星际迷航》同人设定中的成年瓦肯女舰员
+- 脸型上部柔和，下颌自然收窄，下巴小巧而不过尖
+- 浅象牙色皮肤，脸颊有很淡的暖粉色
+- 蓝色杏仁眼，上眼睑略低垂，眼尾微挑，虹膜纹理真实
+- 深黑眉毛保留真实毛流，眉尾上挑
+- 鼻子小巧但鼻梁、鼻翼与体积自然，珊瑚红嘴唇保留细微唇纹
+- 妆容轻薄，细眼线贴近睫毛根部，不加重睫毛、腮红或唇妆
+- 整体气质冷静、端正，略带审视感
+- 黑色齐刘海短波波头，顶部与后脑圆润，两侧至下颌附近，发梢内扣，后侧收至后颈上方
+- 刘海整齐但具有自然发束间隙，真实发丝、发际线和少量碎发可辨，反光柔和
+- 尖耳从短发之间自然露出，耳廓、软骨起伏与皮肤纹理真实，耳根自然连接头部
+- 成年女性自然身材，胸部丰满，腰线明确，肩宽、胸廓、骨盆与四肢比例协调，体态端正
+- 不进一步放大胸部、压细腰部或拉长双腿
 outfit_lock:
-- mustard-yellow and black color-blocked long-sleeve starship uniform with a black
-  stand collar covering the neck root and fine dark-gold trim along the collar edge
-  and front closure
-- black shoulder, upper-chest and upper-back pieces separated from the yellow bodice by a
-  continuous narrow white trim stripe
-- low-saturation mustard-yellow chest and abdomen, back body and sleeves, black side
-  sections with a natural waist tuck, front hem tapering into a pointed notch, coordinated
-  short-jacket-length back hem
-- single small silver-gold upward arrow metal badge on the character's own left chest;
-  the back carries only the necessary seams, with no badge, lettering, belt or long tail
-- matte, opaque fabric with moderate thickness, slight stretch, visible seams, natural
-  ease and a few reasonable wrinkles
-- black high-waisted uniform trousers with a flat waistband, naturally fitted through the
-  hips and thighs, slightly narrowing below the knee, the trouser legs hanging naturally
-- black low-heeled short uniform boots, shaft rising just above the ankle, round almond
-  toe, trouser legs tucked in, moderate sole thickness, fine matte leather, no exposed
-  laces or metal buckles
-extra: Keep the same face, hair, eyes and outfit consistent in every pose and scene; avoid
-  plastic skin, glowing iris highlights or glossy latex-looking fabric.
+- 芥末黄色与黑色拼接长袖星舰制服
+- 黑色立领覆盖颈根，领缘与前襟有细窄暗金黄色滚边
+- 肩部、上胸及肩背上方黑色，黑肩与黄色衣身之间为连续的白色窄饰条
+- 胸腹、背部主体与袖子为低饱和芥末黄，腰侧黑色，自然收腰，前下摆向腰侧形成尖角，后下摆保持协调的短上衣长度
+- 自身左胸只有一枚小型银金色向上箭头形金属徽章，背面无徽章
+- 制服为有适度厚度和轻微弹性的哑光、不透明织物，合体但不紧绷，保留自然松量、缝线、接缝和少量合理褶皱
+- 黑色高腰制服长裤，腰部平整，臀胯和大腿自然合体，膝下略收窄，裤腿自然垂坠
+- 黑色低跟短筒制服靴至脚踝上方，裤脚收入靴内，略圆杏仁形鞋头，鞋底厚度适中，细腻哑光皮革，结构简洁，无外露鞋带或大金属扣
+extra: 同一角色在任意新姿态与新场景中都保持同一张脸、同一发型与尖耳、同一体态，并始终穿着这一套星舰制服。

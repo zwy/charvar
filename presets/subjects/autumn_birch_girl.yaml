@@ -1,31 +1,26 @@
+# 本文件由 `charvar subject derive` 生成（LLM 抽取 + 引用核对 + 审计），可人工修订。
+# 来源模板：autumn_birch_girl.md（sha256:564e1827ce35）
+# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-10-25 12:35 UTC
+# 起草 1 轮 · 审计 1 轮 · 审计通过 · 引用核对：9/9 条命中，无需修复
+# 2026-10-25 人工修订：identity_lock 补入抽取器漏掉的「原创角色，成年女性」身份锚；其余条目未动。
+# 2026-10-25 人工修订：模板新增「2.2 精简前缀（设定板用）」，固定前缀补上邮差包背带方向，身份条目未变。模板指纹已更新。
 id: autumn_birch_girl
 name: 秋日枫林女孩
 subject_noun: woman
 trigger_word: birchgirl
 reference_tag: <image1>
 style_lock:
-- a stylish comic illustration in the style of imaishi hiroyuki, hand-inked linework over flat
-  colour areas with soft textured shading and a faint grain
-- earthy and warm, slightly faded colour palette
-- the same comic medium for the character, the props and the environment, with no photographic
-  rendering and no 3D rendering
+- 手绘漫画插画
+- 手绘墨线＋平涂色块＋柔和纹理阴影＋轻微纸面颗粒；配色温暖朴实、略褪色
 identity_lock:
-- adult woman with a full bust and a healthy shapely build, coordinated shoulders, chest, pelvis
-  and limbs, upright natural bearing
-- short brown hair in a pixie cut with straight bangs and flipped-out ends, brown eyes, a small
-  black stud earring in the left ear and light blush on the cheeks
-- smiling happily with the mouth open
-- full shapely legs with rounded thighs, defined knees and slim ankles
+- 原创角色，成年女性
+- 棕色短发 pixie cut，齐刘海，发尾外翘；棕色大眼；左耳小黑耳钉；腮红
+- 丰满体型，胸部饱满，上身躯量协调；腿型丰满匀称，大腿圆润、膝盖清晰、小腿匀称、脚踝纤细
 outfit_lock:
-- mustard yellow knitted toque with a pom-pom and a leather patch label
-- brown and mustard plaid buttoned collared shirt tucked in
-- red work jacket worn open with a dark brown ribbed collar, cuffs and hem band, a visible zip and
-  patch pockets
-- brown leather work glove on the right hand
-- brown canvas messenger bag at the right hip with the strap over the left shoulder
-- brown leather belt with a rectangular brass buckle
-- high-rise medium blue denim jeans, fitted through the hip and upper thigh, straight-leg with
-  a slight taper below the calf, ending in a clean flat hem just above the ankle
-- brown leather lace-up ankle boots with tan-brown uppers, dark laces and a thick lugged sole
-extra: Keep the same earthy warm slightly faded comic palette, hand-inked linework over flat
-  colour areas, soft textured shading and a faint grain, in every pose.
+- 芥黄针织毛线帽，带绒球与皮质标牌
+- 棕／芥黄格纹翻领衬衫（塞进裤腰）；敞穿红色工装夹克，深棕罗纹领口／袖口／下摆，露拉链与贴袋
+- 右手棕色皮质工装手套；右胯棕色帆布邮差包（背带过左肩）；棕皮带＋方形黄铜扣
+- 高腰中蓝牛仔（直筒，小腿略收，平口停在脚踝上方）；棕色皮面系带踝靴，深棕厚橡胶齿底
+- 夹克素面后片＋深棕罗纹下摆，无新增徽章、口袋或装饰；牛仔裤后中缝、后育克、两个后袋；靴跟；邮差包背带过左肩
+extra: Keep the same face, hairstyle, body proportions and the same default outfit
+  in every pose and scene.

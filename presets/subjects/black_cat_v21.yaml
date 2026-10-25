@@ -1,37 +1,26 @@
+# 本文件由 `charvar subject derive` 生成（LLM 抽取 + 引用核对 + 审计），可人工修订。
+# 来源模板：black_cat_v21.md（sha256:2b8eb1195e5a）
+# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-10-25 12:39 UTC
+# 起草 1 轮 · 审计 1 轮 · 审计通过 · 引用核对：14/14 条命中，无需修复
 id: black_cat_v21
 name: 黑白猫
 subject_noun: cat
 reference_tag: <image1>
 style_lock:
-- low-brow pop flavored 2D watercolor mixed-media illustration, transparent watercolor combined with opaque gouache and acrylic strokes
-- fine eye and muzzle rendering against a simplified blocky body
-- localized watercolor blooms, pigment sedimentation, paper grain, dry-brush marks
-  and white paint dots
-- a clear subject outline, with the shoulder, back and chest-belly area carrying the blooms,
-  grain and dry-brush marks
+- 采用低眉波普气质的二维水彩混合媒介插画。
+- 透明水彩与不透明水粉、丙烯笔触结合，眼睛和口鼻精细，身体以大色块概括，肩背和胸腹局部有积色水痕、纸面颗粒、干刷与少量白色颜料点，主体轮廓清楚。
 identity_lock:
-- an original black-and-white tuxedo cat with 猫狸子 bloodline, kept as the project's own character rather than a canonical pet, visual appearance unchanged
-- slender, elongated cat with a long neck and narrow shoulders, chest and belly stretched lengthwise, body slim and elegant with natural feline structure, limbs slender and paws small and rounded
-- large gray-blue almond eyes with a slightly low upper eyelid and a rounded lower lid, delicate iris, deep black pupil with a few small white highlights
-- head slightly large with a broad crown and a rounded muzzle, round head, slender upright
-  triangular ears with gray-pink-purple inner ears
-- coral-red inverted-triangle nose, small cat mouth and long white whiskers
-- default expression calm and slightly melancholy
-- black head, ears, eye surroundings and outer face
-- narrow white forehead stripe running along the nose bridge and connecting to the white
-  muzzle, chin and chest-belly patch
-- white muzzle, chin, neck, chest and belly as one long continuous patch from the chin
-  down the neck to the abdomen, narrower at the top, slightly wider below, its edge in a few
-  white hair-clump strokes
-- tail long, slender and black, joining the body naturally
-- black fur from near-black, deep blue-gray and charcoal with internal bleeding and grain;
-  white fur as opaque white strokes with light cool blue-gray shadow, kept as simple hair clumps
-- four white paws with white toes to the ankles forming four short white socks, upper legs
-  black; rear paws revealed or hidden by pose, revealed part white, light cool blue-gray shadow
-- keep the long neck, the elongated chest and belly and the large eyes across different poses
-- calm, cautious and observant, like the witch's sparring partner; snark as inner
-  monologue via lowered eyelids, sideways glances, ear turns and slow head turns, mouth
-  keeping a natural cat shape
-outfit_lock: []
-extra: Keep the same black-and-white tuxedo cat proportions, long tail, four white
-  paws and watercolor texture.
+- 带猫狸子血统的原创黑白燕尾服猫。
+- 头部略大，头顶较宽，口鼻圆润。
+- 修长三角耳竖起，耳内灰粉紫色。
+- 巨大灰蓝色杏仁眼，上眼睑稍低垂，下缘圆润，虹膜细腻，深黑瞳孔带少量白色高光。
+- 珊瑚红倒三角鼻头，小巧猫嘴，细长白胡须向两侧舒展。
+- 头顶、耳朵、眼周与脸部外侧黑色。额头中央狭长白毛沿鼻梁展开，连接白色口鼻、下巴及胸腹。
+- 颈部明显修长，肩部较窄，胸腹纵向拉长，身体纤细优雅，具有自然猫科结构。
+- 四肢细长，脚爪小巧，尾巴细长、黑色，连接自然。
+- 黑毛以近黑、深蓝灰、炭灰构成，内部有渗化、积色和颗粒。白毛以不透明白色笔触叠加浅冷灰蓝阴影，毛束简洁。
+outfit_lock:
+- 四肢上部黑色，四只脚爪全部白色，包含两只前爪和两只后爪。
+- 白色完整覆盖每只脚爪的脚趾与爪背，延伸至脚踝，形成四只短白袜，分界自然清楚。
+- 后爪按姿态显露或遮挡，露出部分同样白色，仅用浅冷灰蓝阴影表现体积。
+extra: 任意姿态与场景中，保持同一只黑白燕尾服猫的头部比例、三角耳形、灰蓝色杏仁眼与黑白毛色分区一致，身份特征不随镜头或环境改变。
