@@ -1,0 +1,13 @@
+# 试衣/lookbook 专用固定光照池（1 条 = 固定）。
+# 给 presets/actions/outfit_*.yaml 用：试衣要横向对比多套服装，光照必须每张一样，
+# 否则比的是光线不是衣服。池里只有一条 → rng.choice 永远取到它，无论随机光照开没开。
+# 选「柔和均匀、无硬阴影、无偏色」：硬光会把布料褶皱和垂坠感吃掉，偏色会污染颜色判断
+# （尤其验白丝/黑丝/酒红针织这类要看颜色的衣服）。
+# ★ 别往这个池里加第二条：光照是按变体 id（{outfit_id}__{pose_id}）取值的，
+#   多于一条就会变成每件衣服配一种光，对比失效。要换光就改下面这一行。
+# ★ 取消「随机光照」且没填「固定光照」时，提示词里整句光照会被省掉
+#   （composer._render_suffix：缺光照就整句省略），模型会自己发挥——要么留着随机开关，
+#   要么在固定光照框里写死。
+# caption 只取逗号前的短句（caption.lighting_short），所以第一段要自成一句。
+items:
+- soft even studio lighting, gentle shadows, neutral color

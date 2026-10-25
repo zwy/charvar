@@ -1,0 +1,48 @@
+# 试衣用单动作预设｜正面头像（outfit_front_head）
+# 用途：配合服装预设（presets/outfits/*.yaml）看**领口/妆造/发型**细节。**本预设只有 1 条变体**——
+#   服装 N 件 × 1 条 = N 张图；动作预设一多就是 N×M 张（预设页「条数」照旧控制）。
+# ★ master_template 刻意**不含** {style_lock_sentence}{identity_lock_sentence}{outfit_lock_sentence}：
+#   实测（白裙丝袜、红发眼镜女人两轮）把主体档案锁定项放在动作段前面，
+#   ComfyUI 的 Qwen-Image-Edit 会把后面的动作段稀释到 14%，动作不执行；
+#   服装段在动作段之后、更靠后，被稀释得更狠。→ 身份与画风交给 front 参考图承担，
+#   动作段 + 服装段独占提示词。
+#   要锁画风就把 {style_lock_sentence} 加回 master_template；
+#   **别加 {outfit_lock_sentence}**——它锁的正是被替换的服装，会打架。
+# 动作段为单行双引号标量：折叠写法（>-）会在断行处把「，臀」之类拆出空格，normalize 不清这个。
+# 动作段只管肢体、朝向、机位与完整入镜；服装、身份、画风走服装预设与参考图。
+# 背景与光照用**内置固定影棚池**（wildcards/backgrounds_lookbook_v1.yaml +
+#   lighting_lookbook_v1.yaml，各 1 条 → 每张图背景光都一样，横向只比衣服）。
+# ★ framing=head 会自动追加最紧的近景 guard（composer.closeup_framing_guard）：
+#   "Tight head-and-shoulders framing, no lower body, hips, waist, shorts, socks, shoes…"
+#   ComfyUI 通路还会自动注入同一套下半身负向。→ **这一档只看到肩线以上**：
+#   适合看领口/耳饰/发型/妆造，**别用它验服装整体版型**。
+# 画幅声明 3:4 竖版（头像版式；UI 手动选的比例仍然优先）。
+# caption 标签一律英文（仓库约定，训练信号不中英夹杂）。
+# tags 的最后一项为动作标识，不是表情标签。参考图推荐 front 一张。
+
+name: outfit_front_head
+type: list
+version: 1
+master_template: 'Create an image of the {subject_noun} from {reference_tag}. One character only, no duplicated or repeated figure, no multi-view panel, no character sheet layout, no split screen.'
+suffix_template: The background is {background}. The lighting is {lighting}.
+backgrounds_ref: wildcards/backgrounds_lookbook_v1.yaml
+lighting_ref: wildcards/lighting_lookbook_v1.yaml
+caption_background_suffix: false
+reference_order:
+- front
+preferred_aspect_ratio: '3:4'
+caption_tags:
+  expression: {}
+  pose:
+    stand_front_head: looking straight at the camera
+variants:
+- id: stand_front_head
+  text: "人物正面朝向镜头，头部正对镜头，目光看向镜头，表情自然放松。面部完整可见，五官清晰，面部不被遮挡。肩线水平，颈部自然。正面头像入镜，画面只包含头部与肩部区域，头发与头顶不接触画面边缘。"
+  framing: head
+  angle: front
+  expression: null
+  pose: stand_front_head
+  tags:
+  - head
+  - action
+  - stand_front_head

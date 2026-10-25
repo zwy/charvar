@@ -1,0 +1,12 @@
+# 试衣/lookbook 专用固定背景池（1 条 = 固定）。
+# 给 presets/actions/outfit_*.yaml 用：试衣要横向对比多套服装，背景必须每张一样，
+# 否则比的是背景不是衣服。池里只有一条 → rng.choice 永远取到它，无论随机背景开没开。
+# ★ 别往这个池里加第二条：背景是按变体 id（{outfit_id}__{pose_id}）取值的，
+#   多于一条就会变成每件衣服配一个背景，对比失效。要换风格就改下面这一行。
+# ★ 取消「随机背景」且没填「固定背景」时，提示词里整句背景会被省掉
+#   （composer._render_suffix：缺背景就整句省略），模型会自己发挥——要么留着随机开关，
+#   要么在固定背景框里写死。
+# 条目里不要带逗号：caption 会把背景整句写进训练标签（caption_background_suffix=false），
+#   逗号会把 caption 拆成两段（逗号是 caption 的分隔符）。
+items:
+- a seamless neutral light gray studio backdrop

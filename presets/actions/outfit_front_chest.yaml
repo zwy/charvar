@@ -1,0 +1,50 @@
+# 试衣用单动作预设｜正面半身（outfit_front_chest）
+# 用途：配合服装预设（presets/outfits/*.yaml）看**上装**效果。**本预设只有 1 条变体**——
+#   服装 N 件 × 1 条 = N 张图；动作预设一多就是 N×M 张（预设页「条数」照旧控制）。
+# ★ master_template 刻意**不含** {style_lock_sentence}{identity_lock_sentence}{outfit_lock_sentence}：
+#   实测（白裙丝袜、红发眼镜女人两轮）把主体档案锁定项放在动作段前面，
+#   ComfyUI 的 Qwen-Image-Edit 会把后面的动作段稀释到 14%，动作不执行；
+#   服装段在动作段之后、更靠后，被稀释得更狠。→ 身份与画风交给 front 参考图承担，
+#   动作段 + 服装段独占提示词。
+#   要锁画风就把 {style_lock_sentence} 加回 master_template；
+#   **别加 {outfit_lock_sentence}**——它锁的正是被替换的服装，会打架。
+# 动作段为单行双引号标量：折叠写法（>-）会在断行处把「，臀」之类拆出空格，normalize 不清这个。
+# 动作段只管肢体、朝向、机位与完整入镜；服装、身份、画风走服装预设与参考图。
+# 背景与光照用**内置固定影棚池**（wildcards/backgrounds_lookbook_v1.yaml +
+#   lighting_lookbook_v1.yaml，各 1 条 → 每张图背景光都一样，横向只比衣服）。
+# ★ framing=chest 会自动追加近景 guard（composer.closeup_framing_guard）：
+#   "Chest-up framing, no lower body, hips, waist, shorts, socks, shoes, legs, feet…"
+#   ComfyUI 通路还会自动注入同一套下半身负向。→ **近景档会主动排除下半身**：
+#   这一档用来看领口/肩线/袖型/上装版型，**别用它验丝袜、鞋、裙摆**（那些看 outfit_front_full）。
+#   服装段里写了"wearing … thigh-high stockings"时，画面里出现袜子属于正常现象
+#   （服装原文逐字保留、不会因景别被改写），但构图上半身是主。
+# 画幅声明 3:4 竖版（半身版式；UI 手动选的比例仍然优先）。
+# caption 标签一律英文（仓库约定，训练信号不中英夹杂）。
+# tags 的最后一项为动作标识，不是表情标签。参考图推荐 front 一张。
+
+name: outfit_front_chest
+type: list
+version: 1
+master_template: 'Create an image of the {subject_noun} from {reference_tag}. One character only, no duplicated or repeated figure, no multi-view panel, no character sheet layout, no split screen.'
+suffix_template: The background is {background}. The lighting is {lighting}.
+backgrounds_ref: wildcards/backgrounds_lookbook_v1.yaml
+lighting_ref: wildcards/lighting_lookbook_v1.yaml
+caption_background_suffix: false
+reference_order:
+- front
+preferred_aspect_ratio: '3:4'
+caption_tags:
+  expression: {}
+  pose:
+    stand_front_chest: standing straight facing the camera
+variants:
+- id: stand_front_chest
+  text: "人物正面朝向镜头站立，上半身正对镜头，躯干直立，双肩水平。头部正对镜头，目光看向镜头，表情自然放松。双臂自然垂落在身体两侧，臂干离开躯干留出可见空隙。正面半身入镜，从头顶到胸口下缘完整可见，画面下缘截在胸口位置。"
+  framing: chest
+  angle: front
+  expression: null
+  pose: stand_front_chest
+  tags:
+  - chest
+  - action
+  - stand_front_chest
