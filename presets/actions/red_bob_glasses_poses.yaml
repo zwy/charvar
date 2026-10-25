@@ -22,6 +22,7 @@
 # 改动作段请改脚本后重跑，不要手改（保持与动作卡、prompt-v1.md 逐字一致）。
 
 name: red_bob_glasses_poses
+subject: red_bob_glasses
 type: list
 version: 1
 master_template: 'Create an image of the {subject_noun} from {reference_tag}. One character only, no duplicated or repeated figure, no multi-view panel, no character sheet layout, no split screen.'

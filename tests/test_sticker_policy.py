@@ -19,7 +19,7 @@ from charvar.preset_loader import ListPreset, PresetError, load
 
 @pytest.fixture()
 def sticker_preset():
-    return load("chat_replies_v1_12")
+    return load("chat_replies")
 
 
 @pytest.fixture()
@@ -175,7 +175,7 @@ def test_sticker_meta_snapshot(sticker_preset):
 # ---------- classic 端到端 ----------
 
 def test_classic_sticker_prompt_contains_content_once(sticker_preset, sticker_subject):
-    req = GenerateRequest(subject_id="demo_cat", preset="chat_replies_v1_12", seed=42)
+    req = GenerateRequest(subject_id="demo_cat", preset="chat_replies", seed=42)
     result = compose_generate(sticker_subject, sticker_preset, req)
     assert len(result.items) == 12
     for item in result.items:
@@ -219,7 +219,7 @@ def test_llm_intent_hides_display_text_from_llm(sticker_preset, sticker_subject)
 
     intents = llm_compose.collect_intent(
         sticker_subject, sticker_preset,
-        GenerateRequest(subject_id="demo_cat", preset="chat_replies_v1_12", seed=42, mode="llm",
+        GenerateRequest(subject_id="demo_cat", preset="chat_replies", seed=42, mode="llm",
                         reference_kinds=["front"]),
     )
     # intent 只带策略标签（英文），不带 display_text/lettering（防 LLM 复制中文）
@@ -265,7 +265,7 @@ def test_llm_sticker_final_prompt_gets_verbatim_lettering(sticker_preset, sticke
 
     monkeypatch.setattr(llm, "chat_json", fake_chat_json)
     req = GenerateRequest(
-        subject_id="demo_cat", preset="chat_replies_v1_12", seed=42, mode="llm", reference_kinds=["front"]
+        subject_id="demo_cat", preset="chat_replies", seed=42, mode="llm", reference_kinds=["front"]
     )
     result = llm_compose.generate_llm(sticker_subject, sticker_preset, req, "# 模板", ["front"])
     item = result.items[0]
@@ -294,7 +294,7 @@ def test_llm_sticker_rejects_no_text_then_recovers(sticker_preset, sticker_subje
 
     monkeypatch.setattr(llm, "chat_json", fake_chat_json_recovers)
     req = GenerateRequest(
-        subject_id="demo_cat", preset="chat_replies_v1_12", seed=1, mode="llm", reference_kinds=["front"]
+        subject_id="demo_cat", preset="chat_replies", seed=1, mode="llm", reference_kinds=["front"]
     )
     result = llm_compose.generate_llm(sticker_subject, sticker_preset, req, "# 模板", ["front"])
     assert len(calls) == 2  # 全批一次 + 缺条补调一次
@@ -328,7 +328,7 @@ def test_llm_sticker_anchor_echo_accepted_first_pass(sticker_preset, sticker_sub
 
     monkeypatch.setattr(llm, "chat_json", fake_chat_json_echoes_anchor)
     req = GenerateRequest(
-        subject_id="demo_cat", preset="chat_replies_v1_12", seed=42, mode="llm", reference_kinds=["front"]
+        subject_id="demo_cat", preset="chat_replies", seed=42, mode="llm", reference_kinds=["front"]
     )
     result = llm_compose.generate_llm(sticker_subject, sticker_preset, req, "# 模板", ["front"])
     assert len(calls) == 1  # 全批一次通过，无补调
@@ -346,7 +346,7 @@ def test_llm_sticker_persistent_ban_raises_located_error(sticker_preset, sticker
 
     monkeypatch.setattr(llm, "chat_json", fake_chat_json_always_bad)
     req = GenerateRequest(
-        subject_id="demo_cat", preset="chat_replies_v1_12", seed=1, mode="llm", reference_kinds=["front"]
+        subject_id="demo_cat", preset="chat_replies", seed=1, mode="llm", reference_kinds=["front"]
     )
     with pytest.raises(llm.LLMError) as exc_info:
         llm_compose.generate_llm(sticker_subject, sticker_preset, req, "# 模板", ["front"])

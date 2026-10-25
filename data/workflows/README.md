@@ -4,7 +4,7 @@
 
 ```
 Q21Charvar.json            ← ComfyUI 导出 (API) 的 workflow JSON
-Q21Charvar.mapping.json    ← 字段映射（格式同 presets/comfy_mapping.example.json）
+Q21Charvar.mapping.json    ← 字段映射（格式同 presets/workflows/comfy_mapping.example.json）
 ```
 
 - `charvar gen --format comfyui --workflow Q21Charvar` 会自动在这两个文件间配对；

@@ -10,7 +10,7 @@
 # 字体、排版与身份稳定性需出图验证；本文件不是已经验证成功的图像能力承诺。
 
 schema_version: 2
-name: chat_replies_v1_12
+name: chat_replies
 type: list
 version: 1
 purpose: sticker

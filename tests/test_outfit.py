@@ -269,7 +269,7 @@ def test_api_generate_with_outfit(client):
     bad = client.post("/generate", json={**req, "outfit_preset": "no_such_outfit"})
     assert bad.status_code == 404
 
-    sticker_req = {**req, "preset": "chat_replies_v1_12", "outfit_preset": "stockings_8"}
+    sticker_req = {**req, "preset": "chat_replies", "outfit_preset": "stockings_8"}
     resp = client.post("/generate", json=sticker_req)
     if resp.status_code != 400:  # 仓库若没有 sticker 预设就不验这条
         raise AssertionError(f"sticker+outfit 应被拒绝：{resp.status_code}")

@@ -192,9 +192,9 @@ def test_q21_v2_30_prompt_and_caption():
     assert item3.prompt.endswith("no text.")
 
 
-# ---------- expressions_v1_24（纯表情预设 V1：24 种，独立于 q21 场景预设） ----------
+# ---------- expressions（纯表情预设 V1：24 种，独立于 q21 场景预设） ----------
 
-EXPRESSIONS_V1_24_DIGEST = "15ea68460a071c9cdde27214aafed37dd304e958edc1e8d1972c95f47496fdd5"
+EXPRESSIONS_DIGEST = "15ea68460a071c9cdde27214aafed37dd304e958edc1e8d1972c95f47496fdd5"
 
 EXPRESSION_IDS = (
     "neutral", "soft_smile", "toothy_smile", "laugh", "sad", "tearful", "crying", "angry",
@@ -204,23 +204,23 @@ EXPRESSION_IDS = (
 )
 
 
-def test_expressions_v1_24_digest_locked():
-    """红线：expressions_v1_24 的 24 条 variants 文本逐字不变（V1 基准 sha256）。"""
-    preset = load("expressions_v1_24")
+def test_expressions_digest_locked():
+    """红线：expressions 的 24 条 variants 文本逐字不变（V1 基准 sha256）。"""
+    preset = load("expressions")
     assert isinstance(preset, ListPreset)
     assert len(preset.variants) == 24
     assert {v.id for v in preset.variants} == {f"expr_{e}" for e in EXPRESSION_IDS}
-    assert _texts_digest("expressions_v1_24") == EXPRESSIONS_V1_24_DIGEST, (
-        "expressions_v1_24 的变体文本偏离 V1 基准；如确需修改，请显式重算并更新基准"
+    assert _texts_digest("expressions") == EXPRESSIONS_DIGEST, (
+        "expressions 的变体文本偏离 V1 基准；如确需修改，请显式重算并更新基准"
     )
 
 
-def test_expressions_v1_24_structure_and_caption():
+def test_expressions_structure_and_caption():
     from charvar import composer
     from charvar.caption import build_caption
     from charvar.models import GenerateRequest, SubjectProfile
 
-    preset = load("expressions_v1_24")
+    preset = load("expressions")
     # 全部为头肩正面；expression 字段与 caption 标签一一对应
     for spec in preset.variants:
         assert spec.framing == "head"
@@ -230,7 +230,7 @@ def test_expressions_v1_24_structure_and_caption():
     assert preset.caption_background_suffix is False
     assert len(preset.backgrounds) == 1
     assert len(preset.lighting) == 1
-    assert "headshot" in load("expressions_v1_24").reference_order
+    assert "headshot" in load("expressions").reference_order
     assert set(preset.caption_tags["expression"]) == set(EXPRESSION_IDS)
 
     subject = SubjectProfile(id="demo", name="演示", subject_noun="woman", reference_tag="<image1>")
@@ -244,7 +244,7 @@ def test_expressions_v1_24_structure_and_caption():
     assert "a seamless neutral light gray studio backdrop, plain and uncluttered" in caption
     assert "backdrop background" not in caption
 
-    req = GenerateRequest(subject_id="demo", preset="expressions_v1_24", seed=42,
+    req = GenerateRequest(subject_id="demo", preset="expressions", seed=42,
                           randomize_background=True, randomize_lighting=True)
     result = composer.generate(subject, preset, req)
     assert len(result.items) == 24
@@ -257,13 +257,13 @@ def test_expressions_v1_24_structure_and_caption():
     assert "The lighting is " in item.prompt
 
 
-# ---------- yoga_basic_9（瑜伽动作预设：9 个体式，schema 1 list） ----------
+# ---------- yoga_basic（瑜伽动作预设：9 个体式，schema 1 list） ----------
 
 # V3 基准（2026-10-20）：9 条变体补上 angle 字段，并把 text 里「朝向画面左/右边缘」
 # 改写成侧视语义（前方/后方），使 text 与 angle、caption 视角标签三者一致。
 # V2 基准 bfbac4e9… 对应「angle 留空 + 画面边缘描述」的版本，保留备查。
 # V1 基准 eedd9b21… 对应更早的替换前版本。
-YOGA_BASIC_9_DIGEST = "d508507828c417e9e5509c73fbe651db4f149b9e7db986149318ff99bac4e953"
+YOGA_BASIC_DIGEST = "d508507828c417e9e5509c73fbe651db4f149b9e7db986149318ff99bac4e953"
 YOGA_BASIC_9_V2_DIGEST = "bfbac4e943e8e888a09145c6d418cd48bb04472d2fecbc862dc3f0aedf871694"
 YOGA_BASIC_9_V1_DIGEST = "eedd9b2167bdd1f5613370079a1e75c0ca5a1d4e390058afbb3ed0882dd0e385"
 
@@ -273,20 +273,20 @@ YOGA_BASIC_9_IDS = (
 )
 
 
-def test_yoga_basic_9_digest_locked():
-    """红线：yoga_basic_9 的 9 条 variants 文本逐字不变（V2 基准 sha256）。"""
-    preset = load("yoga_basic_9")
+def test_yoga_basic_digest_locked():
+    """红线：yoga_basic 的 9 条 variants 文本逐字不变（V2 基准 sha256）。"""
+    preset = load("yoga_basic")
     assert isinstance(preset, ListPreset)
     assert len(preset.variants) == 9
     assert {v.id for v in preset.variants} == set(YOGA_BASIC_9_IDS)
-    assert _texts_digest("yoga_basic_9") == YOGA_BASIC_9_DIGEST, (
-        "yoga_basic_9 的变体文本偏离 V2 基准；如确需修改，请显式重算并更新基准"
+    assert _texts_digest("yoga_basic") == YOGA_BASIC_DIGEST, (
+        "yoga_basic 的变体文本偏离 V2 基准；如确需修改，请显式重算并更新基准"
     )
 
 
-def test_yoga_basic_9_structure():
+def test_yoga_basic_structure():
     """动作预设：全身景别 + 每个体式有明确 angle（决定 caption 视角标签与 LLM 模式的视角句）。"""
-    preset = load("yoga_basic_9")
+    preset = load("yoga_basic")
     assert preset.schema_version == 1
     assert preset.purpose == "dataset" and preset.text_policy == "forbid"
     for spec in preset.variants:
@@ -304,7 +304,7 @@ def test_yoga_basic_9_structure():
     assert preset.preferred_aspect_ratio == "4:3"
 
 
-def test_yoga_basic_9_angles_follow_left_right_convention():
+def test_yoga_basic_angles_follow_left_right_convention():
     """angle 与 text 的朝向必须一致：仓库约定 l90=面朝画面左，r90=面朝画面右。
 
     分配依据「关键细节落在近端才看得清」：
@@ -312,7 +312,7 @@ def test_yoga_basic_9_angles_follow_left_right_convention():
     - r90 → 相机看到角色【右】侧面
     正面三式（树/战士二/三角）用 front，其余按近端关键细节选 l90/r90。
     """
-    preset = load("yoga_basic_9")
+    preset = load("yoga_basic")
     by_id = {v.id: v for v in preset.variants}
     expected = {
         "yoga_tree": "front",
@@ -341,9 +341,9 @@ def test_yoga_basic_9_angles_follow_left_right_convention():
     assert "low camera position" in " ".join(by_id["yoga_bow"].text.split())
 
 
-def test_yoga_basic_9_deep_backbend_wording():
+def test_yoga_basic_deep_backbend_wording():
     """骆驼式/弓式用「深弧」措辞：不再有压住弧度的克制说法。"""
-    preset = load("yoga_basic_9")
+    preset = load("yoga_basic")
     by_id = {v.id: v for v in preset.variants}
     assert "arc the torso strongly backward" in by_id["yoga_camel"].text
     assert "moderate" not in by_id["yoga_camel"].text
@@ -351,15 +351,15 @@ def test_yoga_basic_9_deep_backbend_wording():
     assert "moderate bow shape" not in by_id["yoga_bow"].text
 
 
-def test_yoga_basic_9_prompt_and_caption():
+def test_yoga_basic_prompt_and_caption():
     from charvar import composer
     from charvar.models import GenerateRequest, SubjectProfile
 
-    preset = load("yoga_basic_9")
+    preset = load("yoga_basic")
     subject = SubjectProfile(id="demo", name="演示", subject_noun="woman", trigger_word="sw1tch")
     subject.style_lock = ["2D hand-drawn illustration"]
 
-    req = GenerateRequest(subject_id="demo", preset="yoga_basic_9", seed=42)
+    req = GenerateRequest(subject_id="demo", preset="yoga_basic", seed=42)
     result = composer.generate(subject, preset, req)
     assert len(result.items) == 9
     item = result.items[0]
@@ -378,13 +378,13 @@ def test_yoga_basic_9_prompt_and_caption():
     assert item.meta["preferred_aspect_ratio"] == "4:3"
 
 
-def test_yoga_basic_9_auto_ratio_is_landscape():
+def test_yoga_basic_auto_ratio_is_landscape():
     """auto 画幅走预设声明的 4:3（横向动作不被竖版切手切脚）。"""
     from charvar import composer
     from charvar.exporters.comfyui import _smart_ratio, dimensions_for_item
     from charvar.models import GenerateRequest, SubjectProfile
 
-    preset = load("yoga_basic_9")
+    preset = load("yoga_basic")
     subject = SubjectProfile(id="demo", name="演示", subject_noun="woman")
     result = composer.generate(subject, preset, GenerateRequest(subject_id="demo", seed=1))
     item = result.items[0]
@@ -394,7 +394,7 @@ def test_yoga_basic_9_auto_ratio_is_landscape():
     assert dimensions_for_item("3:4", "1k", item) == (768, 1024)
 
 
-@pytest.mark.parametrize("preset_name", ["yoga_basic_9", "yoga_complete_14"])
+@pytest.mark.parametrize("preset_name", ["yoga_basic", "yoga_complete"])
 def test_yoga_presets_carry_single_person_guard(preset_name):
     """动作预设必须带单人硬约束：classic 模式没有 "One character only" 兜底。
 
@@ -426,11 +426,11 @@ def test_yoga_presets_carry_single_person_guard(preset_name):
 
 
 
-# ---------- yoga_complete_14（原九式 + 新增五式：手倒立/下犬/侧板/船式/屈膝头倒立） ----------
+# ---------- yoga_complete（原九式 + 新增五式：手倒立/下犬/侧板/船式/屈膝头倒立） ----------
 
-# 基准：原九式逐字沿用 yoga_basic_9（其前 9 条 digest 应等于 YOGA_BASIC_9_DIGEST），
-# 新增五式见下。yoga_complete_14 的完整 14 条 digest 一并锁定。
-YOGA_COMPLETE_14_DIGEST = "c32bcf9a6d94fd21239bd82fe85be61e228e13ba063edcccb1778795cf607350"
+# 基准：原九式逐字沿用 yoga_basic（其前 9 条 digest 应等于 YOGA_BASIC_DIGEST），
+# 新增五式见下。yoga_complete 的完整 14 条 digest 一并锁定。
+YOGA_COMPLETE_DIGEST = "c32bcf9a6d94fd21239bd82fe85be61e228e13ba063edcccb1778795cf607350"
 
 YOGA_COMPLETE_14_IDS = (
     "yoga_tree", "yoga_warrior_ii", "yoga_triangle", "yoga_low_lunge",
@@ -445,31 +445,31 @@ YOGA_NEW_5_IDS = (
 )
 
 
-def test_yoga_complete_14_digest_locked():
-    """红线：yoga_complete_14 的 14 条变体文本逐字不变（sha256 基准）。"""
-    preset = load("yoga_complete_14")
+def test_yoga_complete_digest_locked():
+    """红线：yoga_complete 的 14 条变体文本逐字不变（sha256 基准）。"""
+    preset = load("yoga_complete")
     assert isinstance(preset, ListPreset)
     assert len(preset.variants) == 14
     assert {v.id for v in preset.variants} == set(YOGA_COMPLETE_14_IDS)
-    assert _texts_digest("yoga_complete_14") == YOGA_COMPLETE_14_DIGEST, (
-        "yoga_complete_14 的变体文本偏离基准；如确需修改，请显式重算并更新基准"
+    assert _texts_digest("yoga_complete") == YOGA_COMPLETE_DIGEST, (
+        "yoga_complete 的变体文本偏离基准；如确需修改，请显式重算并更新基准"
     )
 
 
-def test_yoga_complete_14_keeps_original_nine_verbatim():
-    """原九式逐字沿用 yoga_basic_9：前 9 条 digest 必须等于基础版基准。"""
-    preset = load("yoga_complete_14")
+def test_yoga_complete_keeps_original_nine_verbatim():
+    """原九式逐字沿用 yoga_basic：前 9 条 digest 必须等于基础版基准。"""
+    preset = load("yoga_complete")
     head = hashlib.sha256(
         "\n".join(v.text for v in preset.variants[:9]).encode("utf-8")
     ).hexdigest()
-    assert head == YOGA_BASIC_9_DIGEST, (
-        "yoga_complete_14 的前 9 条与 yoga_basic_9 不一致（原九式必须逐字保留）"
+    assert head == YOGA_BASIC_DIGEST, (
+        "yoga_complete 的前 9 条与 yoga_basic 不一致（原九式必须逐字保留）"
     )
 
 
-def test_yoga_complete_14_structure():
+def test_yoga_complete_structure():
     """合并版：14 条动作预设，字段约定与基础九式一致。"""
-    preset = load("yoga_complete_14")
+    preset = load("yoga_complete")
     assert preset.schema_version == 1
     assert preset.purpose == "dataset" and preset.text_policy == "forbid"
     assert preset.reference_order == ["front"]
@@ -485,12 +485,12 @@ def test_yoga_complete_14_structure():
         assert not any("一" <= ch <= "鿿" for ch in spec.text)
 
 
-def test_yoga_complete_14_angles_follow_left_right_convention():
+def test_yoga_complete_angles_follow_left_right_convention():
     """新增五式的 angle 与 text 朝向必须一致（l90=面朝画面左，r90=面朝画面右）。
 
     手倒立改背面：只露后脑勺、脸完全隐藏（用户反馈正面露脸很诡异）。
     """
-    preset = load("yoga_complete_14")
+    preset = load("yoga_complete")
     by_id = {v.id: v for v in preset.variants}
     expected = {
         "yoga_handstand": "back",              # 背面：只露后脑勺，不露脸
@@ -513,9 +513,9 @@ def test_yoga_complete_14_angles_follow_left_right_convention():
     assert "no part of the face, chin, or cheek visible" in handstand
 
 
-def test_yoga_complete_14_caption_tags_are_english():
+def test_yoga_complete_caption_tags_are_english():
     """caption 标签一律英文：训练标签中英夹杂会污染训练信号。"""
-    preset = load("yoga_complete_14")
+    preset = load("yoga_complete")
     for group, mapping in (preset.caption_tags or {}).items():
         for key, value in (mapping or {}).items():
             assert not any("一" <= ch <= "鿿" for ch in value), (
@@ -523,13 +523,13 @@ def test_yoga_complete_14_caption_tags_are_english():
             )
 
 
-def test_yoga_complete_14_prompt_and_caption():
+def test_yoga_complete_prompt_and_caption():
     from charvar import composer
     from charvar.models import GenerateRequest, SubjectProfile
 
-    preset = load("yoga_complete_14")
+    preset = load("yoga_complete")
     subject = SubjectProfile(id="demo", name="演示", subject_noun="woman", trigger_word="sw1tch")
-    req = GenerateRequest(subject_id="demo", preset="yoga_complete_14", seed=42)
+    req = GenerateRequest(subject_id="demo", preset="yoga_complete", seed=42)
     result = composer.generate(subject, preset, req)
     assert len(result.items) == 14
     captions = {it.variant_id: it.caption for it in result.items}
@@ -555,9 +555,9 @@ def test_yoga_complete_14_prompt_and_caption():
     assert result.items[0].meta["preferred_aspect_ratio"] == "4:3"
 
 
-def test_yoga_complete_14_new_poses_key_requirements():
+def test_yoga_complete_new_poses_key_requirements():
     """新增五式的关键支撑/形态要求留在文本里（出图弱化时便于定位）。"""
-    preset = load("yoga_complete_14")
+    preset = load("yoga_complete")
     by_id = {v.id: v for v in preset.variants}
     handstand = by_id["yoga_handstand"].text
     assert "the hands are the only ground contacts" in handstand
@@ -589,13 +589,13 @@ def test_yoga_complete_14_new_poses_key_requirements():
     assert "feet close together" not in headstand
 
 
-def test_yoga_complete_14_auto_ratio_is_landscape():
+def test_yoga_complete_auto_ratio_is_landscape():
     """auto 画幅走预设声明的 4:3（倒立/侧板等横向动作不被竖版切手切脚）。"""
     from charvar import composer
     from charvar.exporters.comfyui import _smart_ratio, dimensions_for_item
     from charvar.models import GenerateRequest, SubjectProfile
 
-    preset = load("yoga_complete_14")
+    preset = load("yoga_complete")
     subject = SubjectProfile(id="demo", name="演示", subject_noun="woman")
     result = composer.generate(subject, preset, GenerateRequest(subject_id="demo", seed=1))
     for item in result.items:
@@ -603,9 +603,9 @@ def test_yoga_complete_14_auto_ratio_is_landscape():
         assert dimensions_for_item("auto", "1k", item) == (1024, 768)
 
 
-# ---------- chat_replies_v1_12（带字聊天表情包：schema 2，仅新预设启用） ----------
+# ---------- chat_replies（带字聊天表情包：schema 2，仅新预设启用） ----------
 
-CHAT_REPLIES_V1_12_DIGEST = "39a394efd7c0bb85b9f2718fe98e06ac7bda1fd68384e26de771211f9bba188f"
+CHAT_REPLIES_DIGEST = "39a394efd7c0bb85b9f2718fe98e06ac7bda1fd68384e26de771211f9bba188f"
 
 CHAT_REPLIES_CONTENTS = (
     "收到！", "来啦来啦", "啊？", "让我看看", "包的", "我尽量",
@@ -620,18 +620,18 @@ CHAT_REPLIES_IDS = (
 )
 
 
-def test_chat_replies_v1_12_digest_locked():
-    preset = load("chat_replies_v1_12")
+def test_chat_replies_digest_locked():
+    preset = load("chat_replies")
     assert isinstance(preset, ListPreset)
     assert len(preset.variants) == 12
     assert {v.id for v in preset.variants} == set(CHAT_REPLIES_IDS)
-    assert _texts_digest("chat_replies_v1_12") == CHAT_REPLIES_V1_12_DIGEST, (
-        "chat_replies_v1_12 的变体文本偏离 V1 基准；如确需修改，请显式重算并更新基准"
+    assert _texts_digest("chat_replies") == CHAT_REPLIES_DIGEST, (
+        "chat_replies 的变体文本偏离 V1 基准；如确需修改，请显式重算并更新基准"
     )
 
 
-def test_chat_replies_v1_12_contents_exact():
-    preset = load("chat_replies_v1_12")
+def test_chat_replies_contents_exact():
+    preset = load("chat_replies")
     contents = [v.display_text.content for v in preset.variants]
     assert tuple(contents) == CHAT_REPLIES_CONTENTS
     layouts = {v.id: v.display_text.layout for v in preset.variants}
@@ -640,10 +640,10 @@ def test_chat_replies_v1_12_contents_exact():
     assert layouts["sticker_hug"] == "interaction"
 
 
-def test_chat_replies_v1_12_sticker_contract():
+def test_chat_replies_sticker_contract():
     from charvar.preset_loader import MatrixPreset
 
-    preset = load("chat_replies_v1_12")
+    preset = load("chat_replies")
     assert preset.schema_version == 2 and preset.purpose == "sticker"
     assert preset.text_policy == "required_label"
     assert preset.composition_policy == "variant"

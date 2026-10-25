@@ -300,8 +300,10 @@ def test_video_preset_endpoint_and_render(tmp_path, monkeypatch, client):
     presets_root = tmp_path / "presets"
     presets_root.mkdir()
     src_presets = pathlib.Path(__file__).resolve().parent.parent / "presets"
-    for src in src_presets.glob("*.yaml"):
-        _shutil.copy(src, presets_root / src.name)
+    # 动作预设住在 actions/ 子目录（预设名是稳定标识，文件路径只是存储布局）
+    (presets_root / "actions").mkdir()
+    for src in (src_presets / "actions").glob("*.yaml"):
+        _shutil.copy(src, presets_root / "actions" / src.name)
     _shutil.copytree(src_presets / "wildcards", presets_root / "wildcards")
     (presets_root / "video").mkdir()
     (presets_root / "video" / "tiny.yaml").write_text(
@@ -396,7 +398,7 @@ def test_sticker_api_end_to_end(tmp_path, monkeypatch, client):
     queued = _mock_comfy(monkeypatch, workflows)
     client.post("/subjects", json={"id": "demo_cat", "name": "Demo Cat"})
     resp = client.post(
-        "/generate", json={"subject_id": "demo_cat", "preset": "chat_replies_v1_12", "seed": 42}
+        "/generate", json={"subject_id": "demo_cat", "preset": "chat_replies", "seed": 42}
     )
     assert resp.status_code == 200, resp.text
     result = resp.json()
@@ -406,13 +408,13 @@ def test_sticker_api_end_to_end(tmp_path, monkeypatch, client):
     assert item["meta"]["text_policy"] == "required_label"
     assert result["warnings"] == []
 
-    detail = client.get("/presets/chat_replies_v1_12").json()
+    detail = client.get("/presets/chat_replies").json()
     assert detail["schema_version"] == 2 and detail["purpose"] == "sticker"
     assert detail["preferred_aspect_ratio"] == "1:1"
     assert detail["lettering"]["language"] == "zh-Hans"
     assert detail["variants"][0]["display_text"]["content"] == "收到！"
     listing = client.get("/presets").json()
-    entry = next(p for p in listing if p["name"] == "chat_replies_v1_12")
+    entry = next(p for p in listing if p["name"] == "chat_replies")
     assert entry["purpose"] == "sticker" and entry["text_policy"] == "required_label"
 
     run_id = result["run_id"]
@@ -425,14 +427,14 @@ def test_sticker_api_end_to_end(tmp_path, monkeypatch, client):
 
     # 手动比例 3:4 → 768×1024（显式优先于快照）
     run2 = client.post(
-        "/generate", json={"subject_id": "demo_cat", "preset": "chat_replies_v1_12", "seed": 43}
+        "/generate", json={"subject_id": "demo_cat", "preset": "chat_replies", "seed": 43}
     ).json()["run_id"]
     client.post(f"/runs/{run2}/comfyui", json={"workload": "StickerWF", "aspect_ratio": "3:4"})
     assert queued[12]["prompt"]["55"]["inputs"]["width"] == 768
 
     # 负向冲突 → 400 可读报错；显式自定义（无禁字 token）→ 注入原值
     run3 = client.post(
-        "/generate", json={"subject_id": "demo_cat", "preset": "chat_replies_v1_12", "seed": 44}
+        "/generate", json={"subject_id": "demo_cat", "preset": "chat_replies", "seed": 44}
     ).json()["run_id"]
     bad = client.post(f"/runs/{run3}/comfyui", json={"workload": "StickerWF", "negative_prompt": "text, blurry"})
     assert bad.status_code == 400
@@ -452,13 +454,13 @@ def test_sticker_generate_subject_conflict_blocks(tmp_path, monkeypatch, client)
     """主体档案含明确禁字条款 → 400；模板疑似条款不阻断但随结果返回（warnings）。"""
     client.post("/subjects", json={"id": "ban_cat", "name": "Ban"})
     client.put("/subjects/ban_cat", json={"id": "ban_cat", "name": "Ban", "identity_lock": ["no text, clean look"]})
-    resp = client.post("/generate", json={"subject_id": "ban_cat", "preset": "chat_replies_v1_12", "seed": 1})
+    resp = client.post("/generate", json={"subject_id": "ban_cat", "preset": "chat_replies", "seed": 1})
     assert resp.status_code == 400
     assert "no text" in resp.json()["detail"]
 
     client.post("/subjects", json={"id": "warn_cat", "name": "Warn"})
     client.put("/subjects/warn_cat/template", json={"template_md": "## 场景：无文字条款（仅局部）"})
-    resp = client.post("/generate", json={"subject_id": "warn_cat", "preset": "chat_replies_v1_12", "seed": 1})
+    resp = client.post("/generate", json={"subject_id": "warn_cat", "preset": "chat_replies", "seed": 1})
     assert resp.status_code == 200
     assert resp.json()["warnings"] and "无文字" in resp.json()["warnings"][0]
 

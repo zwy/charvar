@@ -12,7 +12,7 @@
 - **主体档案 CRUD**：id/称谓/触发词/风格锁定/外貌锁定/服饰锁定/自由补充，支持粘贴 YAML 导入
 - **历史记录**：每次生成存 SQLite，可回看、重新下载
 - **导出**：TXT（每行一条贴 ComfyUI）、JSONL、captions.zip（`000_full_front.txt …` 与图片同名）、ComfyUI API 逐条入队
-- **内置预设**：`q21_default_30`（原工作流 30 条，逐字保留）、`q21_legacy_30`（工作流残留旧版 30 条）、`matrix_basic`（3 景别 × 8 朝向 + 6 表情的矩阵版）、`yoga_basic_9`（瑜伽动作 9 式：全身景别，角度/表情留空，由各条 text 自述观察方向）、`yoga_complete_14`（同上九式 + 手倒立/下犬式/侧板式/船式/屈膝头倒立共 14 式）
+- **内置预设**：`q21_default_30`（原工作流 30 条，逐字保留）、`q21_legacy_30`（工作流残留旧版 30 条）、`matrix_basic`（3 景别 × 8 朝向 + 6 表情的矩阵版）、`yoga_basic`（瑜伽动作 9 式：全身景别，角度/表情留空，由各条 text 自述观察方向）、`yoga_complete`（同上九式 + 手倒立/下犬式/侧板式/船式/屈膝头倒立共 14 式）
 
 ## 页面一览
 
@@ -80,7 +80,7 @@ COMFYUI_WORKFLOWS_DIR=./data/workflows
 
 - `.env` 不进 git（`.env.example` 给模板）；已存在的环境变量优先。
 - 请求一律绕过代理直连（trust_env=False），shell 的 `ALL_PROXY` 不影响内网调用。
-- workflow 采用与 `shared/comfy_client` 相同的成对约定：`data/workflows/{name}.json` + `{name}.mapping.json`；mapping 格式见 `presets/comfy_mapping.example.json`（`mappings` 列表 + `output_nodes`）。
+- workflow 采用与 `shared/comfy_client` 相同的成对约定：`data/workflows/{name}.json` + `{name}.mapping.json`；mapping 格式见 `presets/workflows/comfy_mapping.example.json`（`mappings` 列表 + `output_nodes`）。
 - 网页「预设页 → ① 生图设置 → ③ 推送生图」与 CLI 共用这套配置。
 - 推送前可选择 `智能 / 1:1 / 3:4 / 16:9 / 4:3 / 9:16 / 2:3 / 3:2 / 21:9` 与 `1K / 2K`；`智能` 会按景别使用全身 `2:3`、胸像/头像/表情 `3:4`。
 - **2K 用 Qwen-Image-2.1 官方像素**（面积恒定 ~4.2MP，如 16:9 = 2752×1536、1:1 = 2048×2048）——模型原生的就是这个尺寸；早期按「长边 2048」算的 2K 只有原生面积的 56%，图会糊。4K 档已下线：远超模型 2K 训练尺寸会丢提示词遵循度。
@@ -140,7 +140,7 @@ LLM_MODEL=deepseek/deepseek-v4.1-flash
 **为什么中文模式值得用**：改写管线注入的材料全是英文（视角规范句、背景/光照池、锚定句都是英文），所以英文改写出来的提示词很长——实测同一条 3 变体预设下英文版 1656–2538 字符，而中文版只有 527–636 字符。**即梦 text2image 上限 1592 字符**，英文版会被 `dreamina_image.validate_prompt` 直接拒掉（白扣一次提交费），中文版稳过。即梦是中文原生后端，中文提示词也更贴合。
 
 - 变更只影响 LLM 模式的改写提示词，不动经典模板模式。
-- 带字表情包预设（`chat_replies_v1_12`，中文文案由程序按原文追加）**强制按英文改写**——LLM 段一旦输出中文就会被 sticker 禁字规则判为不合格。此时选「中文」会被忽略，并在 run 的 `warnings` 里给出声明。
+- 带字表情包预设（`chat_replies`，中文文案由程序按原文追加）**强制按英文改写**——LLM 段一旦输出中文就会被 sticker 禁字规则判为不合格。此时选「中文」会被忽略，并在 run 的 `warnings` 里给出声明。
 - caption 列不受影响，仍是英文训练格式。
 
 ## 安装
@@ -233,12 +233,14 @@ charvar image models    # 列 OpenRouter 可用模型
 
 ## 预设
 
-YAML 预设放 `presets/*.yaml`，两种类型：
+YAML 预设放 `presets/actions/`（动作预设的唯一归属目录；完整布局与命名规范见 `presets/README.md`），两种类型：
 
 - `type: list`：逐条 `variants` 写死（原工作流 30 条逐字保留）。缺省 framing/angle/expression 会由 id 解析（`full_l45` → full+l45；`expr_smile` → head+front+smile）。
 - `type: matrix`：`dimensions` 定义维度文案，`rules` 按顺序做笛卡尔积（`"*"` = 该维度全量），`exclude` 按维度取值排除（`{angle: back, expression: "*"}` 只排除「背面 + 表情」组合）。
 
-背景/光照用 `presets/wildcards/backgrounds.yaml` / `lighting.yaml`（`items` 列表），也可在任意变体文本内使用 Impact Pack 风格的 `{a|b|c}` 内联通配符（按条目种子稳定展开）。
+背景/光照用 `presets/wildcards/backgrounds_v1.yaml` / `lighting_v1.yaml`（`items` 列表），也可在任意变体文本内使用 Impact Pack 风格的 `{a|b|c}` 内联通配符（按条目种子稳定展开）。
+
+预设根字段 `subject: <id>` 标归属主体（省略 = 通用预设），网页预设下拉按「通用 / 主体专属」分组。
 
 变体可带结构化字段：`framing`（full/chest/head）、`angle`、`expression`（表情）、`pose`（体式/动作，独立于表情语义），后两者分别写进 caption。
 
@@ -294,7 +296,7 @@ LLM 优化模式（`mode=llm`）下服装走的是独立通路：服装段作为
 - 推送前端已内置比例与分辨率：`智能 / 1:1 / 3:4 / 16:9 / 4:3 / 9:16 / 2:3 / 3:2 / 21:9` + `1K / 2K`；2K 走 Qwen-Image-2.1 官方像素（面积恒定 ~4.2MP）。`智能` 会按景别使用全身 `2:3`、近景 `3:4`。
 
 - **模式 A（零改动）**：`prompts.txt` 每行一条完整提示词，直接贴进原工作流的 `Text Multiline`（把 Master Prompt 清空、wildcard 节点旁路），队列次数 = 行数。
-- **模式 B（API 排队，推荐）**：workflow 用 ComfyUI「导出 (API)」保存到 `data/workflows/{name}.json`，并写同名 `{name}.mapping.json` 指明注入节点（示例见 `presets/comfy_mapping.example.json`）。`filename_prefix` 默认写成 `{subject}_{index:03d}_{variant_id}`，与 captions 文件一一对应；逐条 `POST /prompt`，返回的 `prompt_id`（以及 `--wait` 时的输出文件名）记入 SQLite `comfy_prompts` 表，供后续关联图片与 caption。
+- **模式 B（API 排队，推荐）**：workflow 用 ComfyUI「导出 (API)」保存到 `data/workflows/{name}.json`，并写同名 `{name}.mapping.json` 指明注入节点（示例见 `presets/workflows/comfy_mapping.example.json`）。`filename_prefix` 默认写成 `{subject}_{index:03d}_{variant_id}`，与 captions 文件一一对应；逐条 `POST /prompt`，返回的 `prompt_id`（以及 `--wait` 时的输出文件名）记入 SQLite `comfy_prompts` 表，供后续关联图片与 caption。
 - 连接检查：`GET /comfy/status`（网页面板「检查连接」）；队列记录：`GET /runs/{run_id}/comfyui`。
 - 已验证链路：charvar → ComfyUI（0.40.0 / win32），单条排队 → 轮询完成 → 拿到输出文件名；`192.168.x.x` 属于你的本地网段，请自行替换。
 - 支持 `aspect_ratio` + `resolution`：比例可选拍档里的 `auto / 1:1 / 3:4 / 16:9 / 4:3 / 9:16 / 2:3 / 3:2 / 21:9`，分辨率支持 `1k / 2k`（2K 为 Qwen 官方像素，面积恒定 ~4.2MP）；`auto` 按景别自动用 2:3（全身）或 3:4（胸像/头像/表情）。
@@ -329,7 +331,7 @@ LLM 优化模式（`mode=llm`）下服装走的是独立通路：服装段作为
 | `data/charvar.db` | 主体档案、生成记录、comfy_prompts（JSON 全量存储，可整库备份） |
 | `data/workflows/` | ComfyUI API workflow + mapping 成对文件（README 说明约定） |
 | `out/` | CLI 默认输出目录（`--out` 可改） |
-| `presets/` | YAML 预设、通配符、主体档案样例、mapping 示例 JSON |
+| `presets/` | YAML 预设（`actions/`）、通配符、主体档案样例、服装/贴字/视频/配方预设（规范见 `presets/README.md`） |
 
 删除 `data/charvar.db` 即重置（预设是代码外文件，不受影响）。
 
@@ -338,7 +340,8 @@ LLM 优化模式（`mode=llm`）下服装走的是独立通路：服装段作为
 ```
 charvar/            核心包：models/preset_loader/wildcard/composer/caption
 │                   exporters（txt/jsonl/captions/comfyui）/storage/api/cli/adhoc
-presets/            q21_default_30、q21_legacy_30、matrix_basic、wildcards/、subjects/
+presets/            actions/（动作预设）+ wildcards/ + subjects/ + outfits/ + overlays/
+                    + video/ + recipes/ + workflows/（规范见 presets/README.md）
 web/                web/app.py（uvicorn 启动）+ web/static/（无构建步骤）
 tests/              pytest：逐字一致性/可复现/子种子/拼接/矩阵/导出/API/adhoc/CLI
 scripts/            start.sh / stop.sh（默认端口 8710）/ install_cli.sh（装全局 CLI + skill）

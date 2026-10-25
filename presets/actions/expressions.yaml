@@ -1,5 +1,5 @@
 # charvar 纯表情预设 V1：24 种；新增文件，不修改 Q21 原始预设。
-# 放入项目 presets 目录；建议文件名 expressions_v1_24.yaml。
+# 放入项目 presets/actions 目录；文件名与 name 字段一致（expressions.yaml）。
 # 参考图：仅 headshot，一张图。经典模式 reference_tag 应与实际参考图标签一致，默认 <image1>。
 # 为兼容现有 ComfyUI 工作流保留 <image1> 引用机制；抖音部署时改用 素材1。
 # 推荐先使用 classic 模式；现有 LLM 改写可能弱化 text 中的面部动作。
@@ -35,7 +35,7 @@
 # 23. expr_wink: 单眼眨眼
 # 24. expr_tongue_out: 吐舌
 
-name: expressions_v1_24
+name: expressions
 type: list
 version: 1
 master_template: |-

@@ -23,6 +23,7 @@
 # （仓库外本机路径，不进 git；仓库协作者看不到，别在仓库里找）。
 
 name: white_skirt_stockings_poses
+subject: white_skirt_stockings
 type: list
 version: 1
 master_template: 'Create an image of the {subject_noun} from {reference_tag}. One character only, no duplicated or repeated figure, no multi-view panel, no character sheet layout, no split screen.'

@@ -3,7 +3,7 @@
 - `type: list`：逐条写死（兼容原工作流，q21_default_30 逐字保留）；
 - `type: matrix`：维度组合 + rules 笛卡尔积 + exclude；
 - 背景/光照：背景用 `backgrounds:`/`lighting:` 内联，或 `backgrounds_ref:`/`lighting_ref:`
-  引用相对预设文件的通配符 YAML（items: [...]）；
+  引用通配符 YAML（items: [...]，路径以 presets 根目录为基准）；
 - `caption_tags` 覆盖 caption 标签映射；`caption_background_suffix: false` 时
   caption 只写背景描述本身（不加 " background" 后缀，长句背景形态）；
 - `schema_version` 是配置格式版本（默认 1，只接受 1/2，未知版本报错）；`version`
@@ -38,7 +38,7 @@ _STICKER_SCHEMA_2_REQUIRED = {
 _SCHEMA_2_ROOT_KEYS = frozenset(
     {
         "schema_version", "name", "type", "version", "purpose", "text_policy",
-        "composition_policy", "preferred_aspect_ratio", "lettering",
+        "composition_policy", "preferred_aspect_ratio", "lettering", "subject",
         "master_template", "suffix_template", "backgrounds", "lighting",
         "backgrounds_ref", "lighting_ref", "caption_tags", "caption_background_suffix",
         "reference_order", "variants",
@@ -70,6 +70,9 @@ class CommonPreset(BaseModel):
     caption_background_suffix: bool = True
     # 预设文本若按固定参考图顺序逐字描述（如 <image1>=headshot…），声明推荐顺序供前端默认勾选与提示
     reference_order: list[str] = Field(default_factory=list)
+    # 归属主体 id（null = 通用预设）。前端按它把「主体专属」与「通用」分组。
+    # 主体 id 必须在 presets/subjects/<id>.yaml 存在。
+    subject: str | None = None
     # ---- schema 2（带字表情包）新增：schema_version=配置格式版本，version=内容版本 ----
     schema_version: int = 1
     purpose: Literal["dataset", "sticker"] = "dataset"
@@ -106,6 +109,24 @@ def _wildcard_items(path: Path, field: str) -> list[str]:
     if not isinstance(items, list) or not all(isinstance(v, str) for v in items):
         raise PresetError(f"通配符文件 {path} 缺少 items: [..]（{field}）")
     return [item.strip() for item in items if item.strip()]
+
+
+def _resolve_wildcard_path(ref: str, preset_path: Path) -> Path:
+    """解析通配符池路径。
+
+    约定以 **presets 根目录** 为基准（``wildcards/backgrounds_v1.yaml``），
+    这样预设文件挪进子目录后引用不用改。兼容旧的「相对预设文件所在目录」写法。
+    """
+    candidate = Path(ref)
+    if candidate.is_absolute():
+        return candidate
+    from_root = paths.presets_dir() / candidate
+    if from_root.exists():
+        return from_root
+    beside_preset = preset_path.parent / candidate
+    if beside_preset.exists():
+        return beside_preset
+    return from_root  # 都不存在 → 报 from_root，错误信息里的路径更有意义
 
 
 def _derive_structured_fields(spec: dict[str, Any]) -> dict[str, Any]:
@@ -241,6 +262,7 @@ def load_file(path: Path) -> ListPreset | MatrixPreset:
         "caption_tags": raw.get("caption_tags"),
         "caption_background_suffix": raw.get("caption_background_suffix", True),
         "reference_order": [str(v).strip() for v in (raw.get("reference_order") or [])],
+        "subject": (str(raw["subject"]).strip() or None) if raw.get("subject") else None,
         "schema_version": schema_version,
         "purpose": raw.get("purpose", "dataset"),
         "text_policy": raw.get("text_policy", "forbid"),
@@ -248,13 +270,14 @@ def load_file(path: Path) -> ListPreset | MatrixPreset:
         "preferred_aspect_ratio": _aspect_ratio_value(raw.get("preferred_aspect_ratio")),
         "lettering": raw.get("lettering"),
     }
-    # 背景/光照：内联优先，其次 _ref 相对路径
+    # 背景/光照：内联优先，其次 _ref（相对 presets 根目录）
     for key, ref_key in (("backgrounds", "backgrounds_ref"), ("lighting", "lighting_ref")):
         if isinstance(raw.get(key), list):
             common[key] = [str(v).strip() for v in raw[key]]
         elif raw.get(ref_key):
-            ref = Path(str(raw[ref_key]))
-            common[key] = _wildcard_items(ref if ref.is_absolute() else path.parent / ref, key)
+            common[key] = _wildcard_items(
+                _resolve_wildcard_path(str(raw[ref_key]), path), key
+            )
 
     try:
         if kind == "list":
@@ -285,12 +308,30 @@ def load_file(path: Path) -> ListPreset | MatrixPreset:
 
 
 def resolve(name: str) -> Path:
-    """按预设名定位 YAML：支持子目录相对路径，如 wildcards/xxx。"""
+    """按预设名定位 YAML。
+
+    **预设名是稳定标识，文件路径只是存储布局。** 名字里不带目录时，在
+    ``PRESET_SEARCH_DIRS`` 里依次找（``actions/`` 优先，兼容旧的顶层位置）——
+    这样把文件挪进子目录不会断掉配方引用、前端下拉和历史 run。
+
+    名字里自带目录（如 ``wildcards/xxx``）时按字面解析。
+    """
     base = paths.presets_dir()
     if not name.endswith(".yaml"):
         name = f"{name}.yaml"
-    path = base / name
-    return path
+    if "/" in name:
+        return base / name
+    for directory in _preset_search_dirs():
+        candidate = directory / name
+        if candidate.exists():
+            return candidate
+    return _preset_search_dirs()[0] / name
+
+
+def _preset_search_dirs() -> list[Path]:
+    """动作预设的搜索目录（新布局优先，兼容旧顶层）。"""
+    base = paths.presets_dir()
+    return [base / "actions", base]
 
 
 def load(name: str) -> ListPreset | MatrixPreset:
@@ -308,7 +349,7 @@ def list_presets() -> list[dict[str, Any]]:
         return result
     from charvar.composer import count_matrix_variants  # 延迟导入避免循环依赖
 
-    for path in sorted(base.glob("*.yaml")):
+    for path in _iter_preset_files():
         try:
             preset = load_file(path)
         except PresetError:
@@ -327,6 +368,20 @@ def list_presets() -> list[dict[str, Any]]:
                 "purpose": preset.purpose,
                 "text_policy": preset.text_policy,
                 "preferred_aspect_ratio": preset.preferred_aspect_ratio,
+                "subject": preset.subject,
             }
         )
     return result
+
+
+def _iter_preset_files() -> list[Path]:
+    """枚举动作预设文件：``actions/`` 优先，顶层作为兼容兜底。"""
+    base = paths.presets_dir()
+    files: list[Path] = []
+    for directory in _preset_search_dirs():
+        if not directory.is_dir():
+            continue
+        for path in sorted(directory.glob("*.yaml")):
+            if path not in files:
+                files.append(path)
+    return files

@@ -28,7 +28,7 @@ reel 参数参照视频合成预设 `q21_turnaround`：**每张 0.5 秒**（其 
 
 ## 限制与注意
 
-- `presets/q21_default_30.yaml` 的 30 条 variants 文本是原工作流逐字红线，**只读**：
+- `presets/actions/q21_default_30.yaml` 的 30 条 variants 文本是原工作流逐字红线，**只读**：
   LLM 模式下也只是作为改写输入传给 LLM，预设文件本身不改；要控角度歧义在 `llm_instructions` 里写。
 - 表情组条目的元数据是 framing=head + angle=front + expression=…：合成器只把它们归入表情段，
   不进 head 组（render_video 的既有规则，表情段在最后）。

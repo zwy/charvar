@@ -4,7 +4,7 @@
 # 结构变化：chest 组 l135/r135 → high/low 机位；head 组 6 机位；表情 8 张。
 name: q21_v2_30
 type: list
-version: 1
+version: 2
 master_template: '{style_lock_sentence}{identity_lock_sentence}{outfit_lock_sentence}{extra}'
 suffix_template: The background is {background}. The lighting is {lighting}.
 backgrounds_ref: wildcards/backgrounds_v2.yaml

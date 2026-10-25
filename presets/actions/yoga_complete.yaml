@@ -1,7 +1,7 @@
-# 合并版｜yoga_complete_14 V2：原九式 + 新增五式。
-# 原九条 variants 的字段值与动作文本逐项保留（与 yoga_basic_9 逐字一致，测试锁定）；
+# 合并版｜yoga_complete V2：原九式 + 新增五式。
+# 原九条 variants 的字段值与动作文本逐项保留（与 yoga_basic 逐字一致，测试锁定）；
 # 只改预设名称、版本并追加pose标签与五条新动作。
-# yoga_basic_9 不被覆盖，仍是独立的九式预设。
+# yoga_basic 不被覆盖，仍是独立的九式预设。
 # 两个倒立均有明确的支撑和头部位置要求；不继承旧主体模板中的站立/抬头看镜头默认姿态。
 # 只生成静态动作图，不作为真人练习指导；不要求腿部盘绕、交叉或抓脚。
 # 导入时改了两处（见下方「导入修订」注释）：caption 标签改英文、下犬式 forefeet→front feet。
@@ -47,7 +47,8 @@
 # 13. yoga_boat: 船式｜坐姿V形平衡、双腿伸直、双臂前伸
 # 14. yoga_headstand_bent_knees: 支撑头倒立·屈膝变体｜前臂头部为支撑、屈膝
 
-name: yoga_complete_14
+name: yoga_complete
+subject: yoga_teacher
 type: list
 version: 2
 master_template: 'Create an image of the {subject_noun} from {reference_tag}. {style_lock_sentence}{identity_lock_sentence}{outfit_lock_sentence}{extra} One character only, no duplicated or repeated figure, no multi-view panel, no character sheet layout, no split screen.'

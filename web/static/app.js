@@ -427,11 +427,29 @@ async function loadPresets() {
   state.presets = await api("/presets");
   const sel = $("#gen-preset");
   sel.innerHTML = "";
+  // 按归属分组：通用预设 + 每个主体专属一组（分组键 = 预设的 subject 元数据）
+  const groups = new Map();
   for (const p of state.presets) {
-    const opt = document.createElement("option");
-    opt.value = p.name;
-    opt.textContent = `${p.name}（${p.type === "list" ? "逐条" : "矩阵"} · ${p.count} 条）`;
-    sel.appendChild(opt);
+    const key = p.subject || "";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(p);
+  }
+  const appendGroup = (label, items) => {
+    if (!items.length) return;
+    const group = document.createElement("optgroup");
+    group.label = label;
+    for (const p of items) {
+      const opt = document.createElement("option");
+      opt.value = p.name;
+      opt.textContent = `${p.name}（${p.type === "list" ? "逐条" : "矩阵"} · ${p.count} 条）`;
+      group.appendChild(opt);
+    }
+    sel.appendChild(group);
+  };
+  appendGroup("通用预设", groups.get("") || []);
+  for (const [subject, items] of groups) {
+    if (!subject) continue;
+    appendGroup(`主体专属 · ${subject}`, items);
   }
   sel.addEventListener("change", () => fillPresetOptions(sel.value).catch(() => {}));
   if (state.presets.some((p) => p.name === "q21_default_30")) {

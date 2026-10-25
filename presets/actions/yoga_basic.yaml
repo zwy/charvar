@@ -26,7 +26,8 @@
 # 8. yoga_camel: 骆驼式｜双膝跪地、双手扶髋、脊柱明显后弯
 # 9. yoga_bow: 弓式｜俯卧、双手各握同侧脚踝、胸髋抬离地面成弓形
 
-name: yoga_basic_9
+name: yoga_basic
+subject: yoga_teacher
 type: list
 version: 1
 master_template: 'Create an image of the {subject_noun} from {reference_tag}. {style_lock_sentence}{identity_lock_sentence}{outfit_lock_sentence}{extra} One character only, no duplicated or repeated figure, no multi-view panel, no character sheet layout, no split screen.'

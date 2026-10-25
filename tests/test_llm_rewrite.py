@@ -541,13 +541,13 @@ def test_llm_language_invalid_rejected(client, monkeypatch):
 def test_sticker_ignores_chinese_language_with_warning(client, monkeypatch):
     """带字表情包：中文文案由程序追加，LLM 段不能出中文 → 忽略「中文」并声明。"""
     captured: list[str] = []
-    _capture_system_prompt(monkeypatch, captured, "chat_replies_v1_12")
+    _capture_system_prompt(monkeypatch, captured, "chat_replies")
     _ready_subject(client)
     resp = client.post(
         "/generate",
         json={
             "subject_id": "demo_witch",
-            "preset": "chat_replies_v1_12",
+            "preset": "chat_replies",
             "seed": 3,
             "mode": "llm",
             "reference_kinds": ["character_sheet"],
