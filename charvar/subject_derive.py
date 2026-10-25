@@ -51,6 +51,14 @@ _SHEET_LAYOUT_RE = re.compile(
     re.I,
 )
 
+# 并列两套服装的措辞：一个主体一套默认服装，备用服装不是身份锁定项。
+# 这类句子进提示词就是矛盾要求（每条锁定项都会被拼成一句 "Maintain ..."）。
+_MULTI_OUTFIT_RE = re.compile(
+    r"备用服装|服装\s*[AB](?![A-Za-z])|服装[AB](?![A-Za-z])|二选一|互相替换|"
+    r"两套服装|多套服装|替换服装|不同时出现",
+    re.I,
+)
+
 MAX_LOCK_CHARS = 200  # 单条锁定项软上限
 MAX_LOCK_COUNT = 10   # 每组条数软上限
 MAX_EXTRA_CHARS = 300  # extra 软上限
@@ -139,6 +147,13 @@ def quality_issues(profile: SubjectProfile) -> list[str]:
                     f"{group} 含设定板结构词「{match.group(0)}」（模板设定板/场景模块章节的版面描述混进来了，"
                     f"单人档案不认这些）：{item[:60]}…"
                 )
+            if group == "outfit_lock":
+                match = _MULTI_OUTFIT_RE.search(item)
+                if match:
+                    warnings.append(
+                        f"outfit_lock 含并列第二套服装的措辞「{match.group(0)}」"
+                        f"（一个主体一套默认服装，备用服装不是身份锁定项）：{item[:60]}…"
+                    )
     seen: dict[str, list[str]] = {}
     for group, items in lock_groups.items():
         for item in items:
@@ -248,6 +263,8 @@ def build_draft_messages(
         _lock_groups_rule(lang),
         "- 锁定项只能来自模板正文：每条必须能在模板里找到对应原文；不得引入模板没有的设定。",
         "- 锁定项不写背景、布光、镜头类内容（那是场景采样/构图，不是身份锁定）。",
+        "- **一个主体只抽一套默认服装**。模板里出现「备用服装B／服装A二选一／互相替换」这类并列两套的写法时，"
+        "只抽默认那套，备用服装不是身份锁定项（并行两套会变成互相矛盾的提示词要求）。",
         "- 素材范围：身份/服装/画风事实优先取【识别锚点表】和【固定前缀】章节；"
         "其他章节（设定板/多视角/场景模块）只允许摘取其中**明确的服装或身份事实条目**"
         "（锚点表没有的服装细节就在这类章节里，不许因此遗漏），"
@@ -256,7 +273,7 @@ def build_draft_messages(
         "「右肩背书包」这类穿着部位是服装事实，保留。",
         (f"- version_hint：「{version_hint}」——只对匹配该关键词的模板版本抽取，忽略其他版本，candidates 留空。"
          if version_hint else
-         "- 模板存在多套候选（正常/精简、多套服装、双主体分段）时不要猜：输出 candidates 列出每个候选的一句话描述，等调用方裁定。"),
+         "- 模板存在多套候选（正常/精简、双主体分段）时不要猜：输出 candidates 列出每个候选的一句话描述，等调用方裁定。"),
         "- 模板里的版本说明、字符预算、证据状态等元信息不要抄进锁定项。",
     ]
     repair_block = ""

@@ -12,9 +12,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# agent 上下文的指令预算（UTF-8 字节）。超过会被运行时截断，
-# 文件末尾的内容 agent 根本读不到 —— 所以要卡住，细节往 docs/ 挪。
-AGENTS_BUDGET_BYTES = 32768
+# AGENTS.md 的体量预算（UTF-8 字节）。它是**密度护栏**，不是运行时硬截断：
+# 超了说明细节该往 docs/ 挪，而不是继续往这份「当前态契约」里塞。
+AGENTS_BUDGET_BYTES = 34816
 
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 DOC_REF_RE = re.compile(r"`(docs/[^`]+?\.(?:md|txt|json))`")

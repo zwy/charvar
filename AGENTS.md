@@ -108,6 +108,8 @@
 
 - **名是标识，路径不是**：yaml 的 `name:` 就是标识（配方 `presets:`、历史 run 的 `preset` 列都存它）——改路径零影响，**改名等于换标识**。
 - 动作预设只放 `presets/actions/`；条目数不进文件名（count 现算），版本在 `version:`、文件名 `_vN` 与之一致；`subject:` 标归属主体，前端按它分「通用 / 主体专属」。
+- `presets/subjects/<id>.md` 是**交付文档**：只写当前态、身份只写一次、≤ 10,000 字符（模板见 `skills/character-forge/templates/character-document.md`）。
+- 主体档案**一个主体一套默认服装**：`outfit_lock` 不并列第二套（`_MULTI_OUTFIT_RE` 告警 + `tests/test_presets_structure.py` 拦截）。
 
 ## 实现红线
 
@@ -131,7 +133,7 @@
 - `web/static/style.css` 里 `label { display: flex }` 会盖掉浏览器默认的 `[hidden] { display: none }`，所以有 `[hidden] { display: none !important }` 这条兜底。新增按条件显隐的控件时，`<select>` 自身带 `hidden` 的话，JS 要同时清掉 select 和它外层 label 上的 `hidden`（`applyOpenRouterCapabilities` 就是这么做的）。
 - `.env`（COMFYUI_HOST/PORT 等）不进 git；改 .env 后要重启 web 服务。
 - 主体档案的锁定项中英文皆可：`style_lock` / `identity_lock` / `outfit_lock` 每条拼成一句 `Maintain ...` 进提示词——classic 模式**原样进提示词**（中文条目就是中文进图，Qwen-Image / OpenRouter 这类双语或 LLM 系模型没问题）；LLM 模式只作为 LLM 输入、由 LLM 重写成英文。目标后端要纯英文提示词时（SD 类老模型）建议仍写英文。导入/校验工具不得把非 ASCII 锁定项当错误。
-- 主体档案的 Markdown 模板上限 24,000 字符（LLM 输入截断阈值，`charvar.llm_prompts._TEMPLATE_MAX_CHARS`）；超长模板尾部会被静默截掉，别指望模型看到。
+- 主体档案的 Markdown 模板上限 24,000 字符（`charvar.llm_prompts._TEMPLATE_MAX_CHARS`），超出尾部被静默截掉；交付文档按 ≤ 10,000 字符写（见「预设存储」）。
 - **LLM 改写的输出语言**（`GenerateRequest.llm_language`，网页「生成参数 → LLM 优化 → 提示词语言」）：`zh`=强制中文 / `en`=强制英文 / `any`=**不做强制性限制（缺省）**。措辞差异集中在 `charvar/llm_prompts.py` 的 `_LANG_PHRASES`（锚定句/视角规范/全身句/framing_guard/背景光照）。**`en` 分支的系统提示词是冻结文本，不得改写**——改 `_LANG_PHRASES["en"]` 或 `_prompt_string_rule` 时要用旧文件做字节级对比（有快照回归测试）。
   - 改写管线注入的材料**全是英文**（视角规范句、背景/光照池、参考图锚定句），所以 `zh` 不是"禁止英文"而是"把这些英文材料译写成中文再采用"；`any` 不写语言规定，多数仍出英文（跟随注入材料）。
   - **即梦字数**：英文改写实测 1656–2538 字符，**超即梦 text2image 上限 1592**（`dreamina_image.validate_prompt` 提交前就拒，白扣一次提交费）；中文改写实测 527–636 字符，稳过。推即梦时选 `zh`。
@@ -145,16 +147,18 @@
 
 ## 导入主体档案（外部 Markdown → 系统）
 
+存储位置、双向同步（DB ↔ 仓库）、sha256 溯源指纹、审计闸门与人工改 yaml 的坑见 `docs/主体档案.md`。这里只记 agent 必须知道的规则。
+
 1. 在 `presets/subjects/<id>.yaml` 写档案（id/名/锁定项/extra），随仓库走、可复现。模板另存同名 `<id>.md`。
-2. 建档＋模板一起入库：`python3 -m charvar.cli subject add presets/subjects/<id>.yaml`（同 id 覆盖加 `--overwrite`）。
+2. 建档＋模板一起入库：`python3 -m charvar.cli subject add presets/subjects/<id>.yaml --overwrite`。
 3. 模板也可单独维护：`PUT /subjects/<id>/template`，或网页「主体档案 → 从 .md 文件载入」。
 4. 锁定项与模板全文逐字保留原文，不做改写或摘要。
-5. 导入后跑一次 `python3 -m pytest -q`，并用 `/subjects/<id>/images/<kind>/suggest-prompt` 验一次 LLM 起草能跑通。
+5. 导入后跑 `python3 -m pytest -q`，并用 `/subjects/<id>/images/<kind>/suggest-prompt` 验一次 LLM 起草能跑通。
 
 **只有模板 .md、还没写档案时**：`charvar subject derive <template.md> --id <slug>` 从模板派生候选
-（`charvar/subject_derive.py`：LLM 抽取 → 引用核对（zh 模式锁定项必须回指模板原文，防编造）→独立审计（omission/contradiction/violation）；默认只写 `presets/subjects/<id>.yaml` 不入库，`--apply` 才入库，`--overwrite` 覆盖，多版本模板必须 `--version <关键词>`）。
-已入库配对的审计：`charvar subject verify <id>`（exit 0 通过 / 1 有问题单，`--json` 供 agent）。
-DB → 仓库对偶：`charvar subject export <id>` 把已入库档案快照成 `presets/subjects/<id>.yaml` + `<id>.md`（模板逐字、无改写）。**DB 是运行时真源，仓库靠 export 保持镜像**——直接在 DB/网页建档后要记得 export，仓库里没有备份的档案清库即失。
+（LLM 抽取 → 引用核对（zh 模式锁定项必须回指模板原文，防编造）→ 独立审计；默认只写 yaml 不入库，`--apply` 才入库，多版本模板必须 `--version <关键词>`）。
+已入库配对的审计：`charvar subject verify <id>`（exit 0 通过 / 1 有问题单，`--json` 供 agent；**跑一次通过不算数**——每轮取样不同，要跑多次汇总去重）。
+DB → 仓库对偶：`charvar subject export <id>` 快照成 `presets/subjects/<id>.yaml` + `<id>.md`。**DB 是运行时真源，仓库靠 export 保持镜像**——只改仓库文件不回灌，网页上看到的还是旧档案。
 
 ## 服装预设与贴字
 

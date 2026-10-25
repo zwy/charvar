@@ -61,7 +61,11 @@ def test_subject_preset_maps_into_prompt_placeholders(subject_id: str):
     mapping = subject_mapping(subject)
     assert mapping["subject_noun"] == "woman"
     assert mapping["reference_tag"] == "<image1>"
-    assert mapping["trigger_word"]
+    # trigger_word 是**可选**的稳定标识，不承载身份或服装事实——审计会把
+    # 「mustardcap」这类夹带身份的写法判为越界，该主体因此留空。
+    # 见 docs/主体档案.md「审计会盯的身份细节边界」。留空时只要求不是空壳。
+    trigger = mapping["trigger_word"]
+    assert trigger is None or (isinstance(trigger, str) and trigger.strip())
     for key in ("style_lock_sentence", "identity_lock_sentence", "outfit_lock_sentence"):
         assert mapping[key].startswith("Maintain ")
         assert mapping[key].endswith(" ")

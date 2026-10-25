@@ -181,6 +181,24 @@ def test_subject_preset_ids_match_filename():
         )
 
 
+def test_subject_profile_has_one_outfit():
+    """一个主体一套默认服装：outfit_lock 里不能并列第二套。
+
+    锁定项会逐条拼成 "Maintain ..." 进每张图的提示词——「服装A与服装B二选一」
+    这种句子进提示词就是矛盾要求。备用服装属显式换装分支，不进身份锁定。
+    """
+    from charvar.subject_derive import _MULTI_OUTFIT_RE
+
+    for path in _yaml_files("subjects"):
+        data = _load(path)
+        for item in data.get("outfit_lock") or []:
+            match = _MULTI_OUTFIT_RE.search(str(item))
+            assert not match, (
+                f"{path.name} 的 outfit_lock 并列了第二套服装"
+                f"（{match.group(0) if match else ''}）：{str(item)[:60]}…"
+            )
+
+
 def test_recipe_doc_points_to_existing_md():
     """配方的 doc: 必须有同名 .md 兜底。"""
     for path in _yaml_files("recipes"):

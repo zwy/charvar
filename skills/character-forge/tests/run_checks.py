@@ -7,6 +7,8 @@ Covers the automatable subset of the review spec's section 10.1:
   - No leftover placeholders in a marked-submit block
   - Marked-submit blocks respect the stated budget
   - Both required base images have a location in the delivery template
+  - The delivery document's fixed section names and delivery artefacts agree
+  - check_delivery.py accepts the good fixtures and rejects the legacy one
   - No mutually conflicting legacy delivery conditions remain
   - Corrected length/cost statements are present, wrong ones are gone
 
@@ -29,8 +31,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "scripts" / "prompt_budget.py"
+DELIVERY_SCRIPT = ROOT / "scripts" / "check_delivery.py"
 MANIFEST = ROOT / "manifest.json"
 BUDGET = 2000
+DELIVERY_MAX_CHARS = 10000
+
+# 交付文档的固定章节名。charvar 的 subject derive 抽取锁定项时优先取
+# 「识别锚点表」和「固定前缀」两节 —— 改名字会掉抽取命中率，所以钉住。
+DELIVERY_SECTIONS = ["识别锚点表", "固定前缀", "基准图", "用户照片扮演", "已知限制"]
 
 failures = []
 notes = []
@@ -50,6 +58,14 @@ def read(rel):
 def run_budget(args):
     proc = subprocess.run(
         [sys.executable, str(SCRIPT), *args],
+        capture_output=True, text=True, cwd=ROOT,
+    )
+    return proc.returncode, proc.stdout, proc.stderr
+
+
+def run_delivery(args):
+    proc = subprocess.run(
+        [sys.executable, str(DELIVERY_SCRIPT), *args],
         capture_output=True, text=True, cwd=ROOT,
     )
     return proc.returncode, proc.stdout, proc.stderr
@@ -112,7 +128,7 @@ def main():
     tmpl = read("templates/character-document.md")
     for needle, label in [
         ("全身正面定妆", "full-body front base has a slot in the delivery template"),
-        ("同图半身", "same-image half-body + 3-view board has a slot in the delivery template"),
+        ("同图设定板", "same-image half-body + 3-view board has a slot in the delivery template"),
     ]:
         check(needle in tmpl, label)
 
@@ -166,6 +182,7 @@ def main():
         "templates/character-document.md", "templates/project-state.md",
         "templates/prompt-record.md", "templates/round-response.md",
         "examples/tiluo-case.md", "scripts/prompt_budget.py",
+        "scripts/check_delivery.py",
     ]:
         path = ROOT / rel
         check(path.exists() and path.stat().st_size > 0, f"exists and non-empty: {rel}")
@@ -175,9 +192,13 @@ def main():
     check(not damaged, "no replacement characters in Markdown", ", ".join(str(d) for d in damaged))
 
     # --- 12. Every text fence declares a role ----------------------------
+    # legacy-* 是**故意的反例夹具**（旧交付文档形态），不参与围栏角色规范检查；
+    # 它要过的是 check_delivery 的「应当被拒」断言。
     fence_re = re.compile(r"^```(?P<info>[^\n]*)\n(?P<body>.*?)^```[^\S\n]*(?:\n|$)", re.M | re.S)
     unlabelled = []
     for path in md_files:
+        if path.name.startswith("legacy-"):
+            continue
         for match in fence_re.finditer(path.read_text(encoding="utf-8")):
             info = match.group("info").split()
             if info and info[0] == "text":
@@ -221,6 +242,7 @@ def main():
         text = fixture.read_text(encoding="utf-8")
         stated = [int(n) for n in re.findall(r"字符数：(\d+)", text)]
         stated += [int(n) for n in re.findall(r"长度\s*(?:约\s*)?(\d+)\s*字符", text)]
+        stated += [int(n) for n in re.findall(r"场景段\s*(\d+)\s*字", text)]
         normal = re.search(r"正常版 (\d+)；精简版 (\d+)", text)
         if normal:
             stated += [int(normal.group(1)), int(normal.group(2))]
@@ -262,6 +284,48 @@ def main():
             check(marker in read(rel),
                   f"S3 规格在 SKILL.md 与 workflow.md 一致: {marker}",
                   f"{rel} 里没有")
+
+    # --- 17. 交付文档的固定章节名 ------------------------------------------
+    for name in DELIVERY_SECTIONS:
+        for rel in ("SKILL.md", "templates/character-document.md", "README.md"):
+            check(name in read(rel),
+                  f"交付章节名固定: {name}",
+                  f"{rel} 里没有")
+
+    # --- 18. 交付物三件在 SKILL.md 里写明 ----------------------------------
+    for needle in ["front.png", "character_sheet.png", "10,000 字符"]:
+        check(needle in skill, f"交付物定义写明: {needle}")
+
+    # --- 19. 交付文档体检脚本：正例通过、反例被拒 ---------------------------
+    code, out, err = run_delivery(["tests/fixtures/sample-delivery.md", "--strict"])
+    check(code == 0, "合格交付夹具通过 check_delivery --strict", f"exit={code} {err.strip()}")
+
+    code, out, err = run_delivery(["tests/fixtures/sample-character-asset.md", "--strict"])
+    check(code == 0, "最小资产夹具通过 check_delivery --strict", f"exit={code} {err.strip()}")
+
+    code, out, err = run_delivery(["tests/fixtures/legacy-delivery.md", "--strict"])
+    check(code == 1, "旧格式交付夹具被 check_delivery --strict 拒绝", f"exit={code} {err.strip()}")
+
+    # 模板本身允许占位符与 template 围栏，但结构必须站得住
+    code, out, err = run_delivery(["templates/character-document.md"])
+    check(code == 0, "交付模板结构体检不报硬错", f"exit={code} {err.strip()}")
+
+    # --- 20. 交付文档篇幅上限三处一致 ---------------------------------------
+    for rel in ("SKILL.md", "README.md", "references/length-and-language.md"):
+        check("10,000 字符" in read(rel),
+              f"交付文档篇幅上限写明: {rel}")
+
+    # --- 21. 一个主体一套默认服装 -------------------------------------------
+    for rel in ("SKILL.md", "README.md", "templates/character-document.md"):
+        check("一套" in read(rel),
+              f"「一个主体一套服装」规则写明: {rel}")
+
+    # --- 22. 交付模板不含流水账章节 -----------------------------------------
+    # 版本记录表、证据台账、案例经验附录都不该出现在交付文档模板里。
+    for needle in ["版本记录", "证据台账", "简要版本记录"]:
+        check(needle not in tmpl,
+              f"交付模板不含流水账章节: {needle}",
+              "模板里出现了这个章节")
 
     print("\n".join(notes))
     if failures:

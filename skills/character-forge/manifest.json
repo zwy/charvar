@@ -1,35 +1,38 @@
 {
   "name": "character-forge",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "updated": "2026-10-25",
-  "description": "角色开发与提示词资产化 Skill：分阶段协助建立单角色提示词资产，交付自包含 Markdown。",
+  "description": "角色开发与提示词资产化 Skill：分阶段协助建立单角色提示词资产，交付一份只写当前态的角色提示词模板与两张基准图。",
   "entrypoint": "SKILL.md",
   "files": {
-    "manifest.json": "版本、文件清单与检查结果记录。",
-    "SKILL.md": "核心入口：两图保底主线、反馈语境判定、双模式、自包含交付门槛。",
     "README.md": "使用说明：最短路线、两种使用方式、代码块角色、脚本与本地检查用法、版本记录。",
-    "references/workflow.md": "阶段与路由：必选／可选关系、复用已有资产、设定板失败回退、交付门槛。",
+    "SKILL.md": "核心入口：两图保底主线、反馈语境判定、双模式、交付物形态与当前态交付门槛。",
+    "examples/tiluo-case.md": "缇珞案例：两条风格路线的工作流示例，非默认角色配置。",
+    "manifest.json": "版本、文件清单与检查结果记录。",
     "references/input-modes.md": "输入模式与基准职责：固定角色延续与用户照片扮演双入口、缺图处理。",
-    "references/quality-checks.md": "验收与证据：四项独立证据字段、交付完整性检查、案例经验泛化限制。",
-    "references/length-and-language.md": "语言、长度与字符预算：语言跟随用户、预算来源、压缩顺序。",
-    "templates/character-document.md": "角色提示词资产文档模板（正式交付主文档）。",
+    "references/length-and-language.md": "语言、长度与字符预算：语言跟随用户、预算来源、压缩顺序、两个不同的上限、交付文档拼接长度。",
+    "references/quality-checks.md": "验收与证据：四项独立证据字段、交付完整性检查、交付文档当前态体检、案例经验泛化限制。",
+    "references/workflow.md": "阶段与路由：必选／可选关系、复用已有资产、设定板失败回退、交付门槛。",
+    "scripts/check_delivery.py": "交付文档结构体检：篇幅、章节齐全、身份只写一次、版本历史残留、外部依赖、围栏角色、声明字数。",
+    "scripts/prompt_budget.py": "字符统计与占位符检查；区分 submit／component／template 代码块。",
+    "templates/character-document.md": "交付文档模板：识别锚点表／固定前缀／基准图场景段／槽位表／用户照片扮演／已知限制。",
     "templates/project-state.md": "项目状态模板：必做资产清单、双模式状态、证据字段。",
     "templates/prompt-record.md": "提示词记录模板（可选深度记录）。",
     "templates/round-response.md": "每轮回复模板：一轮一目标、完整提交稿。",
-    "examples/tiluo-case.md": "缇珞案例：两条风格路线的工作流示例，非默认角色配置。",
-    "scripts/prompt_budget.py": "字符统计与占位符检查；区分 submit／component／template 代码块。",
-    "tests/run_checks.py": "本地静态检查脚本。",
     "tests/fixtures/feedback-cases.md": "反馈判定夹具（虚构）。",
-    "tests/fixtures/sample-character-asset.md": "最小角色资产示例（虚构）。",
+    "tests/fixtures/legacy-delivery.md": "旧格式交付文档反例夹具（虚构）：应被 check_delivery 判为不通过。",
     "tests/fixtures/over-budget-submit.md": "超预算提交稿夹具（虚构）。",
     "tests/fixtures/placeholder-submit.md": "含占位符的提交稿夹具（虚构）。",
-    "tests/regression-matrix.md": "回归测试矩阵评估：T01—T22 的自动／人工／未验证分类与依据。"
+    "tests/fixtures/sample-character-asset.md": "最小角色资产示例（虚构）。",
+    "tests/fixtures/sample-delivery.md": "合格交付文档夹具（虚构角色）：七项体检全过的正例。",
+    "tests/regression-matrix.md": "回归测试矩阵评估：T01—T22 的自动／人工／未验证分类与依据。",
+    "tests/run_checks.py": "本地静态检查脚本。"
   },
   "checks": {
     "command": "python3 tests/run_checks.py",
     "last_run": "2026-10-25",
     "result": "passed",
-    "passed": 63,
+    "passed": 96,
     "failed": 0,
     "note": "由 tests/run_checks.py --record 在实际运行时写入。"
   },
@@ -49,6 +52,11 @@
     }
   },
   "history": [
+    {
+      "version": "1.2.0",
+      "date": "2026-10-25",
+      "note": "交付物与交付文档格式重定。交付物改成明确目录形态：角色提示词模板 .md（≤10,000 字符）＋ front.png ＋ character_sheet.png 三样必交，可选槽位不强求。交付文档改为只写当前态——此前要求内嵌两项基础图的完整提示词原文并保留版本记录表、证据台账、案例经验附录，导致交付文档膨胀到 20k–24k 字符（贴着 charvar subject derive 的 24,000 字符截断线），且身份描述在固定前缀与基准图原文里写了两遍。现在固定前缀是身份的唯一出处，基准图只留场景段（提交时拼接），版本历史、证据台账、案例经验一律留在开发侧。章节名固定为 识别锚点表／固定前缀／基准图与图片槽位／用户照片扮演／已知限制——前两节是 charvar 抽取锁定项时优先取的位置，改名会掉命中率。新增「一个主体一套默认服装」硬规则（并列两套会变成互相矛盾的身份锁定项）。新增 scripts/check_delivery.py 七项体检，不通过不算交付。"
+    },
     {
       "version": "1.1.0",
       "date": "2026-10-25",
