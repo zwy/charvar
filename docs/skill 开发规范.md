@@ -111,7 +111,7 @@ description: 分阶段协助用户从参考图、文字或已有角色建立单�
 
 典型的拆法：
 
-- 正文只留**规则**和**指向**：「详见 [阶段与路由](references/workflow.md)」
+- 正文只留**规则**和**指向**：「详见 `references/workflow.md`」
 - `references/` 放**判定表、边界条件、失败回退**这类「特定阶段才展开」的内容
 - 被引用的文件必须在 `manifest.json` 的 `files` 里登记 ✅
 
@@ -134,7 +134,7 @@ description: 分阶段协助用户从参考图、文字或已有角色建立单�
 代价是：改一处规格容易漏掉其余几处。所以对这种「有意的重复」，正确做法是**加一条检查把它们钉住**，
 而不是靠人记得同步。例：`character-forge` 的 S3 设定板规格有四份副本
 （SKILL.md / references/workflow.md / templates/character-document.md / 测试夹具），
-`tests/run_checks.py` 用 12 个关键短语断言四份一致 —— 改一处漏三处会直接报错。
+`skills/character-forge/tests/run_checks.py` 用 12 个关键短语断言四份一致 —— 改一处漏三处会直接报错。
 
 区分方法：**问「去掉这份副本，这份东西还成立吗？」**
 - 夹具去掉规格 → 夹具失去意义 → 副本必须留
