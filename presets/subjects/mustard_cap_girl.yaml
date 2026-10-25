@@ -1,7 +1,6 @@
 id: mustard_cap_girl
 name: 黄帽红夹克女孩
 subject_noun: woman
-trigger_word: mustardcap
 reference_tag: <image1>
 style_lock:
 - 2D hand-drawn comic illustration with thick black outlines and slightly irregular hand-drawn
@@ -15,17 +14,19 @@ identity_lock:
 - short brown hair with irregular separated bangs, sideburns close to the cheeks and slightly
   flipped-out short ends
 - brown eyes, a round face contour, faint blush on the cheeks and small black stud earrings
-- never infantilised, with no extra exaggeration of the body curves
+- never infantilised, with no extra exaggeration of the body curves, never switched to a slim
+  model physique, and no added nudity or sexualization
 outfit_lock:
-- mustard yellow ribbed knit beanie with a matching pom-pom
+- mustard yellow cuffed knit beanie with a turn-up brim and a matching pom-pom
 - red casual jacket worn open with a dark brown thick ribbed collar, cuffs and hem, and a metal zip
-- brown and mustard plaid collared shirt, tucked into the trousers
+- brown and mustard plaid collared shirt, keeping the original degree of collar opening,
+  tucked into the trousers
 - brown leather belt with a square brass buckle
-- medium blue washed denim jeans, fitted through the thigh and slightly tapered below the knee, with
-  an uncuffed hem
+- medium blue washed denim jeans, fitted through the thigh and slightly tapered below the knee but
+  not tight, with an uncuffed hem
 - dark brown lace-up leather ankle boots with round toes, low heels and thick dark soles
 - brown shoulder bag carried on the character's right shoulder with the bag hanging at the outer
   right hip, the strap not crossing the torso
-extra: Keep the same face, hairstyle, beanie, red jacket, plaid shirt, belt, jeans, ankle boots and
-  right-shoulder bag, and the same 2D hand-drawn comic medium with a warm slightly faded palette,
-  in every pose.
+extra: Keep the same face and hairstyle, and the same 2D hand-drawn comic medium with a warm
+  slightly faded palette, in every pose; occlusion and folds change naturally with the viewpoint
+  and the action, and the clothing details are never forced flat into a single plane.

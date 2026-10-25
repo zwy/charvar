@@ -3,19 +3,35 @@ name: 黑白猫
 subject_noun: cat
 reference_tag: <image1>
 style_lock:
-- low-brow pop flavored 2D watercolor mixed-media illustration
+- low-brow pop flavored 2D watercolor mixed-media illustration, transparent watercolor combined with opaque gouache and acrylic strokes
 - fine eye and muzzle rendering against a simplified blocky body
 - localized watercolor blooms, pigment sedimentation, paper grain, dry-brush marks
   and white paint dots
+- a clear subject outline, with the shoulder, back and chest-belly area carrying the blooms,
+  grain and dry-brush marks
 identity_lock:
-- slender, elongated cat with a long neck and narrow shoulders
-- large gray-blue almond eyes with a slightly low upper eyelid
-- round head, upright triangular ears with gray-pink inner ears
-- coral-red triangular nose, small cat mouth and long white whiskers
+- an original black-and-white tuxedo cat with 猫狸子 bloodline, kept as the project's own character rather than a canonical pet, visual appearance unchanged
+- slender, elongated cat with a long neck and narrow shoulders, chest and belly stretched lengthwise, body slim and elegant with natural feline structure, limbs slender and paws small and rounded
+- large gray-blue almond eyes with a slightly low upper eyelid and a rounded lower lid, delicate iris, deep black pupil with a few small white highlights
+- head slightly large with a broad crown and a rounded muzzle, round head, slender upright
+  triangular ears with gray-pink-purple inner ears
+- coral-red inverted-triangle nose, small cat mouth and long white whiskers
+- default expression calm and slightly melancholy
 - black head, ears, eye surroundings and outer face
-- narrow white forehead stripe running along the nose bridge
-- white muzzle, chin, neck, chest and belly forming a continuous white patch
-- four white paws with white toes and paws extending toward the ankles
+- narrow white forehead stripe running along the nose bridge and connecting to the white
+  muzzle, chin and chest-belly patch
+- white muzzle, chin, neck, chest and belly as one long continuous patch from the chin
+  down the neck to the abdomen, narrower at the top, slightly wider below, its edge in a few
+  white hair-clump strokes
+- tail long, slender and black, joining the body naturally
+- black fur from near-black, deep blue-gray and charcoal with internal bleeding and grain;
+  white fur as opaque white strokes with light cool blue-gray shadow, kept as simple hair clumps
+- four white paws with white toes to the ankles forming four short white socks, upper legs
+  black; rear paws revealed or hidden by pose, revealed part white, light cool blue-gray shadow
+- keep the long neck, the elongated chest and belly and the large eyes across different poses
+- calm, cautious and observant, like the witch's sparring partner; snark as inner
+  monologue via lowered eyelids, sideways glances, ear turns and slow head turns, mouth
+  keeping a natural cat shape
 outfit_lock: []
 extra: Keep the same black-and-white tuxedo cat proportions, long tail, four white
   paws and watercolor texture.
