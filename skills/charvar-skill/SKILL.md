@@ -5,7 +5,7 @@ description: Generate images with the charvar project's ComfyUI, OpenRouter, or 
 
 # charvar 生图
 
-版本：1.1.0  
+版本：1.2.0  
 更新：2026-10-25
 
 通过 charvar 项目的 CLI 出图。三条后端：**comfyui**（本机/局域网 ComfyUI）、
@@ -112,16 +112,28 @@ charvar 的网页顶栏也有「Playground」页签（`http://127.0.0.1:8710`）
 - 生成要 1–3 分钟，命令阻塞轮询（`--timeout` 默认 900s）；`--json` 给脚本消费。
 - 网页顶栏「视频」页签是同一条通路（`http://127.0.0.1:8710`）。
 
-## 主体档案：从模板导入（subject derive / verify）
+## 主体档案：从模板导入（subject derive / add / verify）
 
 手里只有「角色全场景通用提示词模板」.md、要建主体档案时：
 
 ```bash
 ~/.local/bin/charvar subject derive <模板.md> --id <slug>
 # 默认只写 presets/subjects/<id>.yaml（带出处注释头），不落库；--apply 才入库
+# --apply 会把模板全文一并入库（档案 subjects + 模板 subject_templates 两张表都写）
 # 模板含多版本时会列候选并拒绝 → 用 --version <关键词> 指定抽哪个
 # 锁定项默认从模板原文摘录（防幻觉核对）；--lang en 才翻译成英文
 ```
+
+已有 YAML 档案要建档或改档时：
+
+```bash
+~/.local/bin/charvar subject add presets/subjects/<slug>.yaml --overwrite
+# 档案与**同目录同名 <slug>.md 模板一起入库**；--template <路径> 可指定别的模板
+# 找不到模板会告警（只导档案）；--json 给脚本消费
+```
+
+⚠️ **只改仓库里的 yaml/md 而不入库，网页与出图仍读 DB 旧档案**（DB 是运行时真源）。
+改完仓库文件必须 `subject add` 回灌，档案与模板两边才算同步。
 
 已入库档案 ↔ 模板的审计（漏抽/矛盾/违例）：
 
@@ -162,6 +174,8 @@ exit 0 = 通过，exit 1 = 有问题单。完整参数与 `--json` 字段见 `re
 | workflow 找不到 | `data/workflows/` 里没有该名字；用 `--workflow` 给 JSON 路径 |
 
 ## 版本记录
+
+1.2.0（2026-10-25）：**主体档案导入补全** —— 此前 `charvar subject add` 只写档案（`subjects` 表），**从不写模板表**，且不报错、不警告，退出码还是 0。于是「改了仓库里的 yaml/md → 跑一次 subject add」这条路只导了一半：档案更新了，通用提示词模板仍停在旧版，网页与出图继续用旧文案。现在 `subject add` 会把**同目录同名 `<id>.md` 模板一并入库**（`--template` 可指定别的路径），找不到模板时明确告警并提示 DB 里旧模板可能已过期；`--json` 输出给脚本消费；档案头里的 `sha256` 指纹与模板实际内容不符时告警（溯源链断了）。`subject derive --apply` 此前也只入档案，现一并写入模板全文。SKILL.md 此前完全没提 `subject add`，也没提模板要单独上传 —— 按旧描述走的 agent 会以为导入已完成。
 
 1.1.0（2026-10-25）：规范对齐体检后的修正。补上 `references/cli.md` 缺失的视频章节 —— 此前 SKILL.md 说「完整参数见 `references/cli.md`」，但该文件里一条 `charvar video` 命令都没有；另补 `OP_VIDEO_MODEL` / `OP_VIDEO_TIMEOUT` 两个环境变量。**即梦提示词上限改成可执行数字**：此前写「约 1600 / 2000」，但 charvar 实际在 **1592 / 1992** 就拦（上游硬上限 1600 / 2000，留了 8 字符余量防字节／码点计数口径差异），照 1600 写会被拒。`--resolution` 一行补明 **2K 像素表只对 ComfyUI 成立**（OpenRouter 通路走通用长边归一，别拿 Qwen 像素表推算）。
 

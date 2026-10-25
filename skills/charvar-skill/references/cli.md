@@ -199,6 +199,23 @@ data/generated/adhoc_video/{id}/
 | `CHARVAR_DATA_DIR` | 数据目录（默认仓库 `data/`） |
 | `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` | subject derive / verify 的 LLM（也可在网页设置页配置） |
 
+## charvar subject add〈YAML 档案 → 入库（档案＋模板）〉
+
+把仓库里的主体档案导入 DB。**档案与通用提示词模板是两张表**（`subjects` / `subject_templates`），
+本命令两张都写：
+
+```bash
+~/.local/bin/charvar subject add presets/subjects/<slug>.yaml --overwrite
+# 模板来源：--template <路径>，缺省自动取档案同目录的同名 <slug>.md
+# 找不到模板 → 告警，只导档案（DB 里原有模板保持不变，可能已过期）
+# 档案头里的 sha256 指纹与模板实际内容不符 → 告警（溯源链断了）
+# --json：{"subject_id","name","template_path","template_chars","template_updated","fingerprint_mismatch"}
+```
+
+同 id 已存在要 `--overwrite`，否则报错退出 1。
+
+**DB 是运行时真源**：只改 `presets/subjects/` 下的文件而不跑这条命令，网页与出图仍读 DB 旧档案。
+
 ## charvar subject derive〈MD 模板 → 档案〉
 
 手里只有「角色全场景通用提示词模板」.md 时，用它派生主体档案 YAML
@@ -207,7 +224,7 @@ data/generated/adhoc_video/{id}/
 ```bash
 ~/.local/bin/charvar subject derive template.md --id yoga_teacher --json
 # 默认只写 presets/subjects/<id>.yaml（带出处注释头），不碰 DB；
-# 加 --apply 才入库；同 id 已存在要 --overwrite；多版本模板要 --version <关键词>。
+# 加 --apply 才入库（**档案与模板全文两张表都写**）；同 id 已存在要 --overwrite；多版本模板要 --version <关键词>。
 ```
 
 - `--lang`：`zh`（默认，模板原文摘录，防幻觉核对最强）/ `en`（翻译成英文）。

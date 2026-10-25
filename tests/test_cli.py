@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
@@ -278,6 +279,102 @@ def test_export_without_template_warns(_export_env, tmp_path):
     assert result.exit_code == 0, result.output
     assert "警告" in result.output
     assert not (tmp_path / "presets" / "subjects" / "tvelo_x.md").exists()
+
+
+# ---------- subject add（档案 + 模板一起入库） ----------
+
+@pytest.fixture()
+def _add_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CHARVAR_PRESETS_DIR", str(tmp_path / "presets"))
+    return tmp_path
+
+
+def _write_subject_files(base: Path, subject_id: str, *, template: bool = True,
+                         fingerprint: str | None = None) -> Path:
+    header = f"# 来源模板：全场景通用提示词模板.md（sha256:{fingerprint}）\n" if fingerprint else ""
+    yml = base / f"{subject_id}.yaml"
+    yml.write_text(
+        header + f"id: {subject_id}\nname: 演示\nsubject_noun: woman\n"
+        "style_lock:\n- 卡通插画风\nidentity_lock:\n- 成年女性\n",
+        encoding="utf-8",
+    )
+    if template:
+        (base / f"{subject_id}.md").write_text(f"# {subject_id} 模板\n\n正文逐字。\n", encoding="utf-8")
+    return yml
+
+
+def _db_template(subject_id: str) -> str | None:
+    with storage.connect() as conn:
+        return storage.get_subject_template(conn, subject_id)
+
+
+def test_add_imports_sibling_template(_add_env, tmp_path):
+    """档案与模板是两张表：add 必须把同目录 <id>.md 一起入库（否则是半套导入）。"""
+    yml = _write_subject_files(tmp_path, "demo_girl")
+    result = runner.invoke(cli.app, ["subject", "add", str(yml)])
+    assert result.exit_code == 0, result.output
+    with storage.connect() as conn:
+        assert storage.get_subject(conn, "demo_girl") is not None
+    assert _db_template("demo_girl") == "# demo_girl 模板\n\n正文逐字。\n"
+    assert "模板" in result.output
+
+
+def test_add_without_template_warns(_add_env, tmp_path):
+    """找不到模板时要明确警告，不能静默当成功（原来就是静默丢模板）。"""
+    yml = _write_subject_files(tmp_path, "solo_girl", template=False)
+    result = runner.invoke(cli.app, ["subject", "add", str(yml)])
+    assert result.exit_code == 0, result.output
+    assert "警告" in result.output and "模板" in result.output
+    assert _db_template("solo_girl") is None
+
+
+def test_add_keeps_existing_template_when_source_missing(_add_env, tmp_path):
+    """源文件没有模板时，DB 里原有的模板保留，但提示可能已过期。"""
+    yml = _write_subject_files(tmp_path, "keep_girl", template=False)
+    with storage.connect() as conn:
+        storage.save_subject_template(conn, "keep_girl", "# 旧模板\n")
+    result = runner.invoke(cli.app, ["subject", "add", str(yml)])
+    assert result.exit_code == 0, result.output
+    assert _db_template("keep_girl") == "# 旧模板\n"
+    assert "可能已过期" in result.output
+
+
+def test_add_explicit_template(_add_env, tmp_path):
+    """--template 指定的模板优先于同目录同名文件。"""
+    yml = _write_subject_files(tmp_path, "demo_girl")
+    other = tmp_path / "custom.md"
+    other.write_text("# 指定的模板\n", encoding="utf-8")
+    result = runner.invoke(cli.app, ["subject", "add", str(yml), "--template", str(other)])
+    assert result.exit_code == 0, result.output
+    assert _db_template("demo_girl") == "# 指定的模板\n"
+
+
+def test_add_json_fields(_add_env, tmp_path):
+    yml = _write_subject_files(tmp_path, "demo_girl")
+    result = runner.invoke(cli.app, ["subject", "add", str(yml), "--json"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.stdout)
+    assert data["subject_id"] == "demo_girl"
+    assert data["template_updated"] is True
+    assert data["template_chars"] == len("# demo_girl 模板\n\n正文逐字。\n")
+    assert data["fingerprint_mismatch"] is False
+
+
+def test_add_fingerprint_mismatch_warns(_add_env, tmp_path):
+    """yaml 头的模板 sha256 与实际模板对不上时要告警（溯源链断了）。"""
+    yml = _write_subject_files(tmp_path, "fp_girl", fingerprint="0" * 12)
+    result = runner.invoke(cli.app, ["subject", "add", str(yml)])
+    assert result.exit_code == 0, result.output
+    assert "指纹" in result.output and "警告" in result.output
+
+
+def test_add_conflict_needs_overwrite(_add_env, tmp_path):
+    yml = _write_subject_files(tmp_path, "demo_girl")
+    assert runner.invoke(cli.app, ["subject", "add", str(yml)]).exit_code == 0
+    result = runner.invoke(cli.app, ["subject", "add", str(yml)])
+    assert result.exit_code == 1
+    assert "--overwrite" in _stderr(result)
 
 
 # ---------- image dreamina ----------

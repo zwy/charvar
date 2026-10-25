@@ -1,6 +1,6 @@
 {
   "name": "charvar-skill",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "updated": "2026-10-25",
   "description": "按提示词实际出图/出视频的 Claude Code skill：ComfyUI、OpenRouter、即梦三条通路 + 主体档案 CLI。",
   "entrypoint": "SKILL.md",
@@ -16,6 +16,11 @@
     "note": "本 skill 无自带脚本；由仓库级 tests/test_skills.py 校验 frontmatter、版本同步与文件清单。"
   },
   "history": [
+    {
+      "version": "1.2.0",
+      "date": "2026-10-25",
+      "note": "主体档案导入补全：subject add 此前只写档案表、从不写模板表且不告警（半套导入），现在档案与同目录同名 <id>.md 模板一起入库，缺模板告警、加 --json、加 sha256 指纹校验；subject derive --apply 一并写入模板全文；SKILL.md 补上 subject add 与「只改仓库文件不入库不生效」的提醒。"
+    },
     {
       "version": "1.1.0",
       "date": "2026-10-25",

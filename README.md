@@ -173,7 +173,7 @@ uvicorn web.app:app --reload --port 8710       # 热重载（先 stop.sh 释放�
 ## 命令行
 
 ```bash
-python3 -m charvar.cli subject add presets/subjects/silver_witch.yaml   # 建档（--overwrite 覆盖）
+python3 -m charvar.cli subject add presets/subjects/silver_witch.yaml   # 建档＋同目录 <id>.md 模板一起入库（--overwrite 覆盖）
 python3 -m charvar.cli subject list | show <id> | remove <id>
 python3 -m charvar.cli presets list | show <name> [--limit N]
 python3 -m charvar.cli gen --subject silver_witch --preset q21_default_30 --seed 42 --out ./out
@@ -254,7 +254,11 @@ LLM 优化模式（`mode=llm`）下服装走的是独立通路：服装段作为
 
 ## 主体档案
 
-档案分两处：`presets/subjects/*.yaml`（随仓库走的样例档案，`charvar subject add <file>` 建档）与 SQLite `subjects` 表（实际生效的档案）。每份档案还能带一份**全场景通用提示词模板**（Markdown，存 `subject_templates` 表，网页「主体档案 → 编辑模板」或「从 .md 文件载入」维护），作为 LLM 起草角色提示词时的参考资料。
+档案分两处：`presets/subjects/*.yaml`（随仓库走的样例档案，`charvar subject add <file>` 建档）与 SQLite `subjects` 表（实际生效的档案）。每份档案还能带一份**全场景通用提示词模板**（Markdown，存 `subject_templates` 表），作为 LLM 起草角色提示词时的参考资料。
+
+档案与模板是**两张表**，`charvar subject add` 会把档案同目录的同名 `<id>.md` 模板一并入库（`--template` 可指定别的路径；找不到模板时告警）。模板也能用网页「主体档案 → 编辑模板」或「从 .md 文件载入」维护。
+
+**两张表都入库才算导入完整** —— 只改 `presets/subjects/` 下的文件而不入库，网页与出图仍读 DB 里的旧档案，新文案不生效。仓库 → DB 的完整步骤见 [docs/主体档案.md](docs/主体档案.md)。
 
 仓库内置档案：
 

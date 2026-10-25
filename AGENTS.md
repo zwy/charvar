@@ -145,9 +145,9 @@
 
 ## 导入主体档案（外部 Markdown → 系统）
 
-1. 在 `presets/subjects/<id>.yaml` 写档案（id/名/锁定项/extra），随仓库走、可复现。
-2. 建档：`python3 -m charvar.cli subject add presets/subjects/<id>.yaml`（同 id 覆盖加 `--overwrite`）。
-3. 模板全文存 `subject_templates`：`PUT /subjects/<id>/template`（body `{"template_md": "..."}`），或网页「主体档案 → 从 .md 文件载入」。
+1. 在 `presets/subjects/<id>.yaml` 写档案（id/名/锁定项/extra），随仓库走、可复现。模板另存同名 `<id>.md`。
+2. 建档＋模板一起入库：`python3 -m charvar.cli subject add presets/subjects/<id>.yaml`（同 id 覆盖加 `--overwrite`）。
+3. 模板也可单独维护：`PUT /subjects/<id>/template`，或网页「主体档案 → 从 .md 文件载入」。
 4. 锁定项与模板全文逐字保留原文，不做改写或摘要。
 5. 导入后跑一次 `python3 -m pytest -q`，并用 `/subjects/<id>/images/<kind>/suggest-prompt` 验一次 LLM 起草能跑通。
 

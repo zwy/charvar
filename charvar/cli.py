@@ -12,7 +12,9 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Optional
@@ -74,20 +76,111 @@ def _resolve_subject(value: str) -> SubjectProfile:
     return subject
 
 
+# 模板入库的体积上限，与 API 的 PUT /subjects/<id>/template 同口径（字节）
+_TEMPLATE_MAX_BYTES = 200_000
+
+# derive 写在 yaml 头的模板溯源指纹：sha256:<hex>
+_FINGERPRINT_RE = re.compile(r"sha256:([0-9a-f]{12,64})")
+
+
+def _template_fingerprint(yaml_path: Path) -> str | None:
+    """读 yaml 头里 derive 留下的模板 sha256 指纹（没有这一行就返回 None）。"""
+    try:
+        head = yaml_path.read_text(encoding="utf-8")[:2048]
+    except OSError:
+        return None
+    match = _FINGERPRINT_RE.search(head)
+    return match.group(1) if match else None
+
+
+def _resolve_template(
+    subject_id: str, yaml_path: Path, explicit: Optional[Path]
+) -> tuple[Optional[Path], Optional[str]]:
+    """找模板文件：显式 --template 优先，否则档案同目录的同名 <id>.md。
+
+    返回 (路径, 文本)；都没有则 (None, None)——调用方负责警告。
+    """
+    candidates = []
+    if explicit is not None:
+        if not explicit.exists():
+            _die(f"模板文件不存在：{explicit}")
+        candidates.append(explicit)
+    else:
+        candidates.append(yaml_path.parent / f"{subject_id}.md")
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+        try:
+            text = candidate.read_text(encoding="utf-8")
+        except OSError as exc:
+            _die(f"无法读取模板 {candidate}：{exc}")
+        if not text.strip():
+            _die(f"模板是空文件：{candidate}")
+        return candidate, text
+    return None, None
+
+
 # ---------- subject ----------
 
 @subject_app.command("add")
 def subject_add(
     path: Path = typer.Argument(..., exists=True, readable=True, help="主体档案 YAML/JSON 文件"),
     overwrite: bool = typer.Option(False, "--overwrite", "-f", help="同 id 覆盖"),
+    template: Optional[Path] = typer.Option(None, "--template", help="通用提示词模板 .md（缺省自动找同目录同名 <id>.md）"),
+    json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出（外部 agent）"),
 ) -> None:
+    """建档，并把通用提示词模板一起入库（模板逐字，不改写）。
+
+    模板来源＝--template 指定的路径，或档案同目录的同名 <id>.md；都没有时只导档案并警告。
+    档案与模板是两张表（subjects / subject_templates），两边都入库才算导入完整。
+    """
     profile = _profile_from_file(path)
+    tpl_path, tpl_text = _resolve_template(profile.id, path, template)
+    if tpl_text is not None:
+        size = len(tpl_text.encode("utf-8"))
+        if size > _TEMPLATE_MAX_BYTES:
+            _die(f"模板过大（{size} 字节，上限 {_TEMPLATE_MAX_BYTES} 字节）")
+
+    fingerprint = _template_fingerprint(path)
+    fp_mismatch = False
+    if fingerprint and tpl_text is not None:
+        actual = hashlib.sha256(tpl_text.encode("utf-8")).hexdigest()
+        fp_mismatch = not actual.startswith(fingerprint)
+        if fp_mismatch:
+            typer.secho(
+                f"警告：档案头的模板指纹 {fingerprint} 与 {tpl_path.name} 实际内容不符"
+                f"（实际 {actual[:len(fingerprint)]}）——溯源链已断，请同步更新 yaml 头的 sha256",
+                fg=typer.colors.YELLOW,
+            )
+
     with storage.connect() as conn:
         existing = storage.get_subject(conn, profile.id)
         if existing is not None and not overwrite:
             _die(f"主体档案已存在：{profile.id}（--overwrite 覆盖）")
+        had_template = storage.get_subject_template(conn, profile.id) is not None
         storage.save_subject(conn, profile, replace=True)
+        if tpl_text is not None:
+            storage.save_subject_template(conn, profile.id, tpl_text)
+
+    if json_out:
+        typer.echo(json.dumps({
+            "subject_id": profile.id,
+            "name": profile.name,
+            "template_path": str(tpl_path) if tpl_path else None,
+            "template_chars": len(tpl_text) if tpl_text else 0,
+            "template_updated": tpl_text is not None,
+            "fingerprint_mismatch": fp_mismatch,
+        }, ensure_ascii=False))
+        return
     typer.echo(f"已保存主体档案：{profile.id}（{profile.name}）")
+    if tpl_text is not None:
+        typer.echo(f"  模板（{len(tpl_text)} 字符，逐字）→ {tpl_path}")
+    else:
+        message = f"  警告：没有找到模板（{profile.id}.md 不存在），只导入了档案"
+        if had_template:
+            message += "；DB 里原有的模板保持不变，可能已过期"
+        message += "（模板可用 --template 指定，或 PUT /subjects/<id>/template 上传）"
+        typer.secho(message, fg=typer.colors.YELLOW)
 
 
 @subject_app.command("list")
@@ -181,7 +274,10 @@ def subject_derive(
     if apply:
         with storage.connect() as conn:
             storage.save_subject(conn, profile, replace=True)
+            # 模板全文一并入库：档案与模板是两张表，只入档案等于导入半套
+            storage.save_subject_template(conn, profile.id, template_md)
         typer.echo(f"已入库档案：{profile.id}")
+        typer.echo(f"  模板（{len(template_md)} 字符，逐字）→ subject_templates")
 
     if json_out:
         typer.echo(json.dumps(_derive_summary(outcome, yml_path), ensure_ascii=False))
