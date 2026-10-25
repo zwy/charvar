@@ -484,7 +484,7 @@ async function fillPresetOptions(name) {
 
 /* ---------- 生成 ---------- */
 $("#btn-generate").addEventListener("click", async () => {
-  if (!state.subjects.length) return setStatus($("#gen-status"), "先去「主体档案」建一个档案", true);
+  if (!state.subjects.length) return setStatus($("#gen-status"), "先去「主体」建一个档案", true);
   const rawSeed = $("#gen-seed").value.trim();
   // 种子：留空（默认）= 每次随机 0–100000（用户填了用填的，与固定背景/固定光照
   // 「留空随机」同一习惯；提示词内容随机仍由后端 seed_for(seed, key) 派生）。
