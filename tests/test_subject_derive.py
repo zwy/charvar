@@ -452,3 +452,72 @@ def test_cli_verify_reports_verdict(monkeypatch, tmp_path):
     result = runner.invoke(cli.app, ["subject", "verify", "yoga_teacher", "--json"])
     data = json.loads(result.stdout)
     assert data["pass"] is False and data["issues"][0]["detail"] == "丢了棉袜"
+
+# ---------- body_lock：derive 三条闸门的口径 ----------
+
+def test_profile_from_draft_carries_body_lock():
+    draft = _draft(body_lock=["her figure is a lush mature hourglass: a very large, full, round bust"])
+    profile = sd.profile_from_draft(draft)
+    assert profile.body_lock == ["her figure is a lush mature hourglass: a very large, full, round bust"]
+    # 旧草案没有 body_lock 键 → 空数组（存量草案不炸）
+    assert sd.profile_from_draft(_draft()).body_lock == []
+
+
+def test_citation_misses_skip_body_lock():
+    """body_lock 是压缩译写形态，不得进引用核对（否则 zh 模式英译句必然误报）。"""
+    draft = _draft(
+        body_lock=["her figure is a lush mature hourglass: a very large, full, round bust"],
+    )
+    profile = sd.profile_from_draft(draft)
+    assert sd.citation_misses(_TEMPLATE, profile) == []  # 模板是中文，英文锚定句不算未命中
+
+
+def test_quality_issues_body_lock_caps_and_duplicates():
+    profile = sd.profile_from_draft({
+        **_V1,
+        "identity_lock": ["杏眼"],
+        "body_lock": [
+            "item" * 105,  # > 400 字符
+            "杏眼",        # 跨组重复
+            "third item",  # 超出条数软上限 2
+        ],
+    })
+    warnings = " ".join(sd.quality_issues(profile))
+    assert "body_lock 有 3 条（软上限 2）" in warnings
+    assert "body_lock 单条超过 400 字符" in warnings
+    assert "同一条锁定项出现在" in warnings
+
+    # 正常 1 条英文句不误报
+    ok = sd.profile_from_draft({
+        **_V1,
+        "body_lock": ["her figure is a lush mature hourglass: a very large, full, round bust "
+                      "projecting forward as its own volume and clearly wider than her shoulders"],
+    })
+    assert not any("body_lock" in w for w in sd.quality_issues(ok))
+
+
+def test_draft_prompt_states_body_lock_semantics():
+    zh = sd.build_draft_messages(_TEMPLATE, "zh")[0]["content"]
+    assert "body_lock" in zh
+    assert "压缩成 1 条英文断言短句" in zh
+    assert "body_lock 同样不逐字" in zh
+    assert "body_lock 与 extra 同为例外" in zh
+    en = sd.build_draft_messages(_TEMPLATE, "en")[0]["content"]
+    assert "body_lock 同样是英文压缩句" in en
+
+
+def test_verify_prompt_body_lock_policy():
+    """审计口径：body_lock 缺失不报 omission；矛盾才报 contradiction。"""
+    messages = sd.build_verify_messages(sd.profile_from_draft(_draft()), _TEMPLATE)
+    system = messages[0]["content"]
+    assert "body_lock" in system
+    assert "缺失不报 omission" in system
+    assert "仅当它与你看到的模板体形锚点矛盾时报 contradiction" in system
+
+
+def test_draft_prompt_keeps_body_anchors_in_identity_lock():
+    """体形锚点必须仍全量进 identity_lock（classic 模式靠 identity_lock_sentence）；
+    body_lock 只是它的英文压缩镜像，不得搬移。"""
+    zh = sd.build_draft_messages(_TEMPLATE, "zh")[0]["content"]
+    assert "仍按锚点表全量进 identity_lock" in zh
+    assert "英文压缩镜像" in zh

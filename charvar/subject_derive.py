@@ -61,6 +61,8 @@ _MULTI_OUTFIT_RE = re.compile(
 
 MAX_LOCK_CHARS = 200  # 单条锁定项软上限
 MAX_LOCK_COUNT = 10   # 每组条数软上限
+MAX_BODY_LOCK_CHARS = 400  # body_lock 单条软上限（英文压缩句，信息密度低于中文锁定项）
+MAX_BODY_LOCK_COUNT = 2    # body_lock 条数软上限（1–2 条；写多了稀释动作文本）
 MAX_EXTRA_CHARS = 300  # extra 软上限
 CITATION_THRESHOLD = 0.8  # shingle 覆盖率阈值（zh 抽取模式）
 
@@ -78,13 +80,14 @@ DRAFT_SCHEMA: dict = {
         "style_lock": {"type": "array", "items": {"type": "string"}},
         "identity_lock": {"type": "array", "items": {"type": "string"}},
         "outfit_lock": {"type": "array", "items": {"type": "string"}},
+        "body_lock": {"type": "array", "items": {"type": "string"}},
         "extra": {"type": "string"},
         "candidates": {"type": "array", "items": {"type": "string"}},
         "notes": {"type": "string"},
     },
     "required": [
         "id", "name", "subject_noun", "trigger_word", "style_lock",
-        "identity_lock", "outfit_lock", "extra", "candidates", "notes",
+        "identity_lock", "outfit_lock", "body_lock", "extra", "candidates", "notes",
     ],
     "additionalProperties": False,
 }
@@ -129,15 +132,28 @@ def template_title(template_md: str) -> str | None:
 # ---------- 闸门① 质量软校验 ----------
 
 def quality_issues(profile: SubjectProfile) -> list[str]:
-    """软校验（警告不阻断）：单条太长、条数太多、跨组重复、noun 生僻、extra 过长、场景词/设定板结构词。"""
+    """软校验（警告不阻断）：单条太长、条数太多、跨组重复、noun 生僻、extra 过长、场景词/设定板结构词。
+
+    body_lock 走独立软上限（条数 2 / 单条 400 字符，英文压缩句），其余检查同三组：
+    场景词/设定板结构词是锁定项与 body_lock 共同的红线（它也会逐条进锚定块）。
+    """
     warnings: list[str] = []
-    lock_groups = {"style_lock": profile.style_lock, "identity_lock": profile.identity_lock, "outfit_lock": profile.outfit_lock}
+    lock_groups = {
+        "style_lock": profile.style_lock,
+        "identity_lock": profile.identity_lock,
+        "outfit_lock": profile.outfit_lock,
+        "body_lock": profile.body_lock,
+    }
+    count_cap = {"body_lock": MAX_BODY_LOCK_COUNT}
+    chars_cap = {"body_lock": MAX_BODY_LOCK_CHARS}
     for group, items in lock_groups.items():
-        if len(items) > MAX_LOCK_COUNT:
-            warnings.append(f"{group} 有 {len(items)} 条（软上限 {MAX_LOCK_COUNT}）：锁定项会逐条拼进每张图，考虑瘦身")
+        cap = count_cap.get(group, MAX_LOCK_COUNT)
+        if len(items) > cap:
+            warnings.append(f"{group} 有 {len(items)} 条（软上限 {cap}）：锁定项会逐条拼进每张图，考虑瘦身")
         for item in items:
-            if len(item) > MAX_LOCK_CHARS:
-                warnings.append(f"{group} 单条超过 {MAX_LOCK_CHARS} 字符：{item[:60]}…")
+            if len(item) > chars_cap.get(group, MAX_LOCK_CHARS):
+                cap2 = chars_cap.get(group, MAX_LOCK_CHARS)
+                warnings.append(f"{group} 单条超过 {cap2} 字符：{item[:60]}…")
             match = _SCENE_LOCK_RE.search(item)
             if match:
                 warnings.append(f"{group} 含场景词「{match.group(0)}」（背景/布光/镜头归场景采样，不建议写成锁定项）：{item[:60]}…")
@@ -202,7 +218,12 @@ def citation_coverage(entry: str, template_norm: str, template_shingles: set[str
 
 
 def citation_misses(template_md: str, profile: SubjectProfile) -> list[tuple[str, str]]:
-    """闸门②：返回 [(组名, 条目)] —— 覆盖率不达标的锁定条目（zh 抽取模式）。"""
+    """闸门②：返回 [(组名, 条目)] —— 覆盖率不达标的锁定条目（zh 抽取模式）。
+
+    body_lock 不参加引用核对：它是压缩译写的英文形态（受众是出图锚定块），
+    逐字覆盖率本来就低；它的事实正确性交给闸门③审计（与模板矛盾才报），
+    蓄意编造由终审把关 —— 与 extra 同款待遇。
+    """
     template_norm = _norm(template_md)
     template_shingles = {template_norm[i:i + 2] for i in range(len(template_norm) - 1)}
     misses: list[tuple[str, str]] = []
@@ -217,10 +238,14 @@ def citation_misses(template_md: str, profile: SubjectProfile) -> list[tuple[str
 
 def _lock_groups_rule(lang: str) -> str:
     if lang == "en":
-        return "- style_lock/identity_lock/outfit_lock 三组用英文（翻译模板对应句，保留专有名词与服装细节，不丢信息）。"
+        return (
+            "- style_lock/identity_lock/outfit_lock 三组用英文（翻译模板对应句，保留专有名词与服装细节，不丢信息）；"
+            "body_lock 同样是英文压缩句（不逐字，形态见字段语义）。"
+        )
     return (
         "- style_lock/identity_lock/outfit_lock 三组用模板原文（模板是中文就出中文条目）："
-        "每条必须是模板正文的近逐字摘录，允许删词收紧，禁止改写、翻译或引申。extra 除外（形态见字段语义）。"
+        "每条必须是模板正文的近逐字摘录，允许删词收紧，禁止改写、翻译或引申。extra 除外（形态见字段语义）；"
+        "body_lock 同样不逐字——它是给 LLM 出图锚定块用的压缩译写英文句（形态见字段语义）。"
     )
 
 
@@ -235,6 +260,12 @@ def _field_semantics() -> str:
         "- style_lock：画风/媒介/渲染质感（如真实摄影 vs 插画平涂、禁止 3D/蜡感皮肤）。\n"
         "- identity_lock：脸型/五官/发型/肤色（识别锚点表对应行）。\n"
         "- outfit_lock：服装/配饰（识别锚点表的上装/下装行）。\n"
+        "- body_lock：可选体量锚（受众是 LLM 出图时的参考图锚定块，不是档案审计）："
+        "模板里有体形/身材锚点（胸/腰/臀/腿、体型类型）时，压缩成 1 条英文断言短句"
+        "（如 \"her figure is a lush mature hourglass: a very large, full, round bust …\"，"
+        "名词短语断言、不带主语逐句罗列）；模板没有体形锚点就空数组。"
+        "体形锚点条目**仍按锚点表全量进 identity_lock**（classic 模式靠它）——"
+        "body_lock 是它的英文压缩镜像，两处允许语义重叠，只是措辞不同。\n"
         "- extra：给跨姿态/跨场景出图用的兜底一致性句（Keep the same ... in every pose 式）："
         "只强调身份特征与同一套服装在任意新姿态/新场景中保持一致；"
         "**不复述服装清单**（outfit_lock 已有，复述即污染），"
@@ -261,7 +292,8 @@ def build_draft_messages(
     locked_lines = [f"- {key}：{value}（调用方指定，原样使用）" for key, value in locked.items()]
     rules = [
         _lock_groups_rule(lang),
-        "- 锁定项只能来自模板正文：每条必须能在模板里找到对应原文；不得引入模板没有的设定。",
+        "- 锁定项只能来自模板正文：每条必须能在模板里找到对应原文；不得引入模板没有的设定。"
+        "（本条只约束 style_lock/identity_lock/outfit_lock 三组；body_lock 与 extra 同为例外。）",
         "- 锁定项不写背景、布光、镜头类内容（那是场景采样/构图，不是身份锁定）。",
         "- **一个主体只抽一套默认服装**。模板里出现「备用服装B／服装A二选一／互相替换」这类并列两套的写法时，"
         "只抽默认那套，备用服装不是身份锁定项（并行两套会变成互相矛盾的提示词要求）。",
@@ -315,6 +347,9 @@ def build_verify_messages(profile: SubjectProfile, template_md: str) -> list[dic
         "extra 或锁定项残留多视图/设定板的版面结构语句（如「四个视图」「右侧三个全身…四处一致」"
         "「同页」「并排」「分格」）——那是设定图版面描述，不属于单人档案；"
         "extra 复述了整段服装清单（outfit_lock 已覆盖）。\n"
+        "body_lock（体量锚，可选字段）的检查口径：缺失不报 omission（它是给 LLM 出图锚定块"
+        "的英文压缩锚，允许省略）；仅当它与你看到的模板体形锚点矛盾时报 contradiction；"
+        "它与逐字形态的锁定项表述不同（压缩/翻译）本身不算问题。\n"
         "severity 取 omission/contradiction/violation；quote 引模板原文片段（找不到留空）；"
         "detail 用中文一句说清。轻微措辞差异、删词收紧不算问题；没有问题时 pass=true。\n"
         '只输出 JSON：{"pass": <bool>, "issues": [{severity, quote, detail}]}'
@@ -335,7 +370,7 @@ def profile_from_draft(draft: dict, *, subject_id: str = "", name: str = "") -> 
     """把 LLM 候选整成 SubjectProfile（校验失败抛 pydantic ValidationError，调用方修理）。"""
     locks = {
         group: [text for text in (str(item).strip() for item in draft.get(group) or []) if text]
-        for group in ("style_lock", "identity_lock", "outfit_lock")
+        for group in ("style_lock", "identity_lock", "outfit_lock", "body_lock")
     }
     data = {
         "id": (subject_id or str(draft.get("id") or "")).strip(),
