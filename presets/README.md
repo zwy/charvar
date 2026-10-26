@@ -28,6 +28,7 @@
 | `wildcards/` | 背景 / 光照通配符池（`items:` 列表） | 预设的 `backgrounds_ref:` / `lighting_ref:` |
 | `subjects/` | 主体档案样例（`<id>.yaml`）+ 模板导出（`<id>.md`） | `charvar subject add/export` |
 | `outfits/` | 服装预设（独立家族，**不进主预设下拉**） | `charvar/outfit.py` |
+| `hairstyles/` | 发型预设（独立家族，**不进主预设下拉**） | `charvar/hairstyle.py` |
 | `overlays/` | 贴字样式预设（PIL 后处理，不改原图） | `charvar/overlay.py` |
 | `overlays/fonts/` | 贴字字体文件（可选，只放可再分发的开源字体） | 字体解析的第一优先位 |
 | `video/` | 视频合成预设 + `music/` 音频 | `charvar/video.py` |
@@ -44,7 +45,7 @@
 | 动作预设 | 小写 snake_case，`<用途>` | `q21_default_30`、`yoga_complete`、`three_pose_pack` |
 | 通配符池 | `<用途>_v<版本>.yaml`（与动作预设对称） | `backgrounds_v1.yaml`、`lighting_v2.yaml` |
 | 主体档案 | `<id>.yaml` + `<id>.md`，id 全仓库唯一 | `red_bob_glasses.yaml` |
-| 服装 / 贴字 / 视频 | `<用途>.yaml` | `stockings_8.yaml`、`label_topleft_shadow.yaml` |
+| 服装 / 发型 / 贴字 / 视频 | `<用途>.yaml` | `stockings_8.yaml`、`label_topleft_shadow.yaml` |
 | 配方 | `<slug>.yaml` + `<slug>.md` 成对 | `stockings_showcase.yaml` |
 
 两条容易踩的：
@@ -104,6 +105,14 @@
 
 `type: outfit`，`items: [{id, label, text}]`：`text` = 英文服装描述段（**追加在动作段
 之后**），`label` = 中文展示名。组合顺序由请求的 `outfit_order` 决定。
+
+### 发型预设（`hairstyles/*.yaml`）
+
+`type: hairstyle`，`items: [{id, label, text}]`，同服装预设结构：`text` = 英文发型
+描述段（**只写头发结构**：长度/刘海/分缝/层次/卷度，不写发色——发色继承主体档案
+或参考图），`label` = 中文展示名，`caption_tags`（可选）= caption token 映射。
+层级固定 动作→发型→服装（发型层先并、服装层后并），无发型单独的顺序开关。
+约定：identity_lock 里发型只写发色、不写结构；换发型批优先 LLM 模式。
 
 ### 贴字预设（`overlays/*.yaml`）
 

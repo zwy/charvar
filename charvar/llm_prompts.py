@@ -185,6 +185,70 @@ REFERENCE_ROLE_CLAUSES_OUTFIT: dict[str, str] = {
     ),
 }
 
+# 发型组合（hairstyle 预设）专用：参考图**不再**提供头发结构——发型由发型预设给定，
+# 参考图只提供脸部/肤色/发色。headshot 原句的 "copy ... hair" 会让模型照抄参考图发型，
+# 发型预设等于没生效；发色与脸是身份，保留；长度/刘海/分缝/层次/卷度是结构，归发型预设。
+# side 原句的 hair flow、behind 原句的 back of the head 同样按新发型画，分句里去掉。
+REFERENCE_ROLE_CLAUSES_HAIRSTYLE: dict[str, str] = {
+    "character_sheet": (
+        "keep the whole identity, hair color, and art style exactly as shown in {tag}"
+    ),
+    "headshot": (
+        "copy the face, feature proportions, skin tone, and hair color exactly as they "
+        "appear in {tag}; the hair's cut, length, and styling follow the prescribed "
+        "hairstyle instead of {tag}"
+    ),
+    "front": (
+        "copy the body shape, proportions, complete outfit, and footwear, including "
+        "their colors, materials, and details, from {tag}"
+    ),
+    "side": (
+        "use {tag} as the direction reference for the true side profile and for "
+        "one-sided markings"
+    ),
+    "behind": (
+        "use {tag} for the rear outfit details; the back of the head follows the "
+        "prescribed hairstyle instead of {tag}"
+    ),
+}
+
+# 发型 + 服装同时组合：headshot/side 取发型版（头发归发型预设），
+# front 取服装版（体量锚），character_sheet/behind 取发型版并保留服装侧信息。
+REFERENCE_ROLE_CLAUSES_OUTFIT_HAIRSTYLE: dict[str, str] = {
+    "character_sheet": (
+        "keep the whole identity, hair color, and art style exactly as shown in {tag}"
+    ),
+    "headshot": (
+        "copy the face, feature proportions, skin tone, and hair color exactly as they "
+        "appear in {tag}; the hair's cut, length, and styling follow the prescribed "
+        "hairstyle instead of {tag}"
+    ),
+    "front": (
+        "copy the body shape, proportions, bust volume and hip width from {tag} exactly "
+        "as shown; the clothing change must not reshape the figure"
+    ),
+    "side": (
+        "use {tag} as the direction reference for the true side profile and for "
+        "one-sided markings"
+    ),
+    "behind": (
+        "use {tag} for the rear silhouette and outfit details; the back of the head "
+        "follows the prescribed hairstyle instead of {tag}"
+    ),
+}
+
+
+def reference_clause_table(outfit_mode: bool, hairstyle_mode: bool) -> dict[str, str]:
+    """按组合形态选参考图分工分句表（四种组合，各自语义独立成表）。"""
+    if outfit_mode and hairstyle_mode:
+        return REFERENCE_ROLE_CLAUSES_OUTFIT_HAIRSTYLE
+    if hairstyle_mode:
+        return REFERENCE_ROLE_CLAUSES_HAIRSTYLE
+    if outfit_mode:
+        return REFERENCE_ROLE_CLAUSES_OUTFIT
+    return REFERENCE_ROLE_CLAUSES
+
+
 REFERENCE_TAIL_SENTENCE: str = (
     "Take only the character's identity from the reference images and create a new pose, "
     "camera angle, background, and lighting. One character only, no text."
@@ -251,6 +315,7 @@ def reference_anchor_sentence(
     *,
     text_policy: str = "forbid",
     outfit_mode: bool = False,
+    hairstyle_mode: bool = False,
     body_lock: list[str] | None = None,
 ) -> str:
     """按勾选的参考图顺序生成逐图分工锚定句；无参考图 → 空串（改写省略锚定句）。
@@ -261,12 +326,16 @@ def reference_anchor_sentence(
     outfit_mode（服装组合）→ 分句换成「参考图不管服装」的版本：服装由服装预设给定，
     参考图只提供身份/体型/画风。两套都要会给模型两个互相矛盾的服装指令。
 
+    hairstyle_mode（发型组合）→ 分句换成「参考图不管头发结构」的版本（发色/脸仍由
+    参考图提供）：发型结构由发型预设给定，headshot/side/behind 分句里所有「照抄/沿用
+    头发」的表述去掉。与服装组合同时开时再用一套融合分句表（reference_clause_table）。
+
     body_lock（主体档案的可选体形锁定）→ 追加成锚定块的附加分句（紧跟逐图分工句）：
     换装时体量锚的主要文本来源。走锚定块而不是新开材料块，是为了继承现有硬规则
     （逐字采用、全批相同、不得增删分句），不用动冻结的英文系统提示词。
     """
     clauses = []
-    table = REFERENCE_ROLE_CLAUSES_OUTFIT if outfit_mode else REFERENCE_ROLE_CLAUSES
+    table = reference_clause_table(outfit_mode, hairstyle_mode)
     for ref in refs or []:
         clause = table.get(str(ref.get("kind") or ""))
         if not clause:
@@ -349,21 +418,34 @@ def _rewrite_lead(language: str) -> str:
     return f"为每条变体重写一条完整{adj}提示词"
 
 
-def _prompt_string_rule(language: str, *, sticker: bool, outfit: bool = False) -> str:
+def _prompt_string_rule(language: str, *, sticker: bool, outfit: bool = False, hairstyle: bool = False) -> str:
     """「每条 prompt 为一个…字符串」这条硬规则。
 
     en 分支逐字保持旧文案（不含中文 / 不出现中文的措辞不动），只是把
     「不出现中文」这句在 sticker 下省掉——sticker 的禁中文字句已单独规定。
 
-    outfit=True（服装组合）：服装描述逐字保留英文原文（换装描述译写容易走样，
-    且程序兜底补写用的也是英文原文），所以中文分支要开一个例外。
+    outfit=True（服装组合）/ hairstyle=True（发型组合）：描述段逐字保留英文原文
+    （换装/换发描述译写容易走样，且程序兜底补写用的也是英文原文），
+    所以中文分支要开例外；两者同时开时例外合并成一条。
     """
     if language == "zh":
+        if outfit and hairstyle:
+            return (
+                "- 每条 prompt 为一个中文字符串（专有名词、标签可保留原文），"
+                "不出现英文整句、【】小节标题或 {{}} 占位符；只输出提示词本身；"
+                "唯一的例外是 outfit 与 hairstyle 字段的描述——它们逐字保留英文原文；\n"
+            )
         if outfit:
             return (
                 "- 每条 prompt 为一个中文字符串（专有名词、标签可保留原文），"
                 "不出现英文整句、【】小节标题或 {{}} 占位符；只输出提示词本身；"
                 "唯一的例外是 outfit 字段的服装描述——它逐字保留英文原文；\n"
+            )
+        if hairstyle:
+            return (
+                "- 每条 prompt 为一个中文字符串（专有名词、标签可保留原文），"
+                "不出现英文整句、【】小节标题或 {{}} 占位符；只输出提示词本身；"
+                "唯一的例外是 hairstyle 字段的发型描述——它逐字保留英文原文；\n"
             )
         return (
             "- 每条 prompt 为一个中文字符串（专有名词、标签可保留原文），"
@@ -439,6 +521,7 @@ def build_rewrite_messages(
 
     refs: [{"kind": ..., "tag": "<imageN>"}, ...]（tag 按顺序分配）；
     intents: collect_intent 的输出（id/text/framing/angle/expression/background/lighting/framing_guard；
+    服装组合另有 outfit/outfit_label、发型组合另有 hairstyle/hairstyle_label；
     sticker 时另有 purpose/text_policy/composition_policy 与各条 display_text）。
 
     policy=forbid（默认）：旧行为逐字不变——英文且不含中文，尾句 One character only, no text。
@@ -457,8 +540,10 @@ def build_rewrite_messages(
     if sticker:
         # 中文绘字由程序追加，LLM 段输出中文会被 sticker 禁字规则判为不合格 → 强制英文
         language = "en"
-    # 服装组合：意图里带 outfit 字段（服装预设的英文描述段）→ 锚定句与规则都要变。
+    # 服装/发型组合：意图里带 outfit / hairstyle 字段（预设的英文描述段）→
+    # 锚定句与规则都要变（参考图不再提供服装/头发结构）。
     outfit_mode = any(str(i.get("outfit") or "").strip() for i in intents)
+    hairstyle_mode = any(str(i.get("hairstyle") or "").strip() for i in intents)
     ref_lines = "\n".join(
         f"- {r['tag']}：{KIND_LABELS.get(r['kind'], r['kind'])}（{r['kind']}）"
         for r in refs
@@ -507,7 +592,12 @@ def build_rewrite_messages(
             + phrase["guard"] + "\n"
             "- 被遮挡的细节按视角自然隐藏，不强行转体/错开肢体展示；不对称细节（痣、挑染、纹样）在"
             "左右朝向互换时保持贴身位置，不镜像；\n"
-            + _prompt_string_rule(language, sticker=False, outfit=outfit_mode)
+            + _prompt_string_rule(language, sticker=False, outfit=outfit_mode, hairstyle=hairstyle_mode)
+            + ("- 发型：每条意图的 hairstyle 字段是该变体的发型（英文原文），是头发结构的唯一权威："
+               "档案与参考图中的原发型结构描述不再采用——头发长度、刘海、分缝、层次与卷度全部按 "
+               "hairstyle 原文逐字写出，发色仍按参考图与档案保留；必须在该条 prompt 里完整写出 "
+               "hairstyle 原文，不改写、不省略；写在姿态/表情句之后、服装段（若有）与背景/光照句之前；\n"
+               if hairstyle_mode else "")
             + ("- 服装：每条意图的 outfit 字段是该变体必须穿着的服装（英文原文）。"
                "必须在该条 prompt 里完整写出这套服装，逐字采用 outfit 原文，"
                "不改写、不省略、不换用参考图里那套衣服；写在姿态/表情句之后、背景/光照句之前；\n"
@@ -521,7 +611,8 @@ def build_rewrite_messages(
         f"【参考图说明】\n{ref_lines or '（无参考图）'}",
     ]
     anchor = reference_anchor_sentence(
-        refs, text_policy=text_policy, outfit_mode=outfit_mode, body_lock=subject.body_lock
+        refs, text_policy=text_policy, outfit_mode=outfit_mode,
+        hairstyle_mode=hairstyle_mode, body_lock=subject.body_lock,
     )
     if anchor:
         user_parts.append(f"【参考图分工锚定句】（逐字采用，全批相同）\n{anchor}")

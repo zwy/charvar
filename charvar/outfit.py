@@ -172,12 +172,17 @@ def combine(
                 expression=pose.expression,
                 pose=pose.pose,
                 text=f"{pose.text} {item.text.strip()}".strip(),
-                # 分列留档：text 是合并文本（classic 模式直接拼），LLM 模式取这两段分开喂。
-                action_text=pose.text,
+                # 分列留档：text 是合并文本（classic 模式直接拼），LLM 模式取这些段分开喂。
+                # 输入若是发型组合产物（charvar/hairstyle.py 先于服装层组合，层级
+                # 动作→发型→服装），动作原文取其 action_text、发型三字段原样带过。
+                action_text=pose.action_text if pose.action_text is not None else pose.text,
                 outfit_text=item.text.strip(),
                 tags=[*pose.tags, item.id],
                 outfit=item.id,
                 outfit_label=item.label,
+                hairstyle=pose.hairstyle,
+                hairstyle_label=pose.hairstyle_label,
+                hairstyle_text=pose.hairstyle_text,
             )
         )
 

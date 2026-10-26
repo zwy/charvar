@@ -12,6 +12,7 @@ import json
 import sqlite3
 
 from charvar import llm
+from charvar import hairstyle as hairstyle_service
 from charvar import outfit as outfit_service
 from charvar.caption import build_caption
 from charvar.composer import (
@@ -64,21 +65,28 @@ def collect_intent(subject: SubjectProfile, preset: Preset, req: GenerateRequest
         )
         variant_raw = render(spec.text, {"subject_noun": subject.subject_noun, "name": subject.name})
         variant_text, _ = expand_inline(variant_raw, rng)
+        hairstyle_text: str | None = None
         outfit_text: str | None = None
-        if spec.outfit_text:
-            # 服装组合：动作段与服装段分列。合并文本里服装段夹在动作文本尾部时，
+        if spec.hairstyle_text or spec.outfit_text:
+            # 服装/发型组合：动作段与描述段分列。合并文本里服装段夹在动作文本尾部时，
             # 模型会把它当成「参考图自带服装」整段丢弃（实测 LLM 模式 24/24 条丢服装），
-            # 所以动作段单独喂、服装段走独立字段 + 显式规则 + 程序兜底补写。
+            # 发型段同理（头发是参考图自带的核心外观特征，更容易被当成要保留的对象）。
+            # 所以动作段单独喂、发型/服装段走独立字段 + 显式规则 + 程序兜底补写。
             pose_raw = render(
                 spec.action_text if spec.action_text is not None else spec.text,
                 {"subject_noun": subject.subject_noun, "name": subject.name},
             )
-            pose_text, _ = expand_inline(pose_raw, rng)
+            variant_text, _ = expand_inline(pose_raw, rng)
+        if spec.hairstyle_text:
+            hair_raw = render(
+                spec.hairstyle_text, {"subject_noun": subject.subject_noun, "name": subject.name}
+            )
+            hairstyle_text, _ = expand_inline(hair_raw, rng)
+        if spec.outfit_text:
             outfit_raw = render(
                 spec.outfit_text, {"subject_noun": subject.subject_noun, "name": subject.name}
             )
             outfit_text, _ = expand_inline(outfit_raw, rng)
-            variant_text = pose_text
         intent = {
             "id": spec.id,
             "text": variant_text,
@@ -90,6 +98,9 @@ def collect_intent(subject: SubjectProfile, preset: Preset, req: GenerateRequest
             "lighting": lighting,
             "framing_guard": closeup_framing_guard(spec.framing) or None,
         }
+        if hairstyle_text:
+            intent["hairstyle"] = hairstyle_text
+            intent["hairstyle_label"] = spec.hairstyle_label
         if outfit_text:
             intent["outfit"] = outfit_text
             intent["outfit_label"] = spec.outfit_label
@@ -278,9 +289,17 @@ def generate_llm(
     )
     items: list[PromptItem] = []
     missing_outfit: list[str] = []
+    missing_hairstyle: list[str] = []
     for i, intent in enumerate(intents):
         spec = _spec_by_id(preset, intent["id"])
         prompt = normalize(rewritten[intent["id"]])
+        hairstyle_text = str(intent.get("hairstyle") or "").strip()
+        if hairstyle_text and not hairstyle_service.descriptor_covered(prompt, hairstyle_text):
+            # 兜底：模型没把这头发写进提示词 → 由程序按原文补写（插在背景/光照句前）。
+            # 发型兜底先于服装兜底：两段都缺时，先后插入才能落成 动作→发型→服装 顺序
+            # （两个插入都锚定背景/光照句首，后插者必然在前插者之后）。
+            prompt = hairstyle_service.insert_descriptor_sentence(prompt, hairstyle_text)
+            missing_hairstyle.append(spec.id)
         outfit_text = str(intent.get("outfit") or "").strip()
         if outfit_text and not outfit_service.outfit_covered(prompt, outfit_text):
             # 兜底：模型没把这套衣服写进提示词 → 由程序按原文补写（插在背景/光照句前）。
@@ -321,6 +340,8 @@ def generate_llm(
                     "preset_type": preset.type,
                     "outfit": spec.outfit,
                     "outfit_label": spec.outfit_label,
+                    "hairstyle": spec.hairstyle,
+                    "hairstyle_label": spec.hairstyle_label,
                     "mode": "llm",
                     "reference_kinds": list(reference_kinds),
                     **aspect_meta(preset),
@@ -334,6 +355,13 @@ def generate_llm(
             "已由程序按服装预设原文补写（服装以原文为准）。变体："
             + "、".join(missing_outfit[:5])
             + ("…" if len(missing_outfit) > 5 else "")
+        )
+    if missing_hairstyle:
+        warnings.append(
+            f"{len(missing_hairstyle)}/{len(intents)} 条变体的发型描述没在 LLM 改写结果里体现，"
+            "已由程序按发型预设原文补写（发型以原文为准）。变体："
+            + "、".join(missing_hairstyle[:5])
+            + ("…" if len(missing_hairstyle) > 5 else "")
         )
     return GenerateResult(
         run_id=make_run_id(subject.id, preset.name, req.seed),

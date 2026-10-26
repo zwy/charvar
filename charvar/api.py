@@ -47,6 +47,7 @@ from charvar.preset_loader import (
 )
 from charvar import sticker_policy
 from charvar import outfit as outfit_service
+from charvar import hairstyle as hairstyle_service
 from charvar import overlay as overlay_service
 from charvar import recipes as recipes_service
 from charvar import video as video_service
@@ -367,6 +368,10 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     @app.get("/outfit-presets")
     def api_outfit_presets() -> list[dict[str, Any]]:
         return outfit_service.list_outfit_presets()
+
+    @app.get("/hairstyle-presets")
+    def api_hairstyle_presets() -> list[dict[str, Any]]:
+        return hairstyle_service.list_hairstyle_presets()
 
     @app.get("/presets/{name}")
     def api_preset_detail(name: str, expand: bool = Query(True, description="展开变体列表")) -> dict[str, Any]:
@@ -777,14 +782,20 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     def api_generate(req: GenerateRequest) -> GenerateResult:
         subject = _resolve_subject(req)
         preset = _preset(req.preset)
-        if req.outfit_preset:
+        if req.outfit_preset or req.hairstyle_preset:
             if sticker_policy.is_sticker_preset(preset):
                 raise HTTPException(
-                    400, "sticker 预设（带字表情包）不支持服装组合：图片文案与服装段语义冲突"
+                    400, "sticker 预设（带字表情包）不支持服装/发型组合：图片文案与服装段语义冲突"
                 )
             try:
-                outfit_obj = outfit_service.load_outfit(req.outfit_preset)
-                preset = outfit_service.combine(preset, outfit_obj, req.outfit_order)
+                # 层级固定 动作→发型→服装：发型层先并、服装层后并（outfit.combine
+                # 把发型层产物当输入继续叠），id/text 层级由两层 combine 自然落位。
+                if req.hairstyle_preset:
+                    hairstyle_obj = hairstyle_service.load_hairstyle(req.hairstyle_preset)
+                    preset = hairstyle_service.combine(preset, hairstyle_obj)
+                if req.outfit_preset:
+                    outfit_obj = outfit_service.load_outfit(req.outfit_preset)
+                    preset = outfit_service.combine(preset, outfit_obj, req.outfit_order)
             except PresetError as exc:
                 raise HTTPException(getattr(exc, "status", 400), str(exc)) from exc
         sticker_warnings: list[str] = []

@@ -32,6 +32,7 @@ COUNT_SUFFIX_RE = re.compile(r"^(?P<stem>.+)_(?P<count>\d+)$")
 DIR_TYPE_RULES: dict[str, set[str] | None] = {
     "actions": {"list", "matrix"},
     "outfits": {"outfit"},
+    "hairstyles": {"hairstyle"},
     "overlays": {"overlay"},
     "video": {"video"},
     "recipes": {"recipe"},
@@ -240,18 +241,21 @@ def test_wildcard_files_have_items_list():
 def test_recipe_preset_refs_resolve():
     """配方里引用的预设名必须真实存在（按名引用，不是按路径）。
 
-    配方的一步可以同时挂动作预设和服装预设（笛卡尔积），两个族都要认。
+    配方的一步可以同时挂动作/服装/发型预设（笛卡尔积），三个族都要认。
     """
     from charvar import preset_loader
-    from charvar import outfit
+    from charvar import outfit, hairstyle
 
     known = {_load(p).get("name") for p in _action_presets()}
     outfit_names = {o["name"] for o in outfit.list_outfit_presets()}
+    hairstyle_names = {h["name"] for h in hairstyle.list_hairstyle_presets()}
     for path in _yaml_files("recipes"):
         data = _load(path)
         for step in data.get("steps") or []:
             for name in step.get("presets") or []:
-                assert name in known or name in outfit_names, (
+                assert (
+                    name in known or name in outfit_names or name in hairstyle_names
+                ), (
                     f"{path.name} 的步骤引用了不存在的预设 {name!r}"
                 )
                 if name in known:

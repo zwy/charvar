@@ -91,7 +91,7 @@ class RecipeStep(BaseModel):
 
     # ---- images 步 ----
     subject: str | None = None
-    presets: list[str] = Field(default_factory=list)  # [动作/表情预设 [, 服装预设]]
+    presets: list[str] = Field(default_factory=list)  # [动作/表情预设 [, 服装预设 [, 发型预设]]]
     outfit_order: Literal["outfit_first", "pose_first"] = "outfit_first"
     seed: int | None = None
     count: int | None = None
@@ -632,13 +632,21 @@ def _run_images_step(conn, recipe: Recipe, state: RecipeRunState, step: RecipeSt
         raise PresetError(f"{step.label}：{exc}") from exc
     if sticker_policy.is_sticker_preset(preset):
         raise PresetError(f"{step.label}：配方出图步不做 sticker 预设（模型画字请走生成页）")
+    if len(step.presets) > 3:
+        raise PresetError(
+            f"{step.label}：presets 最多 [动作预设, 服装预设, 发型预设]，收到 {len(step.presets)} 个"
+        )
+    # 层级固定 动作→发型→服装：发型层先并（presets[2]）、服装层后并（presets[1]）
+    if len(step.presets) > 2:
+        from charvar import hairstyle as hairstyle_service
+
+        hair_obj = hairstyle_service.load_hairstyle(step.presets[2])
+        preset = hairstyle_service.combine(preset, hair_obj)
     if len(step.presets) > 1:
         from charvar import outfit as outfit_service
 
         outfit_obj = outfit_service.load_outfit(step.presets[1])
         preset = outfit_service.combine(preset, outfit_obj, step.outfit_order)
-    if len(step.presets) > 2:
-        raise PresetError(f"{step.label}：presets 最多 [动作预设, 服装预设]，收到 {len(step.presets)} 个")
     if step.aspect not in (None, "auto"):
         # 画幅覆写只动 preferred_aspect_ratio 声明（auto 推导时用它；手动选的画幅仍优先）
         preset = preset.model_copy(update={"preferred_aspect_ratio": step.aspect})

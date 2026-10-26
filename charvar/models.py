@@ -90,6 +90,12 @@ class VariantSpec(BaseModel):
     # ——合并时服装段夹在动作文本尾部，模型常把它当成「参考图自带服装」整段丢弃。
     action_text: str | None = None
     outfit_text: str | None = None
+    # 发型组合（hairstyle.combine 产物）专用：发型 id + 中文展示名。
+    # 与服装分列同一套逻辑：LLM 模式发型段走独立字段逐字英文；
+    # 层级固定 动作→发型→服装（发型层先并、服装层后并）。
+    hairstyle: str | None = None
+    hairstyle_label: str | None = None
+    hairstyle_text: str | None = None
 
 
 class ReferenceSpec(BaseModel):
@@ -142,6 +148,9 @@ class GenerateRequest(BaseModel):
     # outfit_order 决定变体顺序（也即后续 reel 合成的播放顺序）。
     outfit_preset: str | None = None
     outfit_order: Literal["outfit_first", "pose_first"] = "outfit_first"
+    # 发型组合：动作/表情预设 × 发型预设（presets/hairstyles/）笛卡尔积。
+    # 层级固定 动作→发型→服装（发型层先并、服装层后并），无发型单独的顺序开关。
+    hairstyle_preset: str | None = None
 
 
 class PromptItem(BaseModel):

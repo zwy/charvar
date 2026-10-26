@@ -384,7 +384,7 @@ async function init() {
     genRefCount = count;
     applyGenBackendPanel();
   });
-  await Promise.allSettled([loadSubjects(), loadPresets(), loadOutfits()]);
+  await Promise.allSettled([loadSubjects(), loadPresets(), loadOutfits(), loadHairstyles()]);
   if (state.subjects.length) {
     $("#gen-subject").value = state.subjects[0].id;
   }
@@ -419,6 +419,22 @@ async function loadOutfits() {
     const opt = document.createElement("option");
     opt.value = o.name;
     opt.textContent = `${o.name}（${o.count} 档）`;
+    sel.appendChild(opt);
+  }
+}
+
+async function loadHairstyles() {
+  state.hairstyles = await api("/hairstyle-presets").catch(() => []);
+  const sel = $("#gen-hairstyle");
+  sel.innerHTML = "";
+  const blank = document.createElement("option");
+  blank.value = "";
+  blank.textContent = "不用（跟随参考图/档案发型）";
+  sel.appendChild(blank);
+  for (const h of state.hairstyles) {
+    const opt = document.createElement("option");
+    opt.value = h.name;
+    opt.textContent = `${h.name}（${h.count} 款）`;
     sel.appendChild(opt);
   }
 }
@@ -502,7 +518,10 @@ $("#btn-generate").addEventListener("click", async () => {
   if ($("#gen-count").value) payload.count = Number($("#gen-count").value);
   if ($("#gen-fixed-bg").value.trim()) payload.fixed_background = $("#gen-fixed-bg").value.trim();
   if ($("#gen-fixed-light").value.trim()) payload.fixed_lighting = $("#gen-fixed-light").value.trim();
-  // 服装组合：选了服装预设才带上（笛卡尔积在服务端展开）
+  // 发型/服装组合：选了才带上（笛卡尔积在服务端展开；层级固定 动作→发型→服装）
+  if ($("#gen-hairstyle").value) {
+    payload.hairstyle_preset = $("#gen-hairstyle").value;
+  }
   if ($("#gen-outfit").value) {
     payload.outfit_preset = $("#gen-outfit").value;
     payload.outfit_order = $("#gen-outfit-order") ? $("#gen-outfit-order").value : "outfit_first";

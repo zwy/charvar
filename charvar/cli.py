@@ -30,6 +30,7 @@ from charvar.exporters import txt as txt_exporter
 from charvar.models import GenerateRequest, SubjectProfile
 from charvar.preset_loader import PresetError, list_presets, load, load_file
 from charvar import outfit as outfit_service
+from charvar import hairstyle as hairstyle_service
 from charvar import overlay as overlay_service
 
 app = typer.Typer(
@@ -543,6 +544,7 @@ def gen(
     preset: str = typer.Option("q21_default_30", "--preset", "-p"),
     outfit: Optional[str] = typer.Option(None, "--outfit", help="服装预设名（presets/outfits/），与预设笛卡尔积"),
     outfit_order: str = typer.Option("outfit_first", "--outfit-order", help="组合顺序：outfit_first（默认，每件服装连播全部动作）/pose_first"),
+    hairstyle: Optional[str] = typer.Option(None, "--hairstyle", help="发型预设名（presets/hairstyles/），与预设笛卡尔积；层级 动作→发型→服装"),
     seed: int = typer.Option(0, "--seed"),
     count: Optional[int] = typer.Option(None, "--count", help="None=预设全部"),
     sampling: str = typer.Option("all", "--sampling", help="all/first/random"),
@@ -566,14 +568,19 @@ def gen(
         preset_obj = load(preset)
     except PresetError as exc:
         _die(str(exc))
-    if outfit:
+    if hairstyle or outfit:
         from charvar.sticker_policy import is_sticker_preset
 
         if is_sticker_preset(preset_obj):
-            _die("sticker 预设（带字表情包）不支持服装组合：图片文案与服装段语义冲突")
+            _die("sticker 预设（带字表情包）不支持服装/发型组合：图片文案与服装段语义冲突")
         try:
-            outfit_obj = outfit_service.load_outfit(outfit)
-            preset_obj = outfit_service.combine(preset_obj, outfit_obj, outfit_order)
+            # 层级固定 动作→发型→服装：发型层先并、服装层后并
+            if hairstyle:
+                hairstyle_obj = hairstyle_service.load_hairstyle(hairstyle)
+                preset_obj = hairstyle_service.combine(preset_obj, hairstyle_obj)
+            if outfit:
+                outfit_obj = outfit_service.load_outfit(outfit)
+                preset_obj = outfit_service.combine(preset_obj, outfit_obj, outfit_order)
         except PresetError as exc:
             _die(str(exc))
     if sampling not in ("all", "first", "random"):

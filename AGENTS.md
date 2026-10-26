@@ -66,7 +66,7 @@
 页面按 Playground 的交互排成三步：
 
 1. **① 生图设置**：主体档案 + 供应商（ComfyUI / OpenRouter / 即梦）+ 该供应商的生图参数（画幅 / 分辨率 / 质量 / 模型版本 / **种子** / 负向 / 等待完成）+ 参考图。
-2. **② 生成提示词**：预设（可叠服装预设）+ 生成模式（经典模板 / LLM 优化）+ 模板参数（条数 / 采样 / 分隔符 / 背景光照）。
+2. **② 生成提示词**：预设（可叠发型/服装预设）+ 生成模式（经典模板 / LLM 优化）+ 模板参数（条数 / 采样 / 分隔符 / 背景光照）。
 3. **③ 生成结果**：「推送生图」**单一**按钮，随后是结果表 + 导出。卡标题行给当前批的只读摘要（主体 · 预设 · 种子 · 条数）。
 
 - **不保留文生图 / 图片编辑切换**：有参考图 = 图片编辑（ComfyUI 走图片编辑 workflow / OpenRouter 走 `i2i` 组 / 即梦走 `image2image`），无参考图 = 纯文生图，后端按「有没有参考图」自动分流。
@@ -89,7 +89,7 @@
 ## 全站视觉分组与文案
 
 - **分组容器全站唯一** = `.form-section`（flex column + gap sp-2），组标题 `.form-section-title`（右侧可放状态，如「已选 0 张」）；组间用 `margin-top sp-3 + padding-top sp-3 + 1px 分隔线`，**不要**给 `.card` 的直接子元素手写 margin（见 CSS 注释）。
-  预设页① 拆三组（主体与种子 / 供应商参数 / 参考图），② 拆两组（预设与服装 / 提示词参数）；Playground = 供应商与参数 / 提示词 / 参考图；视频 = 模式与参数 / 提示词 / 首帧图 / 参考图 / 参考视频；主体档案 = 基本信息 / 锁定项 / 补充；设置页一卡一主题。**别新造 `.gen-group` 这类第二套分组类。**
+  预设页① 拆三组（主体与种子 / 供应商参数 / 参考图），② 拆两组（预设与外观 / 提示词参数）；Playground = 供应商与参数 / 提示词 / 参考图；视频 = 模式与参数 / 提示词 / 首帧图 / 参考图 / 参考视频；主体档案 = 基本信息 / 锁定项 / 补充；设置页一卡一主题。**别新造 `.gen-group` 这类第二套分组类。**
 - **间距只在 4/8/12/16 阶梯内收紧**：`.card` padding `14px 16px`、`.card > * + *` 用 sp-3、`.form-grid` 行距 sp-2（列距仍 sp-4）；`.segmented .seg` padding `4px 12px`。500px 断点要同步。
 - **灰字只写「控件里看不到的信息」**：当前生效的 workflow / 模型 / 枚举、当前输出像素、已选参考图数量、不可逆后果（超限硬失败、暂存 24 小时清理、按秒计费、消耗积分）。**删掉**复述控件含义的说明、描述「先做 A 再做 B」的导航文案、重复当前主体的摘要行、以及讲落盘路径 / CLI 用法 / 数据库表这类**实现细节**的长段落（那属于 README）。**每块最多一句灰字**，长说明拆不成一句时宁可删。
 - 参考图区统一形态：组标题 + 右侧「已选 N 张」+ `.ref-empty` 虚线空态框（`#gen-ref-count` / `#adhoc-ref-count` / `#video-ref-count`）。
@@ -178,7 +178,13 @@ DB → 仓库对偶：`charvar subject export <id>` 快照成 `presets/subjects/
   服装段**任何语言模式下都逐字保留英文原文**（zh 分支的中文规则开了这个例外）——换装描述译写容易走样，程序兜底补写的也是英文原文。没有服装组合时，英文分支系统提示词**逐字不变**（有快照回归测试）。
 - **贴字** = `presets/overlays/*.yaml`（`charvar/overlay.py`，PIL 确定性后处理，**不改原图**）：产物落 `<data>/generated/<run_id>/labeled/{index:06d}.png`。语义：`POST /runs/{id}/overlay` = `charvar overlay <run_id> --overlay <preset> [--text-from …] [--items 0,1]`。
 - 字体解析顺序 = `presets/overlays/fonts/` 里的文件 > 系统候选（macOS PingFang / Hiragino、Linux Noto CJK、Windows 雅黑）；`font: ""` = 自动。跨机稳定就把字体文件放进 `fonts/`，**只放可再分发的开源字体（OFL 系安全）；花字/美术字体的版权要单独确认**。
-- 与 **sticker（带字表情包）** 是两套机制：sticker 的字是提示词驱动（模型原生画字，`charvar/sticker_policy.py` 的 display_text/lettering）；贴字是确定性 PIL 后处理。两者共存不冲突；**sticker 预设拒绝服装组合**（语义冲突，400）。
+- 与 **sticker（带字表情包）** 是两套机制：sticker 的字是提示词驱动（模型原生画字，`charvar/sticker_policy.py` 的 display_text/lettering）；贴字是确定性 PIL 后处理。两者共存不冲突；**sticker 预设拒绝服装/发型组合**（语义冲突，400）。
+
+## 发型预设（presets/hairstyles/）
+
+- **层级固定 动作→发型→服装**；`text` 只写头发结构不写发色，≤200 字符。
+- **LLM 模式**：意图字段 `hairstyle` 逐字英文、zh 例外；锚定句按 `reference_clause_table` 换发型版（不锚头发、锚发色/脸）。
+- **锁冲突走约定**：identity_lock 只写发色；classic 不特判。
 
 ## 视频配方
 

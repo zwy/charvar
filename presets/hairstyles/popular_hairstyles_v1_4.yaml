@@ -1,0 +1,47 @@
+# 发型预设：首批四款日常发型。
+# 结构参考现有 outfit 预设：name / type / version / description / items / caption_tags。
+# 注意：type: hairstyle 是拟新增的独立预设类型，并非已确认受当前加载器支持。
+# 本文件仅交付预设内容；接入前需适配加载、请求、提示词组合及 caption 导出。
+# 不要直接改为 type: outfit 来冒充服装预设。
+#
+# 模块职责：
+# - text 为英文发型描述；label 为中文展示名；caption_tags 为英文训练标签。
+# - 发色继承主体档案或人物参考图，条目不绑定染发颜色。
+# - 长度、刘海、分缝、层次及卷度由本预设覆盖，不能再同时锁定原发型。
+# - 保留人物身份、脸部特征、年龄、体型、服装、妆容及画风。
+# - 不把背景、光照、表情或展示机位写入发型条目。
+# - 上述共同规则需要由外层组合器执行；注释本身不会自动进入生成提示词。
+# - 每款固定一个版本，不加入随机分缝或随机刘海。
+#
+# 接入检查：
+# - 主体 identity_lock / extra 及参考图锚定句中，如含原发型锁定，需按职责消除冲突。
+# - 仅放开头发结构变化，不清空人物身份锁定；继续保留原发色约束。
+# - 同步处理 caption 中的旧发型标签，避免新旧发型标签并存。
+# - 单人物参考图即可作为默认输入，不要求新增发型参考图。
+# - 首轮展示条件在外层统一：正面眼平胸像，完整容纳头顶和最长发尾。
+# - 平台输入标记由外层负责，抖音用“素材1”，视频号用“#图1”。
+#
+# 状态：结构与选款已确认；未进行实际出图验证，不宣称跨人物稳定。
+
+name: popular_hairstyles_v1_4
+type: hairstyle
+version: 1
+description: 四款通用发型：法式波波头、轻层次锁骨发、长发蝴蝶剪、慵懒大波浪；继承主体发色，仅替换发型结构。
+items:
+- id: french_bob
+  label: 法式波波头
+  text: chin-length French bob, light wispy bangs ending just above the eyebrows, a softly rounded silhouette with subtly inward-curved ends, the nape exposed
+- id: collarbone_layers
+  label: 轻层次锁骨发
+  text: collarbone-length hair with a center part, no forehead bangs, subtle face-framing layers and gently inward-curved ends, a mostly straight silhouette without continuous waves
+- id: butterfly_cut
+  label: 长发蝴蝶剪
+  text: chest-length butterfly cut, center-parted curtain bangs, short face-framing layers sweeping outward from the cheekbones to the chin, clearly distinct from the longer back layers
+- id: loose_waves
+  label: 慵懒大波浪
+  text: long hair reaching the lower chest, a side part, broad loose continuous S-shaped waves beginning around ear level, long blended layers without short face-framing tiers or tight curls
+caption_tags:
+  french_bob: chin-length French bob with wispy bangs
+  collarbone_layers: center-parted collarbone-length hair with subtle layers
+  butterfly_cut: long butterfly cut with curtain bangs and outward-swept face-framing layers
+  loose_waves: side-parted long hair with loose S-shaped waves

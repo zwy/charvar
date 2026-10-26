@@ -42,13 +42,14 @@
 </div>
 <div class="card"><div class="row-head"><h2>② 生成提示词</h2></div>
 <div class="form-section">
-<div class="form-section-title">预设与服装</div>
+<div class="form-section-title">预设与外观</div>
 <div class="gen-mode-row"><span class="field-label">生成模式</span><div class="segmented">
 <button id="gen-mode-classic" class="seg active" data-mode="classic" type="button">经典模板</button>
 <button id="gen-mode-llm" class="seg" data-mode="llm" type="button">LLM 优化</button>
 </div></div>
 <div class="form-grid">
 <label>预设<select id="gen-preset"></select></label>
+<label>发型预设（可选）<select id="gen-hairstyle"><option value="">不用（跟随参考图/档案发型）</option></select></label>
 <label>服装预设（可选，与预设笛卡尔积）<select id="gen-outfit"><option value="">不用（仅动作/表情预设）</option></select></label>
 <label>组合顺序<select id="gen-outfit-order"><option value="outfit_first">服装优先（每件连播全部动作）</option><option value="pose_first">动作优先（每个动作连播全部服装）</option></select></label>
 </div>
