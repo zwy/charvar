@@ -1,11 +1,20 @@
+# 2026-10-26 人工修订：derive 一次通过（起草 1 轮／审计 1 轮／引用核对 20/20 命中），
+#   但触发两条软上限警告——identity_lock 11 条（上限 10）、body_lock 7 条（上限 2）。
+#   ① identity_lock 把模板里相邻的两句（虹膜／皮肤与唇色）合并为一条：模板正文逐字未动，
+#      引用核对的 shingle 覆盖率仍为 1.0。
+#   ② body_lock 是给 LLM 出图锚定块用的压缩译写英文句，本就不参加引用核对，
+#      按 mustard 的同款形态压成一条，事实与规范锚点一致；再压到 400 字符上限内
+#      （quality_issues 对单条 body_lock 的上限是 400 字符）。
+#   本轮模板改动：体形接规范年轻女性型（逐锚点成句）、单肩书包移出默认造型、
+#   3.2 设定板改散文式且版式在前。锁定项与模板逐字对齐。
 # 本文件由 `charvar subject derive` 生成（LLM 抽取 + 引用核对 + 审计），可人工修订。
-# 来源模板：red_eye_uniform_girl.md（sha256:f16c392671c1）
-# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-10-25 12:36 UTC
-# 起草 2 轮 · 审计 2 轮 · 审计通过 · 引用核对：20/20 条命中，无需修复
+# 来源模板：red_eye_uniform_girl.md（sha256:ace1c24f1eb6e9dd30dea4aba15f1d9bf02eb54e2ec43aa28c8aaa5f207acb8f）
+# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-10-26 05:19 UTC
+# 起草 1 轮 · 审计 1 轮 · 审计通过 · 引用核对：26/26 条命中，无需修复
 id: red_eye_uniform_girl
 name: 红瞳制服少女
-trigger_word: red_eye_uniform_girl
 subject_noun: woman
+trigger_word: red_eye_uniform_girl
 reference_tag: <image1>
 style_lock:
 - 半写实二次元CG插画风，柔和渐变上色，分缕渲染头发，针织与格纹图案清晰可辨
@@ -14,21 +23,32 @@ style_lock:
 - 皮肤平滑通透，不画毛孔与皮肤纹理，仅在鼻尖、脸颊与关节保留极轻的暖色渐变
 - 头发分缕渲染，每一束有独立的明暗走向，发顶与发际有一道柔和的高光带，发梢细碎并有漂浮的碎发
 - 衣料以色块与褶皱阴影表现质感，针织纹理与格纹等图案清晰可辨
+- 整体色调可带一层暖调
 identity_lock:
-- 东亚，十七八岁至二十出头
-- 身量高挑纤细，四肢修长，肩颈线条轻薄，胸部体量明显偏大、轮廓饱满浑圆，在自然重力下自然下垂并有重量感
-- 黑色长直发垂至腰下、发量厚；头顶在脑后上方束起成半扎，束起处一圈蓬松高光带，束起以下沿肩背自然披散，脑后不收成单独垂下的马尾；额前是齐整的厚重刘海遮住眉毛，两鬓与耳侧有碎发垂落
-- 明亮的深红，带清晰的放射状纹路与通透高光
-- 白皙偏冷调，面颊与鼻尖带极轻的暖色渐变
-- 唇色淡粉
-- 眼睛偏大而精致，虹膜有清晰的放射状纹路与通透感，眼球有明确的高光点，睫毛细密根根分明；鼻梁简化，唇形小巧，唇线柔和；下颌与颈部线条干净利落
+- 族裔与年龄感：东亚，十七八岁至二十出头
+- 一位成年女性角色，身量高挑，四肢修长，肩线窄而舒展。身材是成年女性的丰满沙漏体型
+- 上臂与前臂有肌肉线条与脂肪厚度，手臂不是细棍
+- 胸部体量很大，轮廓饱满浑圆，胸部最宽处的宽度比两肩外缘之间的宽度宽出约一半，胸部向前形成独立的体积，胸线与腰线之间有明显的落差，底线在自重下自然下垂
+- 腰部收束清晰，腰线细而窄，向髋部自然展开，保留真实成年女性的生理厚度
+- 臀部圆润饱满并明显向后翘起，臀部最宽处比两肩外缘宽出约三分之一，髋部明显宽于肩宽，臀线清晰
+- 大腿饱满、围度宽
+- 人物按二次元比例与五官特征绘制：眼睛偏大而精致，虹膜有清晰的放射状纹路与通透感，眼球有明确的高光点，睫毛细密根根分明；鼻梁简化，唇形小巧，唇线柔和；下颌与颈部线条干净利落
+- 黑色长直发垂至腰下，发量厚。头顶在脑后上方束起成半扎，束起处一圈蓬松高光带；束起以下沿肩背自然披散，脑后不收成单独垂下的马尾。额前是齐整的厚重刘海遮住眉毛，两鬓与耳侧有碎发垂落
+- 虹膜是明亮的深红色，带清晰的放射状纹路与通透高光。皮肤白皙偏冷调，面颊与鼻尖带极轻的暖色渐变，唇色淡粉
 outfit_lock:
-- 白色长袖衬衫，袖口有纽扣，下摆塞进下装
-- 米色针织背心，无袖圆领，针织纹理清晰，衣摆在腰侧微微外露
-- 深红色丝带蝴蝶结领结，结体较大，两条飘带垂在胸前
-- 深蓝色格纹百褶裙，细白线交错方格，裙褶均匀，裙摆在大腿中段偏下自然垂落
-- 深藏蓝色方正单肩书包，表面有细微反光，细背带斜跨右肩
-- 白色中筒棉袜，袜长到小腿中段、罗纹袜口收在小腿中段；白色低帮运动鞋，鞋面干净、鞋带系好
-- 背部是米色针织衣面，与正面同色、无袖剪裁，腰部以下中缝拼缝；近侧右肩可见背带起始段
-extra: Keep the same facial features, eye color, hairstyle, skin tone, body proportions,
-  and the same outfit consistent across every pose and scene.
+- 上身穿白色长袖衬衫，袖口有纽扣，衬衫下摆塞进下装
+- 外罩一件米色针织背心，无袖，圆领，针织纹理清晰，衣摆在腰侧微微外露
+- 领口系一个深红色丝带蝴蝶结领结，结体较大，两条飘带自然垂在胸前
+- 下身是深蓝色格纹百褶裙，裙摆在大腿中段偏下自然垂落，格纹为细白线交错的方格，裙褶均匀
+- 仅胸部一段的面料被撑起绷紧，肩部、腰部与衣摆保持自然垂坠
+- 背部是米色针织衣面，与正面同色、无袖剪裁，腰部以下中缝拼缝
+- 脚穿白色中筒棉袜，袜长到小腿中段，罗纹袜口收在小腿中段；白色低帮运动鞋，鞋面干净，鞋带系好
+- 配饰：无。默认造型不含包袋、围巾、首饰等随身配饰
+body_lock:
+- "a tall adult woman with long slender limbs and narrow, relaxed shoulders, her
+  figure a lush mature hourglass: a very large, full, round bust forming its own
+  forward volume, its widest point about half again as wide as the shoulder span,
+  with a clear drop to a narrow cinched waist, round full markedly upturned hips
+  about one-third wider than the shoulder span, and full wide thighs"
+extra: Keep the same face, hairstyle, deep red eyes, pale cool skin tone, body proportions
+  and the same outfit in every new pose and scene.

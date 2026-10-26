@@ -1,33 +1,43 @@
 # 本文件由 `charvar subject derive` 生成（LLM 抽取 + 引用核对 + 审计），可人工修订。
-# 来源模板：pingpong_kid_v2.md（sha256:f1e3bc7c4a64）
-# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-10-25 12:36 UTC
-# 起草 1 轮 · 审计 1 轮 · 审计通过 · 引用核对：21/21 条命中，无需修复
+# 来源模板：pingpong_kid_v2.md（sha256:68e401f115ed）
+# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-10-26 12:30 UTC
+# 起草 2 轮 · 审计 2 轮 · 审计通过 · 引用核对：21/21 条命中，无需修复
 id: pingpong_kid_v2
 name: 乒乓小子
 subject_noun: boy
+trigger_word: pingpong_kid
 reference_tag: <image1>
 style_lock:
 - 二维手绘数字绘本插画风：清晰完整的大色块、低对比度的柔和明暗、哑光不反光质感、少量细而柔和的深棕色或同色系暗线，轮廓以色块边界为主、不使用统一粗黑描边
 - 以简化色块塑造人物，结合柔和的局部明暗和少量细线结构
 - 整体是有轻微体积感的哑光卡通插画，不是极简矢量平涂，不是三维渲染
 - 色彩饱满但不荧光，表面呈哑光、不反光的质感，带非常轻微的手绘色彩起伏，类似薄涂水粉质感的数字绘本插画；不出现明显纸纹、粗颗粒、刷痕堆积或厚重颜料肌理
-- 整体造型简化，局部结构可辨认，保留二维手绘感，不使用写实皮肤细节
+- 人物外轮廓清晰自然，以色块边界为主，不使用统一粗黑描边；五官、手指、衣服接缝等必要位置使用少量细而柔和的深棕色或同色系暗线
+- 不使用写实皮肤细节、强烈高光、硬边投影、复杂环境反光或摄影景深
 identity_lock:
 - 少年男性角色，头身比例自然中带卡通夸张，不幼化、不细化
 - 略显懒散的少年体型：头部略大但不是大头小身体的幼态Q版；肩膀自然展开，躯干结实，手臂和大腿有适度厚度，腿部相对较长，膝盖、手肘和手指用简洁形状表现
-- 脸型宽圆、脸颊饱满、下巴圆钝；耳朵略大并向两侧突出
-- 眉毛是短而有厚度的浅棕色眉块、略呈八字；眼睛细小、半睁、上眼皮下垂、深棕色小瞳仁；鼻子用少量深棕色短线和小点概括
-- 肤色：柔和的暖桃棕色，脸颊和关节略带暖红色变化
+- 脸型宽圆、脸颊饱满、下巴圆钝；耳朵略大并向两侧突出；眉毛是短而有厚度的浅棕色眉块、略呈八字；眼睛细小、半睁、上眼皮下垂、深棕色小瞳仁；鼻子用少量深棕色短线和小点概括
+- 柔和的暖桃棕色，脸颊和关节略带暖红色变化
 - 面部保留两颗小黑痣：正面视图中一颗位于画面右侧靠近嘴角的脸颊位置，另一颗位于下巴附近；小黑痣与鼻部的概括线点分开，不增加雀斑或其他斑点
-- 发型：深棕偏黑、略带暖红棕色的蓬松短发，顶部由两团圆润饱满的发块构成，左右略不对称，外轮廓自然起伏
+- 深棕偏黑、略带暖红棕色的蓬松短发，顶部由两团圆润饱满的发块构成，左右略不对称，外轮廓自然起伏
 - 前额有一排弯曲尖束状刘海，刘海下缘及两侧鬓角区域带低饱和紫罗兰色挑染；紫色集中在前额发梢，不扩展成整头紫发
 - 后脑以深棕发色为主，不把前额挑染扩展成紫色后脑
 outfit_lock:
 - 纯红色宽松运动短袖（红色圆领、左右各一条亮黄色弯曲领边、左右肩部各有一块较宽的亮黄色拼接且末端呈向下尖角）
-- 衣身与袖子均为红色，无文字、无图案、无国旗、无logo
-- 黄色肩部拼接是清晰的色块，不是只有一条细黄线，不在胸口添加完整的大V形图案
 - 纯黑色宽松运动短裤（裤腿较宽、长到大腿中部、两侧靠近裤袋位置各有一条细窄浅金黄色弯曲装饰线）
 - 白色短袜
 - 白色低帮系带乒乓球运动鞋，鞋面以白色和浅灰色为主，搭配少量藏蓝色侧面与鞋口装饰、金色鞋底边缘及局部金色细节；鞋带有简化的鞋带与鞋面分区，不增加品牌标志
+- 衣身与袖子均为红色，无文字、无图案、无国旗、无logo
+- 领口为红色圆领基础结构，左右各有一条亮黄色弯曲领边，向前胸方向收尖；左右肩部各有一块较宽的亮黄色拼接，从肩顶向前胸两侧延伸，末端呈向下的尖角
 - 背面上衣保持纯红色，黄色拼接仅延续已有领口与肩部结构，不额外创造背部图案
-extra: 保持相同的头身比例、宽圆脸型、五官画法、发型轮廓、紫色刘海区域、面部小黑痣位置与同一套服装，在任意新姿态和新场景中保持一致。
+body_lock:
+- 'a slightly slouchy teenage boy''s build: a head slightly oversized but not a chibi
+  big-head-small-body proportion; shoulders naturally spread; a sturdy torso; arms
+  and thighs of moderate thickness; relatively long legs; knees, elbows and fingers
+  rendered with simple shapes; proportions natural with cartoon exaggeration, neither
+  a slender pretty-boy nor a muscular athlete'
+extra: Keep the same wide round face, small half-open eyes, mole positions, hairstyle
+  silhouette with violet front bangs, head-to-body ratio and the identical outfit
+  in every pose and scene, drawn in the same matte two-dimensional hand-drawn picture-book
+  style.

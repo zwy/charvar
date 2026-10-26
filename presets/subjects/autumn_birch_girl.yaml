@@ -1,26 +1,41 @@
 # 本文件由 `charvar subject derive` 生成（LLM 抽取 + 引用核对 + 审计），可人工修订。
-# 来源模板：autumn_birch_girl.md（sha256:564e1827ce35）
-# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-10-25 12:35 UTC
-# 起草 1 轮 · 审计 1 轮 · 审计通过 · 引用核对：9/9 条命中，无需修复
-# 2026-10-25 人工修订：identity_lock 补入抽取器漏掉的「原创角色，成年女性」身份锚；其余条目未动。
-# 2026-10-25 人工修订：模板新增「2.2 精简前缀（设定板用）」，固定前缀补上邮差包背带方向，身份条目未变。模板指纹已更新。
+# 来源模板：autumn_birch_girl.md（sha256:8a6bd03c0d74）
+# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-10-26 12:49 UTC
+# 起草 1 轮 · 审计 1 轮 · 审计通过 · 引用核对：34/34 条命中，无需修复
 id: autumn_birch_girl
 name: 秋日枫林女孩
 subject_noun: woman
-trigger_word: birchgirl
+trigger_word: autumn_birch_girl
 reference_tag: <image1>
 style_lock:
-- 手绘漫画插画
-- 手绘墨线＋平涂色块＋柔和纹理阴影＋轻微纸面颗粒；配色温暖朴实、略褪色
+- 自然真实摄影
+- 真人写实摄影
+- 保留细微皮肤纹理与真实发丝，锐化与磨皮克制，保留毛孔与细小绒毛的细节
 identity_lock:
-- 原创角色，成年女性
-- 棕色短发 pixie cut，齐刘海，发尾外翘；棕色大眼；左耳小黑耳钉；腮红
-- 丰满体型，胸部饱满，上身躯量协调；腿型丰满匀称，大腿圆润、膝盖清晰、小腿匀称、脚踝纤细
+- 一位原创东亚成年女性，二十七八岁上下，气质明朗利落。五官与骨骼结构符合自然人体结构。
+- 脸型是偏窄的鹅蛋脸，额头饱满，颧骨平缓，下颌线清晰，下巴圆润不过尖。
+- 眉毛自然平直，眉峰不明显，保留真实毛流；眼睛是明亮的深棕色，眼型圆润，上眼睑略有弧度，双眼皮的褶皱清晰，眼球有明确的高光点，睫毛自然上翘。
+- 鼻梁自然挺直但不过高，鼻翼小巧；唇形柔和饱满，保留细微唇纹。
+- 皮肤白皙偏暖调，面颊有淡粉色腮红，唇色是柔和的砖豆沙色，妆容轻薄干净。
+- 深棕色头发剪成利落的短发，额前是齐整的厚重刘海，发尾在耳侧与后颈处外翘成碎束，头发蓬松有层次，鬓角干净不遮眼；左耳垂上戴一枚小巧的黑色耳钉，右耳的耳垂光滑裸露，耳朵上没有任何佩戴物。
 outfit_lock:
-- 芥黄针织毛线帽，带绒球与皮质标牌
-- 棕／芥黄格纹翻领衬衫（塞进裤腰）；敞穿红色工装夹克，深棕罗纹领口／袖口／下摆，露拉链与贴袋
-- 右手棕色皮质工装手套；右胯棕色帆布邮差包（背带过左肩）；棕皮带＋方形黄铜扣
-- 高腰中蓝牛仔（直筒，小腿略收，平口停在脚踝上方）；棕色皮面系带踝靴，深棕厚橡胶齿底
-- 夹克素面后片＋深棕罗纹下摆，无新增徽章、口袋或装饰；牛仔裤后中缝、后育克、两个后袋；靴跟；邮差包背带过左肩
-extra: Keep the same face, hairstyle, body proportions and the same default outfit
-  in every pose and scene.
+- 头上戴一顶砖红色的针织翻边帽，帽身是细密的罗纹针织，翻边厚实，没有绒球、没有装饰，帽口贴合发顶。
+- 上身穿一件焦糖棕色的羊毛短款夹克，肩线合身、版型不宽大，前襟完全敞开不系扣，两侧衣襟向身体外侧翻开，敞开的开口从锁骨一直露到胯骨，领口是一圈同色罗纹，袖口是罗纹收口，衣摆在胯骨上缘；夹克里面是一件米白色的薄针织高领衫，领口贴合颈根，面料紧贴胸腹，胸前随胸部轮廓形成明确的圆弧隆起，衣料在胸部下方有少量被撑开的褶皱，衣摆全部塞进长裤的裤腰里，腰部两侧的面料顺着腰线向内收。
+- 下身是一条深驼色的高腰修身直筒长裤，面料是厚实的棉质帆布，裤身贴合臀部与大腿外侧的轮廓，臀部位置有明确的圆弧外形与横向的裤缝线，裤线笔直，高腰腰头紧贴腰部曲线，腰头高过肚脐，侧边有口袋，裤脚是一条平整的窄边，裤管末端比靴筒略窄，平整地收在靴筒上方，裤管布面平顺笔直，不在靴筒上堆出多余的布量。
+- 脚上是一双深棕色的皮质马丁靴，靴筒到小腿下段，鞋面有细微的皮革纹理，系带系好，厚实的深色橡胶齿底。
+- 仅胸部一段的面料被撑起绷紧，肩部、腰部与衣摆保持自然垂坠。
+- 夹克背面是完整的同色呢面衣片，只有肩袖接缝与侧缝，下摆是一圈同色罗纹收口、紧贴着裤腰上缘，内层高领衫的衣摆完全收在裤腰里。
+- 长裤背面有后腰育克线与两个简洁无装饰后贴袋，后腰不出现正面纽扣；马丁靴有厚实鞋跟与齿底，帽后为针织罗纹。
+- 无随身配饰。默认造型不含围巾、手套、包袋等。
+body_lock:
+- 'her figure is a lush adult hourglass: a very large, full, round bust whose widest
+  span is about half a shoulder-width wider than the outer shoulders, with a clear
+  bust-to-waist drop and a bustline that falls naturally under its own weight'
+- her waist is narrow and clearly cinched, opening naturally into the hips with real
+  adult softness; her hips are round, full and markedly lifted backward, the widest
+  hip span about a third wider than the outer shoulders, the hips clearly wider than
+  the shoulders, with a clear hip line; her thighs are full and wide, her calves taper
+  neatly into slender ankles; her upper arms and forearms carry muscle line and a layer
+  of softness, never stick-thin; she has relaxed level shoulders, a naturally revealed
+  neck, a medium-tall stature and natural adult head-to-body and leg proportions
+extra: 保持同一张脸、同一发型、同一肤色与同一套默认服装，在任意姿态与场景中都保持一致。

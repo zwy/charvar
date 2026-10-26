@@ -1,37 +1,38 @@
 # 本文件由 `charvar subject derive` 生成（LLM 抽取 + 引用核对 + 审计），可人工修订。
 # 来源模板：tvelo_illustration.md（sha256:b6f3f86d38ef）
-# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-10-25 12:33 UTC
-# 起草 2 轮 · 审计 2 轮 · 审计通过 · 引用核对：22/22 条命中，无需修复
-# 2026-10-25 人工修订：模板的 3.1／3.2 画幅声明改为交付图实际比例（2:3／16:9），身份条目未变。模板指纹已更新。
+# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-10-26 12:31 UTC
+# 起草 1 轮 · 审计 1 轮 · 审计通过 · 引用核对：20/20 条命中，无需修复
 id: tvelo_illustration
 name: 缇珞
 subject_noun: woman
+trigger_word: tvelo
 reference_tag: <image1>
 style_lock:
 - 二维手绘数字插画：深色轮廓线自然、略带粗粝感，细密而克制的排线、可见笔触的铺色与柔和局部明暗
 - 五官精细，发束清楚，衣物以较大色块结合接缝、褶皱和少量织物笔触表现，深色区域保留近黑与深炭灰层次
 - 人物、环境与道具画法协调，不转为摄影、三维渲染或光滑矢量平涂
 identity_lock:
-- 《星际迷航》同人原创角色，不是官方已有角色或官方立绘；不绑定军衔、职务、星舰、年代与血统细节
-- 成年瓦肯女性舰员，面部五官分布与身体比例都是成年人；不绑定具体年龄数值
-- 脸型上部柔和，下颌逐渐收窄，下巴小巧；浅象牙色皮肤，脸颊、鼻尖和眼下带轻微暖粉色
+- 成年瓦肯女性舰员，面部五官分布与身体比例都是成年人
+- 脸型上部柔和，下颌逐渐收窄，下巴小巧
+- 浅象牙色皮肤，脸颊、鼻尖和眼下带轻微暖粉色
 - 蓝色杏仁眼，上眼睑略低垂，眼尾微挑，深色上眼线与外侧睫毛清楚
-- 深黑眉毛、眉尾上挑；小巧鼻子；珊瑚红嘴唇
+- 深黑眉毛，眉尾上挑；小巧鼻子；珊瑚红嘴唇
 - 双耳上端尖长，从两侧短发之间自然露出
 - 黑色齐刘海短波波头，顶部与后脑圆润，刘海整齐而略呈弧线，两侧长度到下颌附近，发梢内扣，后侧收至后颈上方
 - 黑发以少量冷蓝灰色笔触表现反光，主体发色仍为黑色
-- 整体气质冷静、严谨，带轻微审视感
+- 默认冷静、严谨，带轻微审视感
 - 成年女性身体比例，胸部丰满，腰线明确，臀胯与四肢比例协调，体态端正；不进一步夸大胸腰差异
 outfit_lock:
-- 芥末黄与黑色拼接长袖星舰制服：黑色立领覆盖颈根，领缘与前襟有细窄暗金黄色滚边
+- 芥末黄与黑色拼接长袖制服：黑色立领覆盖颈根，领缘与前襟有细窄暗金黄色滚边
 - 肩部、上胸与肩背上方为黑色拼接，黑色肩部与黄色衣身之间有连续的白色窄饰条
-- 胸腹主体、背部主体与长袖为低饱和芥末黄色，腰侧为黑色拼接、自然收腰
-- 前下摆向腰侧形成尖角转折，后下摆保持协调的短上衣长度
+- 胸腹主体、背部主体与长袖为低饱和芥末黄色，腰侧为黑色拼接、自然收腰；前下摆向腰侧形成尖角转折，后下摆保持协调的短上衣长度
 - 自身左胸佩戴一枚小型银金色向上箭头形徽章，背面无徽章
 - 衣料不透明、哑光
 - 黑色高腰制服长裤，腰部平整，臀胯与大腿自然合体，膝盖以下略微收窄，接缝简洁
 - 黑色短筒制服靴到脚踝上方，裤脚收入靴内，略圆的杏仁形鞋头，低跟，鞋底厚度适中，鞋面哑光，无外露鞋带和大金属扣
-- 白色窄饰条沿分界延续为简洁横向肩背分界；无后背徽章、文字、大型开口或长燕尾
-extra: Keep the same face shape, facial features, hairstyle, pointed ears and body
-  proportions, and the same single uniform set, in every pose and scene; only expression,
-  pose, camera, environment and props change.
+body_lock:
+- 'her figure is adult female in proportion: a full bust, a clearly defined waist,
+  hips and limbs in proportion, an upright posture; the chest-to-waist difference
+  is not exaggerated.'
+extra: Keep the same face shape, facial features, hairstyle, pointed ears, skin tone
+  and body proportions in every pose and scene.

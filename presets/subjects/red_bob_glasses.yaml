@@ -1,35 +1,34 @@
 # 本文件由 `charvar subject derive` 生成（LLM 抽取 + 引用核对 + 审计），可人工修订。
 # 来源模板：red_bob_glasses.md（sha256:b1855f3decdb）
-# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-10-25 12:21 UTC
-# 起草 1 轮 · 审计 1 轮 · 审计通过 · 引用核对：22/22 条命中，无需修复
+# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-10-26 12:24 UTC
+# 起草 3 轮 · 审计 3 轮 · 审计通过 · 引用核对：18/18 条命中，无需修复
 id: red_bob_glasses
 name: 红发眼镜女人
 subject_noun: woman
-trigger_word: red_bob_glasses
 reference_tag: <image1>
 style_lock:
-- 卡通插画风，轮廓用深棕色的粗线条，明暗分块清晰，皮肤与布料带柔和的渐变过渡，高光克制，色彩温暖。
+- 卡通插画风，轮廓用深棕色的粗线条，明暗分块清晰，皮肤与布料带柔和的渐变过渡，高光克制，色彩温暖
 identity_lock:
-- 她是一位三十五岁上下的成熟成年女性，面部五官分布与身体比例都明显是成年人。
-- 脸型饱满柔和，下颌线圆厚。
-- 发型是深酒红色的及颈短卷发，头发长度到下颌，发丝成松软的大波浪，额前发际线从头顶分出斜缝，一绺刘海斜横过前额，两侧发片垂在两颊外侧，发梢微微外卷，发丝有光泽。
-- 眉毛是深酒红色，眉形柔和带浅弧。
-- 眼睛是蓝色的杏眼，眼型偏长，眼神沉稳。
-- 嘴唇饱满，涂哑光的暗珊瑚色口红。
-- 她的身材是丰腴肉感的成年女性体型，软组织多、骨肉感重，但肌肉与脂肪分布均匀，没有堆积的赘肉。
-- 胸部体量很大，明显柔软，胸部最宽处的宽度比两肩外缘之间的宽度宽出约一半，胸部向前形成独立的体积，胸线与腰线之间有明显的落差，在自然重力下充分下垂并有重量感。
-- 腰部收束清晰，腰线细而窄，向髋部自然展开，保留真实成年女性的生理厚度。
-- 臀部明显更宽更圆并向后翘起，臀部最宽处比两肩外缘宽出约三分之一，髋部明显宽于肩宽。
-- 大腿明显饱满、围度宽，小腿收窄利落。
+- 她是一位三十五岁上下的成熟成年女性，面部五官分布与身体比例都明显是成年人
+- 脸型饱满柔和，下颌线圆厚
+- 发型是深酒红色的及颈短卷发，头发长度到下颌，发丝成松软的大波浪，额前发际线从头顶分出斜缝，一绺刘海斜横过前额，两侧发片垂在两颊外侧，发梢微微外卷，发丝有光泽
+- 眉毛是深酒红色，眉形柔和带浅弧；眼睛是蓝色的杏眼，眼型偏长，眼神沉稳；嘴唇饱满，涂哑光的暗珊瑚色口红
+- 眼镜是青绿色细边框的长圆形眼镜；耳垂两侧各戴一只金色小圈耳环
+- 她的身材是丰腴肉感的成年女性体型，软组织多、骨肉感重，但肌肉与脂肪分布均匀，没有堆积的赘肉
+- 胸部体量很大，明显柔软，胸部最宽处的宽度比两肩外缘之间的宽度宽出约一半，胸部向前形成独立的体积，胸线与腰线之间有明显的落差，在自然重力下充分下垂并有重量感
+- 腰部收束清晰，腰线细而窄，向髋部自然展开，保留真实成年女性的生理厚度
+- 臀部明显更宽更圆并向后翘起，臀部最宽处比两肩外缘宽出约三分之一，髋部明显宽于肩宽
+- 大腿明显饱满、围度宽，小腿收窄利落
 outfit_lock:
-- 上装是一件深茄紫色的罗纹针织毛衣，紫色调偏深带灰。
-- 领口贴颈的高领，针织是细密的竖向罗纹，仅胸部一段的面料被撑起绷紧，肩部与衣摆保持针织的自然垂坠。
-- 袖子是七分袖，到小臂中部。
-- 衣摆平滑垂在髋部，衣缘有罗纹收边。
-- 下装是一条深砖红色的紧身迷你半身裙，裙长到大腿中段，裙身包臀贴合，腰头平顺，下缘一道小开衩，裙面是哑光的厚质面料。
-- 双腿裸露无袜。
+- 上装是一件深茄紫色的罗纹针织毛衣，紫色调偏深带灰。领口贴颈的高领，针织是细密的竖向罗纹，仅胸部一段的面料被撑起绷紧，肩部与衣摆保持针织的自然垂坠。袖子是七分袖，到小臂中部。衣摆平滑垂在髋部，衣缘有罗纹收边。
+- 下装是一条深砖红色的紧身迷你半身裙，裙长到大腿中段，裙身包臀贴合，腰头平顺，下缘一道小开衩，裙面是哑光的厚质面料。双腿裸露无袜。
 - 鞋是一双黑色圆头浅口低跟单鞋，跟高约三厘米，鞋面哑光皮革，无装饰。
-- 眼镜是青绿色细边框的长圆形眼镜。
-- 耳垂两侧各戴一只金色小圈耳环。
-- 毛衣背面套头无开口：后背一片平滑的竖向罗纹针织面，没有拉链，没有开缝。
-extra: 任何姿态、任何场景下都保持同一张脸、同一发型、同一副眼镜、同一体形与同一套服装（含鞋）不变。
+- 毛衣背面是套头无开口：后背一片平滑的竖向罗纹针织面，没有拉链，没有开缝
+body_lock:
+- "her figure is a lush, fleshy mature adult hourglass: a very large, full, round, soft bust whose widest width exceeds the outer edge of the shoulders by about half, projecting as an independent volume, full and heavy under natural gravity, with a clear drop to a narrow, clearly cinched waist"
+- "the cinched waist flares into noticeably wider, rounder hips that tilt back, their widest width exceeding the outer edge of the shoulders by about one third, over full, wide thighs tapering into trim, narrow calves"
+extra: Keep the same face, the same deep burgundy chin-length wavy bob with side-swept
+  bangs, the same blue almond eyes, the same teal thin-rimmed long oval glasses and
+  gold hoop earrings, the same mature adult woman in her mid-thirties with an adult
+  facial structure and adult body proportions, and the same outfit in every pose and
+  every new scene.

@@ -3,13 +3,12 @@
 name: q21_turnaround
 type: video
 version: 1
-description: 9:16 竖屏 · 正方图模糊背景填满 · 3 景别各顺时针转一圈 · 表情顺序 · 开头 contact sheet 封面 · 背景音乐 轻跳节拍.wav（103s，超长自动截到视频长度）
+description: 9:16 竖屏 · 正方图模糊背景填满 · 3 景别各顺时针转一圈 · 表情顺序 · 背景音乐 轻跳节拍.wav（103s，超长自动截到视频长度）
 aspect: "9:16"            # 16:9 / 9:16 / 4:3 / 3:4 / 1:1
 resolution: 1080p         # 720p / 1080p / 4k（短边 720 / 1080 / 2160）
 fps: 24                   # 每秒帧数（与每张秒数独立设置；帧/张 = 秒 × fps）
 seconds_per_image: 1.0    # 每张展示秒数（允许小数）
-include_contact_sheet: true
-contact_sheet_seconds: 2.0
+include_contact_sheet: false  # 不在开头加 contact sheet 封面
 transition: cut           # 硬切（叠化 fade 预留）
 fit: blur                 # blur=模糊背景填满 / contain=纯色留边 / cover=居中裁切
 background: black         # fit=contain 的底色

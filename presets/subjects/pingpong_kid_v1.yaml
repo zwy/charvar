@@ -1,20 +1,21 @@
 # 本文件由 `charvar subject derive` 生成（LLM 抽取 + 引用核对 + 审计），可人工修订。
 # 来源模板：pingpong_kid_v1.md（sha256:b877a84e8a72）
-# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-10-25 12:30 UTC
-# 起草 2 轮 · 审计 2 轮 · 审计通过 · 引用核对：8/8 条命中，无需修复
+# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-10-26 12:29 UTC
+# 起草 1 轮 · 审计 1 轮 · 审计通过 · 引用核对：6/6 条命中，无需修复
 id: pingpong_kid_v1
-name: 乒乓小子 · 极简平涂
+name: 乒乓小子
 subject_noun: boy
+trigger_word: pingpong_kid
 reference_tag: <image1>
 style_lock:
 - 极简软边缘平涂大色块，只有极淡柔和明暗渐变，无粗黑描边、无复杂纹理、无3D/厚涂/二次元高光，纯2D卡通插画
 identity_lock:
 - 深棕短发，前额刘海带淡紫渐变挑染
 - 标志性圆脸蛋、淡八字眉、半睁下垂的小眼睛、脸颊两颗小黑痣、淡暖肤色
-- 默认神态：松弛淡定微严肃
 outfit_lock:
-- 纯红色无图案运动短袖（仅领口与肩侧有亮黄色 V 型拼接边）
-- 纯黑色运动短裤（两侧细黄装饰线）
-- 白袜
-- 白／藏蓝／金配色乒乓球运动鞋
-extra: 在任意新姿态与新场景中，保持同一张脸、同一发型、同一肤色与同一套默认服装一致。
+- 纯红色无图案运动短袖，仅领口与肩侧有亮黄色V型拼接边
+- 纯黑色运动短裤，两侧细黄装饰线
+- 白袜、白／藏蓝／金配色乒乓球运动鞋
+body_lock: []
+extra: Keep the same face, hairstyle, skin tone, and the same outfit consistent in
+  every new pose and scene.

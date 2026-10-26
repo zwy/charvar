@@ -1,14 +1,13 @@
 # 本文件由 `charvar subject derive` 生成（LLM 抽取 + 引用核对 + 审计），可人工修订。
 # 来源模板：white_skirt_stockings.md（sha256:03c7a20a91d4）
-# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-10-25 12:34 UTC
-# 起草 1 轮 · 审计 1 轮 · 审计通过 · 引用核对：12/12 条命中，无需修复
+# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-10-26 12:34 UTC
+# 起草 1 轮 · 审计 1 轮 · 审计通过 · 引用核对：19/19 条命中，无需修复
 id: white_skirt_stockings
 name: 白裙丝袜女人
 subject_noun: woman
-trigger_word: white_skirt_stockings
 reference_tag: <image1>
 style_lock:
-- 自然真实摄影
+- 自然真实摄影。
 - 真实人物摄影，五官、骨骼和身体比例符合自然人体结构，保留细微皮肤纹理、真实发丝与自然肤色变化，修饰克制。
 identity_lock:
 - 一位原创东亚成年女性角色，二十多岁。
@@ -16,11 +15,22 @@ identity_lock:
 - 眉毛自然柔和，保留真实毛流。圆杏眼，眼型大而圆，上眼睑弧度明显，眼尾平缓。鼻梁自然挺直但不过高，鼻翼小巧。唇形柔和饱满，保留细微唇纹。
 - 皮肤白皙偏暖调，面颊有淡粉色腮红，唇色是正红色的水润唇妆，妆容轻薄干净。
 - 浅蜜棕色头发，长度垂至胸下，发量厚，发尾自然外翘。额前是齐整的厚重刘海，横向齐平遮住眉毛上缘。两侧发丝沿脸颊垂落，后发从耳后披在肩背上，发丝顺滑有光泽。
-- 身材是丰腴肉感的成年女性体型，软组织多、骨肉感重，但肌肉与脂肪分布均匀，没有堆积的赘肉。肩线窄而舒展。颈部自然显露。上臂与前臂有柔和的脂肪厚度，手臂不是细棍。胸部体量很大，轮廓饱满浑圆并明显柔软，胸部最宽处的宽度比两肩外缘之间的宽度宽出约一半，胸部向前形成独立的体积，胸线与腰线之间有明显的落差，在自然重力下充分下垂并有重量感。腰部收束清晰，腰线细而窄，向髋部自然展开，保留真实成年女性的生理厚度。臀部明显更宽更圆并明显向后翘起，臀部最宽处比两肩外缘宽出约三分之一，髋部明显宽于肩宽，臀线清晰。大腿明显饱满、围度宽。膝盖上方有一圈自然的肉感褶，小腿肚有肌肉与脂肪的厚度，膝与踝之间的收窄平缓，脚踝略粗。腿部长度从大腿根到脚底与从头顶到大腿根大致相等，不做拉长双腿的模特比例，不做纤细骨感的时装模特体型。
+- 身材是丰腴肉感的成年女性体型，软组织多、骨肉感重，但肌肉与脂肪分布均匀，没有堆积的赘肉。肩线窄而舒展。颈部自然显露。上臂与前臂有柔和的脂肪厚度，手臂不是细棍。
+- 胸部体量很大，轮廓饱满浑圆并明显柔软，胸部最宽处的宽度比两肩外缘之间的宽度宽出约一半，胸部向前形成独立的体积，胸线与腰线之间有明显的落差，在自然重力下充分下垂并有重量感。
+- 腰部收束清晰，腰线细而窄，向髋部自然展开，保留真实成年女性的生理厚度。臀部明显更宽更圆并明显向后翘起，臀部最宽处比两肩外缘宽出约三分之一，髋部明显宽于肩宽，臀线清晰。
+- 大腿明显饱满、围度宽。膝盖上方有一圈自然的肉感褶，小腿肚有肌肉与脂肪的厚度，膝与踝之间的收窄平缓，脚踝略粗。腿部长度从大腿根到脚底与从头顶到大腿根大致相等，不做拉长双腿的模特比例，不做纤细骨感的时装模特体型。
 outfit_lock:
-- 上身穿白色缎面连衣裙。领口为方领，四角圆润，横向宽度约两个头宽，位置在锁骨下方；领口沿边有一圈白色荷叶边抽褶领。短袖为双层荷叶边飞袖，肩部被荷叶边覆盖，荷叶边外缘收有一道深藏青色细条纹滚边，滚边宽约一厘米，藏青只沿荷叶边外缘走，不延伸到手臂。胸前正中系一只浅黄色缎带大蝴蝶结，结体宽大饱满，两条飘带垂在胸前，结心是一颗绿色圆珠。腰线在胸下约一拳处收紧，裙身自腰部起是细密的纵向抽褶，向外蓬起成A字。裙长到大腿中段偏下，裙摆由两层白色荷叶边叠成，藏青条纹滚边夹在两层荷叶边之间。面料是带缎面光泽的聚酯缎纹，白色纯净；仅胸部一段的面料被撑起绷紧，肩部、腰部与裙身保持缎面自然垂坠的蓬松量与纵向抽褶，不被绷紧。
+- 上身穿白色缎面连衣裙。领口为方领，四角圆润，横向宽度约两个头宽，位置在锁骨下方；领口沿边有一圈白色荷叶边抽褶领。
+- 短袖为双层荷叶边飞袖，肩部被荷叶边覆盖，荷叶边外缘收有一道深藏青色细条纹滚边，滚边宽约一厘米，藏青只沿荷叶边外缘走，不延伸到手臂。
+- 胸前正中系一只浅黄色缎带大蝴蝶结，结体宽大饱满，两条飘带垂在胸前，结心是一颗绿色圆珠。
+- 腰线在胸下约一拳处收紧，裙身自腰部起是细密的纵向抽褶，向外蓬起成A字。裙长到大腿中段偏下，裙摆由两层白色荷叶边叠成，藏青条纹滚边夹在两层荷叶边之间。
+- 面料是带缎面光泽的聚酯缎纹，白色纯净。
 - 背面为同色缎面，后背中央有一道纵向的隐形拉链，拉链两侧的面料自然拉平，肩部荷叶边与藏青滚边延续。
 - 双腿穿裸肤色薄透连脚丝袜，几乎完全透出肤色与膝盖轮廓，无花纹、无袜口花边、无勒痕。丝袜表面光滑，带有一条自上而下连续不断的高光带，像刚抹过一层透明护膜，腿部呈湿润的亮面质感。
 - 双脚穿裸色厚底高跟鞋，鞋面是包住脚背的方形厚底鞋型，鞋头是开放露趾的开口，五个脚趾露在鞋头之外，厚底高约四厘米，粗方跟，鞋色是接近肤色的裸杏色。
-extra: Keep the same face, hairstyle, skin tone, body proportions, and the same outfit
-  in every pose and scene.
+body_lock:
+- "her figure is a lush, fleshy mature adult female body with soft tissue prominent and evenly distributed; a very large, full, round, clearly soft bust whose widest width is about one and a half times the outer shoulder width, projecting forward as an independent volume, hanging fully and heavily under natural gravity, with a clear drop to a clearly cinched, narrow waist opening into the hips with real adult female thickness"
+- "narrow relaxed shoulders, arms with soft fat thickness rather than thin sticks; buttocks noticeably wider and rounder, lifted backward, about one third wider than the shoulders; full thighs with a flesh crease above each knee, gradual knee-to-ankle taper in slightly thick ankles; leg length from hip to sole roughly equal to crown-to-hip length, no fashion-model leg elongation"
+extra: Keep the same face, the same hairstyle and hair color, the same skin tone and
+  the same body proportions, wearing the same outfit as in the reference, in every
+  new pose and every new scene.

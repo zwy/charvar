@@ -1,27 +1,29 @@
 # 本文件由 `charvar subject derive` 生成（LLM 抽取 + 引用核对 + 审计），可人工修订。
 # 来源模板：silver_witch.md（sha256:c7ade0228669）
-# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-10-25 12:38 UTC
-# 起草 2 轮 · 审计 2 轮 · 审计通过 · 引用核对：21/21 条命中，无需修复
+# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-10-26 12:27 UTC
+# 起草 3 轮 · 审计 3 轮 · 审计通过 · 引用核对：23/23 条命中，无需修复
 id: silver_witch
 name: 银白女巫
 subject_noun: woman
 trigger_word: silver_witch
 reference_tag: <image1>
 style_lock:
-- 采用低眉波普气质的二维水彩混合媒介插画
-- 透明水彩与不透明水粉、丙烯笔触结合，面部精细柔和，银白发束清楚，身体与服装以深色大色块概括，局部呈现积色水痕、纸面颗粒、干刷痕迹与白色颜料点，主体轮廓完整
+- 采用低眉波普气质的二维水彩混合媒介插画。
+- 透明水彩与不透明水粉、丙烯笔触结合，面部精细柔和，银白发束清楚，身体与服装以深色大色块概括，局部呈现积色水痕、纸面颗粒、干刷痕迹与白色颜料点，主体轮廓完整。
+- 五官与发束精细，手和鞋简洁，衣身概括，局部肌理粗粝。
 identity_lock:
 - 《哈利·波特》魔法世界中的原创同人成年女巫
 - 成年女性，毕业后承接小型魔法问题的自由委托；不自称官方解咒员或傲罗
-- 性格乐观、马大哈，有能力但容易在收尾时粗心
+- 乐观、马大哈，有能力但容易在收尾时粗心
 - 整体约六头身，头部适度放大，肩部较窄，身体修长，四肢比例协调
 - 脸型上部圆润，下巴小巧柔和
 - 象牙白肤色，脸颊、鼻尖和眼下带柔和粉红晕染
 - 巨大灰蓝色杏仁眼，上眼睑略低垂，眼尾微挑，浓黑上眼线与外侧长睫毛清楚，虹膜细腻，高光少而明确
-- 灰棕短眉，小巧鼻子，珊瑚红嘴唇
+- 灰棕短眉，小巧鼻子，珊瑚红嘴唇轻轻分开
 - 银白齐刘海短波波头到下颌，刘海由宽窄不同的白色发束组成，下缘轻微起伏，两侧发梢稍向外翘，少量细白发丝舒展
 - 头发以不透明白色笔触搭配浅冷灰蓝阴影
 outfit_lock:
+- 默认服装为内搭与巫师外袍两层。
 - 内搭是黑色高领长袖长裙，领口覆盖颈根，胸前面料连续、不透明
 - 上身贴合肩部、胸廓、肋部与腰，收腰自然，内搭袖子贴合手臂至手腕，腋下、手肘和腰侧保留少量柔软褶皱
 - 裙身从腰部向下放松，形成微展A字轮廓，裙摆到脚踝上方
@@ -31,6 +33,8 @@ outfit_lock:
 - 脚穿简洁黑色圆头低跟短靴
 - 衣料为哑光织物，内搭与外袍以近黑、深蓝灰、炭灰区分层次；内搭明暗表现贴身结构，外袍呈现更松动的积色、颗粒与干刷
 - 银白颜料点集中于外袍肩部和背部上方，向下减少
-extra: Keep the same face, facial features, silver-white bob hair, body proportions
-  and identity facts of this adult witch, and the same single default outfit, in every
-  pose and every new scene.
+body_lock:
+- her build is about six heads tall, with a slightly enlarged head, narrow shoulders,
+  a slender body and well-proportioned limbs
+extra: Keep the same face, facial features, silver-white bobbed hair, skin tone and
+  the same signature outfit consistent in every pose and every new scene.
