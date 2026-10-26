@@ -252,7 +252,41 @@ def main():
               f"stated character counts match the measured counts: {rel}",
               f"stated={stated} measured={measured}")
 
-    # --- 16. S3 设定板规格：多份副本必须一致 -------------------------------
+    # --- 16. image2image 上限方向：图生图比文生图高，不是低 ----------------
+    # 1.4.1 更正。此前写作「设定板带参考图要走 image2image（字符上限比文生图低）」，
+    # 与 charvar 实际拦截值相反（text2image 1592 / image2image 1992），
+    # 照着这句话推理会得出错误结论。这里钉住正确方向，并让旧错法不再出现。
+    wrong_i2i = "字符上限比文生图低"
+    wrong_hits = []
+    for path in md_files:
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if wrong_i2i in line and "原写作" not in line and "更正" not in line:
+                wrong_hits.append(f"{path.relative_to(ROOT)}:{number}")
+    check(not wrong_hits, "image2image limit is not claimed lower than text2image", ", ".join(wrong_hits))
+    for rel in ["SKILL.md", "templates/character-document.md"]:
+        text = read(rel)
+        check("text2image" in text and "image2image" in text,
+              f"both image2image and text2image limits stated in {rel}")
+
+    # --- 17. 交付体检命令必须带 --strict ------------------------------------
+    # check_delivery.py 缺 --strict 时照常打印 [FAIL] 与「未通过」，但退出码
+    # 仍返回 0 —— 按退出码判断的 Agent 会误以为体检通过。文档给的命令要能拦住。
+    for rel in ["SKILL.md", "README.md", "templates/character-document.md"]:
+        text = read(rel)
+        # 只取真正可执行的命令行：必须带调用实参（文件名占位符或路径），
+        # 行内说明性提及（如「scripts/check_delivery.py：交付文档结构体检……」）不算命令。
+        cmds = re.findall(r"(?:python3|scripts/)[^`\n]*check_delivery\.py\s+\S[^`\n]*", text)
+        bare = [c for c in cmds if "--strict" not in c]
+        check(not bare, f"every check_delivery command carries --strict in {rel}", "; ".join(bare))
+
+    # --- 18. 固定前缀逐锚点成句 ---------------------------------------------
+    # 交付文档的固定前缀会被 charvar subject derive 按句子抽取成分号串起的
+    # 长句只取第一个子句，后续锚点整段丢失。这条规则要出现在写前缀的地方。
+    for rel in ["SKILL.md", "references/quality-checks.md", "templates/character-document.md"]:
+        text = read(rel)
+        check("逐锚点成句" in text, f"anchor-by-anchor sentence rule stated in {rel}")
+
+    # --- 19. S3 设定板规格：多份副本必须一致 -------------------------------
     # 这段规格在四处各有一份，是**有意的重复**：交付模板必须自包含
     # （接手者不装本技能也要读懂，见 quality-checks.md 第 5 节），
     # 夹具必须有具体实例才能压测 prompt_budget.py。
@@ -285,18 +319,18 @@ def main():
                   f"S3 规格在 SKILL.md 与 workflow.md 一致: {marker}",
                   f"{rel} 里没有")
 
-    # --- 17. 交付文档的固定章节名 ------------------------------------------
+    # --- 20. 交付文档的固定章节名 ------------------------------------------
     for name in DELIVERY_SECTIONS:
         for rel in ("SKILL.md", "templates/character-document.md", "README.md"):
             check(name in read(rel),
                   f"交付章节名固定: {name}",
                   f"{rel} 里没有")
 
-    # --- 18. 交付物三件在 SKILL.md 里写明 ----------------------------------
+    # --- 21. 交付物三件在 SKILL.md 里写明 ----------------------------------
     for needle in ["front.png", "character_sheet.png", "10,000 字符"]:
         check(needle in skill, f"交付物定义写明: {needle}")
 
-    # --- 19. 交付文档体检脚本：正例通过、反例被拒 ---------------------------
+    # --- 22. 交付文档体检脚本：正例通过、反例被拒 ---------------------------
     code, out, err = run_delivery(["tests/fixtures/sample-delivery.md", "--strict"])
     check(code == 0, "合格交付夹具通过 check_delivery --strict", f"exit={code} {err.strip()}")
 
@@ -310,24 +344,24 @@ def main():
     code, out, err = run_delivery(["templates/character-document.md"])
     check(code == 0, "交付模板结构体检不报硬错", f"exit={code} {err.strip()}")
 
-    # --- 20. 交付文档篇幅上限三处一致 ---------------------------------------
+    # --- 23. 交付文档篇幅上限三处一致 ---------------------------------------
     for rel in ("SKILL.md", "README.md", "references/length-and-language.md"):
         check("10,000 字符" in read(rel),
               f"交付文档篇幅上限写明: {rel}")
 
-    # --- 21. 一个主体一套默认服装 -------------------------------------------
+    # --- 24. 一个主体一套默认服装 -------------------------------------------
     for rel in ("SKILL.md", "README.md", "templates/character-document.md"):
         check("一套" in read(rel),
               f"「一个主体一套服装」规则写明: {rel}")
 
-    # --- 22. 交付模板不含流水账章节 -----------------------------------------
+    # --- 25. 交付模板不含流水账章节 -----------------------------------------
     # 版本记录表、证据台账、案例经验附录都不该出现在交付文档模板里。
     for needle in ["版本记录", "证据台账", "简要版本记录"]:
         check(needle not in tmpl,
               f"交付模板不含流水账章节: {needle}",
               "模板里出现了这个章节")
 
-    # --- 23. 媒介归固定前缀，风格只写一次 -----------------------------------
+    # --- 26. 媒介归固定前缀，风格只写一次 -----------------------------------
     for rel in ("SKILL.md", "README.md", "templates/character-document.md"):
         body = read(rel)
         check("媒介" in body and "画面主体" in body,

@@ -5,8 +5,8 @@ description: Generate images with the charvar project's ComfyUI, OpenRouter, or 
 
 # charvar 生图
 
-版本：1.2.0  
-更新：2026-10-25
+版本：1.3.0  
+更新：2026-10-26
 
 通过 charvar 项目的 CLI 出图。三条后端：**comfyui**（本机/局域网 ComfyUI）、
 **openrouter**（OpenRouter 在线生图）和 **dreamina**（即梦官方 CLI，消耗即梦积分）。
@@ -142,6 +142,40 @@ charvar 的网页顶栏也有「Playground」页签（`http://127.0.0.1:8710`）
 ```
 
 exit 0 = 通过，exit 1 = 有问题单。完整参数与 `--json` 字段见 `references/cli.md`。
+
+⚠️ **`verify` 是 LLM 判定，不是确定性检查**：同一个档案连跑几次，报出的条目不一样，
+一轮「通过」不等于档案完整。正确做法是跑多次 → 汇总各轮条目去重 → 逐条对照模板补全 → 再跑。
+
+### 还有一个确定性闸门：`quality_issues`
+
+`verify` 查「档案与模板一致吗」，`quality_issues` 查「档案本身合不合格」。后者纯规则、
+每次结果一样，不消耗额度：
+
+| 检查 | 软上限 | 为什么 |
+|---|---|---|
+| 每组锁项条数 | `MAX_LOCK_COUNT = 10` | 锁项逐条拼进**每张图**的提示词 |
+| 单条锁项长度 | `MAX_LOCK_CHARS = 200` | 单条过长会挤掉别的信息 |
+| `extra` 长度 | `MAX_EXTRA_CHARS = 300` | 兜底句建议短 |
+
+```bash
+python3 - <<'PY'
+from charvar import storage
+from charvar.subject_derive import quality_issues
+conn = storage.connect()
+for sid, pj in conn.execute("SELECT id, profile_json FROM subjects ORDER BY id"):
+    p = storage.SubjectProfile.model_validate_json(pj)
+    for w in quality_issues(p):
+        print(sid, w)
+PY
+```
+
+**两个闸门要一起看。** `verify` 过了但 `quality_issues` 报的条目才是真正影响出图的
+（锁项每条都会进每张图的提示词）。
+
+**锁项抽取丢条的最常见原因：模板里的锚点没逐锚点成句。** 用分号把多个锚点串成一整段
+（`丰满有肉感的成年女性体型：肩线窄、胸量大、腰细、臀宽`），LLM 抽取时只取走第一个子句，
+后面的锚点整段丢失。改成每个锚点独立成句、以名词开头（「肩线窄而舒展。」「胸部体量很大，……」）
+就能完整抽出来。锁项条数或内容对不上模板时，先查这一条。
 
 ## 注意
 

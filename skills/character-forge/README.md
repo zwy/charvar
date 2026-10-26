@@ -1,6 +1,6 @@
 # 角色开发与提示词资产化 Skill｜使用说明
 
-版本：1.4.0
+版本：1.4.1
 
 ## 这是什么
 
@@ -169,7 +169,7 @@ python3 scripts/prompt_budget.py my-prompt.txt --budget 2000 --strict --language
 ## 交付文档体检
 
 ```bash
-python3 scripts/check_delivery.py final/red_bob_glasses/全场景通用提示词模板.md
+python3 scripts/check_delivery.py final/red_bob_glasses/全场景通用提示词模板.md --strict
 python3 scripts/check_delivery.py my-delivery.md --strict
 ```
 
@@ -177,6 +177,7 @@ python3 scripts/check_delivery.py my-delivery.md --strict
 围栏角色（固定前缀 `text component` / 场景段 `text`）、声明字数与实际是否一致。
 
 `--strict` 有 fail 项时返回 1。不通过不算交付。脚本不判定身份一致性与出图质量——那两项人工核。
+**每次都带 `--strict`**：不加时脚本照常打印 `[FAIL]` 与「未通过」，但退出码仍是 0。
 
 ## 本地检查
 
