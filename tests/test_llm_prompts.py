@@ -1,4 +1,6 @@
 """llm_prompts 消息构造：视角/构图/镜像规范必须注入起草与改写上下文。"""
+import pytest
+
 from charvar.llm_prompts import (
     ANGLE_VIEW_SENTENCES,
     FULL_BODY_CAMERA_SENTENCE,
@@ -192,6 +194,62 @@ def test_body_lock_appended_after_role_clauses():
     # 无 body_lock → 锚定句与旧版逐字相同（存量行为不变）
     s3 = reference_anchor_sentence(refs)
     assert "keep the figure exactly" not in s3
+
+
+# ---------- 材料模式与语言（CLI subject prompt；无档案/模板也能起草） ----------
+
+def test_draft_material_only_mode():
+    """只有 --material 一块材料也能起草：单节注入、语言不做规定。"""
+    msgs = draft_subject_image_prompt_messages(
+        None, "character_sheet", None, material="银发巫女少女，戴尖顶帽，蓝紫渐变长袍"
+    )
+    system, user = msgs[0]["content"], msgs[1]["content"]
+    assert "【自定义参考资料】" in user and "银发巫女少女" in user
+    assert "【角色档案】" not in user and "【角色全场景通用提示词模板】" not in user
+    # any 缺省：不写语言规定（黑不提），但画面布局条款与 JSON 约束仍在
+    assert "提示词为英文" not in system and "提示词为中文" not in system
+    assert "头顶与鞋底分别对齐" in system
+    assert "只输出 JSON" in system
+
+
+def test_draft_language_en_keeps_english_rule():
+    msgs = draft_subject_image_prompt_messages(None, "front", None, material="x", language="en")
+    system = msgs[0]["content"]
+    assert "提示词为英文" in system and "不出现中文" in system
+    assert "<image1>" in system  # 编辑槽的画面要求条款与标签规则还在
+
+
+def test_draft_language_zh():
+    msgs = draft_subject_image_prompt_messages(None, "front", None, material="x", language="zh")
+    system = msgs[0]["content"]
+    assert "提示词为中文" in system and "不出现英文整句" in system
+
+
+def test_draft_language_bad_value_raises():
+    with pytest.raises(ValueError):
+        draft_subject_image_prompt_messages(None, "front", None, material="x", language="jp")
+
+
+def test_draft_requires_some_material():
+    """档案、模板、材料全缺 → 报错（CLI 层此前已校验，这里是兜底）。"""
+    with pytest.raises(ValueError):
+        draft_subject_image_prompt_messages(None, "front", None)
+    with pytest.raises(ValueError):
+        draft_subject_image_prompt_messages(None, "front", "   ")
+
+
+def test_draft_sections_assemble(silver_witch):
+    """三块材料按 档案→模板→参考资料 顺序拼装；有模板时保留模板版本条款。"""
+    msgs = draft_subject_image_prompt_messages(
+        silver_witch, "behind", "# 模板正文", material="补充资料", language="en"
+    )
+    user = msgs[1]["content"]
+    a = user.index("【角色档案】")
+    b = user.index("【角色全场景通用提示词模板】")
+    c = user.index("【自定义参考资料】")
+    assert a < b < c and "补充资料" in user
+    assert "以模板对应版本为准" in msgs[0]["content"]
+    assert "提示词为英文" in msgs[0]["content"]
 
 
 def test_rewrite_messages_carry_body_lock():

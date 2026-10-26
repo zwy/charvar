@@ -1,6 +1,6 @@
 {
   "name": "charvar-skill",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "updated": "2026-10-26",
   "description": "按提示词实际出图/出视频的 Claude Code skill：ComfyUI、OpenRouter、即梦三条通路 + 主体档案 CLI。",
   "entrypoint": "SKILL.md",
@@ -11,11 +11,16 @@
   },
   "checks": {
     "command": "python3 -m pytest tests/test_skills.py",
-    "last_run": "2026-10-25",
+    "last_run": "2026-10-26",
     "result": "passed",
     "note": "本 skill 无自带脚本；由仓库级 tests/test_skills.py 校验 frontmatter、版本同步与文件清单。"
   },
   "history": [
+    {
+      "version": "1.5.0",
+      "date": "2026-10-26",
+      "note": "主体图槽位提示词起草开放到 CLI（网页「AI 起草」同链路）：新增 charvar subject prompt，--material/--material-file 自定义参考资料 —— 没有主体档案、没有模板，只有一段角色描述或现成提示词也能起草 5 槽位（character_sheet 文生图；headshot/front/side/behind 含 <image1>，生成时须把设定图成品 --ref 进去）。行为变化两处：① 起草语言不再钉死英文（缺省不写语言规定、跟随材料，网页同链生效；--lang en/zh 可强制）；② CLI 缺省不落库（--apply 才写回 DB 槽位草稿；网页仍即时落库）。推即梦注意草稿常超 1592/1992 字符上限。"
+    },
     {
       "version": "1.4.0",
       "date": "2026-10-26",

@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from charvar import cli, openrouter_image, openrouter_video, storage
+from charvar import cli, llm, openrouter_image, openrouter_video, storage
 from charvar.models import SubjectProfile
 
 runner = CliRunner()
@@ -611,3 +611,120 @@ def test_subject_add_can_import_images_at_once(_export_env, tmp_path):
     assert data["template_updated"] is True
     assert [i["kind"] for i in data["images"]["imported"]] == ["front"]
     assert (tmp_path / "data" / "subjects" / "demo_witch" / "thumbs" / "front.webp").exists()
+
+
+# ---------- subject prompt（槽位提示词起草；--material 无档案/模板也能用） ----------
+
+def _fake_chat_json(monkeypatch, prompt: str = "a silver witch full body, front view", store=None):
+    """打桩 llm.chat_json：记下 messages 便于断言注入内容。"""
+    def fake(messages, **kw):
+        if store is not None:
+            store.append(messages)
+        return {"prompt": prompt}
+
+    monkeypatch.setattr(llm, "chat_json", fake)
+
+
+def test_subject_prompt_material_only_bare_stdout(_export_env, monkeypatch):
+    """--material 单槽：stdout 只放提示词本身（可 | 接 charvar image --prompt-file -）。"""
+    calls: list = []
+    _fake_chat_json(monkeypatch, "a silver witch full body, front view", calls)
+    result = runner.invoke(cli.app, ["subject", "prompt", "front", "--material", "银发巫女少女"])
+    assert result.exit_code == 0, result.output
+    # click 8.1 把 stderr 混进 output、8.5 起分开 —— 两种都可能，取末段断言
+    assert result.output.strip().endswith("a silver witch full body, front view")
+    assert calls and "【自定义参考资料】" in calls[0][1]["content"]
+    assert "【角色档案】" not in calls[0][1]["content"]
+
+
+def test_subject_prompt_material_from_stdin(_export_env, monkeypatch):
+    calls: list = []
+    _fake_chat_json(monkeypatch, "p", calls)
+    result = runner.invoke(cli.app, ["subject", "prompt", "front", "--material-file", "-"], input="银发巫女")
+    assert result.exit_code == 0, result.output
+    assert "银发巫女" in calls[0][1]["content"]
+
+
+def test_subject_prompt_validates_kind_and_material(_export_env):
+    result = runner.invoke(cli.app, ["subject", "prompt", "--material", "x"])
+    assert result.exit_code == 1 and "缺槽位类型" in _stderr(result)
+
+    result = runner.invoke(cli.app, ["subject", "prompt", "front", "--all", "--material", "x"])
+    assert result.exit_code == 1 and "二选一" in _stderr(result)
+
+    result = runner.invoke(cli.app, ["subject", "prompt", "toe", "--material", "x"])
+    assert result.exit_code == 1 and "未知图片类型" in _stderr(result)
+
+    result = runner.invoke(cli.app, ["subject", "prompt", "front"])
+    # kind 给了但三块材料全缺
+    assert result.exit_code == 1 and "起草材料" in _stderr(result)
+
+
+def test_subject_prompt_json_single_and_language_passthrough(_export_env, monkeypatch):
+    calls: list = []
+    _fake_chat_json(monkeypatch, "p1", calls)
+    result = runner.invoke(cli.app, ["subject", "prompt", "headshot", "--material", "描述", "--lang", "en", "--json"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.stdout)
+    assert data["kind"] == "headshot" and data["prompt"] == "p1" and data["db_saved"] is False
+    assert data["language"] == "en"
+    assert "提示词为英文" in calls[0][0]["content"]
+
+
+def test_subject_prompt_all_five_kinds(_export_env, monkeypatch):
+    _fake_chat_json(monkeypatch, "p")
+    result = runner.invoke(cli.app, ["subject", "prompt", "--all", "--material", "x", "--json"])
+    assert result.exit_code == 0, result.output
+    items = json.loads(result.stdout)["items"]
+    assert [i["kind"] for i in items] == ["character_sheet", "headshot", "front", "side", "behind"]
+    assert all(i["prompt"] == "p" for i in items)
+
+
+def test_subject_prompt_template_sibling_resolution(_export_env, monkeypatch, tmp_path):
+    """--subject 给 YAML 路径 → 自动找同目录同名 <id>.md 模板拼进 user 内容。"""
+    calls: list = []
+    _fake_chat_json(monkeypatch, "p", calls)
+    yml = tmp_path / "presets" / "subjects" / "demo_witch.yaml"
+    yml.parent.mkdir(parents=True, exist_ok=True)
+    yml.write_text(
+        "id: demo_witch\nname: 演示\nstyle_lock: [clean lineart]\n", encoding="utf-8"
+    )
+    (tmp_path / "presets" / "subjects" / "demo_witch.md").write_text("# 模板正文标记", encoding="utf-8")
+
+    result = runner.invoke(cli.app, ["subject", "prompt", "front", "--subject", str(yml), "--json"])
+    assert result.exit_code == 0, result.output
+    user = calls[0][1]["content"]
+    assert "【角色档案】" in user and "【角色全场景通用提示词模板】" in user
+    assert "# 模板正文标记" in user
+    assert json.loads(result.stdout)["subject_id"] == "demo_witch"
+
+
+def test_subject_prompt_apply_saves_to_db(_export_env, monkeypatch):
+    _seed_subject("demo_witch")
+    _fake_chat_json(monkeypatch, "front prompt here")
+    result = runner.invoke(cli.app, ["subject", "prompt", "front", "--subject", "demo_witch", "--material", "x", "--apply", "--json"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.stdout)
+    assert data["db_saved"] is True and data["subject_id"] == "demo_witch"
+    with storage.connect() as conn:
+        row = storage.get_subject_image(conn, "demo_witch", "front")
+    assert row["prompt"] == "front prompt here"
+
+
+def test_subject_prompt_apply_requires_db_subject(_export_env, monkeypatch, tmp_path):
+    """--apply 但主体只在 YAML 里、没入库 → 明确报错（不悄悄建行）。"""
+    _fake_chat_json(monkeypatch, "p")
+    yml = tmp_path / "presets" / "subjects" / "ghost_witch.yaml"
+    yml.parent.mkdir(parents=True, exist_ok=True)
+    yml.write_text("id: ghost_witch\nname: 无库演示\n", encoding="utf-8")
+    result = runner.invoke(cli.app, ["subject", "prompt", "front", "--subject", str(yml), "--material", "x", "--apply"])
+    assert result.exit_code == 1
+    assert "未入库" in _stderr(result) and "subject add" in _stderr(result)
+
+
+def test_subject_prompt_out_writes_file(_export_env, monkeypatch, tmp_path):
+    _fake_chat_json(monkeypatch, "written prompt")
+    target = tmp_path / "out" / "front.txt"
+    result = runner.invoke(cli.app, ["subject", "prompt", "front", "--material", "x", "--out", str(target)])
+    assert result.exit_code == 0, result.output
+    assert target.read_text(encoding="utf-8").strip() == "written prompt"

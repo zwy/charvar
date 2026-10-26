@@ -2,6 +2,7 @@
 
 常用命令：
   charvar subject add presets/subjects/silver_witch.yaml
+  charvar subject prompt front --material "..." --out front_prompt.txt
   charvar presets list
   charvar gen --subject silver_witch --preset q21_default_30 --seed 42 --out ./out
   charvar gen ... --format comfyui --workflow <workflows目录名称或路径> [--wait]
@@ -495,6 +496,196 @@ def subject_export(
         typer.echo(f"  模板（{len(template_md)} 字符，逐字）→ {md_path}")
     else:
         typer.secho("  警告：DB 里没有该主体的模板，只导出档案（.md 未写）", fg=typer.colors.YELLOW)
+
+
+@subject_app.command("prompt")
+def subject_prompt(
+    kind: Optional[str] = typer.Argument(
+        None, help="槽位类型 character_sheet/headshot/front/side/behind；与 --all 二选一"
+    ),
+    all_kinds: bool = typer.Option(False, "--all", help="起草全部 5 个槽位（5 次独立 LLM 调用）"),
+    material: Optional[str] = typer.Option(
+        None, "--material", help="自定义参考资料原文：一段角色描述、character_sheet 文生图提示词、任何资料"
+    ),
+    material_file: Optional[str] = typer.Option(
+        None, "--material-file", help="从文件读参考资料（- 读 stdin）；与 --material 二选一"
+    ),
+    subject_ref: Optional[str] = typer.Option(
+        None, "--subject", help="主体档案：YAML 路径或已入库 id（可选，给了拼【角色档案】块加权）"
+    ),
+    template: Optional[Path] = typer.Option(
+        None, "--template", help="「角色全场景通用提示词模板」.md（缺省链：显式 > 档案同目录同名 <id>.md > DB 模板）"
+    ),
+    lang: str = typer.Option("any", "--lang", help="zh=强制中文 / en=强制英文 / any=不写语言规定（缺省，输出跟随材料语言）"),
+    apply: bool = typer.Option(False, "--apply", help="起草完写回 DB 槽位草稿（只写 prompt 不动状态机；需主体已入库）"),
+    out: Optional[Path] = typer.Option(None, "--out", help="写文件：单槽=文件路径；--all=目录（落 <kind>.txt）"),
+    json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出（外部 agent）"),
+) -> None:
+    """起草主体档案 5 槽位的图片提示词（网页「AI 起草」同一条链路，纯文本 LLM 调用）。
+
+    没有主体档案和模板也能用：--material 给一段自定义参考资料即可起草。
+    headshot/front/side/behind 的草稿天然含 <image1>——出图时把 character_sheet 成品图
+    `--ref` 进去（ComfyUI 自动切编辑 workflow / OpenRouter 走 i2i 组）。
+    """
+    from charvar import llm as llm_service
+    from charvar import settings_service
+    from charvar import subject_images as subject_image_service
+    from charvar.llm_prompts import (
+        DRAFT_SCHEMA,
+        _TEMPLATE_MAX_CHARS,
+        draft_subject_image_prompt_messages,
+    )
+
+    if lang not in ("zh", "en", "any"):
+        _die(f"lang 只支持 zh/en/any，收到：{lang}")
+    if kind is None and not all_kinds:
+        _die("缺槽位类型：给 <kind>（character_sheet/headshot/front/side/behind）或 --all")
+    if kind is not None and all_kinds:
+        _die("<kind> 与 --all 二选一")
+    if material and material_file is not None:
+        _die("--material 与 --material-file 二选一")
+
+    material_text: Optional[str] = material
+    if material_file is not None:
+        if material_file == "-":
+            material_text = sys.stdin.read()
+        else:
+            mf = Path(material_file)
+            if not mf.exists():
+                _die(f"参考资料文件不存在：{mf}")
+            try:
+                material_text = mf.read_text(encoding="utf-8")
+            except OSError as exc:
+                _die(f"无法读取参考资料 {mf}：{exc}")
+
+    kinds: list[str]
+    if all_kinds:
+        kinds = list(subject_image_service.IMAGE_KINDS)
+    else:
+        try:
+            subject_image_service._validate_kind(kind or "")
+        except subject_image_service.SubjectImageError as exc:
+            _die(str(exc))
+        kinds = [kind or ""]
+
+    profile: Optional[SubjectProfile] = None
+    yaml_path: Optional[Path] = None
+    if subject_ref is not None:
+        profile = _resolve_subject(subject_ref)
+        probe = Path(subject_ref)
+        if probe.exists() and probe.suffix in (".yaml", ".yml", ".json"):
+            yaml_path = probe
+
+    # 模板解析链：显式 --template > 档案同目录同名 <id>.md > DB 模板；都没有 → 空
+    template_text: Optional[str] = None
+    template_source = ""
+    if template is not None:
+        if not template.exists():
+            _die(f"模板文件不存在：{template}")
+        template_text = template.read_text(encoding="utf-8")
+        if not template_text.strip():
+            _die(f"模板是空文件：{template}")
+        template_source = str(template)
+    else:
+        if yaml_path is not None and profile is not None:
+            sibling = yaml_path.parent / f"{profile.id}.md"
+            if sibling.exists():
+                candidate = sibling.read_text(encoding="utf-8")
+                if candidate.strip():
+                    template_text, template_source = candidate, str(sibling)
+        if template_text is None and profile is not None:
+            with storage.connect() as conn:
+                db_template = storage.get_subject_template(conn, profile.id)
+            if db_template and db_template.strip():
+                template_text, template_source = db_template, "DB subject_templates"
+
+    if material_text is None and subject_ref is None and template_text is None:
+        _die("没有可用的起草材料：--material/--material-file、--subject、--template 至少给一个")
+    if template_text and len(template_text) > _TEMPLATE_MAX_CHARS:
+        typer.secho(
+            f"警告：模板 {len(template_text)} 字符超过起草输入上限 {_TEMPLATE_MAX_CHARS}，"
+            "超出部分 LLM 看不到（与网页/入库行为一致）",
+            fg=typer.colors.YELLOW,
+            err=True,
+        )
+    # --json 是机器模式：stdout 只有 JSON，状态行全不发（模板过长的警告除外）
+    if template_source and not json_out:
+        typer.secho(f"模板来源：{template_source}（{len(template_text or '')} 字符）", fg=typer.colors.CYAN, err=True)
+
+    if apply:
+        if profile is None:
+            _die("--apply 需要主体：用 --subject 给已入库 id 或 YAML 路径")
+        with storage.connect() as conn:
+            if storage.get_subject(conn, profile.id) is None:
+                _die(f"主体 {profile.id} 未入库，--apply 前先 charvar subject add <yaml>")
+
+    with storage.connect() as conn:
+        config = settings_service.llm_overrides(conn)
+
+    results: list[dict] = []
+    for k in kinds:
+        messages = draft_subject_image_prompt_messages(
+            profile, k, template_text, material=material_text, language=lang,
+        )
+        try:
+            data = llm_service.chat_json(
+                messages, config=config, schema=DRAFT_SCHEMA, schema_name="subject_image_prompt", max_tokens=None,
+            )
+        except llm_service.LLMError as exc:
+            _die(f"LLM 起草失败（{k}）：{exc}")
+        prompt = str(data.get("prompt") or "").strip()
+        if not prompt:
+            _die(f"LLM 未返回提示词（{k}）")
+        results.append({"kind": k, "prompt": prompt, "db_saved": False})
+        if not json_out:
+            typer.secho(
+                f"已起草 {subject_image_service.KIND_LABELS.get(k, k)}（{k}）：{len(prompt)} 字符",
+                fg=typer.colors.GREEN, err=True,
+            )
+
+    if apply and profile is not None:
+        with storage.connect() as conn:
+            for r in results:
+                subject_image_service.save_subject_prompt(conn, profile.id, r["kind"], r["prompt"])
+                r["db_saved"] = True
+        if not json_out:
+            typer.secho(f"已写回 DB 槽位草稿：{profile.id} 的 {len(results)} 个槽位", err=True)
+
+    if json_out:
+        if all_kinds:
+            payload: dict[str, object] = {"language": lang, "items": results}
+        else:
+            payload = {**results[0], "language": lang}
+        if profile is not None:
+            payload["subject_id"] = profile.id
+        typer.echo(json.dumps(payload, ensure_ascii=False))
+        return
+
+    if out is not None:
+        if all_kinds:
+            if out.exists() and not out.is_dir():
+                _die(f"--out 是文件但 --all 需要目录：{out}")
+            out.mkdir(parents=True, exist_ok=True)
+            for r in results:
+                (out / f"{r['kind']}.txt").write_text(r["prompt"] + "\n", encoding="utf-8")
+            if not json_out:
+                typer.secho(f"已写入 {len(results)} 个文件 → {out}/<kind>.txt", err=True)
+        else:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            out.write_text(results[0]["prompt"] + "\n", encoding="utf-8")
+            if not json_out:
+                typer.secho(f"已写入 → {out}", err=True)
+        return
+
+    # 默认输出：单槽时 stdout 只放提示词本身（可 | 管道接 charvar image --prompt-file -）
+    if all_kinds:
+        for i, r in enumerate(results):
+            if i:
+                typer.echo("")
+            typer.echo(f"===== {r['kind']} =====")
+            typer.echo(r["prompt"])
+    else:
+        typer.echo(results[0]["prompt"])
 
 
 # ---------- presets ----------

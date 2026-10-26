@@ -236,6 +236,38 @@ data/generated/adhoc_video/{id}/
 - 手动拷 PNG 进 `data/subjects/<id>/` **不会建槽位行**（网页仍显示空槽）；缩略图缺失会在
   读取时自动补，但槽位行只能由本命令或网页上传产生。
 
+## charvar subject prompt〈起草 5 槽位图片提示词〉
+
+网页「主体档案图片 · AI 起草」的同一条链路（网页即时落库，CLI 缺省不落库）。
+LLM 一次起草一个槽位的图片提示词：character_sheet / headshot / front / side / behind。
+**没有主体档案、没有模板也能用** —— `--material` 给一段自定义参考资料
+（角色描述、character_sheet 的文生图提示词、任何资料）：
+
+```bash
+# 单槽：stdout 只放提示词本身，可管道接 charvar image
+~/.local/bin/charvar subject prompt front --material "一位银发巫女少女……"
+# 5 槽全起草（5 次独立 LLM 调用）
+~/.local/bin/charvar subject prompt --all --material-file 资料.md --json
+```
+
+| 参数 | 说明 |
+|---|---|
+| `<kind>` / `--all` | 槽位 5 选 1 或全拿；都缺报错，两者同给报错 |
+| `--material` / `--material-file` | 自定义参考资料；`--material-file -` 读 stdin；两者二选一 |
+| `--subject` | 可选：YAML 路径或已入库 id（给了在 LLM 输入里拼【角色档案】块，锁项加权） |
+| `--template` | 可选：模板 .md；缺省链：显式 > 档案同目录同名 `<id>.md` > DB 模板 |
+| `--lang` | 缺省 `any` = 不写语言规定（输出跟随材料语言）；`en` 强制英文（SD 类老模型）/ `zh` 强制中文 |
+| `--apply` | 起草完写回 DB 槽位草稿（只写 prompt 不动状态机）。**需主体已入库；缺省不碰 DB** |
+| `--out` / `--json` | 单槽=写文件；`--all` 时 `--out` 要目录（落 `<kind>.txt`）。`--json` 下 stdout 只有 JSON |
+
+- `--json` 字段：单槽 `{"kind","prompt","db_saved","language","subject_id"(有 subject 时)}`；
+  `--all` 为 `{"language","items":[{...},...],"subject_id"(同上)}`。材料三选至少一项
+  （material / subject / template），全缺报错。
+- 依赖 LLM 配置（同 `subject derive`，见「相关环境变量」的 `LLM_*` 行）。
+- **4 个编辑槽是编辑指令**：草稿里的 `<image1>` 指设定图参考图，生成时必须带，否则标签悬空：
+  `prompt front ... | charvar image comfyui --prompt-file - --ref <设定图.png> --out front.png`。
+- **即梦长度**：草稿常超 text2image 1592 / image2image 1992 字符，推即梦先压缩过线。
+
 ## charvar subject derive〈MD 模板 → 档案〉
 
 手里只有「角色全场景通用提示词模板」.md 时，用它派生主体档案 YAML

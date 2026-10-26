@@ -374,30 +374,100 @@ def _angle_norm_lines(intents: list[dict]) -> str:
     return "\n".join(f"- {a}: {ANGLE_VIEW_SENTENCES[a]}" for a in angles if a in ANGLE_VIEW_SENTENCES)
 
 
+def _language_rule(language: str) -> tuple[str, str]:
+    """起草提示词的语言规定与 JSON 示例值（en 短语保持旧文案逐字不变）。
+
+    any = 不做语言强制（黑不提）：不写语言规定，输出语言由模型按材料自行决定；
+    zh/en 分支给出对应规定，措辞风格对齐 _prompt_string_rule。
+    """
+    if language == "en":
+        return (
+            "提示词为英文，可多句自然衔接，直接用于 Stable Diffusion / Qwen-Image 类模型；"
+            "不出现中文、小节标题（如【】）或 {{}} 占位符；",
+            "<英文提示词>",
+        )
+    if language == "zh":
+        return (
+            "提示词为中文（专有名词、标签可保留原文），可多句自然衔接，"
+            "直接用于 Stable Diffusion / Qwen-Image 类模型；"
+            "不出现英文整句、小节标题（如【】）或 {{}} 占位符；",
+            "<提示词>",
+        )
+    return (
+        "提示词可多句自然衔接，直接用于 Stable Diffusion / Qwen-Image 类模型；"
+        "不出现小节标题（如【】）或 {{}} 占位符；",
+        "<提示词>",
+    )
+
+
 def draft_subject_image_prompt_messages(
-    subject: SubjectProfile,
+    subject: SubjectProfile | None,
     kind: str,
-    template_md: str,
+    template_md: str | None = None,
+    *,
+    material: str | None = None,
+    language: str = "any",
 ) -> list[dict]:
-    """为主体图起草提示词的 messages（chat_json → {"prompt": "<英文提示词>"}）。"""
+    """为主体图起草提示词的 messages（chat_json → {"prompt": "<提示词>"}）。
+
+    材料三选任意组合（至少一项，全缺报 ValueError）：
+    - subject：结构化主体档案（锁项加权锚点）；
+    - template_md：角色全场景通用提示词模板（超上限截断，与入库行为一致）；
+    - material：自定义参考资料原文（一段角色描述、character_sheet 文生图提示词、任何资料）——
+      没有档案/模板时也能起草。
+
+    language：zh=强制中文 / en=强制英文 / any=不写语言规定（缺省，输出语言跟随材料）。
+    """
     brief = _KIND_BRIEFS.get(kind)
     if brief is None:
         raise ValueError(f"未知图片类型：{kind}")
+    if language not in LANGUAGE_CHOICES:
+        raise ValueError(f"未知语言选项：{language}（支持 {'/'.join(LANGUAGE_CHOICES)}）")
+    subject_provided = subject is not None
+    template_text = _clip_template(template_md or "").strip()
+    material_text = (material or "").strip()
+
+    sections: list[str] = []
+    if subject_provided:
+        sections.append(f"【角色档案】\n{_profile_payload(subject)}")
+    if template_text:
+        sections.append(f"【角色全场景通用提示词模板】\n{template_text}")
+    if material_text:
+        sections.append(f"【自定义参考资料】\n{material_text}")
+    if not sections:
+        raise ValueError("缺少起草材料：角色档案、模板、自定义参考资料至少给一项")
+
+    user = "\n\n".join(sections)
+
+    source_parts: list[str] = []
+    if subject_provided:
+        source_parts.append("角色档案")
+    if template_text:
+        source_parts.append("「角色全场景通用提示词模板」")
+    if material_text:
+        source_parts.append("自定义参考资料")
+    source_desc = source_parts[0] if len(source_parts) == 1 else "、".join(source_parts[:-1]) + "与" + source_parts[-1]
+
     system = (
-        "你是 ComfyUI 图像生成提示词专家。根据给定的角色档案与「角色全场景通用提示词模板」，"
-        f"为该角色的「{KIND_LABELS.get(kind, kind)}」（{kind}）撰写一条提示词。\n"
+        "你是图像生成提示词专家。根据给定的"
+        f"{source_desc}，为对应的角色撰写「{KIND_LABELS.get(kind, kind)}」（{kind}）提示词。\n"
         f"- 画面要求：\n{brief}\n"
-        "- 角色外观、画风与服饰锁定项以模板对应版本为准：模板存在多个版本（正常/精简、多套服装、"
-        "双主体分段）时只选用与该主体匹配的一套，不混合；模板显式禁止的内容"
-        "（文字、logo、图案、粗描边、3D 等）写成对应的显式 no ... 条款。\n"
-        "- 提示词为英文，可多句自然衔接，直接用于 Stable Diffusion / Qwen-Image 类模型；"
-        "不出现中文、小节标题（如【】）或 {{}} 占位符；提示词里只允许出现上面给出的 <image1> 标签"
-        "（若有），不得出现 <image2> 等未提供的标签。\n"
-        '只输出 JSON：{"prompt": "<英文提示词>"}'
     )
-    user = (
-        f"【角色档案】\n{_profile_payload(subject)}\n\n"
-        f"【角色全场景通用提示词模板】\n{_clip_template(template_md) or '（未提供模板）'}"
+    if template_text:
+        system += (
+            "- 角色外观、画风与服饰锁定项以模板对应版本为准：模板存在多个版本（正常/精简、多套服装、"
+            "双主体分段）时只选用与该主体匹配的一套，不混合；模板显式禁止的内容"
+            "（文字、logo、图案、粗描边、3D 等）写成对应的显式 no ... 条款。\n"
+        )
+    else:
+        system += (
+            "- 资料里显式禁止的内容（文字、logo、图案、粗描边、3D 等）写成对应的显式 no ... 条款。\n"
+        )
+    lang_rule, example_value = _language_rule(language)
+    system += (
+        f"- {lang_rule}"
+        "提示词里只允许出现上面给出的 <image1> 标签（若有），不得出现 <image2> 等未提供的标签。\n"
+        f'只输出 JSON：{{"prompt": "{example_value}"}}'
     )
     return [
         {"role": "system", "content": system},
