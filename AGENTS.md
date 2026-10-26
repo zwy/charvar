@@ -154,6 +154,7 @@
 3. 模板也可单独维护：`PUT /subjects/<id>/template`，或网页「主体档案 → 从 .md 文件载入」。
 4. 锁定项与模板全文逐字保留原文，不做改写或摘要。
 5. 导入后跑 `python3 -m pytest -q`，并用 `/subjects/<id>/images/<kind>/suggest-prompt` 验一次 LLM 起草能跑通。
+6. 交付包的槽位图用 `python3 -m charvar.cli subject image import <目录> --subject <id>` 装进运行时：落盘 + 生成 WebP 缩略图 + 建 `subject_images` 行（也可在 `subject add` 时加 `--images <目录>` 一次做完）。**手动把 PNG 拷进 `data/subjects/<id>/` 不会建槽位行**（网页仍显示空槽）；缩略图缺失会在读取时自动补，但槽位行只能由导入命令或网页上传产生。
 
 **只有模板 .md、还没写档案时**：`charvar subject derive <template.md> --id <slug>` 从模板派生候选
 （LLM 抽取 → 引用核对（zh 模式锁定项必须回指模板原文，防编造）→ 独立审计；默认只写 yaml 不入库，`--apply` 才入库，多版本模板必须 `--version <关键词>`）。

@@ -227,26 +227,29 @@ def test_install_script_covers_every_skill():
 
 
 def _typer_commands(app) -> tuple[set[str], set[str]]:
-    """枚举 typer app 的命令与子命令组。
+    """枚举 typer app 的命令与子命令组（含嵌套子组）。
 
-    返回 ``(可用命令, 组名)``：可用命令 = 顶层命令 + 「组 子命令」；
-    组名单独返回，用来判断两段式写法（``charvar image models``）的第一个词
-    到底是不是一个组。
+    返回 ``(可用命令, 组名)``：可用命令 = 顶层命令 + 「组 子命令」（递归到
+    嵌套组，如 ``subject image import``）；组名单独返回，用来判断两段式写法
+    （``charvar image models``）的第一个词到底是不是一个组。
     """
     commands: set[str] = set()
     groups: set[str] = set()
-    for cmd in app.registered_commands:
-        name = cmd.name or (cmd.callback.__name__.replace("_", "-") if cmd.callback else "")
-        if name:
-            commands.add(name)
-    for group in app.registered_groups:
-        gname = group.name or ""
-        if gname:
-            groups.add(gname)
-        for cmd in group.typer_instance.registered_commands:
-            cname = cmd.name or (cmd.callback.__name__.replace("_", "-") if cmd.callback else "")
-            if gname and cname:
-                commands.add(f"{gname} {cname}")
+
+    def walk(typer_app, prefix: str) -> None:
+        for cmd in typer_app.registered_commands:
+            name = cmd.name or (cmd.callback.__name__.replace("_", "-") if cmd.callback else "")
+            if name:
+                commands.add(f"{prefix} {name}".strip())
+        for group in typer_app.registered_groups:
+            gname = group.name or ""
+            if not gname:
+                continue
+            full = f"{prefix} {gname}".strip()
+            groups.add(full)
+            walk(group.typer_instance, full)
+
+    walk(app, "")
     return commands, groups
 
 

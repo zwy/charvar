@@ -517,3 +517,97 @@ def test_video_models_handles_fetch_error(monkeypatch):
     result = runner.invoke(cli.app, ["video", "models"])
     assert result.exit_code == 1
     assert "视频模型目录" in _stderr(result)
+
+
+# ---------- subject image import（交付包图片 → 运行时） ----------
+
+def _png_file(path: Path, size=(32, 48)) -> Path:
+    from PIL import Image
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", size, (10, 20, 30)).save(path, format="PNG")
+    return path
+
+
+def _seed_subject(subject_id: str = "demo_witch") -> None:
+    profile = SubjectProfile(
+        id=subject_id, name="演示", subject_noun="woman",
+        style_lock=["clean lineart"], identity_lock=["short silver bob"],
+        outfit_lock=["flight suit"], extra="Keep the same silhouette.",
+    )
+    with storage.connect() as conn:
+        storage.save_subject(conn, profile, replace=True)
+
+
+def test_subject_image_import_directory_makes_thumbs(_export_env, tmp_path):
+    """目录导入：按文件名认槽位，落盘 + 缩略图 + 槽位行一次到位。"""
+    _seed_subject()
+    pkg = tmp_path / "final" / "demo_witch"
+    _png_file(pkg / "character_sheet.png")
+    _png_file(pkg / "front.png")
+    (pkg / "全场景通用提示词模板.md").write_text("模板正文", encoding="utf-8")
+
+    result = runner.invoke(cli.app, ["subject", "image", "import", str(pkg), "--json"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.stdout)
+    assert data["subject_id"] == "demo_witch"  # 缺省取目录名
+    assert [i["kind"] for i in data["imported"]] == ["character_sheet", "front"]
+    assert data["skipped"] == ["全场景通用提示词模板.md"]
+
+    root = tmp_path / "data" / "subjects" / "demo_witch"
+    assert (root / "character_sheet.png").exists()
+    assert (root / "front.png").exists()
+    assert (root / "thumbs" / "character_sheet.webp").exists()
+    assert (root / "thumbs" / "front.webp").exists()
+
+    with storage.connect() as conn:
+        row = storage.get_subject_image(conn, "demo_witch", "front")
+    assert row["status"] == "ready" and row["source"] == "uploaded"
+
+
+def test_subject_image_import_single_file_needs_kind(_export_env, tmp_path):
+    _seed_subject()
+    src = _png_file(tmp_path / "pkg" / "mystery.png")
+    result = runner.invoke(cli.app, ["subject", "image", "import", str(src), "--subject", "demo_witch"])
+    assert result.exit_code == 1
+    assert "--kind" in _stderr(result)
+
+    result = runner.invoke(cli.app, [
+        "subject", "image", "import", str(src), "--subject", "demo_witch", "--kind", "side", "--json",
+    ])
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout)["imported"][0]["kind"] == "side"
+    assert (tmp_path / "data" / "subjects" / "demo_witch" / "thumbs" / "side.webp").exists()
+
+
+def test_subject_image_import_requires_existing_subject(_export_env, tmp_path):
+    pkg = tmp_path / "final" / "ghost"
+    _png_file(pkg / "front.png")
+    result = runner.invoke(cli.app, ["subject", "image", "import", str(pkg)])
+    assert result.exit_code == 1
+    assert "主体档案不存在" in _stderr(result)
+
+
+def test_subject_add_can_import_images_at_once(_export_env, tmp_path):
+    """导入档案 + 导入图片一条命令做完（档案、模板、图片三样都入库）。"""
+    yml = tmp_path / "presets" / "subjects" / "demo_witch.yaml"
+    yml.parent.mkdir(parents=True, exist_ok=True)
+    yml.write_text(
+        "id: demo_witch\nname: 演示\nsubject_noun: woman\n"
+        "style_lock: [clean lineart]\nidentity_lock: [short silver bob]\n"
+        "outfit_lock: [flight suit]\nextra: Keep the same silhouette.\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "presets" / "subjects" / "demo_witch.md").write_text("# 模板\n", encoding="utf-8")
+    pkg = tmp_path / "final" / "demo_witch"
+    _png_file(pkg / "front.png")
+
+    result = runner.invoke(cli.app, [
+        "subject", "add", str(yml), "--images", str(pkg), "--json",
+    ])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.stdout)
+    assert data["subject_id"] == "demo_witch"
+    assert data["template_updated"] is True
+    assert [i["kind"] for i in data["images"]["imported"]] == ["front"]
+    assert (tmp_path / "data" / "subjects" / "demo_witch" / "thumbs" / "front.webp").exists()

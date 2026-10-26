@@ -680,8 +680,8 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             subject_images._validate_kind(kind)
         except subject_images.SubjectImageError as exc:
             raise HTTPException(400, str(exc)) from exc
-        thumb = subject_images.thumb_file(subject_id, kind)
-        if not thumb.exists():
+        thumb = subject_images.ensure_thumb(subject_id, kind)
+        if thumb is None:
             raise HTTPException(404, f"该类型还没有缩略图：{kind}")
         return FileResponse(thumb, media_type="image/webp")
 

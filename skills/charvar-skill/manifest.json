@@ -1,6 +1,6 @@
 {
   "name": "charvar-skill",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "updated": "2026-10-26",
   "description": "按提示词实际出图/出视频的 Claude Code skill：ComfyUI、OpenRouter、即梦三条通路 + 主体档案 CLI。",
   "entrypoint": "SKILL.md",
@@ -16,6 +16,11 @@
     "note": "本 skill 无自带脚本；由仓库级 tests/test_skills.py 校验 frontmatter、版本同步与文件清单。"
   },
   "history": [
+    {
+      "version": "1.4.0",
+      "date": "2026-10-26",
+      "note": "补上 CLI 导入槽位图。① 此前 subject add 只导档案与模板，**没有导入图片的命令** —— 交付包（final/<id>/）里的槽位图只能靠网页上传，或手写脚本拷进 data/subjects/<id>/；手写脚本那路不生成 WebP 缩略图（缩略图端点 404、网页无预览），也不建 subject_images 行（网页仍显示空槽）。② 新增 charvar subject image import <目录> --subject <id>：按文件名认槽位，一次做完落盘 + 生成缩略图 + 建槽位行；subject add 也可加 --images <目录> 连档案带图一起导。③ 装的是同一张图时保留原 source/provider/prompt_id（交付包回灌不抹出处），换成不同的图才回到 source=uploaded、provider 清空。④ 兜底自愈：读槽位时发现原图在、缩略图缺就自动补（subject_images.ensure_thumb）。"
+    },
     {
       "version": "1.3.0",
       "date": "2026-10-26",

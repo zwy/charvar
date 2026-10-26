@@ -209,12 +209,32 @@ data/generated/adhoc_video/{id}/
 # 模板来源：--template <路径>，缺省自动取档案同目录的同名 <slug>.md
 # 找不到模板 → 告警，只导档案（DB 里原有模板保持不变，可能已过期）
 # 档案头里的 sha256 指纹与模板实际内容不符 → 告警（溯源链断了）
-# --json：{"subject_id","name","template_path","template_chars","template_updated","fingerprint_mismatch"}
+# --images <目录>：同时把交付包里的槽位图装进运行时（落盘 + 缩略图 + 建槽位行）
+# --json：{"subject_id","name","template_path","template_chars","template_updated","fingerprint_mismatch","images"}
 ```
 
 同 id 已存在要 `--overwrite`，否则报错退出 1。
 
 **DB 是运行时真源**：只改 `presets/subjects/` 下的文件而不跑这条命令，网页与出图仍读 DB 旧档案。
+
+## charvar subject image import〈交付包槽位图 → 运行时〉
+
+把交付包目录（`final/<id>/`）里的槽位图装进 `data/subjects/<id>/`：
+
+```bash
+~/.local/bin/charvar subject image import <目录> --subject <id>
+# 目录导入缺省用目录名当主体 id（final/<id>/ → <id>）
+# 单文件：--kind <kind> 指定槽位（character_sheet / headshot / front / side / behind）
+# --json：{"subject_id","imported":[{"kind","source_file","file_path","thumb"}],"skipped":[...]}
+```
+
+- 按文件名认槽位，落盘 `data/subjects/<id>/<kind>.{ext}` + 生成 `thumbs/<kind>.webp` + 写
+  `subject_images` 行（status=ready、source=uploaded）。
+- 非槽位图（如模板 `.md`）跳过，在结果里列出。
+- 装的是**同一张图**时保留原来的 `source`/`provider`/`prompt_id`；换成不同的图才回到
+  `source=uploaded`、`provider` 清空。
+- 手动拷 PNG 进 `data/subjects/<id>/` **不会建槽位行**（网页仍显示空槽）；缩略图缺失会在
+  读取时自动补，但槽位行只能由本命令或网页上传产生。
 
 ## charvar subject derive〈MD 模板 → 档案〉
 

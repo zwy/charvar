@@ -747,3 +747,118 @@ def test_generate_dreamina_auth_error_is_409(client, tmp_path, monkeypatch):
         json={"prompt": "x"},
     )
     assert resp.status_code == 409, resp.text
+
+
+# ---------- 交付包图片导入（CLI/脚本侧） ----------
+
+def test_import_image_file_creates_original_thumb_and_row(tmp_path, monkeypatch):
+    """从磁盘装图：落盘 + 缩略图 + 槽位行一起到位（不用再手动补缩略图）。"""
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    from charvar import subject_images as service
+
+    source = tmp_path / "pkg" / "front.png"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(_png_bytes())
+
+    with storage.connect() as conn:
+        slot = service.import_image_file(conn, "demo_witch", "front", source)
+
+    assert slot.status == "ready"
+    assert slot.source == "uploaded"
+    assert (paths.subjects_dir() / "demo_witch" / "front.png").exists()
+    thumb = paths.subjects_dir() / "demo_witch" / "thumbs" / "front.webp"
+    assert thumb.exists() and thumb.stat().st_size > 0
+    assert slot.thumb_url == "/subjects/demo_witch/images/front/thumb"
+
+
+def test_import_image_file_replaces_old_suffix(tmp_path, monkeypatch):
+    """换图换后缀时清掉旧文件（_original_file 按固定后缀序取图，留着会取错图）。"""
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    from charvar import subject_images as service
+
+    stale = paths.subjects_dir() / "demo_witch" / "front.png"
+    stale.parent.mkdir(parents=True)
+    stale.write_bytes(_png_bytes())
+    source = tmp_path / "front.jpg"
+    Image.new("RGB", (32, 32), (1, 2, 3)).save(source, format="JPEG")
+
+    with storage.connect() as conn:
+        service.import_image_file(conn, "demo_witch", "front", source)
+
+    assert not stale.exists()
+    assert (paths.subjects_dir() / "demo_witch" / "front.jpg").exists()
+
+
+def test_import_image_file_rejects_broken_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    from charvar import subject_images as service
+
+    broken = tmp_path / "front.png"
+    broken.write_bytes(b"not an image")
+    with storage.connect() as conn:
+        with pytest.raises(service.SubjectImageError):
+            service.import_image_file(conn, "demo_witch", "front", broken)
+
+
+def test_detect_kind_recognises_slot_names():
+    from charvar import subject_images as service
+
+    assert service.detect_kind("character_sheet.png") == "character_sheet"
+    assert service.detect_kind("FRONT.JPG") == "front"
+    assert service.detect_kind("全场景通用提示词模板.md") is None
+
+
+def test_missing_thumb_is_healed_on_read(client):
+    """手动拷进目录的图：读槽位时补出缩略图，不再 404 / 不显示空预览。"""
+    client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
+    target = paths.subjects_dir() / "demo_witch" / "front.png"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(_png_bytes())
+
+    slots = {s["kind"]: s for s in client.get("/subjects/demo_witch/images").json()["slots"]}
+    assert slots["front"]["original_url"].endswith("/file")
+    assert slots["front"]["thumb_url"].endswith("/thumb")
+    assert (paths.subjects_dir() / "demo_witch" / "thumbs" / "front.webp").exists()
+    assert client.get("/subjects/demo_witch/images/front/thumb").status_code == 200
+
+
+def test_import_same_image_keeps_provider(tmp_path, monkeypatch):
+    """重装同一张图（交付包回灌）不该抹掉「哪个后端出的」。"""
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    from charvar import subject_images as service
+
+    source = tmp_path / "pkg" / "front.png"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(_png_bytes())
+    with storage.connect() as conn:
+        service.import_image_file(conn, "demo_witch", "front", source)
+        row = storage.get_subject_image(conn, "demo_witch", "front")
+        # 模拟「这张图是 ComfyUI 出的」
+        row["source"] = "generated"
+        row["provider"] = "comfyui"
+        storage.upsert_subject_image(conn, row)
+
+        slot = service.import_image_file(conn, "demo_witch", "front", source)
+        assert slot.source == "generated"
+        assert slot.provider == "comfyui"
+
+
+def test_import_different_image_resets_provider(tmp_path, monkeypatch):
+    """换成不同的图：来源标记回到「uploaded」，provider 清空。"""
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    from charvar import subject_images as service
+
+    first = tmp_path / "a.png"
+    first.write_bytes(_png_bytes(color=(200, 100, 50)))
+    second = tmp_path / "b.png"
+    second.write_bytes(_png_bytes(color=(10, 200, 90)))
+    with storage.connect() as conn:
+        service.import_image_file(conn, "demo_witch", "front", first)
+        row = storage.get_subject_image(conn, "demo_witch", "front")
+        row["source"] = "generated"
+        row["provider"] = "comfyui"
+        storage.upsert_subject_image(conn, row)
+
+        slot = service.import_image_file(conn, "demo_witch", "front", second)
+        assert slot.source == "uploaded"
+        assert slot.provider is None

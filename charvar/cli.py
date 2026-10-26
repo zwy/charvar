@@ -37,10 +37,12 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 subject_app = typer.Typer(help="主体档案（SQLite 存储）", no_args_is_help=True)
+subject_image_app = typer.Typer(help="主体档案图片（槽位图导入）", no_args_is_help=True)
 presets_app = typer.Typer(help="YAML 预设", no_args_is_help=True)
 image_app = typer.Typer(help="Playground：给一段提示词直接出一张图", no_args_is_help=True)
 video_app = typer.Typer(help="Playground 视频：给一段提示词直接出一段视频（OpenRouter，异步作业）", no_args_is_help=True)
 app.add_typer(subject_app, name="subject")
+subject_app.add_typer(subject_image_app, name="image")
 app.add_typer(presets_app, name="presets")
 recipes_app = typer.Typer(help="视频配方：线性步骤执行器（出图批 → 贴字 → 本地合成）", no_args_is_help=True)
 app.add_typer(recipes_app, name="recipes")
@@ -120,6 +122,56 @@ def _resolve_template(
     return None, None
 
 
+# ---------- 主体档案图片导入（交付包 → 运行时） ----------
+
+def _collect_subject_images(path: Path, kind_hint: Optional[str]) -> tuple[list[tuple[str, Path]], list[str]]:
+    """收集待导入的槽位图：返回 ((kind, 文件), 跳过说明)。"""
+    from charvar import subject_images as subject_image_service
+
+    hits: list[tuple[str, Path]] = []
+    skipped: list[str] = []
+    if path.is_dir():
+        for candidate in sorted(path.iterdir()):
+            if not candidate.is_file():
+                continue
+            kind = subject_image_service.detect_kind(candidate.name)
+            if kind is None:
+                skipped.append(candidate.name)
+                continue
+            hits.append((kind, candidate))
+        if not hits:
+            detail = "、".join(skipped) if skipped else "（目录为空）"
+            _die(f"目录里没有可识别的槽位图（character_sheet / headshot / front / side / behind）：{detail}")
+        return hits, skipped
+    kind = kind_hint or subject_image_service.detect_kind(path.name)
+    if kind is None:
+        _die(f"无法从文件名判断槽位类型：{path.name}（用 --kind 指定）")
+    return [(kind, path)], skipped
+
+
+def _import_subject_images(subject_id: str, path: Path, kind_hint: Optional[str] = None) -> dict:
+    """把交付包图片装进运行时：落盘 + 生成缩略图 + 建槽位行。返回导入结果。"""
+    from charvar import subject_images as subject_image_service
+
+    hits, skipped = _collect_subject_images(path, kind_hint)
+    imported: list[dict] = []
+    with storage.connect() as conn:
+        if storage.get_subject(conn, subject_id) is None:
+            _die(f"主体档案不存在：{subject_id}（先 charvar subject add 建档）")
+        for kind, file_path in hits:
+            try:
+                slot = subject_image_service.import_image_file(conn, subject_id, kind, file_path)
+            except subject_image_service.SubjectImageError as exc:
+                _die(f"导入 {file_path.name} 失败：{exc}")
+            imported.append({
+                "kind": kind,
+                "source_file": str(file_path),
+                "file_path": slot.file_path,
+                "thumb": str(subject_image_service.thumb_file(subject_id, kind)),
+            })
+    return {"imported": imported, "skipped": skipped}
+
+
 # ---------- subject ----------
 
 @subject_app.command("add")
@@ -127,12 +179,14 @@ def subject_add(
     path: Path = typer.Argument(..., exists=True, readable=True, help="主体档案 YAML/JSON 文件"),
     overwrite: bool = typer.Option(False, "--overwrite", "-f", help="同 id 覆盖"),
     template: Optional[Path] = typer.Option(None, "--template", help="通用提示词模板 .md（缺省自动找同目录同名 <id>.md）"),
+    images: Optional[Path] = typer.Option(None, "--images", help="一并导入交付包图片（目录或单个文件），自动生成缩略图"),
     json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出（外部 agent）"),
 ) -> None:
     """建档，并把通用提示词模板一起入库（模板逐字，不改写）。
 
     模板来源＝--template 指定的路径，或档案同目录的同名 <id>.md；都没有时只导档案并警告。
     档案与模板是两张表（subjects / subject_templates），两边都入库才算导入完整。
+    --images 可同时把交付包里的槽位图装进运行时（落盘 + 缩略图 + 建槽位行）。
     """
     profile = _profile_from_file(path)
     tpl_path, tpl_text = _resolve_template(profile.id, path, template)
@@ -162,15 +216,24 @@ def subject_add(
         if tpl_text is not None:
             storage.save_subject_template(conn, profile.id, tpl_text)
 
+    image_result = None
+    if images is not None:
+        if not images.exists():
+            _die(f"图片路径不存在：{images}")
+        image_result = _import_subject_images(profile.id, images)
+
     if json_out:
-        typer.echo(json.dumps({
+        payload = {
             "subject_id": profile.id,
             "name": profile.name,
             "template_path": str(tpl_path) if tpl_path else None,
             "template_chars": len(tpl_text) if tpl_text else 0,
             "template_updated": tpl_text is not None,
             "fingerprint_mismatch": fp_mismatch,
-        }, ensure_ascii=False))
+        }
+        if image_result is not None:
+            payload["images"] = image_result
+        typer.echo(json.dumps(payload, ensure_ascii=False))
         return
     typer.echo(f"已保存主体档案：{profile.id}（{profile.name}）")
     if tpl_text is not None:
@@ -181,6 +244,37 @@ def subject_add(
             message += "；DB 里原有的模板保持不变，可能已过期"
         message += "（模板可用 --template 指定，或 PUT /subjects/<id>/template 上传）"
         typer.secho(message, fg=typer.colors.YELLOW)
+    if image_result is not None:
+        for item in image_result["imported"]:
+            typer.echo(f"  图片 {item['kind']} → {item['file_path']}（缩略图 {item['thumb']}）")
+        if image_result["skipped"]:
+            typer.echo(f"  跳过（非槽位图）：{'、'.join(image_result['skipped'])}")
+
+
+@subject_image_app.command("import")
+def subject_image_import(
+    path: Path = typer.Argument(..., exists=True, readable=True, help="图片文件或交付包目录"),
+    subject: Optional[str] = typer.Option(None, "--subject", "-s", help="主体 id（缺省取目录名）"),
+    kind: Optional[str] = typer.Option(None, "--kind", help="槽位类型（单文件时缺省按文件名推断）"),
+    json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出（外部 agent）"),
+) -> None:
+    """把交付包里的槽位图装进运行时：落盘 → 生成缩略图 → 建槽位行。
+
+    目录导入按文件名识别槽位（character_sheet / headshot / front / side / behind），
+    其余文件跳过并在结果里列出。**缩略图随导入一并生成**，网页立刻有预览。
+    """
+    subject_id = subject or (path.name if path.is_dir() else None)
+    if not subject_id:
+        _die("缺主体 id：用 --subject <id> 指定")
+    result = _import_subject_images(subject_id, path, kind)
+    if json_out:
+        typer.echo(json.dumps({"subject_id": subject_id, **result}, ensure_ascii=False))
+        return
+    typer.echo(f"已导入 {subject_id} 的图片：{len(result['imported'])} 张")
+    for item in result["imported"]:
+        typer.echo(f"  {item['kind']:16s} {item['source_file']} → {item['file_path']}（缩略图 {item['thumb']}）")
+    if result["skipped"]:
+        typer.echo(f"  跳过（非槽位图）：{'、'.join(result['skipped'])}")
 
 
 @subject_app.command("list")

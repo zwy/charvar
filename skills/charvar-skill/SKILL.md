@@ -5,7 +5,7 @@ description: Generate images with the charvar project's ComfyUI, OpenRouter, or 
 
 # charvar 生图
 
-版本：1.3.0  
+版本：1.4.0  
 更新：2026-10-26
 
 通过 charvar 项目的 CLI 出图。三条后端：**comfyui**（本机/局域网 ComfyUI）、
@@ -143,6 +143,21 @@ charvar 的网页顶栏也有「Playground」页签（`http://127.0.0.1:8710`）
 
 exit 0 = 通过，exit 1 = 有问题单。完整参数与 `--json` 字段见 `references/cli.md`。
 
+### 交付包图片导入（槽位图 → 运行时）
+
+交付包目录（`final/<id>/`）里的槽位图，一条命令装进运行时：**落盘 + 生成缩略图 + 建槽位行**。
+
+```bash
+~/.local/bin/charvar subject image import <目录> --subject <id>
+# 目录导入缺省用目录名当主体 id；单文件用 --kind <kind> 指定槽位
+# --json：{"subject_id","imported":[{"kind","source_file","file_path","thumb"}],"skipped":[...]}
+```
+
+也可在 `subject add` 时一并装图：`~/.local/bin/charvar subject add <yaml> --overwrite --images <目录>`。
+
+⚠️ **手动把 PNG 拷进 `data/subjects/<id>/` 不会建槽位行** —— 网页仍显示空槽。
+缩略图缺失会在读取时自动补，但槽位行只能由导入命令或网页上传产生。
+
 ⚠️ **`verify` 是 LLM 判定，不是确定性检查**：同一个档案连跑几次，报出的条目不一样，
 一轮「通过」不等于档案完整。正确做法是跑多次 → 汇总各轮条目去重 → 逐条对照模板补全 → 再跑。
 
@@ -220,6 +235,20 @@ PY
 | workflow 找不到 | `data/workflows/` 里没有该名字；用 `--workflow` 给 JSON 路径 |
 
 ## 版本记录
+
+1.4.0（2026-10-26）：**补上 CLI 导入槽位图** —— 此前 `charvar subject add` 只导档案与模板，
+**完全没有导入图片的命令**：交付包（`final/<id>/`）里的槽位图只能靠网页上传，或手写脚本拷进
+`data/subjects/<id>/`。手写脚本那条路有两个坑：不会生成 WebP 缩略图（缩略图端点 404、网页
+不显示预览），也不会建 `subject_images` 行（网页仍显示空槽）。现在新增
+`charvar subject image import <目录> --subject <id>`：按文件名认槽位，一次做完
+落盘 + 生成缩略图 + 建槽位行；`subject add` 也可加 `--images <目录>` 一条命令连档案带图一起导。
+装的是同一张图时保留原来的 `source`/`provider`/`prompt_id`（交付包回灌不该抹掉出处），
+换成不同的图才回到 `source=uploaded`。另补一层兜底：读取槽位时若发现原图在、缩略图缺，
+自动补出（`subject_images.ensure_thumb`）—— 手动拷进来的图也能出预览。
+
+1.3.0（2026-10-26）：主体档案补两个闸门说明与一条抽取规则：`verify` 是 LLM 判定、非确定性
+（连跑多次汇总去重再逐条对照）；新增确定性闸门 `quality_issues`（纯规则、不耗额度）；
+锁项抽取丢条的最常见原因是模板锚点没逐锚点成句。
 
 1.2.0（2026-10-25）：**主体档案导入补全** —— 此前 `charvar subject add` 只写档案（`subjects` 表），**从不写模板表**，且不报错、不警告，退出码还是 0。于是「改了仓库里的 yaml/md → 跑一次 subject add」这条路只导了一半：档案更新了，通用提示词模板仍停在旧版，网页与出图继续用旧文案。现在 `subject add` 会把**同目录同名 `<id>.md` 模板一并入库**（`--template` 可指定别的路径），找不到模板时明确告警并提示 DB 里旧模板可能已过期；`--json` 输出给脚本消费；档案头里的 `sha256` 指纹与模板实际内容不符时告警（溯源链断了）。`subject derive --apply` 此前也只入档案，现一并写入模板全文。SKILL.md 此前完全没提 `subject add`，也没提模板要单独上传 —— 按旧描述走的 agent 会以为导入已完成。
 

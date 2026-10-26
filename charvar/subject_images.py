@@ -116,6 +116,25 @@ def thumb_file(subject_id: str, kind: str) -> Path:
     return subject_dir(subject_id) / "thumbs" / f"{kind}.webp"
 
 
+def ensure_thumb(subject_id: str, kind: str) -> Path | None:
+    """按 kind 补齐 WebP 缩略图（缺了就按原图现生成），返回可用路径。
+
+    与 ``assets.ensure_thumb`` 同一套路：手动拷进目录的图、交付包导入时漏掉的图、
+    旧版本没留缩略图的图，都能在读取时补出缩略图 —— 避免「有图无缩略图」
+    导致缩略图端点 404、网页槽位不显示预览。
+    """
+    thumb = thumb_file(subject_id, kind)
+    if thumb.exists():
+        return thumb
+    original = _original_file(subject_id, kind)
+    if original is None:
+        return None
+    try:
+        return assets.make_thumb(original, thumb)
+    except OSError:
+        return None  # 原图坏了（半截文件）→ 不给缩略图，槽位仍按原图可读
+
+
 def _remove_stale_kind_files(subject_id: str, kind: str, keep: Path) -> None:
     """清掉同 kind 其他后缀的旧文件。_original_file 按固定后缀序取图，
     残留旧后缀文件（如上次生成 .png 这次输出 .jpg）会导致展示错图。"""
@@ -166,7 +185,7 @@ def build_slot(
     original = _original_file(subject_id, kind)
     if original is not None:
         slot.original_url = f"/subjects/{subject_id}/images/{kind}/file"
-        if thumb_file(subject_id, kind).exists():
+        if ensure_thumb(subject_id, kind) is not None:
             slot.thumb_url = f"/subjects/{subject_id}/images/{kind}/thumb"
     slot.is_ready = slot.status == "ready" and original is not None
     return slot
@@ -756,6 +775,82 @@ def save_uploaded_image(
         source="uploaded",
         provider=None,  # 上传的图片不来自任一生图后端
         prompt=previous.get("prompt", ""),
+        file_path=_relative(target),
+        created_at=previous.get("created_at", ""),
+    ))
+    return get_slot(conn, subject_id, kind)
+
+
+def detect_kind(filename: str) -> str | None:
+    """按文件名推断槽位类型：交付包里的 character_sheet.png / front.png …"""
+    stem = Path(filename).stem.lower()
+    return stem if stem in IMAGE_KINDS else None
+
+
+def _previous_slot_bytes(row: dict[str, Any]) -> bytes:
+    """上一轮槽位文件的字节（判断这次装的是不是同一张图）。"""
+    file_path = row.get("file_path")
+    if not file_path:
+        return b""
+    candidate = Path(file_path)
+    if not candidate.is_absolute():
+        candidate = paths.data_dir() / candidate
+    try:
+        return candidate.read_bytes()
+    except OSError:
+        return b""
+
+
+def import_image_file(
+    conn: sqlite3.Connection,
+    subject_id: str,
+    kind: str,
+    source_path: Path,
+) -> SubjectImageSlot:
+    """把磁盘上的图片装进主体槽位：落盘 → 缩略图 → 清旧后缀 → 建槽位行。
+
+    与 ``save_uploaded_image`` 同一套副作用，区别只是入参是路径而不是字节
+    （交付包导入、跨目录搬运用）。**缩略图在这里一并生成** —— 装完即有预览，
+    不依赖调用方记得再补一步。
+
+    来源语义：文件来自磁盘 → ``source="uploaded"``、``provider=None``；
+    但若装的是**同一张图**（与上一轮槽位文件逐字节相同，多为交付包回灌），
+    保留原来的 source / provider / prompt_id —— 重装同一张图不该抹掉出处。
+    prompt 文本始终保留（换图不换提示词）。
+    """
+    _validate_kind(kind)
+    source_path = Path(source_path)
+    if not source_path.is_file():
+        raise SubjectImageError(f"图片文件不存在：{source_path}")
+    suffix = source_path.suffix.lower()
+    if suffix not in _UPLOAD_SUFFIXES:
+        raise SubjectImageError(
+            f"只支持 {'/'.join(_UPLOAD_SUFFIXES)} 格式，收到：{source_path.name}"
+        )
+    try:
+        with Image.open(source_path) as image:
+            image.verify()
+    except Exception as exc:  # noqa: BLE001
+        raise SubjectImageError(f"不是有效的图片文件：{exc}") from exc
+
+    previous = storage.get_subject_image(conn, subject_id, kind) or {}
+    previous_bytes = _previous_slot_bytes(previous)
+
+    target = subject_dir(subject_id) / f"{kind}{suffix}"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source_path, target)
+    assets.make_thumb(target, thumb_file(subject_id, kind))
+    _remove_stale_kind_files(subject_id, kind, keep=target)
+
+    same_image = bool(previous_bytes) and previous_bytes == target.read_bytes()
+    _save_row(conn, SubjectImageSlot(
+        subject_id=subject_id,
+        kind=kind,
+        status="ready",
+        source=previous.get("source") if same_image and previous.get("source") else "uploaded",
+        provider=previous.get("provider") if same_image else None,
+        prompt=previous.get("prompt", ""),
+        prompt_id=previous.get("prompt_id") if same_image else None,
         file_path=_relative(target),
         created_at=previous.get("created_at", ""),
     ))
