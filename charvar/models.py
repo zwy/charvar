@@ -20,6 +20,10 @@ class SubjectProfile(BaseModel):
     style_lock: list[str] = Field(default_factory=list)
     identity_lock: list[str] = Field(default_factory=list)
     outfit_lock: list[str] = Field(default_factory=list)
+    # 可选体形锁定（LLM 改写专用）：non-empty 时逐条追加进【参考图分工锚定块】，
+    # 目的是换装时给胸/腰/臀体量留显式文本锚（classic 模式不使用，identity_lock 不动）。
+    # 建议写英文短句（en/any 输出直接逐字采用；zh 模式由 LLM 译写）。
+    body_lock: list[str] = Field(default_factory=list)
     extra: str = ""
 
 

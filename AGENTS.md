@@ -133,6 +133,7 @@
 - `web/static/style.css` 里 `label { display: flex }` 会盖掉浏览器默认的 `[hidden] { display: none }`，所以有 `[hidden] { display: none !important }` 这条兜底。新增按条件显隐的控件时，`<select>` 自身带 `hidden` 的话，JS 要同时清掉 select 和它外层 label 上的 `hidden`（`applyOpenRouterCapabilities` 就是这么做的）。
 - `.env`（COMFYUI_HOST/PORT 等）不进 git；改 .env 后要重启 web 服务。
 - 主体档案的锁定项中英文皆可：`style_lock` / `identity_lock` / `outfit_lock` 每条拼成一句 `Maintain ...` 进提示词——classic 模式**原样进提示词**（中文条目就是中文进图，Qwen-Image / OpenRouter 这类双语或 LLM 系模型没问题）；LLM 模式只作为 LLM 输入、由 LLM 重写成英文。目标后端要纯英文提示词时（SD 类老模型）建议仍写英文。导入/校验工具不得把非 ASCII 锁定项当错误。
+- **`body_lock`（主体档案可选字段）**：体形锚，专门给换装场景用。LLM 改写有参考图时逐条编成 `keep the figure exactly as shown in <imageN>: …` 分句追加进【参考图分工锚定块】（继承「逐字采用、全批相同」硬规则）；`identity_lock` 保持权威不动，classic 模式不用这个字段。建议写英文短句、1–2 条为宜（写长了稀释动作段）。实测缺失时遮盖性服装会让整批胸部缩水（换装批的「身材没控制住」大多是这个）。Web 主体表单有「体型锁定」文本域。
 - 主体档案的 Markdown 模板上限 24,000 字符（`charvar.llm_prompts._TEMPLATE_MAX_CHARS`），超出尾部被静默截掉；交付文档按 ≤ 10,000 字符写（见「预设存储」）。
 - **LLM 改写的输出语言**（`GenerateRequest.llm_language`，网页「生成参数 → LLM 优化 → 提示词语言」）：`zh`=强制中文 / `en`=强制英文 / `any`=**不做强制性限制（缺省）**。措辞差异集中在 `charvar/llm_prompts.py` 的 `_LANG_PHRASES`（锚定句/视角规范/全身句/framing_guard/背景光照）。**`en` 分支的系统提示词是冻结文本，不得改写**——改 `_LANG_PHRASES["en"]` 或 `_prompt_string_rule` 时要用旧文件做字节级对比（有快照回归测试）。
   - 改写管线注入的材料**全是英文**（视角规范句、背景/光照池、参考图锚定句），所以 `zh` 不是"禁止英文"而是"把这些英文材料译写成中文再采用"；`any` 不写语言规定，多数仍出英文（跟随注入材料）。

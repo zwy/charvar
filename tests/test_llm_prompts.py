@@ -148,3 +148,61 @@ def test_rewrite_messages_policy_branches(silver_witch):
     assert "One character only, no text." not in sticker_user
     assert "不要输出任何中文字符" in sticker[0]["content"]
     assert "no text / no writing" in sticker[0]["content"]
+
+
+# ---------- body_lock（可选体形锁定）：追加进锚定块 ----------
+
+def _subject_with_body_lock() -> SubjectProfile:
+    return SubjectProfile(
+        id="a_b", name="测试", subject_noun="woman",
+        body_lock=["a very large, full, round bust reading clearly wider than her shoulders"],
+    )
+
+
+def test_body_lock_clauses_empty_by_default():
+    from charvar.llm_prompts import body_lock_clauses
+
+    assert body_lock_clauses(None, [{"kind": "front", "tag": "<image1>"}]) == []
+    assert body_lock_clauses([], [{"kind": "front", "tag": "<image1>"}]) == []
+    # 有锁定项但没有参考图 → 不注入（无锚定句可挂）
+    assert body_lock_clauses(["a very large bust"], []) == []
+
+
+def test_body_lock_appended_after_role_clauses():
+    from charvar.llm_prompts import reference_anchor_sentence
+
+    refs = [{"kind": "front", "tag": "<image1>"}]
+    s = reference_anchor_sentence(
+        refs, outfit_mode=True, body_lock=["a very large, full, round bust"]
+    )
+    assert "Copy the body shape, proportions, bust volume and hip width from <image1>" in s
+    # body_lock 分句紧跟逐图分工句，tag 用第一张参考图的 tag
+    assert "keep the figure exactly as shown in <image1>: a very large, full, round bust" in s
+    # 分句顺序：逐图分工在前、body_lock 在后
+    assert s.index("from <image1>") < s.index("keep the figure")
+
+    # 多条 body_lock → 多个分句
+    s2 = reference_anchor_sentence(
+        [{"kind": "front", "tag": "<image1>"}],
+        outfit_mode=True,
+        body_lock=["a very large bust", "wide hips"],
+    )
+    assert ": a very large bust" in s2 and ": wide hips" in s2
+
+    # 无 body_lock → 锚定句与旧版逐字相同（存量行为不变）
+    s3 = reference_anchor_sentence(refs)
+    assert "keep the figure exactly" not in s3
+
+
+def test_rewrite_messages_carry_body_lock():
+    subject = _subject_with_body_lock()
+    msgs = build_rewrite_messages(
+        subject, "# 模板", [{"kind": "front", "tag": "<image1>"}],
+        [{"id": "full_front", "angle": "front", "framing": "full"}], language="en",
+    )
+    user = msgs[1]["content"]
+    # body_lock 编成分句进【参考图分工锚定句】，随现有硬规则逐字采用、全批相同
+    assert "【参考图分工锚定句】" in user
+    assert "keep the figure exactly as shown in <image1>: a very large, full, round bust" in user
+    # 系统提示词不动（冻结红线）：没有新增体形规则句
+    assert "体形" not in msgs[0]["content"]

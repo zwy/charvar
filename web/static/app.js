@@ -898,6 +898,7 @@ function fillSubjectForm(s) {
   $("#s-trigger").value = s.trigger_word || "";
   $("#s-style").value = (s.style_lock || []).join("\n");
   $("#s-identity").value = (s.identity_lock || []).join("\n");
+  $("#s-body").value = (s.body_lock || []).join("\n");
   $("#s-outfit").value = (s.outfit_lock || []).join("\n");
   $("#s-extra").value = s.extra || "";
   loadSubjectImages();
@@ -908,7 +909,7 @@ function clearSubjectForm() {
   state.currentSubject = null;
   renderSubjectList();
   $("#subject-form-title").textContent = "档案详情";
-  ["s-id", "s-name", "s-trigger", "s-style", "s-identity", "s-outfit", "s-extra"].forEach((id) => ($(id).value = ""));
+  ["s-id", "s-name", "s-trigger", "s-style", "s-identity", "s-body", "s-outfit", "s-extra"].forEach((id) => ($(id).value = ""));
   $("#s-noun").value = "person";
   $("#subject-images-card").hidden = true;
   $("#template-card").hidden = true;
@@ -923,6 +924,7 @@ function collectSubjectFromForm() {
     trigger_word: $("#s-trigger").value.trim() || null,
     style_lock: list("#s-style"),
     identity_lock: list("#s-identity"),
+    body_lock: list("#s-body"),
     outfit_lock: list("#s-outfit"),
     extra: $("#s-extra").value.trim(),
   };

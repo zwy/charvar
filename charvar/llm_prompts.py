@@ -161,6 +161,9 @@ REFERENCE_ROLE_CLAUSES: dict[str, str] = {
 # 服装组合（outfit 预设）专用：参考图**不再**提供服装——服装由服装预设给定。
 # 参考图里那套衣服（主体自己的白裙丝袜/西装等）与服装预设必须二选一，
 # 两边都写会让模型跟着参考图穿，服装预设等于没生效（实测：整批 24/24 条丢服装）。
+# front 分句必须点名体量锚（bust/hip）：换装时服装 token 权重远大于泛指的
+# "copy body shape"，模型遇到遮盖性强的服装（针织裙/西装/风衣）按先验重画躯干，
+# 实测整批胸部缩水（mustard_cap_girl_outfit_front_full…s42622）。
 REFERENCE_ROLE_CLAUSES_OUTFIT: dict[str, str] = {
     "character_sheet": (
         "keep the whole identity and art style exactly as shown in {tag}"
@@ -170,7 +173,8 @@ REFERENCE_ROLE_CLAUSES_OUTFIT: dict[str, str] = {
         "they appear in {tag}"
     ),
     "front": (
-        "copy the body shape and proportions from {tag}"
+        "copy the body shape, proportions, bust volume and hip width from {tag} exactly "
+        "as shown; the clothing change must not reshape the figure"
     ),
     "side": (
         "use {tag} as the direction reference for the true side profile and for "
@@ -185,6 +189,21 @@ REFERENCE_TAIL_SENTENCE: str = (
     "Take only the character's identity from the reference images and create a new pose, "
     "camera angle, background, and lighting. One character only, no text."
 )
+
+
+def body_lock_clauses(body_lock: list[str] | None, refs: list[dict]) -> list[str]:
+    """把主体的 body_lock（可选体形锁定）编成锚定块里的附加分句。
+
+    - 每条 body_lock item 一个分句，格式 keep the figure exactly as shown in {tag}: <item>；
+      item 断言体形本身（如 very large, full, round bust …），tag 指向第一张参考图
+      ——体形在每张参考图里都可见，选哪张开场都不悬空。
+    - 无 body_lock 或无参考图 → 空列表（锚定块不变，存量行为逐字不变）。
+    """
+    items = [str(x).strip() for x in (body_lock or []) if str(x).strip()]
+    if not items or not refs:
+        return []
+    tag = str(refs[0].get("tag") or "<image1>")
+    return [f"keep the figure exactly as shown in {tag}: {item}" for item in items]
 
 # required_label（带字表情包）专用尾句：中文文案由程序按原文追加，这里只禁「额外」文字。
 # 不要全局替换旧尾句——旧预设仍逐字使用 REFERENCE_TAIL_SENTENCE。
@@ -228,7 +247,11 @@ DRAFT_SCHEMA: dict = {
 
 
 def reference_anchor_sentence(
-    refs: list[dict], *, text_policy: str = "forbid", outfit_mode: bool = False
+    refs: list[dict],
+    *,
+    text_policy: str = "forbid",
+    outfit_mode: bool = False,
+    body_lock: list[str] | None = None,
 ) -> str:
     """按勾选的参考图顺序生成逐图分工锚定句；无参考图 → 空串（改写省略锚定句）。
 
@@ -237,6 +260,10 @@ def reference_anchor_sentence(
 
     outfit_mode（服装组合）→ 分句换成「参考图不管服装」的版本：服装由服装预设给定，
     参考图只提供身份/体型/画风。两套都要会给模型两个互相矛盾的服装指令。
+
+    body_lock（主体档案的可选体形锁定）→ 追加成锚定块的附加分句（紧跟逐图分工句）：
+    换装时体量锚的主要文本来源。走锚定块而不是新开材料块，是为了继承现有硬规则
+    （逐字采用、全批相同、不得增删分句），不用动冻结的英文系统提示词。
     """
     clauses = []
     table = REFERENCE_ROLE_CLAUSES_OUTFIT if outfit_mode else REFERENCE_ROLE_CLAUSES
@@ -245,6 +272,7 @@ def reference_anchor_sentence(
         if not clause:
             continue
         clauses.append(clause.format(tag=ref.get("tag") or "<image1>"))
+    clauses.extend(body_lock_clauses(body_lock, refs))
     if not clauses:
         return ""
     tail = REFERENCE_TAIL_SENTENCE if text_policy != "required_label" else REFERENCE_TAIL_SENTENCE_REQUIRED_LABEL
@@ -421,6 +449,9 @@ def build_rewrite_messages(
     language：改写输出的语言。zh=强制中文 / en=强制英文 / any=不做强制性限制（缺省，
     提示词里不出现任何语言规定，输出语言由模型自行决定）。sticker 强制 en——中文文案由
     程序按 display_text 原文追加，LLM 段一旦输出中文就会被 sticker 的禁字规则判为不合格。
+
+    主体档案的 body_lock（可选体形锁定）自动进锚定块：换装重绘躯干时给胸/腰/臀
+    体量留显式文本锚（见 reference_anchor_sentence）。
     """
     sticker = text_policy == "required_label"
     if sticker:
@@ -489,7 +520,9 @@ def build_rewrite_messages(
         f"【角色全场景通用提示词模板】\n{_clip_template(template_md) or '（未提供模板）'}",
         f"【参考图说明】\n{ref_lines or '（无参考图）'}",
     ]
-    anchor = reference_anchor_sentence(refs, text_policy=text_policy, outfit_mode=outfit_mode)
+    anchor = reference_anchor_sentence(
+        refs, text_policy=text_policy, outfit_mode=outfit_mode, body_lock=subject.body_lock
+    )
     if anchor:
         user_parts.append(f"【参考图分工锚定句】（逐字采用，全批相同）\n{anchor}")
     # display_text / lettering 是绘字段来源，不进 LLM 输入（防止改写或复制中文文案）

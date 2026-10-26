@@ -34,6 +34,12 @@ identity_lock:
 - 腰部收束清晰，腰线细而窄，向髋部自然展开，保留真实成年女性的生理厚度
 - 臀部圆润饱满并明显向后翘起，臀部最宽处比两肩外缘宽出约三分之一，髋部明显宽于肩宽，臀线清晰
 - 大腿饱满、围度宽
+# body_lock：LLM 改写（换装）时逐条追加进参考图分工锚定块的体量锚（英文短句，
+# en/any 逐字采用、zh 译写）。identity_lock 保持权威不动；这里只写提示词预算内的
+# 精简版——六条锚点一句化（胸为主，腰臀腿随行），换装重绘躯干时就是主要文本锚
+# （实测缺失时整批胸部缩水）。classic 模式不使用本字段。
+body_lock:
+- "her figure is a lush mature hourglass: a very large, full, round bust projecting forward as its own volume and clearly wider than her shoulders, a distinct drop from bust line to a narrow cinched waist, wide rounded hips over full thighs"
 outfit_lock:
 - 芥末黄色翻边针织毛线帽，帽顶带同色绒球，保留清楚的针织纹理
 - 敞开的红色休闲夹克，深棕色厚罗纹翻领、袖口和下摆，前襟带金属拉链，左右衣襟自然垂落

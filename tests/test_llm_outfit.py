@@ -137,7 +137,31 @@ def test_outfit_mode_anchor_does_not_take_outfit_from_reference():
     msgs = _messages([_intent(outfit="wearing a brick-red mini skirt and black pumps")])
     anchor = msgs[1]["content"].split("【参考图分工锚定句】", 1)[1]
     assert "complete outfit" not in anchor, "服装模式下锚定句不能让参考图提供服装"
-    assert "Copy the body shape and proportions from <image1>" in anchor
+    assert "Copy the body shape, proportions, bust volume and hip width from <image1>" in anchor
+    assert "the clothing change must not reshape the figure" in anchor
+
+
+def test_outfit_mode_anchor_carries_body_lock():
+    """body_lock（体形锁定）→ 换装时锚定块里有体量锚分句（A 方案核心）。
+
+    mustard_cap_girl_outfit_front_full…s42622 实测：无 body_lock 时最终提示词里
+    体形信息量为零，遮盖性服装整批胸部缩水；body_lock 是主要文本锚。
+    """
+    from charvar.llm_prompts import build_rewrite_messages
+    from charvar.models import SubjectProfile
+
+    subject = SubjectProfile(
+        id="s", name="n", subject_noun="woman",
+        body_lock=["her figure is a lush mature hourglass: a very large, full, round bust"],
+    )
+    msgs = build_rewrite_messages(
+        subject, "# 模板", [{"kind": "front", "tag": "<image1>"}],
+        [_intent(outfit="wearing a brick-red mini skirt")], language="en",
+    )
+    anchor = msgs[1]["content"].split("【参考图分工锚定句】", 1)[1]
+    assert "keep the figure exactly as shown in <image1>: her figure is a lush mature hourglass" in anchor
+    # 服装模式 front 分句（体量锚）与 body_lock 分句都在
+    assert "bust volume and hip width" in anchor
 
 
 def test_outfit_mode_system_has_outfit_rule():
