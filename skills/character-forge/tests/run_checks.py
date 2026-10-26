@@ -286,6 +286,33 @@ def main():
         text = read(rel)
         check("逐锚点成句" in text, f"anchor-by-anchor sentence rule stated in {rel}")
 
+    # --- 18b. 设定板版式说明排在固定前缀之前 --------------------------------
+    # 版式说明排在身份描述之后会被模型忽略，多描绘全部退化成同一种全身立绘
+    # （2026-10-26 ComfyUI 实测排后 10/10 次退化、排前 n=3 全对）。
+    # 写交付文档的地方（skill + 交付模板）都必须写明这个相反的拼接顺序，
+    # 否则接手者会照 3.1 的顺序拼设定板。
+    for rel in ["SKILL.md", "references/quality-checks.md", "templates/character-document.md"]:
+        text = read(rel)
+        check(
+            "排在固定前缀之前" in text,
+            f"character-sheet layout must precede the identity prefix in {rel}",
+        )
+    # 交付模板的 3.2 小节必须显式标出「场景段在前」，且不能只写「与固定前缀拼接为一段」
+    # （那句不指明顺序，是这个坑的来源）。
+    tmpl = read("templates/character-document.md")
+    check("拼接顺序与 3.1 相反" in tmpl, "delivery template states the reversed 3.2 order")
+    check(
+        "场景段 → 固定前缀" in tmpl,
+        "delivery template spells out the 3.2 concatenation order",
+    )
+
+    # --- 18c. 设定板版式用散文式骨架 ----------------------------------------
+    # 结构化分块写法（「画布分为左右两个区域」）在实测中与散文式表现相同，
+    # 但散文式骨架是跨角色已验证的版本，值得在 skill 与交付模板里点明可抄。
+    for rel in ["SKILL.md", "templates/character-document.md"]:
+        text = read(rel)
+        check("散文式" in text, f"prose-style character-sheet layout mentioned in {rel}")
+
     # --- 19. S3 设定板规格：多份副本必须一致 -------------------------------
     # 这段规格在四处各有一份，是**有意的重复**：交付模板必须自包含
     # （接手者不装本技能也要读懂，见 quality-checks.md 第 5 节），
