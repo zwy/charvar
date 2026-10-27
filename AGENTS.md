@@ -88,14 +88,14 @@
 
 ## 全站视觉分组与文案
 
-- **分组容器全站唯一** = `.form-section`（flex column + gap sp-2），组标题 `.form-section-title`（右侧可放状态，如「已选 0 张」）；组间用 `margin-top sp-3 + padding-top sp-3 + 1px 分隔线`，**不要**给 `.card` 的直接子元素手写 margin（见 CSS 注释）。
+- **分组容器全站唯一** = `.form-section`（flex column + gap sp-2），组标题 `.form-section-title`（右侧可放状态，如「已选 0 张」）；组间用 `margin-top sp-3 + padding-top sp-3 + 1px 分隔线`，**不要**给 `.card` 的直接子元素手写 margin。
   预设页① 拆三组（主体与种子 / 供应商参数 / 参考图），② 拆两组（预设与外观 / 提示词参数）；Playground = 供应商与参数 / 提示词 / 参考图；视频 = 模式与参数 / 提示词 / 首帧图 / 参考图 / 参考视频；主体档案 = 基本信息 / 锁定项 / 补充；设置页一卡一主题。**别新造 `.gen-group` 这类第二套分组类。**
-- **间距只在 4/8/12/16 阶梯内收紧**：`.card` padding `14px 16px`、`.card > * + *` 用 sp-3、`.form-grid` 行距 sp-2（列距仍 sp-4）；`.segmented .seg` padding `4px 12px`。500px 断点要同步。
+- **间距只在 4/8/12/16 阶梯内收紧**：`.card` padding `14px 16px`、`.card > * + *` 用 sp-3、`.form-grid` 行距 sp-2、`.settings-grid`（设置页专用）行距 sp-3（列距均 sp-4）；`.segmented .seg` padding `4px 12px`。500px 断点要同步。
 - **灰字只写「控件里看不到的信息」**：当前生效的 workflow / 模型 / 枚举、当前输出像素、已选参考图数量、不可逆后果（超限硬失败、暂存 24 小时清理、按秒计费、消耗积分）。**删掉**复述控件含义的说明、描述「先做 A 再做 B」的导航文案、重复当前主体的摘要行、以及讲落盘路径 / CLI 用法 / 数据库表这类**实现细节**的长段落（那属于 README）。**每块最多一句灰字**，长说明拆不成一句时宁可删。
 - 参考图区统一形态：组标题 + 右侧「已选 N 张」+ `.ref-empty` 虚线空态框（`#gen-ref-count` / `#adhoc-ref-count` / `#video-ref-count`）。
 - 参考图条目宽度限 `max-width: 240px` + 名字换行；「随机背景 / 随机光照」两个 checkbox 挪到固定背景 / 固定光照之后单独成行（`label.check` 是行内排版，跟普通 label 同排时底边会错位）。
 - `.gen-mode-row`（小标题 + 分段控件同一行）、`.form-grid-2`（只有两个字段的组固定 2 列）。
-- 视觉方向与文案策略固化在 `.superdesign/design-system.md`（Superdesign 工具产出）+ `.superdesign/init/*.md`；**改任何页面的分组 / 间距 / 文案前先读 design-system.md**，别自创一套。
+- 视觉方向与文案策略固化在 `.superdesign/design-system.md` + `.superdesign/init/*.md`；**改任何页面的分组 / 间距 / 文案前先读 design-system.md**，别自创一套。
 
 ## 测试
 
