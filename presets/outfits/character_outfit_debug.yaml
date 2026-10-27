@@ -1,0 +1,38 @@
+# 成年虚构角色的非色情服装清除与配件残留测试；不用于真人去衣或未成年人。
+# 本文件仅提供 outfit 文本，不生成图片、不修改主体档案、不自动清理锁定项。
+# 结构依据 charvar/outfit.py：顶层 OutfitPreset，条目 id / label / text。
+# 每条 text <= 240 字符；caption_tags 为英文 caption token 映射。
+# 前两项为用户要求；后两项是补充对照，可删除整个条目及其 caption_tags 映射。
+# 仅内裤 = 上身无衣物，并非成套内衣；无衣物 = 连内裤与全部穿戴配件也没有。
+# 清除范围包含眼镜、首饰、发饰；保留脸、原发型发色与可辨体态。
+# 若眼镜/发饰写入 identity_lock，调试副本须解除对应配件锁，不能同时要求保留与移除。
+# 前三项须排除旧服装 outfit_lock 及 extra/master_template 等来源的旧服装指令。
+# 第四项保留原上/下身衣物，只解除鞋袜/配件相关锁，不要误删需保留的衣服描述。
+# 上述是接入要求，不是 YAML 已实现的运行时能力；注释不会自动进入生图提示词。
+# 用非色情全身自然站姿测试，不与性感动作预设做全量笛卡尔积。
+# 裸体项是否受支持由实际服务决定；如拒绝，记为服务限制，不尝试规避。
+# 不把空 text、空字符串或 null 当作脱衣；此加载器要求非空 text。
+# 尚未在完整 charvar 环境或生图模型中测试。
+
+name: character_outfit_debug
+type: outfit
+version: 1
+description: 成年虚构角色非色情生产调试：仅内裤、无衣物、基础运动内搭、仅清穿戴配件；含两个补充对照项，待出图验收
+items:
+- id: debug_briefs_only
+  label: 仅内裤（其余衣物与配件全部移除）
+  text: The adult character wears only plain opaque mid-rise grey briefs, with a bare upper body and bare feet; no other garments, socks, hosiery, shoes, headwear, eyewear, jewelry or hair accessories.
+- id: debug_unclothed
+  label: 无衣物（全部衣物与穿戴配件移除）
+  text: The adult character is fully unclothed and barefoot for a non-sexual figure study; no garments, underwear, socks, hosiery, shoes, headwear, eyewear, jewelry, hair accessories or other wearables.
+- id: debug_sport_baseline
+  label: 基础运动内搭（灰色运动背心＋平角内裤）
+  text: The adult character wears only a plain opaque grey sports bra and matching mid-rise boxer briefs, barefoot; no other garments, socks, hosiery, shoes, headwear, eyewear, jewelry or hair accessories.
+- id: debug_accessories_clear
+  label: 仅清配件（保留原衣服，移除鞋袜等）
+  text: Keep the adult character's original upper-body and lower-body garments, but remove all socks, hosiery, shoes, headwear, eyewear, jewelry, hair accessories and other wearable accessories; feet are bare.
+caption_tags:
+  debug_briefs_only: grey briefs only, no accessories
+  debug_unclothed: unclothed figure study, no wearables
+  debug_sport_baseline: grey sports bra and boxer briefs, no accessories
+  debug_accessories_clear: original garments, barefoot and no accessories
