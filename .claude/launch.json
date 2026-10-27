@@ -7,9 +7,8 @@
       "port": 8710
     },
     {
-      "name": "charvar-web-fg",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "web.app"],
+      "name": "charvar-web-attach",
+      "url": "http://127.0.0.1:8710",
       "port": 8710
     }
   ]

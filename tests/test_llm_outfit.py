@@ -197,14 +197,23 @@ def test_outfit_keywords_and_covered():
     assert not outfit_covered("She stands facing the camera.", text)
 
 
-def test_insert_outfit_sentence_before_background():
+def test_insert_outfit_sentence_at_front():
+    """兜底补写落在提示词**最前面**（与 LLM 模式的服装位置规则一致）。"""
     prompt = "The figure stands facing the camera. The background is a plain white backdrop. The lighting is soft."
     out = insert_outfit_sentence(prompt, "wearing a brick-red mini skirt")
+    assert out.startswith("wearing a brick-red mini skirt.")
     assert out.index("wearing a brick-red mini skirt") < out.index("The background is")
     # 锚定句里句中的 background, and lighting 不该被当成锚点
     anchor = "Use the same art style. Create a new pose, camera angle, background, and lighting. One character only."
     out2 = insert_outfit_sentence(anchor, "wearing a brick-red mini skirt")
-    assert out2.endswith("wearing a brick-red mini skirt.")
+    assert out2.startswith("wearing a brick-red mini skirt.")
+    assert out2.endswith("One character only.")
+
+
+def test_insert_outfit_sentence_chinese_terminator():
+    """中文服装段补「。」，英文服装段补「.」——不能黏成一句。"""
+    out = insert_outfit_sentence("人物站立。", "该成年角色仅穿一条灰色内裤，赤足")
+    assert out.startswith("该成年角色仅穿一条灰色内裤，赤足。")
 
 
 # ---------- 端到端（mock LLM） ----------
@@ -246,8 +255,8 @@ def test_llm_mode_outfit_kept_when_model_writes_it(client, monkeypatch):
     assert not any("服装" in w for w in result["warnings"])
 
 
-def test_classic_mode_outfit_still_in_prompt(client, monkeypatch):
-    """经典模式不受影响：服装段照旧拼在动作段之后。"""
+def test_classic_mode_outfit_first_in_prompt(client, monkeypatch):
+    """经典模式：服装段排在提示词**最前面**（换装的主角）。"""
     _ready_subject(client)
     resp = client.post(
         "/generate",
@@ -262,9 +271,11 @@ def test_classic_mode_outfit_still_in_prompt(client, monkeypatch):
     assert resp.status_code == 200, resp.text
     item = resp.json()["items"][0]
     assert "wearing a dark slate-violet button-up shirt" in item["prompt"]
-    # 经典模式：动作段在前、服装段拼在动作段之后（合并文本）
-    assert item["variant_text"].endswith("matte leather")
-    assert item["prompt"].index("wearing a dark slate-violet") > 0
+    # 服装段在第一句；动作段在它后面
+    assert item["prompt"].index("wearing a dark slate-violet") == 0
+    # 留档：variant_text = 动作段（不含服装段），服装段单独记 meta
+    assert "wearing a dark slate-violet" not in item["variant_text"]
+    assert "matte leather" in item["meta"]["outfit_text"]
 
 
 # 英文分支系统提示词快照（改动前逐字记录，防止英文分支漂移）。
@@ -282,3 +293,72 @@ _EN_SYSTEM_SNAPSHOT = """你是角色图像提示词改写器。输入：角色�
 - 每条 prompt 为一个英文字符串，不出现中文、【】小节标题或 {{}} 占位符；只输出提示词本身；
 - 必须为输入列表中的每个 id 各输出一条，不得增删。
 只输出 JSON：{"variants": [{"id": "<variant_id>", "prompt": "<english prompt>"}]}"""
+
+
+# ---------- 位置与语言（新契约） ----------
+
+def test_outfit_mode_system_says_outfit_is_first():
+    """服装段写成该条 prompt 的第一句（换装图里服装是主角）。"""
+    msgs = _messages([_intent(outfit="wearing a brick-red mini skirt")])
+    system = msgs[0]["content"]
+    assert "写成该条 prompt 的第一句" in system
+    assert "排在参考图锚定句" in system
+
+
+def test_outfit_mode_zh_keeps_original_language():
+    """中文分支：服装描述逐字保留**原文**（中文预设就写中文，不译写）。"""
+    msgs = _messages([_intent(outfit="该成年角色仅穿着一条中腰灰色内裤")], language="zh")
+    system = msgs[0]["content"]
+    assert "唯一的例外是 outfit 字段的服装描述" in system
+    assert "逐字保留原文" in system
+
+
+def test_outfit_mode_en_has_outfit_exception():
+    """英文分支也开口子：服装段逐字保留原文（预设写中文就中文）。"""
+    msgs = _messages([_intent(outfit="该成年角色仅穿着一条中腰灰色内裤")], language="en")
+    system = msgs[0]["content"]
+    assert "唯一的例外是 outfit 字段的服装描述" in system
+    assert "逐字保留原文" in system
+
+
+def test_outfit_policy_note_rule_present():
+    """带 subject_policy 的条目：规则要说明「这些内容不得出现」。"""
+    msgs = _messages([_intent(outfit="wearing a brick-red mini skirt",
+                               outfit_policy_note="本条服装取代角色原本的衣着，不要写出角色原本那套衣服。")])
+    system = msgs[0]["content"]
+    assert "outfit_policy_note" in system
+
+
+def test_llm_mode_outfit_is_first_sentence(client, monkeypatch):
+    """端到端：模型照规则把服装写在第一句。"""
+    from charvar import llm
+
+    def fake_chat_json(messages, **kw):
+        user = messages[1]["content"]
+        intents = json.loads(user.split("【变体列表】\n", 1)[1])
+        variants = []
+        for intent in intents:
+            outfit = intent.get("outfit") or ""
+            body = f"{outfit} The figure stands facing the camera." if outfit else (
+                "The figure stands facing the camera."
+            )
+            variants.append({"id": intent["id"], "prompt": body})
+        return {"variants": variants}
+
+    monkeypatch.setattr(llm, "chat_json", fake_chat_json)
+    _ready_subject(client)
+    resp = client.post(
+        "/generate",
+        json={
+            "subject_id": "demo_witch",
+            "preset": "three_pose_pack",
+            "outfit_preset": "mature_milf_outfits",
+            "count": 1,
+            "seed": 7,
+            "mode": "llm",
+            "reference_kinds": ["character_sheet"],
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    prompt = resp.json()["items"][0]["prompt"]
+    assert prompt.startswith("wearing a dark slate-violet button-up shirt")

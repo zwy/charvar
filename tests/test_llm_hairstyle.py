@@ -105,11 +105,14 @@ def _intent(**over):
 
 
 def test_hairstyle_mode_anchor_does_not_take_hair_from_reference():
-    """发型模式下 headshot 分句：脸/肤色/发色由参考图提供，发型结构归发型预设。"""
+    """发型模式下 headshot 分句：脸/肤色/发色由参考图提供，发型结构归发型预设；
+    且带裸头声明——参考图里的帽子和头饰会盖住刘海/发顶，预设描述落进被遮挡区
+    （2026-10-27 实测：autumn_birch_girl 针织帽批 4/4 未落实预设发型）。"""
     msgs = _messages([_intent(hairstyle="chin-length French bob with light wispy bangs")])
     anchor = msgs[1]["content"].split("【参考图分工锚定句】", 1)[1]
     assert "skin tone, and hair color" in anchor, "发色锚定必须在"
     assert "follow the prescribed hairstyle instead of <image1>" in anchor
+    assert "her head is bare" in anchor and "no headwear" in anchor
     # 基础版的「copy ... hair, skin tone ...」不能出现——那是照抄参考图发型
     assert "proportions, hair, skin tone" not in anchor
 
@@ -136,15 +139,40 @@ def test_outfit_hairstyle_both_anchor_fused():
     assert "bust volume and hip width" in anchor, "体量锚（服装版 front）在"
     assert "rear silhouette and outfit details" in anchor, "behind 融合分句在"
     assert "the back of the head follows the prescribed hairstyle" in anchor
+    assert "the head bare with no headwear" in anchor, "发型模式 behind 分句带裸头声明"
     # front 服装版不再让参考图提供服装
     assert "complete outfit" not in anchor
 
 
 def test_hairstyle_mode_system_has_hairstyle_rule():
+    from charvar.llm_prompts import BARE_HEAD_SENTENCE
+
     msgs = _messages([_intent(hairstyle="chin-length French bob with light wispy bangs")])
     system = msgs[0]["content"]
     assert "hairstyle 字段是该变体的发型" in system
     assert "逐字" in system and "发色仍按参考图与档案保留" in system
+    # 头部佩戴物不保留；裸头声明逐字进 prompt；发型句提前到锚定句之后
+    assert "头部佩戴物不保留" in system
+    assert BARE_HEAD_SENTENCE in system
+    assert "贴住锚定句" in system or "锚定句之后" in system
+
+
+def test_hairstyle_rule_absent_without_hairstyle():
+    """无发型组合：裸头声明与发型规则不出现（存量行为不变）。"""
+    msgs = _messages([_intent()])
+    assert "her head is bare" not in msgs[1]["content"]
+    assert "hairstyle 字段是该变体的发型" not in msgs[0]["content"]
+
+
+def test_insert_hairstyle_sentence_includes_bare_head():
+    """程序兜底补写：发型原文 + 裸头声明同组插入。"""
+    from charvar import hairstyle as hairstyle_service
+
+    prompt = "She stands facing the camera. The figure faces the camera directly. Background: a plain gray wall."
+    out = hairstyle_service.insert_hairstyle_sentence(prompt, "chin-length French bob")
+    assert "chin-length French bob" in out
+    assert "no hat, no headwear" in out
+    assert "Background:" in out and out.index("chin-length French bob") < out.index("Background:")
 
 
 def test_hairstyle_mode_zh_allows_english_hairstyle_clause():
@@ -208,11 +236,12 @@ def _gen(client, monkeypatch, mode, *, with_outfit: bool = False):
 
 
 def test_llm_mode_hairstyle_appended_when_model_drops_it(client, monkeypatch):
-    """模型把发型丢了 → 程序按原文补写 + run 声明。"""
+    """模型把发型丢了 → 程序按原文补写（带裸头声明）+ run 声明。"""
     result = _gen(client, monkeypatch, mode="drop")
     assert len(result["items"]) == 3
     for item in result["items"]:
         assert "chin-length French bob" in item["prompt"]
+        assert "no hat, no headwear" in item["prompt"], "补写组必须带裸头声明"
         assert item["meta"]["hairstyle"] == "french_bob"
     assert any("发型描述没在 LLM 改写结果里体现" in w for w in result["warnings"])
 
@@ -225,14 +254,14 @@ def test_llm_mode_hairstyle_kept_when_model_writes_it(client, monkeypatch):
     assert not any("发型" in w for w in result["warnings"])
 
 
-def test_llm_mode_both_dropped_order_hair_before_outfit(client, monkeypatch):
-    """发型与服装都被丢时：程序先补发型再补服装，最终顺序 动作→发型→服装 成立。"""
+def test_llm_mode_both_dropped_order_outfit_before_hair(client, monkeypatch):
+    """发型与服装都被丢时：服装段兜底落在最前面，发型段在其后。"""
     result = _gen(client, monkeypatch, mode="drop_all", with_outfit=True)
     hair_snip = "chin-length French bob, light wispy bangs"
     outfit_snip = "wearing sheer black nylon pantyhose"
     for item in result["items"]:
         assert hair_snip in item["prompt"] and outfit_snip in item["prompt"]
-        assert item["prompt"].index(hair_snip) < item["prompt"].index(outfit_snip)
+        assert item["prompt"].index(outfit_snip) < item["prompt"].index(hair_snip)
     assert any("发型描述没在" in w for w in result["warnings"])
     assert any("服装描述没在" in w for w in result["warnings"])
 

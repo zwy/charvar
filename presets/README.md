@@ -103,8 +103,11 @@
 
 ### 服装预设（`outfits/*.yaml`）
 
-`type: outfit`，`items: [{id, label, text}]`：`text` = 英文服装描述段（**追加在动作段
-之后**），`label` = 中文展示名。组合顺序由请求的 `outfit_order` 决定。
+`type: outfit`，`items: [{id, label, text}]`：`text` = 服装描述段（**语言不限**：
+中文/英文都合法，整段逐字进提示词），`label` = 中文展示名。可选 `caption_tags`
+（id → 英文 token）与 `subject_policy`（换装时对主体档案锁定项做什么）。
+组合顺序由请求的 `outfit_order` 决定；**服装段在最终提示词里排第一句**
+（与 `outfit_order` 无关）。详见 `docs/贴字与服装预设.md`。
 
 ### 发型预设（`hairstyles/*.yaml`）
 

@@ -24,9 +24,10 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
 from charvar import paths
-from charvar.composer import expand_matrix
+from charvar.composer import expand_matrix, terminate_sentence
 from charvar.models import VariantSpec
 from charvar.preset_loader import ListPreset, MatrixPreset, PresetError
+from charvar.subject_policy import SubjectPolicy
 
 # 服装 id 只进变体 id / tag / 展示名，不落盘文件名，但仍按 slug 白名单校验，
 # 避免「白丝·蕾」之类进系统后与顺序分隔符（__）混排。
@@ -36,11 +37,19 @@ COMBINE_ORDERS = ("outfit_first", "pose_first")
 
 
 class OutfitItem(BaseModel):
-    """一条服装：英文描述段进提示词、中文 label 给贴字/展示、id 进变体名与 caption。"""
+    """一条服装：描述段进提示词、中文 label 给贴字/展示、id 进变体名与 caption。
+
+    text 的语言不限（中文 / 英文都合法）：服装段整段进提示词，语言跟随预设原文，
+    不由程序翻译——译写会让版型走样，程序兜底补写用的也是原文。
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     id: str
     label: str
     text: str
+    # 可选：这条服装对主体档案锁定项的处理策略（换装 / 清除衣物用）
+    subject_policy: SubjectPolicy | None = None
 
 
 class OutfitPreset(BaseModel):
@@ -177,6 +186,9 @@ def combine(
                 # 动作→发型→服装），动作原文取其 action_text、发型三字段原样带过。
                 action_text=pose.action_text if pose.action_text is not None else pose.text,
                 outfit_text=item.text.strip(),
+                outfit_policy=(
+                    item.subject_policy.model_dump() if item.subject_policy is not None else None
+                ),
                 tags=[*pose.tags, item.id],
                 outfit=item.id,
                 outfit_label=item.label,
@@ -219,46 +231,67 @@ _OUTFIT_STOPWORDS = frozenset(
     """.split()
 )
 
-# 背景/光照句在句首（改写段的固定顺序是 姿态→表情→背景/光照）。
-# 只认句首，避免命中锚定句里的 "...camera angle, background, and lighting"。
-_SENTENCE_TAIL_RE = re.compile(
-    r"(?<=[.!?]\s)(?=(?:The\s+)?[Bb]ackground\b|(?:The\s+)?[Ll]ighting\b|背景|光照)"
-)
+# 中文服装段没有空格分词，单字又没有区分度 → 按连续汉字块切二元组
+# （顿号/逗号/分号会切断汉字块，二元组不跨标点）。
+_CJK_RUN_RE = re.compile(r"[一-鿿]+")
+_CJK_RE = re.compile(r"[一-鿿]")
+
+# 两种文字各自的命中率下限。
+_LATIN_MIN_RATIO = 0.5
+_CJK_MIN_RATIO = 0.25
 
 
 def outfit_keywords(text: str) -> list[str]:
-    """服装描述段的内容词（判定「这套衣服写进去了没有」用）。"""
-    words = re.findall(r"[A-Za-z0-9][A-Za-z0-9\-']*", (text or "").lower())
-    return [w for w in words if len(w) >= 4 and w not in _OUTFIT_STOPWORDS]
+    """服装描述段的内容词（判定「这套衣服写进去了没有」用）。
 
-
-def outfit_covered(prompt: str, outfit_text: str) -> bool:
-    """提示词里是否已落实这套服装（内容词覆盖率 ≥ 50%）。
-
-    LLM 逐字抄服装原文时覆盖率 100%；整段被丢弃时接近 0%。
-    阈值取 50%：改写过的说法（换同义词）也能过，只有真丢了才会低于阈值。
+    拉丁文按单词切（≥4 字符、去停用词）；中文按连续汉字块的二元组切
+    （中文没有空格分词，单字又没有区分度）。
     """
-    keys = outfit_keywords(outfit_text)
+    words = re.findall(r"[A-Za-z0-9][A-Za-z0-9\-']*", (text or "").lower())
+    latin = [w for w in words if len(w) >= 4 and w not in _OUTFIT_STOPWORDS]
+    cjk: list[str] = []
+    for run in _CJK_RUN_RE.findall(text or ""):
+        cjk.extend(run[i : i + 2] for i in range(len(run) - 1))
+    return latin + cjk
+
+
+def _coverage(keys: list[str], low: str, min_ratio: float) -> bool:
     if not keys:
         return True
-    low = (prompt or "").lower()
     hit = 0
     for word in keys:
         base = word[:-1] if len(word) > 4 and word.endswith("s") else word
         if word in low or base in low:
             hit += 1
-    return hit * 2 >= len(keys)
+    return hit >= len(keys) * min_ratio
+
+
+def outfit_covered(prompt: str, outfit_text: str) -> bool:
+    """提示词里是否已落实这套服装。
+
+    LLM 逐字抄服装原文时覆盖率 100%；整段被丢弃时接近 0%。
+    拉丁词与中文二元组分别按各自阈值判定：拉丁词 50%（换同义词的改写也能过，
+    只有真丢了才低于阈值）；中文二元组冗余度高，阈值放低到 25%，不然「写了但
+    换了说法」会被误判成「整段丢了」而触发重复补写。
+    """
+    text = outfit_text or ""
+    words = re.findall(r"[A-Za-z0-9][A-Za-z0-9\-']*", text.lower())
+    latin = [w for w in words if len(w) >= 4 and w not in _OUTFIT_STOPWORDS]
+    cjk: list[str] = []
+    for run in _CJK_RUN_RE.findall(text):
+        cjk.extend(run[i : i + 2] for i in range(len(run) - 1))
+    low = (prompt or "").lower()
+    return _coverage(latin, low, _LATIN_MIN_RATIO) and _coverage(cjk, low, _CJK_MIN_RATIO)
 
 
 def insert_outfit_sentence(prompt: str, outfit_text: str) -> str:
-    """把服装句补进提示词：优先插在背景/光照句之前（与 LLM 自己的排布一致），
-    找不到句首锚点就追加到末尾。"""
-    sentence = (outfit_text or "").strip().rstrip(".")
+    """把服装句补进提示词**最前面**。
+
+    位置规则与 LLM 模式一致：服装是换装的主角，排在参考图锚定句、景别句、
+    姿态句之前。程序兜底补写必须落同一个位置——模型写在前面、程序补在后面
+    会变成两套服装互相打架。
+    """
+    sentence = terminate_sentence(outfit_text)
     if not sentence:
         return prompt
-    match = _SENTENCE_TAIL_RE.search(prompt)
-    if match:
-        head = prompt[: match.start()].rstrip()
-        tail = prompt[match.start():].lstrip()
-        return f"{head} {sentence}. {tail}".strip()
-    return f"{prompt.rstrip()} {sentence}.".strip()
+    return f"{sentence} {prompt.strip()}".strip()

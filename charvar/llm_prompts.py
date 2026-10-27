@@ -79,6 +79,14 @@ FULL_BODY_CAMERA_SENTENCE: str = (
     "with no wide-angle distortion, no looking up or down, and no exaggerating the near-side hands or feet."
 )
 
+# 赤足任务的构图规范句：服装段写了「赤足 / barefoot」时用这一句——
+# 原句的 "soles of the shoes" 跟赤足打架（模型两边都要就画出一双鞋）。
+FULL_BODY_CAMERA_SENTENCE_BAREFOOT: str = (
+    "The entire figure from the top of the head to the soles of the feet is fully inside the frame "
+    "(fingertips included), centered with clean margins around it, at eye level and near-orthographic "
+    "with no wide-angle distortion, no looking up or down, and no exaggerating the near-side hands or feet."
+)
+
 # 遮挡与镜像规范句（所有视角共用的附加条款）。
 OCCLUSION_SENTENCE: str = (
     "Details hidden by this view stay hidden naturally, never rotated, bent or staggered into view; "
@@ -189,14 +197,29 @@ REFERENCE_ROLE_CLAUSES_OUTFIT: dict[str, str] = {
 # 参考图只提供脸部/肤色/发色。headshot 原句的 "copy ... hair" 会让模型照抄参考图发型，
 # 发型预设等于没生效；发色与脸是身份，保留；长度/刘海/分缝/层次/卷度是结构，归发型预设。
 # side 原句的 hair flow、behind 原句的 back of the head 同样按新发型画，分句里去掉。
+# headshot/behind 分句带裸头声明（BARE_HEAD_SENTENCE 的压缩版）：参考图里的帽子/
+# 头饰会盖住刘海与发顶，预设描述落进被遮挡区时模型连头饰一起保留或画回原发型
+# （2026-10-27 实测：autumn_birch_girl 针织帽批 4/4 未落实）。
+# 裸头声明（发型组合的固定正向句）：发型预设条目默认裸头——帽子/发箍/发卡等头部
+# 佩戴物会盖住发顶与刘海，预设描述落进「被遮挡区」时模型要么连头饰一起保留、
+# 要么摘了头饰又画回参考图原发型（2026-10-27 实测：autumn_birch_girl 针织帽，
+# 4 条变体全部没有落实预设发型）。这句进锚定句（批间逐字相同）+ 系统硬规则
+# （改写 LLM 逐字采用）+ 程序兜底补写（与发型句同组）。若条目本身要带头饰
+# （贝雷帽发型等），把头饰描述写进该条 text，本句会被其覆盖。
+BARE_HEAD_SENTENCE: str = (
+    "Her head is bare, with no hat, no headwear, and no hair accessories, "
+    "the whole hairstyle fully exposed from the hairline to the hair ends."
+)
+
 REFERENCE_ROLE_CLAUSES_HAIRSTYLE: dict[str, str] = {
     "character_sheet": (
         "keep the whole identity, hair color, and art style exactly as shown in {tag}"
     ),
     "headshot": (
         "copy the face, feature proportions, skin tone, and hair color exactly as they "
-        "appear in {tag}; the hair's cut, length, and styling follow the prescribed "
-        "hairstyle instead of {tag}"
+        "appear in {tag}; her head is bare, with no hat, no headwear, and no hair "
+        "accessories, the whole hairstyle fully exposed; the hair's cut, length, and "
+        "styling follow the prescribed hairstyle instead of {tag}"
     ),
     "front": (
         "copy the body shape, proportions, complete outfit, and footwear, including "
@@ -208,7 +231,7 @@ REFERENCE_ROLE_CLAUSES_HAIRSTYLE: dict[str, str] = {
     ),
     "behind": (
         "use {tag} for the rear outfit details; the back of the head follows the "
-        "prescribed hairstyle instead of {tag}"
+        "prescribed hairstyle instead of {tag}, the head bare with no headwear"
     ),
 }
 
@@ -220,8 +243,9 @@ REFERENCE_ROLE_CLAUSES_OUTFIT_HAIRSTYLE: dict[str, str] = {
     ),
     "headshot": (
         "copy the face, feature proportions, skin tone, and hair color exactly as they "
-        "appear in {tag}; the hair's cut, length, and styling follow the prescribed "
-        "hairstyle instead of {tag}"
+        "appear in {tag}; her head is bare, with no hat, no headwear, and no hair "
+        "accessories, the whole hairstyle fully exposed; the hair's cut, length, and "
+        "styling follow the prescribed hairstyle instead of {tag}"
     ),
     "front": (
         "copy the body shape, proportions, bust volume and hip width from {tag} exactly "
@@ -233,7 +257,7 @@ REFERENCE_ROLE_CLAUSES_OUTFIT_HAIRSTYLE: dict[str, str] = {
     ),
     "behind": (
         "use {tag} for the rear silhouette and outfit details; the back of the head "
-        "follows the prescribed hairstyle instead of {tag}"
+        "follows the prescribed hairstyle instead of {tag}, the head bare with no headwear"
     ),
 }
 
@@ -510,13 +534,14 @@ def _prompt_string_rule(language: str, *, sticker: bool, outfit: bool = False, h
             return (
                 "- 每条 prompt 为一个中文字符串（专有名词、标签可保留原文），"
                 "不出现英文整句、【】小节标题或 {{}} 占位符；只输出提示词本身；"
-                "唯一的例外是 outfit 与 hairstyle 字段的描述——它们逐字保留英文原文；\n"
+                "唯一的例外是 outfit 与 hairstyle 字段的描述——它们逐字保留原文；\n"
             )
         if outfit:
             return (
                 "- 每条 prompt 为一个中文字符串（专有名词、标签可保留原文），"
                 "不出现英文整句、【】小节标题或 {{}} 占位符；只输出提示词本身；"
-                "唯一的例外是 outfit 字段的服装描述——它逐字保留英文原文；\n"
+                "唯一的例外是 outfit 字段的服装描述——它逐字保留原文"
+                "（服装预设里写的是中文就保持中文，不译写）；\n"
             )
         if hairstyle:
             return (
@@ -533,6 +558,15 @@ def _prompt_string_rule(language: str, *, sticker: bool, outfit: bool = False, h
             return (
                 "- 每条 prompt 为一个英文字符串，不出现【】小节标题或 {{}} 占位符；"
                 "只输出提示词本身；\n"
+            )
+        if outfit:
+            # 服装段逐字保留原文（服装预设里写什么语言就是什么语言）。
+            # 预设写中文时整条 prompt 会出现中文服装句——这是已知的取舍，
+            # 运行时会在 run 的 warnings 里声明（纯英文模型读不懂中文服装描述）。
+            return (
+                "- 每条 prompt 为一个英文字符串，不出现中文、【】小节标题或 {{}} 占位符；"
+                "只输出提示词本身；"
+                "唯一的例外是 outfit 字段的服装描述——它逐字保留原文；\n"
             )
         return (
             "- 每条 prompt 为一个英文字符串，不出现中文、【】小节标题或 {{}} 占位符；"
@@ -593,6 +627,7 @@ def build_rewrite_messages(
     text_policy: str = "forbid",
     composition_policy: str = "legacy",
     language: str = "any",
+    barefoot: bool = False,
 ) -> list[dict]:
     """批量改写变体提示词的 messages（chat_json → {"variants": [{"id","prompt"}...]}）。
 
@@ -681,12 +716,20 @@ def build_rewrite_messages(
             + _prompt_string_rule(language, sticker=False, outfit=outfit_mode, hairstyle=hairstyle_mode)
             + ("- 发型：每条意图的 hairstyle 字段是该变体的发型（英文原文），是头发结构的唯一权威："
                "档案与参考图中的原发型结构描述不再采用——头发长度、刘海、分缝、层次与卷度全部按 "
-               "hairstyle 原文逐字写出，发色仍按参考图与档案保留；必须在该条 prompt 里完整写出 "
-               "hairstyle 原文，不改写、不省略；写在姿态/表情句之后、服装段（若有）与背景/光照句之前；\n"
+               "hairstyle 原文逐字写出，发色仍按参考图与档案保留；档案与参考图里的帽子、发箍、"
+               "发卡等头部佩戴物不保留（发型预设默认裸头），每条 prompt 在发型句之后逐字写出裸头声明："
+               f"“{BARE_HEAD_SENTENCE}”；不得出现「摘掉帽子/卸下头饰」这类把原图内容当主角的措辞；"
+               "两组都完整写出，不改写、不省略；发型句与裸头声明写在参考图锚定句之后、目标景别句之前"
+               "（贴住锚定句，压过参考图里原发型的先验；服装段排在这句之前的第一位）；\n"
                if hairstyle_mode else "")
-            + ("- 服装：每条意图的 outfit 字段是该变体必须穿着的服装（英文原文）。"
+            + ("- 服装：每条意图的 outfit 字段是该变体必须穿着的服装（原文语言即该段语言，"
+               "服装预设里写的是中文就用中文写、是英文就用英文写，不译写）。"
                "必须在该条 prompt 里完整写出这套服装，逐字采用 outfit 原文，"
-               "不改写、不省略、不换用参考图里那套衣服；写在姿态/表情句之后、背景/光照句之前；\n"
+               "不改写、不省略、不换用参考图里那套衣服；"
+               "写成该条 prompt 的第一句——排在参考图锚定句、目标景别句、姿态/表情句与"
+               "背景/光照句之前（换装图里服装是主角）；"
+               "若该条意图带 outfit_policy_note，按它执行：其中声明不得出现的内容"
+               "（角色原本那套衣服、配件）不要写进该条提示词；\n"
                if outfit_mode else "")
             + "- 必须为输入列表中的每个 id 各输出一条，不得增删。\n"
             + _json_example(language)
@@ -713,7 +756,10 @@ def build_rewrite_messages(
         )
     else:
         norms = _angle_norm_lines(intents)
-        spec_lines = ["- full framing: " + FULL_BODY_CAMERA_SENTENCE]
+        spec_lines = [
+            "- full framing: "
+            + (FULL_BODY_CAMERA_SENTENCE_BAREFOOT if barefoot else FULL_BODY_CAMERA_SENTENCE)
+        ]
         if norms:
             spec_lines.append(norms)
         spec_lines.append("- any view: " + OCCLUSION_SENTENCE)

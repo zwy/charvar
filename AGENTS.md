@@ -135,7 +135,7 @@
 - 主体档案的锁定项中英文皆可：`style_lock` / `identity_lock` / `outfit_lock` 每条拼成一句 `Maintain ...` 进提示词——classic 模式**原样进提示词**（中文条目就是中文进图，Qwen-Image / OpenRouter 这类双语或 LLM 系模型没问题）；LLM 模式只作为 LLM 输入、由 LLM 重写成英文。目标后端要纯英文提示词时（SD 类老模型）建议仍写英文。导入/校验工具不得把非 ASCII 锁定项当错误。
 - **`body_lock`（主体档案可选字段）**：体形锚，专门给换装场景用。LLM 改写有参考图时逐条编成 `keep the figure exactly as shown in <imageN>: …` 分句追加进【参考图分工锚定块】（继承「逐字采用、全批相同」硬规则）；`identity_lock` 保持权威不动，classic 模式不用这个字段。建议写英文短句、1–2 条为宜（软上限 400 字符 ×2 条，写长了稀释动作段）。实测缺失时遮盖性服装会让整批胸部缩水（换装批的「身材没控制住」大多是这个）。Web 主体表单有「体型锁定」文本域；derive 抽取会自动生成（模板有体形锚点时压缩成英文断言句——引用核对豁免、缺失不报 omission、与模板矛盾才报 contradiction），`subject export` 自动带出。
 - 主体档案的 Markdown 模板上限 24,000 字符（`charvar.llm_prompts._TEMPLATE_MAX_CHARS`），超出尾部被静默截掉；交付文档按 ≤ 10,000 字符写（见「预设存储」）。
-- **LLM 改写的输出语言**（`GenerateRequest.llm_language`，网页「生成参数 → LLM 优化 → 提示词语言」）：`zh`=强制中文 / `en`=强制英文 / `any`=**不做强制性限制（缺省）**。措辞差异集中在 `charvar/llm_prompts.py` 的 `_LANG_PHRASES`（锚定句/视角规范/全身句/framing_guard/背景光照）。**`en` 分支的系统提示词是冻结文本，不得改写**——改 `_LANG_PHRASES["en"]` 或 `_prompt_string_rule` 时要用旧文件做字节级对比（有快照回归测试）。
+- **LLM 改写的输出语言**（`GenerateRequest.llm_language`，网页「生成参数 → LLM 优化 → 提示词语言」）：`zh`=强制中文 / `en`=强制英文 / `any`=**不做强制性限制（缺省）**。措辞差异集中在 `charvar/llm_prompts.py` 的 `_LANG_PHRASES`（锚定句/视角规范/全身句/framing_guard/背景光照）。**`en` 分支的系统提示词是冻结文本，不得改写**——改 `_LANG_PHRASES["en"]` 或 `_prompt_string_rule` 时要用旧文件做字节级对比（有快照回归测试；快照锁的是**无服装组合**那一版，服装组合另有分支）。
   - 改写管线注入的材料**全是英文**（视角规范句、背景/光照池、参考图锚定句），所以 `zh` 不是"禁止英文"而是"把这些英文材料译写成中文再采用"；`any` 不写语言规定，多数仍出英文（跟随注入材料）。
   - **即梦字数**：英文改写实测 1656–2538 字符，**超即梦 text2image 上限 1592**（`dreamina_image.validate_prompt` 提交前就拒，白扣一次提交费）；中文改写实测 527–636 字符，稳过。推即梦时选 `zh`。
   - **带字表情包预设强制英文**（`text_policy=required_label`）：中文文案由程序按 display_text 原文追加，LLM 段出中文会被 sticker 禁字规则判为不合格（补调也救不回来）。此时选「中文」会被忽略并在 run 的 `warnings` 声明——`api.py` 的 warnings 是**合并**不是覆盖。
@@ -162,63 +162,34 @@
 已入库配对的审计：`charvar subject verify <id>`（exit 0 通过 / 1 有问题单，`--json` 供 agent；**跑一次通过不算数**——每轮取样不同，要跑多次汇总去重）。
 DB → 仓库对偶：`charvar subject export <id>` 快照成 `presets/subjects/<id>.yaml` + `<id>.md`。**DB 是运行时真源，仓库靠 export 保持镜像**——只改仓库文件不回灌，网页上看到的还是旧档案。
 
-## 槽位图出图与编辑提示词起草（2026-10-26 起）
+## 槽位图出图与编辑提示词起草
 
-角色交付包（`final/<id>/`）的五张槽位图按下面这套流程出，image-engine 仓执行，charvar 提供能力：
-
-- **设定板走纯文生图，其余四张（front／headshot／side／behind）垫设定板做 image-edit。**
-  设定板是基准，必须先有它。实测**垫图出设定板的版式是随机的**——同一段文案出三张，
-  两张版式对、一张左侧半身像变成全身；纯文生图则稳定出正确版式。
-- **多描绘设定板的场景段要自带一句体形锚**：体形锚只写在固定前缀里时，
-  模型在多描绘版面里画不出体形（三个全身偏瘦一档）。做法是在**场景段末尾**
-  （版式段之后、统一性句之前）加一句「四个描绘都是同一种丰满体型：……」，
-  措辞与固定前缀一致、句子要短；放在版式段之前会把「左侧放大半身像」挤掉。
-  这是「场景段不复述体态锚点」的例外，只对多描绘设定板成立。
-- **编辑槽的提示词用 `charvar subject prompt` 起草，不手写**：
-  ```bash
-  ~/.local/bin/charvar subject prompt --all --material-file <设定板文生图提示词.md> --json
-  ```
-  `--out <目录>` 要求目录**先存在**；否则用 `--json` 重定向再拆文件。
-  实测它会自动带上三处反复踩的坑：headshot 稿写「下方在腰部裁切」（半身像不跑成全身）、
-  side 稿写「与参考图右侧面全身同方向」、behind 稿写「不回头、不露出正面五官」。
-- **但起草稿只当参考，不当最终提交稿——起草器是有损转述。**
-  2026-10-26 实测（秋日枫林女孩）：同一份源文本，起草稿把服装段的
-  「胸前随胸部轮廓形成明确的圆弧隆起」漏掉了，派生出的 front 从满胸掉成偏瘦；
-  它还会**改写**规范的体形锚点句（「宽出约一半」被换成「明显宽于两肩外缘」），
-  丢掉三段式结构里的「轮廓饱满浑圆」「向前形成独立体积」「底线在自重下自然下垂」。
-  **一般规律**：LLM 转述会挑离得最近的句子改写锚点句本身——
-  锚点句附近不要放同义的改写句（源文本里多一个同义表述，锚点句就多一分失真）。
-  体形与服装的句子必须来自模板原文：编辑提示词＝引导句（以参考图为身份基准，只改构图与镜头）
-  ＋固定前缀的对应视角变体 ＋对应单视图场景段 ＋版式护栏句。
-- **起草会忠实照抄模板里的矛盾**——模板有矛盾，矛盾会原样进生成稿。**先修模板，再重跑起草**，
-  不要手改草稿。典型：交付模板的「配饰」行写「不含帽子」，而「头饰」行要求戴针织帽，
-  起草就会把 `no hat` 带进稿子。同源矛盾也要一起修（如耳钉在「头部」行、「配饰」行却写「不含首饰」）。
-- 出图后用 `charvar subject add <yaml> --overwrite --images <交付包目录>` 把新图装进运行时，
-  旧槽位图会随导入清除；只拷 PNG 进 `data/subjects/<id>/` 不建槽位行。
+五张槽位图（设定板／front／headshot／side／behind）的出图顺序、体形锚写法、
+「用 `charvar subject prompt` 起草但不当最终稿」等实测规则见 `docs/槽位图出图.md`。
 
 ## 服装预设与贴字
 
-字段参考见 `docs/贴字与服装预设.md`。这里只记 agent 必须知道的规则。
+字段与完整规则见 `docs/贴字与服装预设.md`。这里只记 agent 必须知道的规则。
 
 两者都是出图后的组合能力，服务于「视频配方」的合成流水线（出图批 → 贴字 → 本地合成 reel）。
 
-- **服装预设** = `presets/outfits/*.yaml`（`charvar/outfit.py`）：每条 = 英文服装描述段 `text` + 中文 `label`（贴字/展示用）+ 可选 `caption_tags`（id → 英文 caption token，缺省 = id）。独立家族，**不进主预设下拉**（`list_presets` 只扫 `presets/actions/`）。
-- **跨预设笛卡尔积**：出图请求带 `outfit_preset`（+ `outfit_order`：`outfit_first`/`pose_first`，缺省 outfit_first = 每件服装连播全部动作）。服装段**追加在动作段之后**——服装段必须短（白裙丝袜动作预设实测：前置长文本把动作稀释到 14%，动作不执行；这条红线对服装段同样成立，建议每条 ≤200 字符，先小批验证动作还成立）。变体 id = `{outfit_id}__{pose_id}`（pose_first 时反序），caption 在 pose 之后插 outfit token，meta 带 `outfit`/`outfit_label`。语义：`POST /generate`（带 outfit_preset）= `charvar gen --outfit … --outfit-order …`，网页生成页同源。变体顺序就是后续 reel 合成的播放顺序。
-- **LLM 模式（mode=llm）下的服装是另一条通路，别退回合并文本的写法**。实测 LLM 会把服装段当成「参考图自带服装」整段丢弃（参考图自带白裙丝袜 + 服装预设两套指令互相打架）。三件事必须同时做，缺一件就复发：
-  1. **动作段与服装段分列**：`outfit.combine` 把 `action_text`/`outfit_text` 分别留在 VariantSpec 上（`text` 仍是合并文本给 classic 用）；`collect_intent` 只把动作段塞进 intent 的 `text`，服装走独立字段 `outfit`（+`outfit_label`）。
-  2. **锚定句在服装模式下换一套**（`REFERENCE_ROLE_CLAUSES_OUTFIT`）：参考图只提供身份/体型/画风，**不再**说「copy the complete outfit from <image1>」。
-  3. **程序兜底**：改写完用 `outfit.outfit_covered`（内容词覆盖率 ≥50%）查这套衣服在不在提示词里，不在就用 `outfit.insert_outfit_sentence` 按原文补写（插在背景/光照句之前），并在 run 的 `warnings` 声明补了几条。
-
-  服装段**任何语言模式下都逐字保留英文原文**（zh 分支的中文规则开了这个例外）——换装描述译写容易走样，程序兜底补写的也是英文原文。没有服装组合时，英文分支系统提示词**逐字不变**（有快照回归测试）。
+- **服装预设** = `presets/outfits/*.yaml`（`charvar/outfit.py`）：每条 = 服装描述段 `text`（**语言不限**：中文/英文都合法，整段进提示词，不译写）+ 中文 `label`（贴字/展示用）+ 可选 `caption_tags`（id → 英文 caption token，缺省 = id）+ 可选 `subject_policy`。独立家族，**不进主预设下拉**。
+- **服装段排在提示词最前面**（换装图里服装是主角）：classic 由 `composer` 拼装时拆出来放第一句，LLM 由系统规则要求写成第一句（在参考图锚定句之前）。**这跟 `outfit_order` 无关**——那控制组合顺序（变体 id `{outfit_id}__{pose_id}`），不是 prompt 内各段的位置。
+- **服装段要短**：≤200 字符（稀释红线）。服装段已改到最前，更别把动作段挤没。
+- **换装要解掉主体的旧衣物锁**：条目可声明 `subject_policy`（`clothing: replace` 摘掉主体旧衣物；`accessories: remove` 摘掉鞋袜与配件）。摘的是**临时主体副本**（`charvar/subject_policy.py`），档案不动；identity_lock 只摘配件**子句**，脸/发型发色/体态保留。LLM 模式档案块整批共享 → 批内策略不一致时按并集摘并在 warnings 声明。
+- **LLM 模式（mode=llm）下的服装是另一条通路，别退回合并文本的写法**：实测 LLM 会把服装段当成「参考图自带服装」整段丢弃。三件事必须同时做，缺一件就复发——①动作段与服装段分列（`action_text`/`outfit_text`）；②锚定句换服装版（`REFERENCE_ROLE_CLAUSES_OUTFIT`：参考图只提供身份/体型/画风，**不再**说「copy the complete outfit from <image1>」）；③丢了由程序按原文兜底补写到**最前面**（`outfit_covered` + `insert_outfit_sentence`）+ run 的 `warnings` 声明。细节见 `docs/贴字与服装预设.md`。
+- **覆盖度校验分语言**（`outfit_covered`）：拉丁词 ≥50%、中文二元组 ≥25%。中文服装段用英文词校验会**恒判已覆盖** → 服装丢了都发现不了。
+- **赤足服装**：text 写了「赤足/barefoot」时，构图句里的「鞋底 / soles of the shoes」自动换成脚的措辞（`composer.barefootize`）。
 - **贴字** = `presets/overlays/*.yaml`（`charvar/overlay.py`，PIL 确定性后处理，**不改原图**）：产物落 `<data>/generated/<run_id>/labeled/{index:06d}.png`。语义：`POST /runs/{id}/overlay` = `charvar overlay <run_id> --overlay <preset> [--text-from …] [--items 0,1]`。
-- 字体解析顺序 = `presets/overlays/fonts/` 里的文件 > 系统候选（macOS PingFang / Hiragino、Linux Noto CJK、Windows 雅黑）；`font: ""` = 自动。跨机稳定就把字体文件放进 `fonts/`，**只放可再分发的开源字体（OFL 系安全）；花字/美术字体的版权要单独确认**。
-- 与 **sticker（带字表情包）** 是两套机制：sticker 的字是提示词驱动（模型原生画字，`charvar/sticker_policy.py` 的 display_text/lettering）；贴字是确定性 PIL 后处理。两者共存不冲突；**sticker 预设拒绝服装/发型组合**（语义冲突，400）。
+- 字体解析顺序与「只放可再分发的开源字体」的约定见 `docs/贴字与服装预设.md`。
+- 与 **sticker（带字表情包）** 是两套机制：sticker 的字是提示词驱动（模型原生画字）；贴字是确定性 PIL 后处理。**sticker 预设拒绝服装/发型组合**（语义冲突，400）。
+
 
 ## 发型预设（presets/hairstyles/）
 
-- **层级固定 动作→发型→服装**；`text` 只写头发结构不写发色，≤200 字符。
-- **LLM 模式**：意图字段 `hairstyle` 逐字英文、zh 例外；锚定句按 `reference_clause_table` 换发型版（不锚头发、锚发色/脸）。
-- **锁冲突走约定**：identity_lock 只写发色；classic 不特判。
+- **层级固定 服装→发型→动作**（服装段前置成第一句，发型句贴锚定句）；`text` 只写头发结构不写发色，≤200 字符。
+- **LLM 模式**：意图字段 `hairstyle` 逐字原文、zh 例外；锚定句按 `reference_clause_table` 换发型版（不锚头发、锚发色/脸）。
+- **锁冲突走约定**：identity_lock 只写发色；classic 不特判。字段细节见 `docs/贴字与服装预设.md`。
 
 ## 视频配方
 

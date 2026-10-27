@@ -273,3 +273,104 @@ def test_api_generate_with_outfit(client):
     resp = client.post("/generate", json=sticker_req)
     if resp.status_code != 400:  # 仓库若没有 sticker 预设就不验这条
         raise AssertionError(f"sticker+outfit 应被拒绝：{resp.status_code}")
+
+# ---------- 中文服装段 / 位置 / 主体锁策略 ----------
+
+_CHINESE_OUTFIT = (
+    "该成年角色仅穿着一条素色、不透明的中腰灰色内裤，上身赤裸，赤足；"
+    "除此之外，未穿戴任何其他衣物、袜类、鞋履、头饰、眼镜、首饰或发饰。"
+)
+
+
+def test_chinese_outfit_coverage():
+    """中文服装段也要能判定「写进去了没有」——旧实现只认英文词，中文恒判已覆盖。"""
+    from charvar.outfit import outfit_covered, outfit_keywords
+
+    assert outfit_covered(_CHINESE_OUTFIT, _CHINESE_OUTFIT)
+    # 整段丢弃 → 判定没覆盖（否则程序永远不会补写，服装丢了都不知道）
+    assert not outfit_covered("人物正面朝向镜头直立站立。", _CHINESE_OUTFIT)
+    # 换个说法写 → 仍算覆盖
+    assert outfit_covered(
+        "该角色只穿一条灰色内裤，上身赤裸，双脚赤足，没有穿其它衣物、袜子、鞋子、帽子、眼镜或首饰。",
+        _CHINESE_OUTFIT,
+    )
+    # 关键词含中文二元组
+    assert any(len(k) == 2 and "一" <= k[0] <= "鿿" for k in outfit_keywords(_CHINESE_OUTFIT))
+
+
+def test_outfit_text_can_be_chinese():
+    """服装段的语言不限：中文服装预设能解析、能组合。"""
+    yaml_text = f"""
+name: demo_cn_outfits
+type: outfit
+version: 1
+items:
+- id: briefs
+  label: 仅内裤
+  text: {_CHINESE_OUTFIT}
+"""
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "demo_cn_outfits.yaml"
+        p.write_text(yaml_text, encoding="utf-8")
+        preset = outfit_service.parse_outfit_file(p)
+        assert preset.items[0].text == _CHINESE_OUTFIT
+        merged = outfit_service.combine(_pose_preset(), preset)
+        assert merged.variants[0].outfit_text == _CHINESE_OUTFIT
+
+
+def test_combine_carries_subject_policy():
+    """服装条目声明的 subject_policy 要透传到变体。"""
+    import tempfile
+    from pathlib import Path
+
+    yaml_text = """
+name: demo_policy_outfits
+type: outfit
+version: 1
+items:
+- id: briefs
+  label: 仅内裤
+  text: wearing grey briefs only, barefoot
+  subject_policy:
+    clothing: replace
+    accessories: remove
+"""
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "demo_policy_outfits.yaml"
+        p.write_text(yaml_text, encoding="utf-8")
+        preset = outfit_service.parse_outfit_file(p)
+        merged = outfit_service.combine(_pose_preset(), preset)
+        assert merged.variants[0].outfit_policy == {
+            "clothing": "replace",
+            "accessories": "remove",
+        }
+
+
+def test_classic_prompt_puts_outfit_first():
+    """classic：服装段是提示词第一句，动作段在其后。"""
+    from charvar.composer import generate
+    from charvar.models import SubjectProfile
+
+    sub = SubjectProfile(id="demo", name="演示", subject_noun="woman")
+    preset = outfit_service.combine(_pose_preset(), outfit_service.load_outfit("stockings_8"))
+    result = generate(sub, preset, GenerateRequest(subject=sub, seed=7, count=1))
+    prompt = result.items[0].prompt
+    assert prompt.startswith("wearing sheer black nylon pantyhose")
+    assert prompt.index("wearing sheer black nylon pantyhose") < prompt.index("人物正面朝向镜头站立")
+
+
+def test_barefoot_outfit_replaces_shoe_wording():
+    """赤足服装：构图句里的「鞋底 / soles of the shoes」换成脚的措辞。"""
+    from charvar.composer import barefootize, is_barefoot_outfit
+
+    assert is_barefoot_outfit(_CHINESE_OUTFIT)
+    assert not is_barefoot_outfit("wearing a black bikini, no stockings")
+    assert barefootize("from the top of the head to the soles of the shoes") == (
+        "from the top of the head to the soles of the feet"
+    )
+    assert barefootize("双脚并拢、鞋底相贴、脚尖朝前") == "双脚并拢、脚底相贴、脚尖朝前"
+    # 负向禁令不动
+    assert "socks, shoes, legs" in barefootize("no lower body, socks, shoes, legs")

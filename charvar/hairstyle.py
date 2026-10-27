@@ -32,6 +32,7 @@ from charvar.preset_loader import ListPreset, MatrixPreset, PresetError
 # 判定/插入语义一致——别抄第二份逻辑。
 from charvar.outfit import insert_outfit_sentence as insert_descriptor_sentence
 from charvar.outfit import outfit_covered as descriptor_covered
+from charvar.llm_prompts import BARE_HEAD_SENTENCE
 
 # 发型 id 只进变体 id / tag / 展示名，不落盘文件名，但与服装同按 slug 白名单校验，
 # 避免中文/杂字符混进变体 id 与顺序分隔符（__）。
@@ -134,6 +135,16 @@ def _pose_specs(preset: ListPreset | MatrixPreset) -> list[VariantSpec]:
     if isinstance(preset, ListPreset):
         return list(preset.variants)
     return expand_matrix(preset)
+
+
+def insert_hairstyle_sentence(prompt: str, hairstyle_text: str) -> str:
+    """发型句兜底补写：发型原文 + 裸头声明同组插进提示词（插在背景/光照句之前）。
+
+    单独补发型而不带裸头声明，帽子和头饰还会盖住刘海/发顶，预设照旧落空
+    （2026-10-27 实测）。裸头声明与发型段共用一次插入，落在同一组。
+    """
+    merged = f"{hairstyle_text.strip()} {BARE_HEAD_SENTENCE}"
+    return insert_descriptor_sentence(prompt, merged)
 
 
 def combine(pose_preset: ListPreset | MatrixPreset, hairstyle: HairstylePreset) -> ListPreset:

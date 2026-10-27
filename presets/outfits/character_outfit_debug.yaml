@@ -4,16 +4,22 @@
 # 第一条 text 沿用用户本轮报告有效的中文服装段；其他三条为同步翻译，待实测。
 # 所有 text 均以“服装：”开头，明确本轮最终衣物状态；每条不超过 240 字符。
 # caption_tags 仍按原项目约定保留英文，不属于生图服装正文。
-# 注意：本文件不会自动将服装段移到最终提示词最前面。
-# 需要由编译层选择服装优先排列，不能用 outfit_first 冒充文本前置：
-# outfit_first / pose_first 控制的是组合顺序，而不是 prompt 内各段的位置。
-# 前三项须解除临时主体副本中旧衣物与配件约束，检查 outfit_lock、identity_lock、
-# extra、master_template、动作文本等来源；不修改原角色档案。
-# 第四项只解除鞋袜与配件约束，保留原上/下身衣物。
-# 若眼镜/发饰属于身份锁，本轮清除测试也须单独解除对应配件锁。
-# 保留脸、发型发色与可辨体态；不为清除服装主动改变人物身材。
-# 全身构图建议使用“从头顶到双脚底部完整入镜”，避免赤足任务残留“鞋底”。
-# 以上注释是接入说明，不会自动进入提示词，也不提供运行时强制执行能力。
+#
+# ★ 接入方式（已由 charvar 的编译层落地，见 charvar/subject_policy.py）：
+#   - 服装段排在最终提示词**最前面**（compile 层的事，不用 outfit_first 冒充文本前置：
+#     outfit_first / pose_first 控制的是组合顺序，不是 prompt 内各段的位置）。
+#   - subject_policy 声明这条服装对主体档案锁定项做什么：
+#       clothing=replace → 主体 outfit_lock 里的旧衣物条目整条摘掉（这条服装取代默认服装）
+#       accessories=remove → 摘掉鞋袜与配件（outfit_lock 整条 + identity_lock 的配件**子句**）
+#     摘的是**临时主体副本**，原角色档案不动、不写回。脸、发型发色与体态保留
+#     （body_lock 与 identity_lock 的非配件部分照旧进提示词）。
+#   - 前三项替换全部衣物；第四项只清鞋袜与配件、保留原上/下身衣物。
+#   - 若眼镜/发饰属于身份锁，accessories=remove 会一并解除对应配件锁。
+#   - 第四项要求保留原衣物：建议**单独跑一批**（LLM 模式的档案块整批共享，
+#     与前三项同批时旧衣物描述会按并集被摘掉，run 的 warnings 会声明这件事）。
+#   - text 里的「赤足」会让构图句里的「鞋底 / soles of the shoes」自动换成脚的措辞。
+#   - 全身构图建议使用“从头顶到双脚底部完整入镜”，避免赤足任务残留“鞋底”。
+# 以上注释是接入说明，不会自动进入提示词。
 # 未运行完整仓库或实际生图；服务不支持某项时记录限制，不尝试绕过。
 
 name: character_outfit_debug
@@ -23,16 +29,28 @@ description: 成年虚构角色非色情生产调试：仅内裤、无衣物、�
 items:
 - id: debug_briefs_only
   label: 仅内裤（其余衣物与配件全部移除）
-  text: 该成年角色仅穿着一条素色、不透明的中腰灰色内裤，上身赤裸，赤足；除此之外，未穿戴任何其他衣物、袜类、鞋履、头饰、眼镜、首饰或发饰。
+  text: 该成年角色仅穿着一条素色、不透明的中腰灰色内裤，上身赤裸，乳头，赤足；除此之外，未穿戴任何其他衣物、袜类、鞋履、头饰、眼镜、首饰或发饰。
+  subject_policy:
+    clothing: replace
+    accessories: remove
 - id: debug_unclothed
   label: 无衣物（全部衣物与穿戴配件移除）
-  text: 该成年角色全身未穿着任何衣物，赤足；未穿戴内衣、内裤、袜类、鞋履、头饰、眼镜、首饰、发饰或任何其他穿戴物，呈现非色情的人体习作状态。
+  text: 该成年角色裸体，乳头，全身未穿着任何衣物，赤足；未穿戴内衣、内裤、袜类、鞋履、头饰、眼镜、首饰、发饰或任何其他穿戴物。
+  subject_policy:
+    clothing: replace
+    accessories: remove
 - id: debug_sport_baseline
   label: 基础运动内搭（灰色运动背心＋平角内裤）
   text: 该成年角色仅穿着一件素色、不透明的灰色运动背心和一条配套的中腰灰色平角内裤，赤足；除此之外，未穿戴任何其他衣物、袜类、鞋履、头饰、眼镜、首饰或发饰。
+  subject_policy:
+    clothing: replace
+    accessories: remove
 - id: debug_accessories_clear
   label: 仅清配件（保留原衣服，移除鞋袜等）
   text: 保留该成年角色原有的上身与下身衣物，仅移除全部袜类、鞋履、头饰、眼镜、首饰、发饰及其他穿戴配件，双脚赤足；不替换、不新增原有上身与下身衣物。
+  subject_policy:
+    clothing: keep
+    accessories: remove
 caption_tags:
   debug_briefs_only: grey briefs only, no accessories
   debug_unclothed: unclothed figure study, no wearables

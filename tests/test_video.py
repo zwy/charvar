@@ -63,7 +63,8 @@ def test_video_preset_loads_with_defaults():
     assert preset.aspect == "9:16"
     assert preset.fps == 24
     assert preset.seconds_per_image == 1.0
-    assert preset.include_contact_sheet is True
+    # q21_turnaround 刻意不开 contact sheet 封面（预设里 include_contact_sheet: false）
+    assert preset.include_contact_sheet is False
     assert preset.fit == "blur"
     assert preset.order_mode == "turnaround"
     with pytest.raises(video.VideoPresetError):

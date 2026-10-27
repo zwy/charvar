@@ -607,6 +607,7 @@ function startVideoPolling(runId) {
     }
     if (s.status === "ready") {
       stopVideoPolling();
+      $("#btn-video-generate").disabled = false; // 作业终态：按钮复原，可直接再生成一个
       renderVideoResult(s);
       dropVideoRefsSent(s.run_id);
       loadVideoRecent();
@@ -617,6 +618,7 @@ function startVideoPolling(runId) {
     }
     if (s.status === "failed") {
       stopVideoPolling();
+      $("#btn-video-generate").disabled = false;
       renderVideoResult(s);
       loadVideoRecent();
       setStatus($("#video-status"), `失败：${s.error || "作业失败"}`, true);

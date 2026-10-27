@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 
 from charvar import llm
@@ -18,8 +19,10 @@ from charvar.caption import build_caption
 from charvar.composer import (
     _apply_sampling,
     aspect_meta,
+    barefootize,
     closeup_framing_guard,
     expand_matrix,
+    is_barefoot_outfit,
     make_run_id,
     normalize,
     render,
@@ -32,6 +35,11 @@ from charvar.sticker_policy import (
     llm_response_bans,
     render_lettering_block,
     sticker_meta,
+)
+from charvar.subject_policy import (
+    apply_subject_policy,
+    merge_policies,
+    outfit_policy_note,
 )
 from charvar.wildcard import expand_inline, rng_for, seed_for
 
@@ -87,6 +95,9 @@ def collect_intent(subject: SubjectProfile, preset: Preset, req: GenerateRequest
                 spec.outfit_text, {"subject_noun": subject.subject_noun, "name": subject.name}
             )
             outfit_text, _ = expand_inline(outfit_raw, rng)
+            if is_barefoot_outfit(outfit_text):
+                # 赤足任务：动作段里的「鞋底 / soles of the shoes」跟服装的「赤足」打架
+                variant_text = barefootize(variant_text)
         intent = {
             "id": spec.id,
             "text": variant_text,
@@ -104,6 +115,11 @@ def collect_intent(subject: SubjectProfile, preset: Preset, req: GenerateRequest
         if outfit_text:
             intent["outfit"] = outfit_text
             intent["outfit_label"] = spec.outfit_label
+            policy = getattr(spec, "outfit_policy", None)
+            if policy:
+                note = outfit_policy_note(policy)
+                if note:
+                    intent["outfit_policy_note"] = note
         if is_sticker_preset(preset):
             # 只带策略标签（英文）进 LLM 输入；display_text/lettering 由程序按原文附加，
             # 不进 intents（LLM 不翻译、不改写、不复制中文文案）
@@ -150,6 +166,7 @@ def _rewrite_once(
     text_policy: str = "forbid",
     composition_policy: str = "legacy",
     language: str = "any",
+    barefoot: bool = False,
     rejected: dict[str, list[str]] | None = None,
 ) -> None:
     """改写一批 intent 并把 {id: prompt} 并入 rewritten；截断时先抢救半截 JSON。
@@ -162,7 +179,7 @@ def _rewrite_once(
     messages = build_rewrite_messages(
         subject, template_md, refs, chunk, instructions,
         text_policy=text_policy, composition_policy=composition_policy,
-        language=language,
+        language=language, barefoot=barefoot,
     )
     try:
         data = llm.chat_json(
@@ -206,6 +223,7 @@ def rewrite_prompts(
     text_policy: str = "forbid",
     composition_policy: str = "legacy",
     language: str = "any",
+    barefoot: bool = False,
 ) -> dict[str, str]:
     """一次（或分批）chat_json 调用，返回 {variant_id: prompt}。
 
@@ -227,6 +245,7 @@ def rewrite_prompts(
             "text_policy": text_policy,
             "composition_policy": composition_policy,
             "language": language,
+            "barefoot": barefoot,
             "rejected": rejected,
         }
         _rewrite_once(subject, template_md, refs, instructions, chunk, rewritten, config, **common)
@@ -276,6 +295,36 @@ def generate_llm(
             "带字表情包预设：中文文案由程序按原文追加，LLM 改写段不能输出中文 —— "
             "已忽略「提示词语言＝中文」，本支按英文改写。"
         )
+    # 服装组合 + 主体锁策略：档案块整批共享，按并集摘除（任一条要求摘就摘）。
+    # 摘的是**临时副本**，档案本身不动。
+    policies = [
+        getattr(_spec_by_id(preset, intent["id"]), "outfit_policy", None)
+        for intent in intents
+    ]
+    merged = merge_policies(policies)
+    if merged:
+        subject = apply_subject_policy(subject, merged)
+        if len({json.dumps(p, sort_keys=True, ensure_ascii=False) for p in policies if p}) > 1:
+            warnings.append(
+                "本批各条服装的「主体锁处理策略」不一致，LLM 模式的档案块是整批共享的，"
+                "已按并集摘除（任一条要求摘除就摘除）——要求保留主体原衣物的那几条会拿不到"
+                "旧衣物描述，这类条目请单独跑一批。"
+            )
+    # 服装段原文是中文时，en 模式（整条英文）会出现中文服装句——纯英文模型读不懂。
+    if language == "en":
+        zh_outfits = sorted(
+            {
+                str(intent.get("outfit") or "")
+                for intent in intents
+                if re.search(r"[一-鿿]", str(intent.get("outfit") or ""))
+            }
+        )
+        if zh_outfits:
+            warnings.append(
+                f"提示词语言＝英文，但服装预设的描述是中文（{len(zh_outfits)} 套）——"
+                "服装段按原文逐字保留，提示词里会出现中文服装描述；"
+                "纯英文出图模型可能读不懂，需要的话请另写一份英文服装预设。"
+            )
     rewritten = rewrite_prompts(
         subject,
         template_md,
@@ -286,6 +335,9 @@ def generate_llm(
         text_policy=getattr(preset, "text_policy", "forbid"),
         composition_policy=getattr(preset, "composition_policy", "legacy"),
         language=language,
+        barefoot=any(
+            is_barefoot_outfit(str(intent.get("outfit") or "")) for intent in intents
+        ),
     )
     items: list[PromptItem] = []
     missing_outfit: list[str] = []
@@ -296,9 +348,10 @@ def generate_llm(
         hairstyle_text = str(intent.get("hairstyle") or "").strip()
         if hairstyle_text and not hairstyle_service.descriptor_covered(prompt, hairstyle_text):
             # 兜底：模型没把这头发写进提示词 → 由程序按原文补写（插在背景/光照句前）。
-            # 发型兜底先于服装兜底：两段都缺时，先后插入才能落成 动作→发型→服装 顺序
-            # （两个插入都锚定背景/光照句首，后插者必然在前插者之后）。
-            prompt = hairstyle_service.insert_descriptor_sentence(prompt, hairstyle_text)
+            # 服装兜底插在**最前面**、发型兜底插在背景/光照句前 → 两段都缺时的落位是
+            # 服装→…→发型（服装是换装的主角，在最前；发型贴住锚定句）。
+            # 补写组带裸头声明：单独补发型，帽子和头饰还会盖住刘海/发顶。
+            prompt = hairstyle_service.insert_hairstyle_sentence(prompt, hairstyle_text)
             missing_hairstyle.append(spec.id)
         outfit_text = str(intent.get("outfit") or "").strip()
         if outfit_text and not outfit_service.outfit_covered(prompt, outfit_text):

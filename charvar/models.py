@@ -90,6 +90,9 @@ class VariantSpec(BaseModel):
     # ——合并时服装段夹在动作文本尾部，模型常把它当成「参考图自带服装」整段丢弃。
     action_text: str | None = None
     outfit_text: str | None = None
+    # 服装组合：这条服装对主体档案锁定项的处理策略（换装 / 清除衣物）。
+    # YAML 预设不声明这个字段；由服装组合时程序从服装条目抄进变体。
+    outfit_policy: dict | None = None
     # 发型组合（hairstyle.combine 产物）专用：发型 id + 中文展示名。
     # 与服装分列同一套逻辑：LLM 模式发型段走独立字段逐字英文；
     # 层级固定 动作→发型→服装（发型层先并、服装层后并）。

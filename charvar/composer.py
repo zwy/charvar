@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import itertools
 from typing import Any
+import json
 import logging
 import re
 from datetime import datetime
@@ -25,6 +26,7 @@ from charvar.models import (
 )
 from charvar.preset_loader import ListPreset, MatrixPreset, Preset, PresetError
 from charvar.sticker_policy import is_sticker_preset, render_lettering_block, sticker_meta
+from charvar.subject_policy import apply_subject_policy
 from charvar.wildcard import expand_inline, rng_for, seed_for
 
 logger = logging.getLogger(__name__)
@@ -176,6 +178,77 @@ def normalize(text: str) -> str:
     return text.strip()
 
 
+_CJK_RE = re.compile(r"[一-鿿]")
+
+# 赤足任务：构图句里的鞋类措辞要跟着改。
+# 「赤足」和「从头顶到鞋底」/「soles of the shoes」打架：服装说赤足、构图句说鞋底，
+# 模型两边都要就画出一双鞋。只换构图措辞，负向禁令（"no ... shoes ..."）不动。
+_BAREFOOT_MARKERS = ("赤足", "赤腳", "barefoot", "bare foot", "bare feet")
+_BAREFOOT_SUBSTITUTIONS = (
+    ("soles of the shoes", "soles of the feet"),
+    ("soles of shoes", "soles of feet"),
+    ("head to shoes", "head to feet"),
+    ("to the shoes", "to the feet"),
+    ("鞋底", "脚底"),
+)
+
+
+def is_barefoot_outfit(text: str) -> bool:
+    """这套服装是不是赤足的？（服装段里写了赤足 / barefoot）"""
+    low = (text or "").lower()
+    return any(m in low for m in _BAREFOOT_MARKERS)
+
+
+def barefootize(text: str) -> str:
+    """赤足任务：把构图句里的鞋类措辞换成脚的措辞。"""
+    out = text or ""
+    for old, new in _BAREFOOT_SUBSTITUTIONS:
+        out = out.replace(old, new)
+    return out
+
+
+def terminate_sentence(text: str) -> str:
+    """给一段独立文本补上句末标点（中文用「。」，英文用「.」）。
+
+    服装段是提示词里独立的一段，直接黏在下一段前面会读成一句
+    （"...no stockings Create an image of the woman..."）。
+    """
+    sentence = (text or "").strip()
+    if not sentence:
+        return sentence
+    if not sentence.endswith((".", "!", "?", "。", "！", "？")):
+        sentence += "。" if _CJK_RE.search(sentence) else "."
+    return sentence
+
+
+# ---- 赤足任务：构图句里的鞋类措辞要跟着改 ----
+
+# 「赤足」和「从头顶到鞋底」/「soles of the shoes」打架：服装说赤足、构图句说鞋底，
+# 模型两边都要就画出一双鞋。只换构图措辞，负向禁令（"no ... shoes ..."）不动。
+_BAREFOOT_MARKERS = ("赤足", "赤腳", "barefoot", "bare foot", "bare feet")
+_BAREFOOT_SUBSTITUTIONS = (
+    ("soles of the shoes", "soles of the feet"),
+    ("soles of shoes", "soles of feet"),
+    ("head to shoes", "head to feet"),
+    ("to the shoes", "to the feet"),
+    ("鞋底", "脚底"),
+)
+
+
+def is_barefoot_outfit(text: str) -> bool:
+    """这套服装是不是赤足的？（服装段里写了赤足 / barefoot）"""
+    low = (text or "").lower()
+    return any(m in low for m in _BAREFOOT_MARKERS)
+
+
+def barefootize(text: str) -> str:
+    """赤足任务：把构图句里的鞋类措辞换成脚的措辞。"""
+    out = text or ""
+    for old, new in _BAREFOOT_SUBSTITUTIONS:
+        out = out.replace(old, new)
+    return out
+
+
 def make_run_id(subject_id: str, preset_name: str, seed: int) -> str:
     stamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
     # run_id 要过 assets.safe_run_id（[A-Za-z0-9_.-]）；组合预设名（a+b）里的 + 转下划线，
@@ -237,8 +310,19 @@ def generate(subject: SubjectProfile, preset: Preset, req: GenerateRequest) -> G
     specs = _apply_sampling(specs, req)
 
     sticker_mode = is_sticker_preset(preset)
-    master_raw = render(preset.master_template, subject_mapping(subject))
     items: list[PromptItem] = []
+    # 服装组合 + 主体锁策略：按服装条目生成**临时**主体副本（档案本身不动、不写回）。
+    # 同一套服装的多个动作共用一份副本。
+    subject_cache: dict[str, SubjectProfile] = {}
+
+    def _subject_for(spec: VariantSpec) -> SubjectProfile:
+        policy = spec.outfit_policy
+        if not policy:
+            return subject
+        key = json.dumps(policy, sort_keys=True, ensure_ascii=False)
+        if key not in subject_cache:
+            subject_cache[key] = apply_subject_policy(subject, policy)
+        return subject_cache[key]
 
     for i, spec in enumerate(specs):
         rng = rng_for(req.seed, spec.id)
@@ -249,8 +333,34 @@ def generate(subject: SubjectProfile, preset: Preset, req: GenerateRequest) -> G
             rng.choice(preset.lighting) if req.randomize_lighting and preset.lighting else None
         )
 
-        variant_raw = render(spec.text, {"subject_noun": subject.subject_noun, "name": subject.name})
-        variant_text, _ = expand_inline(variant_raw, rng)
+        item_subject = _subject_for(spec)
+
+        # 服装段与动作段分列：服装段单独拿出来，**排在提示词最前面**（换装的主角）。
+        outfit_text = ""
+        if spec.outfit_text:
+            action_raw = render(
+                spec.action_text if spec.action_text is not None else spec.text,
+                {"subject_noun": item_subject.subject_noun, "name": item_subject.name},
+            )
+            variant_text, _ = expand_inline(action_raw, rng)
+            outfit_raw = render(
+                spec.outfit_text,
+                {"subject_noun": item_subject.subject_noun, "name": item_subject.name},
+            )
+            outfit_text, _ = expand_inline(outfit_raw, rng)
+            outfit_text = terminate_sentence(outfit_text)
+        else:
+            variant_raw = render(
+                spec.text,
+                {"subject_noun": item_subject.subject_noun, "name": item_subject.name},
+            )
+            variant_text, _ = expand_inline(variant_raw, rng)
+
+        master_raw = render(preset.master_template, subject_mapping(item_subject))
+        if outfit_text and is_barefoot_outfit(outfit_text):
+            # 赤足任务：构图句里的「鞋底 / soles of the shoes」跟服装的「赤足」打架
+            variant_text = barefootize(variant_text)
+            master_raw = barefootize(master_raw)
         master = normalize(expand_inline(master_raw, rng)[0])
 
         suffix = _render_suffix(preset.suffix_template, background, lighting)
@@ -263,7 +373,7 @@ def generate(subject: SubjectProfile, preset: Preset, req: GenerateRequest) -> G
             # lettering block 不再过 normalize（保持 content 逐字原样）。
             core = normalize(
                 req.separator.join(
-                    part for part in (master, variant_text, framing_guard) if part.strip()
+                    part for part in (outfit_text, master, variant_text, framing_guard) if part.strip()
                 )
             )
             tail = [render_lettering_block(spec.display_text, preset.lettering)]
@@ -273,7 +383,9 @@ def generate(subject: SubjectProfile, preset: Preset, req: GenerateRequest) -> G
         else:
             prompt = normalize(
                 req.separator.join(
-                    part for part in (master, variant_text, framing_guard, suffix) if part.strip()
+                    part
+                    for part in (outfit_text, master, variant_text, framing_guard, suffix)
+                    if part.strip()
                 )
             )
         caption = build_caption(
@@ -302,6 +414,7 @@ def generate(subject: SubjectProfile, preset: Preset, req: GenerateRequest) -> G
                     "preset_type": preset.type,
                     "outfit": spec.outfit,
                     "outfit_label": spec.outfit_label,
+                    "outfit_text": spec.outfit_text,
                     "hairstyle": spec.hairstyle,
                     "hairstyle_label": spec.hairstyle_label,
                     "rear_angle": spec.angle in REAR_ANGLES if spec.angle else False,
