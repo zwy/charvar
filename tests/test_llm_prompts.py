@@ -171,7 +171,7 @@ def test_body_lock_clauses_empty_by_default():
 
 
 def test_body_lock_appended_after_role_clauses():
-    from charvar.llm_prompts import reference_anchor_sentence
+    from charvar.llm_prompts import BODY_LOCK_VIEW_GUARD_CLAUSE, reference_anchor_sentence
 
     refs = [{"kind": "front", "tag": "<image1>"}]
     s = reference_anchor_sentence(
@@ -182,6 +182,8 @@ def test_body_lock_appended_after_role_clauses():
     assert "keep the figure exactly as shown in <image1>: a very large, full, round bust" in s
     # 分句顺序：逐图分工在前、body_lock 在后
     assert s.index("from <image1>") < s.index("keep the figure")
+    # 视角护栏在体量锚分句之后：视角看不到的部位保持隐藏，不画第二人
+    assert BODY_LOCK_VIEW_GUARD_CLAUSE in s and s.index("keep the figure") < s.index(BODY_LOCK_VIEW_GUARD_CLAUSE)
 
     # 多条 body_lock → 多个分句
     s2 = reference_anchor_sentence(
@@ -190,10 +192,34 @@ def test_body_lock_appended_after_role_clauses():
         body_lock=["a very large bust", "wide hips"],
     )
     assert ": a very large bust" in s2 and ": wide hips" in s2
+    # 视角护栏只加一条，不逐条重复
+    assert s2.count("never draw a second figure") == 1
 
     # 无 body_lock → 锚定句与旧版逐字相同（存量行为不变）
     s3 = reference_anchor_sentence(refs)
     assert "keep the figure exactly" not in s3
+    assert "never draw a second figure" not in s3
+
+
+def test_character_sheet_guard_clause_in_anchor():
+    """character_sheet 参考图：设定板是同一角色的多视图，不照搬版式、只画一人。"""
+    from charvar.llm_prompts import reference_anchor_sentence
+
+    s = reference_anchor_sentence([{"kind": "character_sheet", "tag": "<image1>"}])
+    assert "multi-view reference sheet of ONE single character" in s
+    assert "never separate people" in s
+    assert "exactly one figure" in s
+
+    # 前置逐图分工句仍在，且护栏不悬空在其他 kind 上
+    refs = [{"kind": "headshot", "tag": "<image1>"}, {"kind": "character_sheet", "tag": "<image2>"}]
+    s2 = reference_anchor_sentence(refs)
+    assert "keep the whole identity" in s2
+    assert "<image2> is a multi-view reference sheet" in s2
+    assert s2.count("reference sheet of ONE single character") == 1
+
+    # 非 character_sheet 参考图不加护栏
+    s3 = reference_anchor_sentence([{"kind": "front", "tag": "<image1>"}])
+    assert "reference sheet" not in s3
 
 
 # ---------- 材料模式与语言（CLI subject prompt；无档案/模板也能起草） ----------
@@ -262,5 +288,7 @@ def test_rewrite_messages_carry_body_lock():
     # body_lock 编成分句进【参考图分工锚定句】，随现有硬规则逐字采用、全批相同
     assert "【参考图分工锚定句】" in user
     assert "keep the figure exactly as shown in <image1>: a very large, full, round bust" in user
+    # 视角护栏随锚定块进 user（不在系统提示词里，冻结红线不动）
+    assert "never draw a second figure" in user
     # 系统提示词不动（冻结红线）：没有新增体形规则句
     assert "体形" not in msgs[0]["content"]
