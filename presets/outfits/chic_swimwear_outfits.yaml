@@ -1,0 +1,36 @@
+# 服装预设：成年女性时装泳装四款。
+# 结构参考用户提供的 mature_milf_outfits.yaml 与 charvar/outfit.py。
+# text 仅描述服装，追加在动作段之后；每条 ≤200 字符（服装段稀释红线，见 AGENTS.md）。
+# ≤200 预算下的取舍：修饰性副词（soft / lined / small / moderately / simple / subtle / continuous）
+# 按条目取舍删减，版型与结构要素（罩杯、环扣、镂空、单肩方向、侧背覆盖）全部保留。
+# label 为中文展示名；caption_tags 为英文 caption token 映射。
+# 本组默认赤脚、无袜；不包含罩衫、裙装、首饰或太阳镜。
+# 适用于成年人物；人物身份、体态、发型、动作、场景由各自模块管理。
+# 当前四款均为新设计，尚无服装参考图，未完成跨人物或跨模型实测。
+# 人物图若带有旧服装，应明确替换范围；需稳定换装时先制作各款服装参考图。
+# 双参考工作流：素材1 = 人物图，素材2 = 当前款服装图。
+# 服装参考图必须实际加载；仅在文字中写素材2不会加载图片。
+# 正面参考不能证明背面结构；环扣连接与单肩方向须重点验收。
+
+name: chic_swimwear_outfits
+type: outfit
+version: 1
+description: 成年女性时装泳装四款：黑色极简分体、樱桃红复古分体、象牙白环扣连体、翡翠绿单肩连体；设计草案，待出图验证
+items:
+- id: swim_black_triangle
+  label: 黑曜极简（黑色细肩带比基尼）
+  text: wearing an opaque matte black bikini with fixed triangle cups, thin shoulder straps, a continuous underbust band, mid-rise V-waist bottoms, fixed side bands and high-cut legs, barefoot, no stockings
+- id: swim_cherry_highwaist
+  label: 樱桃复古（樱桃红高腰比基尼）
+  text: wearing an opaque matte cherry-red bikini with wide shoulder straps, a sweetheart neckline, vertical cup seams and matching navel-high bottoms with raised leg openings, barefoot, no stockings
+- id: swim_ivory_ring
+  label: 象牙环扣（象牙白小镂空连体泳衣）
+  text: wearing an opaque ivory one-piece swimsuit, two shoulder straps, V-neck, a champagne-gold front waist ring, two cutouts beside it, continuous side and back panels, mid-cut legs, barefoot, no stockings
+- id: swim_emerald_asymmetric
+  label: 翡翠斜肩（翡翠绿单肩连体泳衣）
+  text: wearing an opaque deep emerald one-piece swimsuit with a sheen, one wide left shoulder strap, diagonal neckline, bare right shoulder, fitted waist, mid-low back, mid-cut legs, barefoot, no stockings
+caption_tags:
+  swim_black_triangle: matte black triangle bikini
+  swim_cherry_highwaist: cherry-red high-waisted bikini
+  swim_ivory_ring: ivory ring-detail one-piece swimsuit
+  swim_emerald_asymmetric: emerald one-shoulder swimsuit
