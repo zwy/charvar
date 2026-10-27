@@ -109,12 +109,15 @@ label.check input { width: auto; }
 /* checkbox 是小方框，不能跟着输入框撑到 35px 高 */
 label input[type="checkbox"] { min-height: 0; }
 label.span2 { grid-column: span 2; }
-.workflow-grid {
+/* 设置页字段栅格：两列 + --sp-3 行距（=「生图 Workflow」那套节奏）。
+   .form-grid 的行距只有 --sp-2，在设置页显得字段黏成一片，所以设置页统一走它。 */
+.settings-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--sp-3) var(--sp-4);
+  align-items: start;
 }
-.workflow-grid .form-note { grid-column: 1 / -1; }
+.settings-grid > .hint { align-self: end; }
 .actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 button, .btn {
   font: inherit;
@@ -193,6 +196,8 @@ td .caption { color: var(--muted); }
 /* 面板内纵向节奏比卡片密一层：--sp-3 */
 .comfy-panel > * + * { margin-top: var(--sp-3); }
 .hint { color: var(--muted); font-size: 12px; margin: 0; }
+/* 警示型灰字：模型能力不匹配（带参考图会失败）这种要能被一眼看到 */
+.hint-warn { color: var(--danger); }
 /* 表单字段尾部的一句说明：比相邻控件再退一层，别贴死 */
 .form-field .hint { margin-top: var(--sp-1); }
 .log {
@@ -205,6 +210,7 @@ td .caption { color: var(--muted); }
   overflow: auto;
   white-space: pre-wrap;
   margin: 0;
+  margin-top: var(--sp-3); 
 }
 /* 主体档案选择卡：id ＋ 显示名两行文字，网格紧凑排布（替代旧的一行一个列表） */
 .subject-cards {
@@ -259,13 +265,19 @@ td .caption { color: var(--muted); }
 /* 锁定项三栏并排（窄屏自动换成单列） */
 .lock-grid { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
 .full-row { grid-column: 1 / -1; }
-/* OpenRouter 设置：两种模式（文生图 / 图片编辑）并排两组，窄屏自动堆叠 */
-.or-mode-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--sp-4) 28px; }
-.or-mode-group { display: grid; gap: var(--sp-3) var(--sp-4); align-content: start; }
+/* OpenRouter 设置：文生图 / 图片编辑 / 凭据三栏并排，窄屏自动堆叠 */
+.or-mode-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: var(--sp-3) var(--sp-4); }
+/* 模式组 = 卡片里的子面板（浅底 + 1px 边），别让三栏的字段糊在一起 */
+.or-mode-group {
+  display: grid;
+  gap: var(--sp-3) var(--sp-4);
+  align-content: start;
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: #fafbfd;
+}
 .or-mode-group .form-section-title { margin-bottom: 0; }
-/* 卡片底行：API Key 与「拉取模型清单」同一行，按钮对齐输入框底边 */
-.or-foot { display: flex; align-items: flex-end; gap: 20px 32px; flex-wrap: wrap; }
-.or-foot label { flex: 0 1 360px; margin: 0; }
 /* 「保存设置」独立行卡片：全页设置一个入口 */
 .settings-save .hint { flex: 1 1 320px; }
 .import-box { border-top: 1px solid var(--line); padding-top: var(--sp-3); }
@@ -472,8 +484,12 @@ td .caption { color: var(--muted); }
 .ref-pick:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* 设置页 */
-.size-row { display: flex; gap: 6px; }
-.size-row select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; width: auto; flex: 1; }
+/* 主体图默认尺寸：每槽位一格（画幅 + 分辨率两枚下拉），三列排布 */
+.size-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--sp-3) var(--sp-4); }
+.size-row { display: flex; gap: var(--sp-2); }
+/* 尺寸下拉跟别处的输入框同高（--ctl-h），别在卡片里缩成一小截 */
+.size-row select { font: inherit; padding: 7px 9px; min-height: var(--ctl-h); border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; width: auto; flex: 1 1 auto; }
+.size-row select:last-child { flex: 0 0 96px; }
 
 /* Playground 页 */
 .adhoc-result-wrap img { display: block; max-width: min(640px, 100%); height: auto; object-fit: contain; background: #f4f6f9; border: 1px solid var(--line); border-radius: var(--radius-panel); cursor: zoom-in; }
@@ -538,7 +554,7 @@ td .caption { color: var(--muted); }
   .card { padding: 12px 14px; }
 }
 @media (max-width: 720px) {
-  .workflow-grid { grid-template-columns: 1fr; }
+  .settings-grid { grid-template-columns: 1fr; }
 }
 /* 预设页的参考图卡：带「分工」下拉，不是整块点选 */
 #gen-ref-list .ref-pick { cursor: default; }

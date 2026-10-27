@@ -1576,9 +1576,10 @@ async function loadSettings() {
     $("#set-dreamina-model").value = dm.model || "";
     const dmRes = $("#set-dreamina-resolution");
     dmRes.value = Array.from(dmRes.options).some((o) => o.value === dm.resolution) ? dm.resolution : "";
+    // 放在卡片标题行右侧，长句塞不进标题行
     $("#dreamina-cli-status").textContent = settings.dreamina_cli_available === false
-      ? "⚠ 本机没有找到 dreamina CLI：安装（curl -s https://jimeng.jianying.com/cli | bash）并完成 dreamina login 后才能出图"
-      : "dreamina CLI 已就绪；登录态用 dreamina user_credit 可以自查";
+      ? "⚠ 未找到 dreamina CLI：安装后 dreamina login 才能出图"
+      : "dreamina CLI 已就绪（积分用 dreamina user_credit 自查）";
     const sizes = $("#settings-sizes");
     sizes.innerHTML = "";
     for (const [kind, size] of Object.entries(settings.image_sizes)) {

@@ -108,6 +108,11 @@ handled globally).
 ### Layout
 `main { max-width: 1180px; margin: 20px auto; padding: 0 20px; }`
 Form grid: `repeat(auto-fill, minmax(220px, 1fr))` → 3 columns at 1180px.
+Settings page: `.settings-grid` — 2 columns, gap `--sp-3` / `--sp-4`, collapses at 720px.
+It is the only field grid the settings cards use: `.form-grid`'s 8px row gap reads as a wall of
+stuck-together fields there, 12px does not. The image-size card uses `.size-grid` (one cell per
+slot, 3 columns). Same-kind controls share `--ctl-h` (35px) — a dropdown rendered a few px shorter
+than its neighbours is visible immediately.
 Breakpoints: 720px (two-column grids collapse), 500px (form grid → 1 column, topbar wraps,
 card padding shrinks).
 

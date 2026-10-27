@@ -143,14 +143,14 @@
 </section>
 <section id="tab-runs" class="tab-page"><div class="card"><div class="row-head"><h2>生成历史</h2><div class="actions"><button id="btn-runs-refresh">刷新</button></div></div><div class="table-wrap"><table id="runs-table"><thead><tr><th>run_id</th><th>主体</th><th>预设</th><th>种子</th><th>条数</th><th>ComfyUI</th><th>时间</th><th>操作</th></tr></thead><tbody></tbody></table></div></div></section>
 <section id="tab-settings" class="tab-page">
-<div class="card"><h2>LLM</h2><div class="form-grid">
+<div class="card"><h2>LLM</h2><div class="settings-grid">
 <label>Base URL<input type="text" id="set-llm-base" placeholder="留空 = 环境变量 LLM_BASE_URL"></label>
 <label>模型<input type="text" id="set-llm-model" placeholder="留空 = LLM_MODEL"></label>
 <label>API Key<input type="password" id="set-llm-key" placeholder="留空 = LLM_API_KEY（已配置则留空即可）" autocomplete="off"></label>
-<label class="span2">默认负向提示词<input type="text" id="set-negative" placeholder="主体图生成时统一追加（可留空）"></label>
+<label>默认负向提示词<input type="text" id="set-negative" placeholder="主体图生成时统一追加（可留空）"></label>
 </div></div>
-<div class="card"><h2>主体图默认尺寸</h2><div id="settings-sizes" class="form-grid"></div></div>
-<div class="card"><h2>生图 Workflow</h2><div class="workflow-grid">
+<div class="card"><h2>主体图默认尺寸</h2><div id="settings-sizes" class="size-grid"></div></div>
+<div class="card"><h2>生图 Workflow</h2><div class="settings-grid">
 <label>文生图 workflow（主体图：三视图）<select id="set-t2i"></select></label>
 <label>图片编辑 workflow（LLM 模式变体 / 档案单图）<select id="set-edit"></select></label>
 <p class="form-note">各槽位一律按「主体图默认尺寸」的画幅 × 分辨率出图，参考图只提供外观。</p>
@@ -169,30 +169,27 @@
 <label id="set-or-i2i-res-field" hidden>分辨率档<select id="set-or-i2i-resolution"></select></label>
 <label id="set-or-i2i-quality-field" hidden>质量档<select id="set-or-i2i-quality"></select></label>
 </section>
-</div>
-<p id="or-model-hints" class="hint"></p>
-<datalist id="or-model-options"></datalist>
-<div class="or-foot">
+<section class="or-mode-group">
+<div class="form-section-title">凭据</div>
 <label>API Key<input type="password" id="set-or-key" placeholder="留空 = OP_IMAGE_API_KEY / LLM_API_KEY" autocomplete="off"></label>
 <div class="actions"><button id="btn-or-models-refresh">拉取模型清单</button><span id="or-models-status" class="status"></span></div>
+</section>
+<p class="form-note">分辨率 / 质量档按模型声明动态显示，不支持的档不出现；留空 = 请求显式值 &gt; 这里 &gt; env。</p>
 </div>
-<p class="form-note">分辨率 / 质量档按所选模型的 supported_parameters 动态加载，不支持的档不显示。留空 = 用请求显式值 &gt; 这里 &gt; env。API Key 留空 = 用环境变量。</p>
+<p id="or-model-hints" class="hint hint-warn"></p>
+<datalist id="or-model-options"></datalist>
 </div>
-<div class="card"><h2>即梦 Dreamina 生图</h2>
-<div class="form-grid">
+<div class="card"><div class="row-head"><h2>即梦 Dreamina 生图</h2><span id="dreamina-cli-status" class="hint"></span></div>
+<div class="settings-grid">
 <label>model_version<input type="text" id="set-dreamina-model" placeholder="留空 = DREAMINA_IMAGE_MODEL（CLI 默认 5.0）"></label>
 <label>分辨率档<select id="set-dreamina-resolution">
 <option value="">（跟随 env 默认）</option><option value="2K">2K</option><option value="4K">4K</option></select></label>
-</div>
-<p class="form-note">走本机 <code>dreamina</code> CLI 登录态，没有 API Key。不暴露 seed；提示词上限 text2image 约 1600 字符、image2image 约 2000 字符（超限硬失败）。生成消耗即梦积分。</p>
-<span id="dreamina-cli-status" class="hint"></span>
-</div>
-<div class="card"><h2>OpenRouter 视频</h2>
-<div class="form-grid">
+<p class="form-note">走本机 <code>dreamina</code> CLI 登录态，没有 API Key，不暴露 seed；提示词上限 文生图 1592 字符 / 图片编辑 1992 字符（超限硬失败），生成消耗即梦积分。</p>
+</div></div>
+<div class="card"><h2>OpenRouter 视频</h2><div class="settings-grid">
 <label>默认模型<select id="set-or-video-model"></select></label>
-</div>
-<p class="form-note">生效链：请求显式 &gt; 这里 &gt; <code>OP_VIDEO_MODEL</code>。时长 / 分辨率 / 画幅在「视频」页逐条选。API key 与生图共用。</p>
-</div>
+<p class="hint">生效链：请求显式 &gt; 这里 &gt; <code>OP_VIDEO_MODEL</code>；时长 / 分辨率 / 画幅在「视频」页逐条选。</p>
+</div></div>
 <div class="card settings-save"><div class="actions">
 <button id="btn-settings-save" class="primary">保存设置</button><span id="settings-status" class="status"></span>
 <span class="hint">一次保存本页全部设置。</span>
