@@ -158,27 +158,6 @@ REFERENCE_ROLE_CLAUSES: dict[str, str] = {
     ),
 }
 
-# character_sheet（四视图设定板）参考图的单人护栏：设定板是「同一角色的多个视图」，
-# 但照搬设定板版式会输出多人——实测 back 角变体（请求里只有 back 视角）在四视图
-# 参考图下出两人：体量描述在背面画不出，模型检索到设定板的「正面大图＋背面全身」
-# 面板结构，把邻近面板一起搬出来（full_back/chest_back 出正面＋背面两人、
-# head_back 出两个重复背面）。r135 等无面板对应的视角不受影响。
-CHARACTER_SHEET_GUARD_CLAUSE: str = (
-    "{tag} is a multi-view reference sheet of ONE single character: its panels are all "
-    "views of the same one figure, never separate people; do not copy its sheet layout "
-    "or reproduce panels side by side, and every image must contain exactly one figure"
-)
-
-# body_lock 的视角护栏：体形描述里该视角看不见的部位保持隐藏——实测背面视角下
-# 正面体量句（胸部向前形成独立的体积）不能在画面兑现，模型会补一个正面人物来
-# 满足文本（这是「为不可见部位加画第二人」的直接机制）。裁剪交给改写 LLM 执行：
-# 它逐条重写、知道每条的 angle/framing，由护栏授权省略不可见部位的表述。
-BODY_LOCK_VIEW_GUARD_CLAUSE: str = (
-    "parts of the figure description that the requested view cannot show stay hidden "
-    "by that view; never draw a second figure or an extra view to display a hidden "
-    "body part"
-)
-
 # 服装组合（outfit 预设）专用：参考图**不再**提供服装——服装由服装预设给定。
 # 参考图里那套衣服（主体自己的白裙丝袜/西装等）与服装预设必须二选一，
 # 两边都写会让模型跟着参考图穿，服装预设等于没生效（实测：整批 24/24 条丢服装）。
@@ -282,17 +261,18 @@ def body_lock_clauses(body_lock: list[str] | None, refs: list[dict]) -> list[str
     - 每条 body_lock item 一个分句，格式 keep the figure exactly as shown in {tag}: <item>；
       item 断言体形本身（如 very large, full, round bust …），tag 指向第一张参考图
       ——体形在每张参考图里都可见，选哪张开场都不悬空。
-    - 尾部追加 BODY_LOCK_VIEW_GUARD_CLAUSE：视角看不到的体形描述保持隐藏，
-      绝不为展示隐藏部位画第二人（见该常量注释）。
+    - 这里**不加**任何「视角护栏」（不要画第二人/不照搬设定板版式之类的措辞）：
+      出图模型对概念词是显性召唤物，「设定板分格/第二个人物/多视图」写进它读到的
+      提示词反而把版式复现出来（2026-10-27 实测：护栏写进锚定句后，正面/r45 变体
+      从单人变 3 人设定板版式）。视角裁剪走 build_rewrite_messages 的系统硬规则，
+      只给改写 LLM 看，不落进出图提示词。
     - 无 body_lock 或无参考图 → 空列表（锚定块不变，存量行为逐字不变）。
     """
     items = [str(x).strip() for x in (body_lock or []) if str(x).strip()]
     if not items or not refs:
         return []
     tag = str(refs[0].get("tag") or "<image1>")
-    return [
-        f"keep the figure exactly as shown in {tag}: {item}" for item in items
-    ] + [BODY_LOCK_VIEW_GUARD_CLAUSE]
+    return [f"keep the figure exactly as shown in {tag}: {item}" for item in items]
 
 # required_label（带字表情包）专用尾句：中文文案由程序按原文追加，这里只禁「额外」文字。
 # 不要全局替换旧尾句——旧预设仍逐字使用 REFERENCE_TAIL_SENTENCE。
@@ -357,11 +337,9 @@ def reference_anchor_sentence(
 
     body_lock（主体档案的可选体形锁定）→ 追加成锚定块的附加分句（紧跟逐图分工句）：
     换装时体量锚的主要文本来源。走锚定块而不是新开材料块，是为了继承现有硬规则
-    （逐字采用、全批相同、不得增删分句），不用动冻结的英文系统提示词。
-    体量锚分句尾部自动带视角护栏（视角看不到的部位保持隐藏、不画第二人）。
-
-    reference 里出现 character_sheet（四视图设定板）→ 分句后追加 CHARACTER_SHEET_GUARD_CLAUSE：
-    它是同一角色的多视图，不是多个人，不照搬版式（back 角变体实测在四视图下出两人）。
+    （逐字采用、全批相同、不得增删分句），不用动冻结的相关规则句。
+    按视角裁剪这批体量句的授权在 build_rewrite_messages 的系统硬规则里（只进
+    改写 LLM 的输入，不进锚定句与出图提示词）。
     """
     clauses = []
     table = reference_clause_table(outfit_mode, hairstyle_mode)
@@ -370,8 +348,6 @@ def reference_anchor_sentence(
         if not clause:
             continue
         clauses.append(clause.format(tag=ref.get("tag") or "<image1>"))
-        if str(ref.get("kind") or "") == "character_sheet":
-            clauses.append(CHARACTER_SHEET_GUARD_CLAUSE.format(tag=ref.get("tag") or "<image1>"))
     clauses.extend(body_lock_clauses(body_lock, refs))
     if not clauses:
         return ""
@@ -635,7 +611,9 @@ def build_rewrite_messages(
     程序按 display_text 原文追加，LLM 段一旦输出中文就会被 sticker 的禁字规则判为不合格。
 
     主体档案的 body_lock（可选体形锁定）自动进锚定块：换装重绘躯干时给胸/腰/臀
-    体量留显式文本锚（见 reference_anchor_sentence）。
+    体量留显式文本锚（见 reference_anchor_sentence）。锚定句里的体形分句全批逐字
+    相同；但内容按各变体视角裁剪——授权与措辞禁忌在系统硬规则里（视角看不到的
+    部位描述省略，且改写结果不得出现设定板/分格/第二个人物等版式词汇）。
     """
     sticker = text_policy == "required_label"
     if sticker:
@@ -693,6 +671,13 @@ def build_rewrite_messages(
             + phrase["guard"] + "\n"
             "- 被遮挡的细节按视角自然隐藏，不强行转体/错开肢体展示；不对称细节（痣、挑染、纹样）在"
             "左右朝向互换时保持贴身位置，不镜像；\n"
+            + ("- 体形锁定句的视角裁剪（唯一例外）：锚定句里的体形锁定分句"
+               "（keep the figure exactly…）保持全批逐字相同，但它描述的体形按该变体的视角裁剪后写进 "
+               "prompt：该视角能看到的部位描述必须采用（语义不改写）；看不到的部位描述省略，"
+               "不要写成「虽然不可见但依然存在」一类的转述句，也不要为它增加任何额外构图内容；"
+               "改写结果里绝不出现设定板、分格、多视图并排、第二个人物、复现面板这类词汇"
+               "（这些词是出图模型的显性召唤物，写了就会被画出来）；\n"
+               if (not sticker and subject.body_lock) else "")
             + _prompt_string_rule(language, sticker=False, outfit=outfit_mode, hairstyle=hairstyle_mode)
             + ("- 发型：每条意图的 hairstyle 字段是该变体的发型（英文原文），是头发结构的唯一权威："
                "档案与参考图中的原发型结构描述不再采用——头发长度、刘海、分缝、层次与卷度全部按 "
