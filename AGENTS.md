@@ -37,6 +37,29 @@
 - seed：目录标 `seed: false` 的模型不发；时长的 bool 会过 pydantic int 校验，`validate` 里明确拦。
 - 按秒计费（面板按 pricing_skus 出「预计 ≈」只做展示）；heygen-video-1 的便宜档是 480p $0.02/s。
 
+### Playground 语音（OpenRouter TTS 通路）
+
+`charvar/adhoc_tts.py` 是「给一段文本出一段音频」的同构通路，只接 OpenRouter
+（`charvar/openrouter_tts.py` 客户端）；API 细节与实测话术见 `docs/语音通路.md`。
+
+- **同步通路**（与视频的异步作业不同）：`POST /audio/speech` 一次请求直接返回音频
+  字节流，web `/tts/generate` 等音频返回再响应，**没有 status 轮询端点**。
+- CLI：`charvar tts openrouter`（`--prompt`/`--prompt-file`/`--voice`/`--model`/`--format`/`--out`/`--json`）
+  + `charvar tts models`；产物落 `data/generated/adhoc_tts/{id}/`（无 thumbs）。
+  **网页入口**：顶栏「语音」页签（`web/static/tts.js`）+ `/tts/*`。改参数名/输出格式
+  时 CLI、网页、skill 三处同步。
+- 模型目录走 `GET /api/v1/models?output_modalities=speech`（无独立端点），缓存
+  `data/openrouter/speech-models.json`（三份缓存之一）。
+- **voice 实测必填**（heygen/minimax 不带 voice 一律 400）：目录 `supported_voices`
+  非空时请求空值自动取第一项兜底；枚举为空的模型（fish/seed）不发送。
+- **格式协商**：请求显式 > `data/openrouter/tts-capabilities.json` 探测缓存（值级，
+  与生图 capabilities.json 语义不同别混）> 静态表（heygen/gemini→pcm、minimax→mp3）
+  > 不发（API 默认 pcm）；被拒按 400 话术换值重试并记档。裸 PCM 按响应头
+  `rate/channels` 封装 WAV —— **落盘永远是可播的 wav/mp3**。
+- HeyGen 系 5000 字符单次上限提交前拦；响应无费用头，按目录价估算展示；
+  默认链 请求显式 > 设置页「OpenRouter 语音」组 > `OP_TTS_MODEL` > 免费档
+  `heygen/heygen-voice-1-turbo:free`；声音克隆（input_references）第二期。
+
 ## 仓库里的 skills（`skills/`）
 
 **开发或改 skill 前先读 `docs/skill 开发规范.md`** —— 包结构、frontmatter、渐进披露、版本三处同步、兄弟 skill 去重、测试分类（哪些机器查得到、哪些只能人工核）。规范里 ✅ 的部分由 `tests/test_skills.py` 自动校验（`python3 -m pytest -q` 会跑）。

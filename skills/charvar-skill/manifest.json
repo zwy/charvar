@@ -1,21 +1,26 @@
 {
   "name": "charvar-skill",
-  "version": "1.5.0",
-  "updated": "2026-10-26",
-  "description": "按提示词实际出图/出视频的 Claude Code skill：ComfyUI、OpenRouter、即梦三条通路 + 主体档案 CLI。",
+  "version": "1.6.0",
+  "updated": "2026-10-28",
+  "description": "按提示词实际出图/出视频的 Claude Code skill：ComfyUI、OpenRouter、即梦三条通路 + OpenRouter 语音（TTS）+ 主体档案 CLI。",
   "entrypoint": "SKILL.md",
   "files": {
     "manifest.json": "版本、文件清单与检查结果记录。",
-    "SKILL.md": "核心入口：三条生图通路、视频、主体档案命令与排错表。",
+    "SKILL.md": "核心入口：三条生图通路、视频、语音、主体档案命令与排错表。",
     "references/cli.md": "完整 CLI 参数参考。"
   },
   "checks": {
     "command": "python3 -m pytest tests/test_skills.py",
-    "last_run": "2026-10-26",
+    "last_run": "2026-10-28",
     "result": "passed",
     "note": "本 skill 无自带脚本；由仓库级 tests/test_skills.py 校验 frontmatter、版本同步与文件清单。"
   },
   "history": [
+    {
+      "version": "1.6.0",
+      "date": "2026-10-28",
+      "note": "新增语音生成通路（OpenRouter TTS）：charvar tts openrouter（文本 → wav/mp3，同步）与 charvar tts models（模型/voice 清单）。默认模型免费档 heygen/heygen-voice-1-turbo:free（OP_TTS_MODEL 可换），网页顶栏「语音」页签同一条通路。voice 目录枚举非空时实测必填（空值自动取第一项兜底）；HeyGen 系 5000 字符单次上限提交前拦截；裸 PCM 按响应头采样率封装成 wav，MiniMax 只出 mp3（格式给错自动换档重试并记探测缓存）。声音克隆（参考音频）第二期再接。"
+    },
     {
       "version": "1.5.0",
       "date": "2026-10-26",

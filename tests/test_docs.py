@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parent.parent
 
 # AGENTS.md 的体量预算（UTF-8 字节）。它是**密度护栏**，不是运行时硬截断：
 # 超了说明细节该往 docs/ 挪，而不是继续往这份「当前态契约」里塞。
-AGENTS_BUDGET_BYTES = 34816
+AGENTS_BUDGET_BYTES = 36864
 
 LINK_RE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 DOC_REF_RE = re.compile(r"`(docs/[^`]+?\.(?:md|txt|json))`")

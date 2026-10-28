@@ -23,8 +23,10 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from charvar import __version__, assets, llm, paths, settings_service, storage, subject_images
 from charvar import adhoc as adhoc_service
 from charvar import adhoc_video as adhoc_video_service
+from charvar import adhoc_tts as adhoc_tts_service
 from charvar import dreamina_image
 from charvar import openrouter_image
+from charvar import openrouter_tts
 from charvar import openrouter_video
 from charvar import reference_images
 from charvar.assets import ensure_thumb, resolve_run_asset, sheet_path, thumb_path
@@ -336,6 +338,20 @@ class VideoGenerateRequest(BaseModel):
     first_frame: AdhocReferenceSpec | None = None
     references: list[AdhocReferenceSpec] = Field(default_factory=list)
     video_references: list[StagedVideoRefSpec] = Field(default_factory=list)
+
+
+class TtsGenerateRequest(BaseModel):
+    """网页「语音」页的请求(与 CLI ``charvar tts`` 同一套参数;OpenRouter 同步通路)。
+
+    语音合成是**同步**的:本端点等 OpenRouter 返回音频字节后再响应(几十秒封顶),
+    不需要视频那套 status 轮询。voice / response_format 空串 = 自动
+    (枚举兜底第一项 / 格式自动协商)。
+    """
+
+    text: str
+    model: str | None = None  # 空 = 设置页/env 默认(免费 turbo:free)
+    voice: str = ""  # 空 = 不发(目录枚举非空时 client 兜底第一项)
+    response_format: str = ""  # 空 = 自动(探测缓存 > 静态表 > API 默认 pcm)
 
 
 def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
@@ -1819,6 +1835,91 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         try:
             path = adhoc_video_service.run_dir(run_id) / "manifest.json"
         except adhoc_video_service.AdhocVideoError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        if not path.exists():
+            raise HTTPException(404, f"没有 manifest：{run_id}")
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    # ---- Playground 语音（charvar.adhoc_tts：web 与 CLI charvar tts 同一通路） ----
+    # 同步生成（与视频的异步作业不同）：/tts/generate 等音频字节返回后再响应，
+    # 没有 status 轮询。与 /videos 同款路由声明纪律：字面路径（/tts/models、/tts）
+    # 必须在 /tts/{run_id}/… 之前，否则 run_id 通配会把它们吞掉。
+
+    _AUDIO_MEDIA_TYPES = {
+        "wav": "audio/wav",
+        "mp3": "audio/mpeg",
+        "ogg": "audio/ogg",
+        "flac": "audio/flac",
+    }
+
+    @app.get("/tts/models")
+    def api_tts_models(refresh: bool = Query(False)) -> dict[str, Any]:
+        """语音模型目录（每模型的 voice 枚举 + 目录价；缓存本地 JSON）。"""
+        try:
+            data = openrouter_tts.list_models(force_refresh=refresh)
+        except openrouter_tts.OpenRouterTtsError as exc:
+            raise HTTPException(502, f"读语音模型目录失败：{exc}") from exc
+        models: list[dict[str, Any]] = []
+        for item in data.get("data") or []:
+            if not isinstance(item, dict):
+                continue
+            models.append(
+                {
+                    "id": str(item.get("id") or ""),
+                    "name": str(item.get("name") or ""),
+                    "supported_voices": item.get("supported_voices") or [],
+                    "pricing": item.get("pricing") or {},
+                }
+            )
+        with _db() as conn:
+            default_model = settings_service.openrouter_tts_config(conn)["model"]
+        return {"data": models, "default_model": default_model}
+
+    @app.post("/tts/generate")
+    def api_tts_generate(req: TtsGenerateRequest) -> dict[str, Any]:
+        """Playground 语音：给一段文本出一行语音（同步，等音频字节返回）。
+
+        走的是 CLI ``charvar tts`` 同一套（``charvar.adhoc_tts``），不落 runs 表。
+        """
+        tts_req = adhoc_tts_service.TtsRequest(
+            text=req.text,
+            model=(req.model or "").strip() or None,
+            voice=(req.voice or "").strip(),
+            response_format=(req.response_format or "").strip(),
+        )
+        try:
+            result = adhoc_tts_service.generate(tts_req, db_path)
+        except adhoc_tts_service.AdhocTtsError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001 - 网络/后端异常统一转 502
+            raise HTTPException(502, f"语音合成失败：{exc}") from exc
+        payload = result.model_dump()
+        payload["audio_url"] = f"/tts/{result.run_id}/audio"
+        return payload
+
+    @app.get("/tts")
+    def api_tts_list(limit: int = Query(20, ge=1, le=100)) -> list[dict[str, Any]]:
+        """最近的 Playground 语音记录（读 manifest.json；不落 runs 表）。"""
+        return adhoc_tts_service.list_recent(limit)
+
+    @app.get("/tts/{run_id}/audio")
+    def api_tts_audio(run_id: str) -> FileResponse:
+        try:
+            path = adhoc_tts_service.audio_file(run_id)
+        except adhoc_tts_service.AdhocTtsError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        media_type = _AUDIO_MEDIA_TYPES.get(
+            path.suffix.lower().lstrip("."), "application/octet-stream"
+        )
+        return FileResponse(path, media_type=media_type)
+
+    @app.get("/tts/{run_id}/manifest")
+    def api_tts_manifest(run_id: str) -> dict[str, Any]:
+        try:
+            path = adhoc_tts_service.run_dir(run_id) / "manifest.json"
+        except adhoc_tts_service.AdhocTtsError as exc:
             raise HTTPException(400, str(exc)) from exc
         if not path.exists():
             raise HTTPException(404, f"没有 manifest：{run_id}")

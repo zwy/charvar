@@ -43,6 +43,7 @@ subject_image_app = typer.Typer(help="主体档案图片（槽位图导入）", 
 presets_app = typer.Typer(help="YAML 预设", no_args_is_help=True)
 image_app = typer.Typer(help="Playground：给一段提示词直接出一张图", no_args_is_help=True)
 video_app = typer.Typer(help="Playground 视频：给一段提示词直接出一段视频（OpenRouter，异步作业）", no_args_is_help=True)
+tts_app = typer.Typer(help="Playground 语音：给一段文本直接出一段语音（OpenRouter，同步）", no_args_is_help=True)
 app.add_typer(subject_app, name="subject")
 subject_app.add_typer(subject_image_app, name="image")
 app.add_typer(presets_app, name="presets")
@@ -50,6 +51,7 @@ recipes_app = typer.Typer(help="视频配方：线性步骤执行器（出图批
 app.add_typer(recipes_app, name="recipes")
 app.add_typer(image_app, name="image")
 app.add_typer(video_app, name="video")
+app.add_typer(tts_app, name="tts")
 
 
 def _die(message: str) -> None:
@@ -1316,6 +1318,112 @@ def video_models(
         pricing = openrouter_video.pricing_hints(model)
         if pricing:
             typer.echo(f"    价格：{'、'.join(pricing)}")
+        typer.echo("")
+
+
+# ---------- tts（Playground 语音） ----------
+
+def _run_tts(req, json_out: bool) -> None:
+    """跑一次 Playground 语音合成并输出结果（--json 时 stdout 只有 JSON）。"""
+    from charvar import adhoc_tts as adhoc_tts_service
+
+    try:
+        result = adhoc_tts_service.generate(req)
+    except adhoc_tts_service.AdhocTtsError as exc:
+        _die(str(exc))
+        return
+    except Exception as exc:  # noqa: BLE001 - 网络/后端异常转友好提示
+        _die(f"{type(exc).__name__}: {exc}")
+        return
+    if json_out:
+        typer.echo(result.model_dump_json())
+        return
+    typer.echo(f"完成：{result.audio_path}")
+    typer.echo(f"  模型：{result.model or ''}  voice：{result.voice or '（provider 默认）'}  {result.response_format or 'pcm'}")
+    if result.duration_s is not None:
+        typer.echo(f"  时长：{result.duration_s:.1f}s · {result.size_bytes} 字节")
+    if result.cost is not None:
+        typer.echo(f"  预计：${result.cost:.4f}")
+    typer.echo(f"  用时：{result.duration_ms / 1000:.1f}s  manifest → {result.manifest_path}")
+
+
+@tts_app.command("openrouter")
+def tts_openrouter(
+    prompt: Optional[str] = typer.Option(None, "--prompt", help="要朗读的文本"),
+    prompt_file: Optional[str] = typer.Option(None, "--prompt-file", help="文本文件（- 表示读 stdin）"),
+    voice: str = typer.Option("", "--voice", help="voice 标识（空 = 目录枚举第一项兜底；用 charvar tts models 查清单）"),
+    model: Optional[str] = typer.Option(
+        None, "--model", help="模型 slug（默认设置页 / OP_TTS_MODEL，兜底 heygen/heygen-voice-1-turbo:free）"
+    ),
+    output_format: str = typer.Option(
+        "", "--format", help="输出格式 mp3/pcm（空 = 自动协商；heygen 只出 pcm、minimax 只出 mp3，给错会自动换档重试）"
+    ),
+    timeout: float = typer.Option(300.0, "--timeout", help="HTTP 超时秒数（默认 300）"),
+    out: Optional[Path] = typer.Option(None, "--out", "-o", help="另外落一份到这个路径"),
+    json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出到终端"),
+) -> None:
+    """用 OpenRouter 出一段语音（文本 → 音频；同步，一次请求直接返回）。
+
+    默认模型 heygen/heygen-voice-1-turbo:free（免费，10 个默认 voice）。
+    HeyGen 系 5000 字符上限在提交前拦截；语音落盘为 wav（裸 PCM 自动封装）或 mp3。
+    """
+    from charvar import adhoc_tts as adhoc_tts_service
+
+    req = adhoc_tts_service.TtsRequest(
+        text=_read_prompt(prompt, prompt_file),
+        backend="openrouter",
+        voice=voice,
+        model=model,
+        response_format=output_format,
+        out=out,
+    )
+    _run_tts(req, json_out)
+
+
+@tts_app.command("models")
+def tts_models(
+    refresh: bool = typer.Option(False, "--refresh", help="忽略本地缓存，强制拉取最新目录"),
+    json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出到终端"),
+) -> None:
+    """列 OpenRouter 可用的语音模型及其 voice 枚举。
+
+    提交前先跑这个：voice 超枚举会被拒（404），枚举非空的模型 voice 必填
+    （空值会自动用第一项兜底）。
+    """
+    from charvar import openrouter_tts
+
+    try:
+        data = openrouter_tts.list_models(force_refresh=refresh)
+    except openrouter_tts.OpenRouterTtsError as exc:
+        _die(f"读 OpenRouter 语音模型目录失败：{exc}")
+        return
+
+    if json_out:
+        typer.echo(json.dumps(data, ensure_ascii=False))
+        return
+
+    items = [m for m in (data.get("data") or []) if isinstance(m, dict)]
+    if not items:
+        typer.echo("（目录为空）")
+        return
+    for model in items:
+        model_id = str(model.get("id") or "").strip()
+        if not model_id:
+            continue
+        typer.echo(f"{model_id}\t{str(model.get('name') or model_id)}")
+        voices = [str(v) for v in (model.get("supported_voices") or []) if isinstance(v, (str, int))]
+        if voices:
+            shown = voices[:12]
+            suffix = f"…（共 {len(voices)} 个）" if len(voices) > len(shown) else ""
+            typer.echo(f"    voice：{', '.join(shown)}{suffix}")
+        rate = (model.get("pricing") or {}).get("prompt")
+        if rate is not None:
+            try:
+                per_million = float(rate) * 1_000_000
+                price = "免费" if per_million == 0 else f"${per_million:.2f}/百万字符"
+                typer.echo(f"    价格：{price}")
+            except (TypeError, ValueError):
+                pass
         typer.echo("")
 
 

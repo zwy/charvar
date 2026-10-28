@@ -94,6 +94,19 @@ class OpenRouterVideoSettings(BaseModel):
     model: str = ""
 
 
+class OpenRouterTtsSettings(BaseModel):
+    """OpenRouter 语音合成(TTS)配置(Playground 语音,``charvar.adhoc_tts``)。
+
+    - model 空串 = 用 env ``OP_TTS_MODEL``(再缺省 heygen/heygen-voice-1-turbo:free);
+    - API key 与生图/视频同链路(OP_IMAGE_API_KEY / LLM_API_KEY),这里不重复配;
+    - voice / response_format 不进配置:voice 随所选模型的目录枚举变
+      (supported_voices,枚举非空时 client 兜底第一项),response_format 由
+      client 按探测缓存/静态表自动协商 —— 都不适合设全局默认。
+    """
+
+    model: str = ""
+
+
 class AppSettings(BaseModel):
     comfy_t2i_workflow: str = _DEFAULT_WORKFLOW_T2I
     comfy_edit_workflow: str = _DEFAULT_WORKFLOW_EDIT
@@ -102,6 +115,7 @@ class AppSettings(BaseModel):
     openrouter: OpenRouterSettings = Field(default_factory=OpenRouterSettings)
     dreamina: DreaminaSettings = Field(default_factory=DreaminaSettings)
     openrouter_video: OpenRouterVideoSettings = Field(default_factory=OpenRouterVideoSettings)
+    openrouter_tts: OpenRouterTtsSettings = Field(default_factory=OpenRouterTtsSettings)
     default_negative_prompt: str = ""
 
 
@@ -140,6 +154,12 @@ def get_settings(conn: sqlite3.Connection) -> AppSettings:
         if isinstance(ov_raw, dict)
         else OpenRouterVideoSettings()
     )
+    ot_raw = data.get("openrouter_tts")
+    openrouter_tts = (
+        OpenRouterTtsSettings.model_validate(ot_raw)
+        if isinstance(ot_raw, dict)
+        else OpenRouterTtsSettings()
+    )
     # 迁移：旧的单模型配置（DB 里的 openrouter.model）平移到两个模式；
     # 新字段各自可再覆盖。model 字段本体保留在返回值里，读接口不再展示。
     if not openrouter.t2i_model:
@@ -154,6 +174,7 @@ def get_settings(conn: sqlite3.Connection) -> AppSettings:
         openrouter=openrouter,
         dreamina=dreamina,
         openrouter_video=openrouter_video,
+        openrouter_tts=openrouter_tts,
         default_negative_prompt=str(data.get("default_negative_prompt") or ""),
     )
 
@@ -174,6 +195,7 @@ def save_settings(conn: sqlite3.Connection, patch: dict) -> AppSettings:
             "openrouter",
             "dreamina",
             "openrouter_video",
+            "openrouter_tts",
             "default_negative_prompt",
         ):
             continue
@@ -240,6 +262,19 @@ def openrouter_video_config(conn: sqlite3.Connection) -> dict[str, str]:
 
     settings = get_settings(conn)
     return {"model": openrouter_video.resolve_model(settings.openrouter_video.model)}
+
+
+def openrouter_tts_config(conn: sqlite3.Connection) -> dict[str, str]:
+    """OpenRouter 语音(TTS)的生效配置:DB > env(OP_TTS_MODEL)> 缺省(免费 turbo:free)。
+
+    - model 走 openrouter_tts.resolve_model 的完整链路;
+    - voice / response_format 不进配置(voice 随模型的目录枚举变,
+      格式由 openrouter_tts 自动协商),提交前校验在 charvar.openrouter_tts。
+    """
+    from charvar import openrouter_tts
+
+    settings = get_settings(conn)
+    return {"model": openrouter_tts.resolve_model(settings.openrouter_tts.model)}
 
 
 def llm_overrides(conn: sqlite3.Connection) -> dict[str, str] | None:

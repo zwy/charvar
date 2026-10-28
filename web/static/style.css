@@ -330,6 +330,11 @@ td .caption { color: var(--muted); }
 .video-card video { width: 100%; display: block; }
 .video-card .image-placeholder { min-height: 120px; display: flex; align-items: center; justify-content: center; }
 
+/* Playground 语音：结果播放器与历史卡片里的内联音频统一宽度 */
+#tts-result-player { width: 100%; max-width: 560px; }
+.tts-card audio { width: 100%; display: block; }
+.tts-card .image-placeholder { min-height: 60px; display: flex; align-items: center; justify-content: center; }
+
 /* 表格行内操作按钮：并列一行，紧凑间距 */
 .row-actions { display: flex; gap: 6px; }
 .row-actions button { white-space: nowrap; }

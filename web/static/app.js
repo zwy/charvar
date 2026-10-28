@@ -1571,6 +1571,22 @@ async function loadSettings() {
     }
     vSel.innerHTML = vOptions.join("");
     vSel.value = orv.model || "";
+    // OpenRouter 语音：模型下拉来自 /tts/models 目录；已存值不在清单里时补一项
+    const ort = settings.openrouter_tts || {};
+    let ttsCatalog = null;
+    try {
+      ttsCatalog = await api("/tts/models");
+    } catch {} // 清单读不到时下拉里只剩「跟随默认」
+    const ttsModels = (ttsCatalog && ttsCatalog.data) || [];
+    const tSel = $("#set-or-tts-model");
+    const defaultTtsModel = (ttsCatalog && ttsCatalog.default_model) || "";
+    const tOptions = [`<option value="">跟随默认（${escapeHtml(defaultTtsModel || "OP_TTS_MODEL / heygen-voice-1-turbo:free")}）</option>`]
+      .concat(ttsModels.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name || m.id)}</option>`));
+    if (ort.model && !ttsModels.some((m) => m.id === ort.model)) {
+      tOptions.push(`<option value="${escapeHtml(ort.model)}">${escapeHtml(ort.model)}（不在当前清单里）</option>`);
+    }
+    tSel.innerHTML = tOptions.join("");
+    tSel.value = ort.model || "";
     // 即梦：model 自由文本（空 = env/CLI 默认）；分辨率档固定 2K/4K 枚举
     const dm = settings.dreamina || {};
     $("#set-dreamina-model").value = dm.model || "";
@@ -1637,6 +1653,10 @@ $("#btn-settings-save").addEventListener("click", async () => {
   // OpenRouter 视频：model 空串 = 落库为空 = 回到 env（OP_VIDEO_MODEL）/ heygen 默认
   patch.openrouter_video = {
     model: $("#set-or-video-model").value.trim(),
+  };
+  // OpenRouter 语音：model 空串 = 落库为空 = 回到 env（OP_TTS_MODEL）/ 免费默认
+  patch.openrouter_tts = {
+    model: $("#set-or-tts-model").value.trim(),
   };
   try {
     await api("/settings", { method: "PUT", body: JSON.stringify(patch) });

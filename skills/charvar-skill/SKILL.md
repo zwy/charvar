@@ -1,12 +1,12 @@
 ---
 name: charvar-skill
-description: Generate images with the charvar project's ComfyUI, OpenRouter, or Dreamina backends from any project. This skill should be used when the user asks to "用 comfyui 生图", "用 openrouter 生图", "用即梦生图", "charvar 帮我出图", "用 charvar 出张图", "generate an image with comfyui", "generate an image with openrouter", "generate an image with dreamina", or otherwise asks to produce an image via the charvar CLI; also for generating short videos via OpenRouter ("charvar 帮我出段视频", "用 openrouter 生视频", "generate a video with charvar"), and for charvar subject-profile tasks such as "导入角色档案", "从模板生成主体档案" or using the charvar subject CLI, and for drafting the five subject-image slot prompts (character_sheet/headshot/front/side/behind) without an existing profile via "charvar subject prompt" ("起草主体图提示词", "AI 起草定妆图提示词", "帮我起草设定图提示词").
+description: Generate images with the charvar project's ComfyUI, OpenRouter, or Dreamina backends from any project. This skill should be used when the user asks to "用 comfyui 生图", "用 openrouter 生图", "用即梦生图", "charvar 帮我出图", "用 charvar 出张图", "generate an image with comfyui", "generate an image with openrouter", "generate an image with dreamina", or otherwise asks to produce an image via the charvar CLI; also for generating short videos via OpenRouter ("charvar 帮我出段视频", "用 openrouter 生视频", "generate a video with charvar"), for text-to-speech via OpenRouter ("charvar 帮我出语音", "把这段文字变成语音", "用 openrouter 生语音", "generate speech / TTS with charvar"), and for charvar subject-profile tasks such as "导入角色档案", "从模板生成主体档案" or using the charvar subject CLI, and for drafting the five subject-image slot prompts (character_sheet/headshot/front/side/behind) without an existing profile via "charvar subject prompt" ("起草主体图提示词", "AI 起草定妆图提示词", "帮我起草设定图提示词").
 ---
 
 # charvar 生图
 
-版本：1.5.0  
-更新：2026-10-26
+版本：1.6.0  
+更新：2026-10-28
 
 通过 charvar 项目的 CLI 出图。三条后端：**comfyui**（本机/局域网 ComfyUI）、
 **openrouter**（OpenRouter 在线生图）和 **dreamina**（即梦官方 CLI，消耗即梦积分）。
@@ -111,6 +111,27 @@ charvar 的网页顶栏也有「Playground」页签（`http://127.0.0.1:8710`）
   `~/.local/bin/charvar video models` 看清单，heygen 支持 5–15s、480p/768p/2K。
 - 生成要 1–3 分钟，命令阻塞轮询（`--timeout` 默认 900s）；`--json` 给脚本消费。
 - 网页顶栏「视频」页签是同一条通路（`http://127.0.0.1:8710`）。
+
+## 语音（OpenRouter TTS 通路）
+
+给一段文本出**一段音频**（同步：命令块到响应为止，一般几秒到几十秒）。
+默认模型 `heygen/heygen-voice-1-turbo:free`（免费，实测一句 5 秒文本 ~15s 出片），
+设置里可用 `OP_TTS_MODEL` 换（付费版 heygen-voice-1 $15/百万字符）：
+
+```bash
+~/.local/bin/charvar tts openrouter --prompt "欢迎收听本期的角色播报。" --voice sabrina --out out/narration.wav
+```
+
+- voice：`~/.local/bin/charvar tts models` 看清单（heygen 10 个默认 voice：
+  nadine/tabitha/bram/gareth/noelle/meredith/sabrina/lucian/weston/vincent）。
+  **voice 实测必填** —— 目录枚举非空的模型不给 `--voice` 时自动用枚举第一项兜底；
+  fish/seed 这类没列枚举的不发送、交 provider 默认。
+- 格式自动协商：输出一律是落地可播的 wav（裸 PCM 按响应头采样率封装）或 mp3；
+  HeyGen 只出 pcm、MiniMax 只出 mp3（给错自动换档重试）。`--format mp3|pcm` 可显式指定。
+- **HeyGen 系 5000 字符单次上限**（提交前拦截，超了会报错；其他模型上限未知交给 provider）。
+- 语音落盘 `data/generated/adhoc_tts/<run_id>/original/000000.wav|mp3` + manifest.json，不落 runs 表。
+- 网页顶栏「语音」页签是同一条通路（`http://127.0.0.1:8710`），可直接试放/下载。
+- 声音克隆（参考音频音色复刻）暂未接入；需要时先在网页/CLI 里用默认 voice。
 
 ## 主体档案：从模板导入（subject derive / add / verify）
 
@@ -271,6 +292,8 @@ PY
 | workflow 找不到 | `data/workflows/` 里没有该名字；用 `--workflow` 给 JSON 路径 |
 
 ## 版本记录
+
+1.6.0（2026-10-28）：**新增语音生成通路（OpenRouter TTS）**：`charvar tts openrouter`（文本 → wav/mp3，同步）与 `charvar tts models`（模型/voice 清单）。默认模型免费档 `heygen/heygen-voice-1-turbo:free`（`OP_TTS_MODEL` 可换），网页顶栏新增「语音」页签同一条通路。要点：voice 目录枚举非空时实测必填（空值自动取第一项兜底）；HeyGen 系 5000 字符单次上限提交前拦截；裸 PCM 按响应头采样率封装成 wav，MiniMax 只出 mp3（格式给错自动换档重试并记探测缓存）。声音克隆（参考音频）第二期再接。
 
 1.5.0（2026-10-26）：**主体图槽位提示词起草开放到 CLI**（网页「AI 起草」同一条链路）。此前起草
 槽位提示词只能在网页上对「已入库 + 有模板」的主体做；现在 `charvar subject prompt` 支持

@@ -126,6 +126,34 @@ https://jimeng.jianying.com/cli | bash`）并完成 `dreamina login`（登录态
 价目来自 `pricing_skus`，各 provider 键名不同（heygen 美元/秒、grok 美分/秒），
 charvar 已统一换算成美元/秒。
 
+## charvar tts openrouter
+
+用 OpenRouter 出一段语音（文本 → 音频）。**同步**：命令块到音频返回为止，
+一般几秒到几十秒（文本越长越慢），不像视频是异步作业。
+
+| 参数 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `--prompt` | str | — | 要朗读的文本 |
+| `--prompt-file` | str | — | 文本文件路径；`-` 表示读 stdin |
+| `--voice` | str | 枚举第一项 | voice 标识；**枚举非空的模型 voice 实测必填**，空值自动取目录枚举第一项兜底 |
+| `--model` | str | 设置页/`OP_TTS_MODEL`/兜底 `heygen/heygen-voice-1-turbo:free` | 模型 slug |
+| `--format` | str | 自动 | `mp3`/`pcm`；空 = 自动协商（heygen 只出 pcm、minimax 只出 mp3，给错自动换档重试并记探测缓存） |
+| `--timeout` | float | `300` | HTTP 超时秒数 |
+| `--out` / `-o` | path | — | 另外落一份到这个路径（音频本体仍落 run 目录） |
+| `--json` | flag | — | 结果以 JSON 输出到终端 |
+
+**上限与自动兜底：**
+
+- HeyGen 系（slug 以 `heygen/` 开头）单次 **5000 字符**上限，提交前拦截（码点计）；
+  其他模型上限未知，交给 provider（400 原样报）。
+- voice 超枚举提交前报错；`~/.local/bin/charvar tts models` 查清单。
+- 输出落盘是可播的 wav（裸 PCM 按响应头 `rate/channels` 封装）或 mp3。
+
+## charvar tts models
+
+列 OpenRouter 可用的语音模型、voice 枚举与每百万字符价目（免费档标「免费」）。
+参数与 `video models` 一致：`--refresh`（忽略本地缓存重拉）、`--json`（原始目录）。
+
 ## 产物落盘（生图）
 
 不给 `--out` 时：
@@ -152,6 +180,18 @@ data/generated/adhoc_video/{id}/
 ```
 
 视频同样**不落 runs 表**。暂存参考图在 `_refs/`，参考视频在 `_vrefs/`。
+
+## 产物落盘（语音）
+
+不给 `--out` 时：
+
+```
+data/generated/adhoc_tts/{id}/
+├── original/000000.wav    ← 音频（裸 PCM 已封装；mp3 模型落 000000.mp3）
+└── manifest.json          ← 完整请求 + X-Generation-Id，失败也留痕
+```
+
+语音同样**不落 runs 表**；没有 thumbs（音频没有海报帧）。
 
 ## JSON 输出格式
 
@@ -191,6 +231,8 @@ data/generated/adhoc_video/{id}/
 | `OP_IMAGE_I2I_MODEL` / `OP_IMAGE_I2I_RESOLUTION` / `OP_IMAGE_I2I_QUALITY` | 图片编辑（带参考图）默认模型 / 分辨率 / 质量 |
 | `OP_VIDEO_MODEL` | 视频默认模型（默认 `heygen/heygen-video-1`；设置页 DB 值优先） |
 | `OP_VIDEO_TIMEOUT` | 视频单次提交轮询超时秒数 |
+| `OP_TTS_MODEL` | 语音默认模型（默认免费档 `heygen/heygen-voice-1-turbo:free`；设置页 DB 值优先） |
+| `OP_TTS_TIMEOUT` | 语音单次合成 HTTP 超时秒数（默认 300） |
 | `DREAMINA_IMAGE_MODEL` | 即梦 model_version 默认（默认 5.0） |
 | `DREAMINA_IMAGE_RESOLUTION` | 即梦分辨率档默认（2K/4K，默认 2K；小写大写都收） |
 | `DREAMINA_IMAGE_TIMEOUT` | 即梦单次生图总等待预算秒数（默认 300） |
