@@ -441,6 +441,25 @@ $("#btn-adhoc-recent-add").addEventListener("click", () => {
   }, { title: "Playground · 从最近生成选择参考图" });
 });
 
+/* 动作库（pose-db-01 灰人偶线稿）：浏览器是共用的（GenRefs.showPoseBrowser），
+   选完推进本页自己的 references 列表；发送时 role 固定 pose（只锚姿势构图）。 */
+$("#btn-adhoc-pose-add").addEventListener("click", () => {
+  if (adhocState.references.length >= ADHOC_MAX_REFS) {
+    return setStatus($("#adhoc-status"), `参考图最多 ${ADHOC_MAX_REFS} 张`, true);
+  }
+  GenRefs.showPoseBrowser((pick) => {
+    adhocState.references.push({
+      type: "pose",
+      pose_id: pick.pose_id,
+      angle: pick.angle,
+      name: pick.name,
+      url: pick.url,
+    });
+    renderAdhocRefs();
+    setStatus($("#adhoc-status"), "已加入参考图");
+  }, { title: "Playground · 动作库（灰人偶线稿 · 只锚姿势构图）" });
+});
+
 /* ---------- 出图 ---------- */
 $("#btn-adhoc-generate").addEventListener("click", async () => {
   const prompt = $("#adhoc-prompt").value.trim();
@@ -473,6 +492,8 @@ $("#btn-adhoc-generate").addEventListener("click", async () => {
         ? { staged_id: ref.id }
         : ref.type === "recent"
         ? { run_id: ref.run_id }
+        : ref.type === "pose"
+        ? { pose_id: ref.pose_id, angle: ref.angle || "", role: "pose" }
         : { subject_id: ref.subject_id, kind: ref.kind }
     );
   }

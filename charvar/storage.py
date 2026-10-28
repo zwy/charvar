@@ -79,6 +79,21 @@ CREATE TABLE IF NOT EXISTS subject_templates (
     template_md TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS pose_images (
+    -- 站点 id 去视角后缀（如 full_sexy_P001）；(pose_id, angle) 唯一
+    pose_id TEXT NOT NULL,
+    angle TEXT NOT NULL,
+    line TEXT NOT NULL DEFAULT '',
+    number TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL DEFAULT '',
+    category TEXT NOT NULL DEFAULT '',
+    -- data/ 相对路径（与 subject_images.file_path 同约定）
+    file_path TEXT NOT NULL DEFAULT '',
+    thumb_path TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (pose_id, angle)
+);
+CREATE INDEX IF NOT EXISTS idx_pose_images_line ON pose_images(line, category);
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value_json TEXT NOT NULL,

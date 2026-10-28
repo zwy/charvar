@@ -104,14 +104,16 @@ class VariantSpec(BaseModel):
 class ReferenceSpec(BaseModel):
     """参考图规格：来源 + 在提示词里的分工（role）。
 
-    来源三种（与 Playground 同源）：
+    来源四种（与 Playground 同源）：
     - ``staged_id``：上传暂存的图（``/adhoc/references`` 暂存池）；
     - ``subject_id`` + ``kind``：主体档案的图片槽位；
-    - ``run_id``：Playground「最近生成」的原图。
+    - ``run_id``：Playground「最近生成」的原图；
+    - ``pose_id`` + ``angle``：姿势库（pose-db-01）的人偶线稿 —— 只锚姿势构图，
+      不锚任何身份外观（脸/发型/服装/配色来自主体档案或其它参考图）。
 
     ``role`` 决定这张图在 LLM 改写的锚定句里管哪一摊
-    （front/headshot/side/behind/character_sheet，同 ``subject_images.IMAGE_KINDS``）；
-    缺省按 ``front`` 处理。不接受任意路径 —— 那是把文件读权限开给了浏览器。
+    （front/headshot/side/behind/character_sheet/pose）；pose 来源缺省 ``pose``，
+    其余缺省按 ``front`` 处理。不接受任意路径 —— 那是把文件读权限开给了浏览器。
     """
 
     staged_id: str | None = None
@@ -121,6 +123,9 @@ class ReferenceSpec(BaseModel):
     role: str | None = None
     # charvar run 的第几张原图（run_id 来源时用；缺省第 1 张）
     index: int | None = None
+    # 姿势库来源：动作 id（如 full_sexy_P001）+ 视角（缺省正面）
+    pose_id: str | None = None
+    angle: str | None = None
 
 
 class GenerateRequest(BaseModel):

@@ -28,6 +28,7 @@ from charvar import dreamina_image
 from charvar import openrouter_image
 from charvar import openrouter_tts
 from charvar import openrouter_video
+from charvar import poses as poses_service
 from charvar import reference_images
 from charvar.assets import ensure_thumb, resolve_run_asset, sheet_path, thumb_path
 
@@ -215,26 +216,29 @@ class AdhocReferenceSpec(ReferenceSpec):
 
 
 # 参考图在提示词里的分工（role）：与主体档案的图片槽位同名，
-# 决定 LLM 改写的锚定句里这张图管哪一摊；缺省按 front 处理。
-REFERENCE_ROLES = ("character_sheet", "headshot", "front", "side", "behind")
+# 决定 LLM 改写的锚定句里这张图管哪一摊；pose = 姿势库人偶线稿（只锚姿势构图）；
+# 其余缺省按 front 处理，pose 来源缺省按 pose 处理。
+REFERENCE_ROLES = ("character_sheet", "headshot", "front", "side", "behind", "pose")
 DEFAULT_REFERENCE_ROLE = "front"
 
 
 def _reference_paths_from_specs(
     specs: list[ReferenceSpec],
+    db_path=None,
 ) -> tuple[list[Path], list[str], list[str]]:
     """参考图规格 → (本地文件路径, role 列表, 暂存 id 列表)。
 
-    三种来源与 Playground 同源：上传暂存（staged_id）、主体档案槽位
+    四种来源与 Playground 同源：上传暂存（staged_id）、主体档案槽位
     （subject_id + kind）、最近生成的原图（run_id；adhoc run 取唯一原图，
-    charvar run 按 index 取第几张）。role 缺省 front。
+    charvar run 按 index 取第几张）、姿势库（pose_id + angle —— 灰人偶线稿，
+    role 固定 pose）。role 缺省 front（pose 来源缺省 pose）。
     不接受任意路径 —— 那是把文件读权限开给了浏览器。
     """
     paths: list[Path] = []
     roles: list[str] = []
     staged_ids: list[str] = []
     for spec in specs:
-        role = (spec.role or "").strip() or DEFAULT_REFERENCE_ROLE
+        role = (spec.role or "").strip() or ("pose" if spec.pose_id else DEFAULT_REFERENCE_ROLE)
         if role not in REFERENCE_ROLES:
             raise HTTPException(
                 400, f"参考图分工不合法：{role}（支持 {' / '.join(REFERENCE_ROLES)}）"
@@ -260,9 +264,15 @@ def _reference_paths_from_specs(
             paths.append(reference_images.prepared_reference(local, subject_dir, spec.kind))
         elif spec.run_id:
             paths.append(_run_reference_file(spec.run_id, spec.index))
+        elif spec.pose_id:
+            try:
+                paths.append(poses_service.prepared_reference_file(spec.pose_id, spec.angle, db_path))
+            except poses_service.PoseError as exc:
+                raise HTTPException(400, str(exc)) from exc
         else:
             raise HTTPException(
-                400, "参考图缺少来源：需要 staged_id / subject_id+kind / run_id 之一"
+                400,
+                "参考图缺少来源：需要 staged_id / subject_id+kind / run_id / pose_id+angle 之一",
             )
         roles.append(role)
     return paths, roles, staged_ids
@@ -744,6 +754,46 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             storage.save_subject_template(conn, subject_id, req.template_md)
         return {"ok": True, "subject_id": subject_id, "bytes": len(req.template_md.encode("utf-8"))}
 
+    # ---- 姿势库（pose-db-01 人偶线稿） ----
+    @app.get("/poses")
+    def api_poses_list(
+        line: str = Query("", description="按系統原文过滤"),
+        category: str = Query("", description="按分類原文过滤"),
+        q: str = Query("", max_length=60, description="按动作名/编号/id 过滤"),
+    ) -> dict[str, Any]:
+        """姿势库浏览：动作清单（按动作分组）+ 系統/分類元数据。
+
+        视角全量返回（客户端过滤）；图片 URL 经 /poses/image/{source}/… 端点伺服，
+        浏览器不给磁盘路径。
+        """
+        with _db() as conn:
+            return poses_service.list_poses(conn, line=line, category=category, q=q)
+
+    def _pose_image_response(
+        source: str, pose_id: str, angle: str, variant: str
+    ) -> FileResponse:
+        if source != poses_service.SOURCE_ID:
+            raise HTTPException(404, f"没有这个姿势库：{source}")
+        try:
+            path = (
+                poses_service.thumb_image_file(pose_id, angle, db_path)
+                if variant == "thumb"
+                else poses_service.full_image_file(pose_id, angle, db_path)
+            )
+        except poses_service.PoseError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        return FileResponse(
+            path, media_type="image/jpeg" if variant == "thumb" else "image/png"
+        )
+
+    @app.get("/poses/image/{source}/{pose_id}/{angle}/thumb")
+    def api_pose_image_thumb(source: str, pose_id: str, angle: str) -> FileResponse:
+        return _pose_image_response(source, pose_id, angle, "thumb")
+
+    @app.get("/poses/image/{source}/{pose_id}/{angle}/full")
+    def api_pose_image_full(source: str, pose_id: str, angle: str) -> FileResponse:
+        return _pose_image_response(source, pose_id, angle, "full")
+
     # ---- 全局设置 ----
     def _settings_payload(settings: settings_service.AppSettings) -> dict[str, Any]:
         data = settings.model_dump()
@@ -830,7 +880,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         # 参考图先校验（来源合法 / 文件在 / role 合法）：经典模式也要当场报错，
         # 别等到第 ③ 步推送生图才发现这张图选不出来。
         if req.references:
-            _reference_paths_from_specs(req.references)
+            _reference_paths_from_specs(req.references, db_path=db_path)
         try:
             result = compose_generate(subject, preset, req)
         except (ValueError, PresetError) as exc:
@@ -851,7 +901,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         # 提示词阶段只用 role 定锚定句分工；没给就回退旧的 reference_kinds。
         roles: list[str] = []
         if req.references:
-            _paths, roles, _staged = _reference_paths_from_specs(req.references)
+            _paths, roles, _staged = _reference_paths_from_specs(req.references, db_path=db_path)
             if not 1 <= len(roles) <= 4:
                 raise HTTPException(400, "LLM 模式需要 1–4 张参考图")
         else:
@@ -1134,7 +1184,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         主体档案槽位（reference_kinds），老调用不受影响。
         """
         if references:
-            paths, _roles, _staged = _reference_paths_from_specs(references)
+            paths, _roles, _staged = _reference_paths_from_specs(references, db_path=db_path)
             return paths
         return _openrouter_reference_paths(subject_id, reference_kinds)
 
@@ -1512,7 +1562,16 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                 except adhoc_service.AdhocError as exc:
                     raise HTTPException(400, str(exc)) from exc
                 continue
-            raise HTTPException(400, "参考图缺少来源（staged_id、subject_id + kind 或 run_id）")
+            if spec.pose_id:
+                # 姿势库的灰人偶线稿：预处理压缩版与两条生图通路共用
+                try:
+                    paths_found.append(poses_service.prepared_reference_file(spec.pose_id, spec.angle, db_path))
+                except poses_service.PoseError as exc:
+                    raise HTTPException(400, str(exc)) from exc
+                continue
+            raise HTTPException(
+                400, "参考图缺少来源（staged_id、subject_id + kind、run_id 或 pose_id + angle）"
+            )
         return paths_found, staged_ids
 
     @app.post("/adhoc/references")

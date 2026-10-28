@@ -40,6 +40,8 @@ KIND_LABELS: dict[str, str] = {
     "front": "全身正面",
     "side": "全身侧面",
     "behind": "全身背面",
+    # 姿势库（pose-db-01）人偶线稿：改写 LLM 的【参考图说明】里按它解释用途
+    "pose": "姿势／构图参照（灰人偶线稿，不含角色外观）",
 }
 
 _UPLOAD_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp")

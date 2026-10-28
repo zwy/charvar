@@ -164,6 +164,15 @@ REFERENCE_ROLE_CLAUSES: dict[str, str] = {
     "behind": (
         "use {tag} for the back of the head and the rear outfit details"
     ),
+    # 姿势库人偶线稿：只锚姿势构图，不锚任何身份外观 —— 四张分句表里语义一致，
+    # 与服装/发型组合正交（人偶没有服装发色可抄）。
+    "pose": (
+        "{tag} is a grayscale, faceless mannequin line drawing used only as the pose "
+        "and composition reference: follow the stance, body posture, limb placement, "
+        "and camera angle and framing it shows exactly, with the same number of "
+        "figures it depicts; copy no face, hair, clothing, footwear, accessory, "
+        "color, or art style from it"
+    ),
 }
 
 # 服装组合（outfit 预设）专用：参考图**不再**提供服装——服装由服装预设给定。
@@ -190,6 +199,13 @@ REFERENCE_ROLE_CLAUSES_OUTFIT: dict[str, str] = {
     ),
     "behind": (
         "use {tag} for the back of the head and the rear silhouette"
+    ),
+    "pose": (
+        "{tag} is a grayscale, faceless mannequin line drawing used only as the pose "
+        "and composition reference: follow the stance, body posture, limb placement, "
+        "and camera angle and framing it shows exactly, with the same number of "
+        "figures it depicts; copy no face, hair, clothing, footwear, accessory, "
+        "color, or art style from it"
     ),
 }
 
@@ -233,6 +249,13 @@ REFERENCE_ROLE_CLAUSES_HAIRSTYLE: dict[str, str] = {
         "use {tag} for the rear outfit details; the back of the head follows the "
         "prescribed hairstyle instead of {tag}, the head bare with no headwear"
     ),
+    "pose": (
+        "{tag} is a grayscale, faceless mannequin line drawing used only as the pose "
+        "and composition reference: follow the stance, body posture, limb placement, "
+        "and camera angle and framing it shows exactly, with the same number of "
+        "figures it depicts; copy no face, hair, clothing, footwear, accessory, "
+        "color, or art style from it"
+    ),
 }
 
 # 发型 + 服装同时组合：headshot/side 取发型版（头发归发型预设），
@@ -258,6 +281,13 @@ REFERENCE_ROLE_CLAUSES_OUTFIT_HAIRSTYLE: dict[str, str] = {
     "behind": (
         "use {tag} for the rear silhouette and outfit details; the back of the head "
         "follows the prescribed hairstyle instead of {tag}, the head bare with no headwear"
+    ),
+    "pose": (
+        "{tag} is a grayscale, faceless mannequin line drawing used only as the pose "
+        "and composition reference: follow the stance, body posture, limb placement, "
+        "and camera angle and framing it shows exactly, with the same number of "
+        "figures it depicts; copy no face, hair, clothing, footwear, accessory, "
+        "color, or art style from it"
     ),
 }
 
@@ -295,7 +325,9 @@ def body_lock_clauses(body_lock: list[str] | None, refs: list[dict]) -> list[str
     items = [str(x).strip() for x in (body_lock or []) if str(x).strip()]
     if not items or not refs:
         return []
-    tag = str(refs[0].get("tag") or "<image1>")
+    # 体形锚指向第一张非 pose 参考图：人偶线稿没有可核对的体形，别把锚挂到它上。
+    anchor_refs = [r for r in refs if str(r.get("kind") or "") != "pose"] or refs
+    tag = str(anchor_refs[0].get("tag") or "<image1>")
     return [f"keep the figure exactly as shown in {tag}: {item}" for item in items]
 
 # required_label（带字表情包）专用尾句：中文文案由程序按原文追加，这里只禁「额外」文字。
@@ -305,6 +337,20 @@ REFERENCE_TAIL_SENTENCE_REQUIRED_LABEL: str = (
     "camera angle, background, and lighting. One character only. The prescribed Chinese "
     "lettering is appended verbatim after this description and is the only text allowed "
     "in the image; render no other text, captions, logos, or watermarks."
+)
+
+# 姿势库（role=pose）专用尾句：旧尾句的「create a new pose … One character only」
+# 与姿势参考正相反 —— 有姿势参考时姿势是权威、人数跟随参考图（2人絡み 线是双人位，
+# 写死 one character 会被砍成单人）。人偶线稿的风格污染也在这里排掉
+# （锚定句开头的"same art style"会被灰线稿拉偏）。
+# sticker（required_label）场景不配姿势库参考，保持 sticker 尾句不动。
+REFERENCE_TAIL_SENTENCE_POSE: str = (
+    "Follow the pose, body posture, limb placement, and camera framing of the mannequin "
+    "pose reference image(s) exactly, with the same number of figures as the pose "
+    "reference shows. Take the character's identity, face, hairstyle, and outfit only "
+    "from the other reference images and the subject profile, and create the background "
+    "and lighting. Never render a gray mannequin or copy its line-drawing style. "
+    "No text."
 )
 
 
@@ -375,7 +421,16 @@ def reference_anchor_sentence(
     clauses.extend(body_lock_clauses(body_lock, refs))
     if not clauses:
         return ""
-    tail = REFERENCE_TAIL_SENTENCE if text_policy != "required_label" else REFERENCE_TAIL_SENTENCE_REQUIRED_LABEL
+    # 尾句三选一：sticker（不配姿势库参考）→ sticker 版；引用了姿势库 → pose 版
+    # （旧尾句的 create a new pose / One character only 与姿势参考正相反）；
+    # 其余 → 旧尾句（存量行为逐字不变）。
+    has_pose_ref = any(str(r.get("kind") or "") == "pose" for r in refs or [])
+    if text_policy == "required_label":
+        tail = REFERENCE_TAIL_SENTENCE_REQUIRED_LABEL
+    elif has_pose_ref:
+        tail = REFERENCE_TAIL_SENTENCE_POSE
+    else:
+        tail = REFERENCE_TAIL_SENTENCE
     body = "; ".join(clauses)
     body = body[0].upper() + body[1:]
     return (

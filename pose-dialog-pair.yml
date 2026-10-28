@@ -1,0 +1,538 @@
+- generic [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: charvar 角色变体提示词生成器
+    - navigation [ref=e4]:
+      - button "预设" [ref=e5] [cursor=pointer]
+      - button "Playground" [ref=e6] [cursor=pointer]
+      - button "视频" [ref=e7] [cursor=pointer]
+      - button "语音" [ref=e8] [cursor=pointer]
+      - button "配方" [ref=e9] [cursor=pointer]
+      - button "主体" [ref=e10] [cursor=pointer]
+      - button "历史" [ref=e11] [cursor=pointer]
+      - button "设置" [ref=e12] [cursor=pointer]
+  - main [ref=e13]:
+    - generic [ref=e1293]:
+      - generic [ref=e1294]:
+        - generic [ref=e1295]:
+          - heading "Playground" [level=2] [ref=e1296]
+          - generic [ref=e1297]: 给一段提示词出一张图 · 不入档案、不进历史
+        - generic [ref=e1298]:
+          - generic [ref=e1299]: 供应商与参数
+          - generic [ref=e1300]:
+            - generic [ref=e1301]:
+              - button "ComfyUI" [ref=e1302] [cursor=pointer]
+              - button "OpenRouter" [ref=e1303] [cursor=pointer]
+              - button "即梦" [ref=e1304] [cursor=pointer]
+            - generic [ref=e1305]:
+              - button "文生图" [ref=e1306] [cursor=pointer]
+              - button "图片编辑" [ref=e1307] [cursor=pointer]
+          - generic [ref=e1308]:
+            - generic [ref=e1309]:
+              - text: 画幅比例
+              - combobox "画幅比例" [ref=e1310]:
+                - option "3:4" [selected]
+                - option "1:1"
+                - option "16:9"
+                - option "4:3"
+                - option "9:16"
+                - option "2:3"
+                - option "3:2"
+                - option "21:9"
+            - generic [ref=e1311]:
+              - text: 分辨率
+              - combobox "分辨率" [ref=e1312]:
+                - option "1k（长边 1024）"
+                - option "2k（Qwen 官方 ~4.2MP）" [selected]
+            - generic [ref=e1313]:
+              - text: 种子
+              - spinbutton "种子" [ref=e1314]
+            - generic [ref=e1315]:
+              - text: 负向提示词
+              - textbox "负向提示词" [ref=e1316]:
+                - /placeholder: 留空 = 用 workflow 默认
+        - generic [ref=e1317]:
+          - generic [ref=e1318]: 提示词
+          - generic "提示词" [ref=e1319]:
+            - textbox "提示词" [ref=e1320]:
+              - /placeholder: a red apple on a wooden table
+        - generic [ref=e1565]:
+          - generic [ref=e1566]:
+            - generic [ref=e1567]: 参考图
+            - generic [ref=e1568]: 已选 0 张
+          - generic [ref=e1569]: 暂无参考图
+          - generic [ref=e1571]:
+            - generic [ref=e1572] [cursor=pointer]: 上传参考图
+            - button "从最近生成加入" [ref=e1573] [cursor=pointer]
+            - button "从动作库加入" [ref=e1574] [cursor=pointer]
+            - combobox [ref=e1575]:
+              - option "autumn_birch_girl · 秋日枫林女孩" [selected]
+              - option "black_cat_v21 · 黑白猫"
+              - option "mustard_cap_girl · 黄帽红夹克女孩"
+              - option "pingpong_kid_v1 · 乒乓小子"
+              - option "pingpong_kid_v2 · 乒乓小子"
+              - option "red_bob_glasses · 红发眼镜女人"
+              - option "red_eye_uniform_girl · 红瞳制服少女"
+              - option "silver_girl_v1 · 银白女孩"
+              - option "silver_witch · 银白女巫"
+              - option "tvelo_illustration · 缇珞"
+              - option "tvelo_photoreal · 缇珞"
+              - option "white_skirt_stockings · 白裙丝袜女人"
+              - option "yellow_dress_bob · 黄裙短发女人"
+              - option "yoga_teacher · 瑜伽老师"
+            - combobox [ref=e1576]:
+              - option "人物半身像＋三视图" [selected]
+              - option "人物半身像"
+              - option "全身正面"
+              - option "全身侧面"
+              - option "全身背面"
+            - button "从主体档案加入" [ref=e1577] [cursor=pointer]
+            - button "清空参考图" [ref=e1578] [cursor=pointer]
+        - button "出图" [ref=e1322] [cursor=pointer]
+      - generic [ref=e1323]:
+        - generic [ref=e1324]:
+          - heading "最近生成" [level=2] [ref=e1325]
+          - button "刷新" [ref=e1327] [cursor=pointer]
+        - generic [ref=e1328]:
+          - generic [ref=e1329] [cursor=pointer]:
+            - generic [ref=e1330]: 已入队
+            - generic [ref=e1331]: ·
+            - paragraph
+            - button "复用提示词" [ref=e1334]
+          - generic [ref=e1335] [cursor=pointer]:
+            - img "点击预览大图" [ref=e1336]
+            - generic [ref=e1337]:
+              - generic [ref=e1338]: comfyui · 3:4
+              - generic [ref=e1339]: 10-28 09:07
+            - paragraph [ref=e1340]: 真实照片风格的幼猫角色定妆照。画面里只有一只小猫，完整全身入画，从头到爪子都在画面内，居中构图，正面看向镜头。 主角是一只三花幼猫，是真猫的照片，不是卡通、不是插画、不是 3D 渲染：头顶、后背和尾巴是黑色、橙色、白色相间的三色斑块，脸中央有一道白色的竖纹，胸口和四条腿是干净的纯白色，尾尖颜色更深；粉色鼻子；一双又大又圆的深色眼睛，幼猫比例，眼白很少；胡须清晰可见。 它坐直在画面中央，后腿收在身体下面，身体微微前倾。它的两只前爪叠在一起，一起握住一把小巧的塑料玩具锤的绿色握把，把锤子竖直地举在身体的右侧。锤子与身体之间留有明显空隙，锤子没有碰到身体的任何部位。锤子造型：锤头是亮粉色的鼓形圆柱，表面有一圈圈横向的凸起条纹；握把是一根粉色细杆，握把的中段和尾端是亮绿色。 场景：室内客厅的米白色针织绒面地毯，地毯有细密柔软的绒毛纹理；背景是一张浅米色布艺沙发，沙发明显虚化，只作为干净的背景色块。柔和的自然光从画面左前方照过来，没有硬阴影，整体明亮干净。浅景深，焦点在猫身上。手机实拍质感，轻微颗粒噪点。 画面里不要出现任何汉字、英文字母、数字、标牌、招牌、海报、相框、包装盒、杂志、书本、屏幕、logo、水印，也不要任何文字标签。背景里不要出现第三只动物，不要出现镜子或倒影。
+            - generic [ref=e1341]:
+              - button "查看提示词" [ref=e1342]
+              - button "查看大图" [ref=e1343]
+              - button "复用提示词" [ref=e1344]
+          - generic [ref=e1345] [cursor=pointer]:
+            - img "点击预览大图" [ref=e1346]
+            - generic [ref=e1347]:
+              - generic [ref=e1348]: comfyui · 3:4
+              - generic [ref=e1349]: 10-28 09:06
+            - paragraph [ref=e1350]: 真实照片风格的幼猫角色定妆照。画面里只有一只小猫，完整全身入画，从头到爪子都在画面内，居中构图，正面看向镜头。 主角是一只三花幼猫，是真猫的照片，不是卡通、不是插画、不是 3D 渲染：头顶、后背和尾巴是黑色、橙色、白色相间的三色斑块，脸中央有一道白色的竖纹，胸口和四条腿是干净的纯白色，尾尖颜色更深；粉色鼻子；一双又大又圆的深色眼睛，幼猫比例，眼白很少；胡须清晰可见。 它坐直在画面中央，后腿收在身体下面，身体微微前倾。它的两只前爪叠在一起，一起握住一把小巧的塑料玩具锤的绿色握把，把锤子竖直地举在身体的右侧。锤子与身体之间留有明显空隙，锤子没有碰到身体的任何部位。锤子造型：锤头是亮粉色的鼓形圆柱，表面有一圈圈横向的凸起条纹；握把是一根粉色细杆，握把的中段和尾端是亮绿色。 场景：室内客厅的米白色针织绒面地毯，地毯有细密柔软的绒毛纹理；背景是一张浅米色布艺沙发，沙发明显虚化，只作为干净的背景色块。柔和的自然光从画面左前方照过来，没有硬阴影，整体明亮干净。浅景深，焦点在猫身上。手机实拍质感，轻微颗粒噪点。 画面里不要出现任何汉字、英文字母、数字、标牌、招牌、海报、相框、包装盒、杂志、书本、屏幕、logo、水印，也不要任何文字标签。背景里不要出现第三只动物，不要出现镜子或倒影。
+            - generic [ref=e1351]:
+              - button "查看提示词" [ref=e1352]
+              - button "查看大图" [ref=e1353]
+              - button "复用提示词" [ref=e1354]
+          - generic [ref=e1355] [cursor=pointer]:
+            - img "点击预览大图" [ref=e1356]
+            - generic [ref=e1357]:
+              - generic [ref=e1358]: comfyui · 3:4
+              - generic [ref=e1359]: 10-28 09:05
+            - paragraph [ref=e1360]: 真实照片风格的幼猫角色定妆照。画面里只有一只小猫，完整身体入画，居中构图。 主角是一只银灰虎斑幼猫，是真猫的照片，不是卡通、不是插画、不是 3D 渲染：全身是银灰色的虎斑纹，背部和头顶是深浅相间的灰色条纹，额头有几道清晰的灰色条纹；肚皮、下巴和两只前爪是干净的奶白色；耳尖和尾尖颜色更深；圆眼睛，深色瞳孔，眼神平静；胡须清晰可见。 它整个趴在地毯上，肚子贴地，两只前爪向前伸直并叠在一起，头低垂着贴近前爪，看着像是趴着不想动。 场景：室内客厅的米白色针织绒面地毯，地毯有细密柔软的绒毛纹理；背景是一张浅米色布艺沙发，沙发明显虚化，只作为干净的背景色块。柔和的自然光从画面左前方照过来，没有硬阴影，整体明亮干净。浅景深，焦点在猫身上。手机实拍质感，轻微颗粒噪点。 画面里不要出现任何汉字、英文字母、数字、标牌、招牌、海报、相框、包装盒、杂志、书本、屏幕、logo、水印，也不要任何文字标签。背景里不要出现第三只动物，不要出现镜子或倒影。
+            - generic [ref=e1361]:
+              - button "查看提示词" [ref=e1362]
+              - button "查看大图" [ref=e1363]
+              - button "复用提示词" [ref=e1364]
+          - generic [ref=e1365] [cursor=pointer]:
+            - img "点击预览大图" [ref=e1366]
+            - generic [ref=e1367]:
+              - generic [ref=e1368]: comfyui · 3:4
+              - generic [ref=e1369]: 10-28 09:05
+            - paragraph [ref=e1370]: 真实照片风格的幼猫角色定妆照。画面里只有一只小猫，完整身体入画，居中构图。 主角是一只银灰虎斑幼猫，是真猫的照片，不是卡通、不是插画、不是 3D 渲染：全身是银灰色的虎斑纹，背部和头顶是深浅相间的灰色条纹，额头有几道清晰的灰色条纹；肚皮、下巴和两只前爪是干净的奶白色；耳尖和尾尖颜色更深；圆眼睛，深色瞳孔，眼神平静；胡须清晰可见。 它整个趴在地毯上，肚子贴地，两只前爪向前伸直并叠在一起，头低垂着贴近前爪，看着像是趴着不想动。 场景：室内客厅的米白色针织绒面地毯，地毯有细密柔软的绒毛纹理；背景是一张浅米色布艺沙发，沙发明显虚化，只作为干净的背景色块。柔和的自然光从画面左前方照过来，没有硬阴影，整体明亮干净。浅景深，焦点在猫身上。手机实拍质感，轻微颗粒噪点。 画面里不要出现任何汉字、英文字母、数字、标牌、招牌、海报、相框、包装盒、杂志、书本、屏幕、logo、水印，也不要任何文字标签。背景里不要出现第三只动物，不要出现镜子或倒影。
+            - generic [ref=e1371]:
+              - button "查看提示词" [ref=e1372]
+              - button "查看大图" [ref=e1373]
+              - button "复用提示词" [ref=e1374]
+          - generic [ref=e1375] [cursor=pointer]:
+            - img "点击预览大图" [ref=e1376]
+            - generic [ref=e1377]:
+              - generic [ref=e1378]: comfyui · 3:4
+              - generic [ref=e1379]: 10-28 09:05
+            - paragraph [ref=e1380]: 真实照片风格的幼猫角色定妆照。画面里只有一只小猫，完整全身入画，从头到爪子都在画面内，居中构图。 主角是一只三花幼猫，是真猫的照片，不是卡通、不是插画、不是 3D 渲染：头顶、后背和尾巴是黑色、橙色、白色相间的三色斑块，胸口和四条腿是干净的纯白色，尾尖颜色更深；粉色鼻子；一双又大又圆的深色眼睛，幼猫比例，眼白很少；胡须清晰可见。 它坐直在画面中央，身体微微前倾，两只前爪一起握着一把小巧的塑料玩具锤。锤子举在身体的右前侧、悬在半空，与身体保持明显距离。锤子造型：锤头是亮粉色的鼓形圆柱，表面有一圈圈横向的凸起条纹，锤头的圆形端面朝向镜头；握把是一根粉色细杆，握把的中段和尾端是亮绿色。 场景：室内客厅的米白色针织绒面地毯，地毯有细密柔软的绒毛纹理；背景是一张浅米色布艺沙发，沙发明显虚化，只作为干净的背景色块。柔和的自然光从画面左前方照过来，没有硬阴影，整体明亮干净。浅景深，焦点在猫身上。手机实拍质感，轻微颗粒噪点。 画面里不要出现任何汉字、英文字母、数字、标牌、招牌、海报、相框、包装盒、杂志、书本、屏幕、logo、水印，也不要任何文字标签。背景里不要出现第三只动物，不要出现镜子或倒影。
+            - generic [ref=e1381]:
+              - button "查看提示词" [ref=e1382]
+              - button "查看大图" [ref=e1383]
+              - button "复用提示词" [ref=e1384]
+          - generic [ref=e1385] [cursor=pointer]:
+            - img "点击预览大图" [ref=e1386]
+            - generic [ref=e1387]:
+              - generic [ref=e1388]: comfyui · 3:4
+              - generic [ref=e1389]: 10-28 09:05
+            - paragraph [ref=e1390]: 真实照片风格的幼猫角色定妆照。画面里只有一只小猫，完整全身入画，从头到爪子都在画面内，居中构图。 主角是一只三花幼猫，是真猫的照片，不是卡通、不是插画、不是 3D 渲染：头顶、后背和尾巴是黑色、橙色、白色相间的三色斑块，胸口和四条腿是干净的纯白色，尾尖颜色更深；粉色鼻子；一双又大又圆的深色眼睛，幼猫比例，眼白很少；胡须清晰可见。 它坐直在画面中央，身体微微前倾，两只前爪一起握着一把小巧的塑料玩具锤。锤子举在身体的右前侧、悬在半空，与身体保持明显距离。锤子造型：锤头是亮粉色的鼓形圆柱，表面有一圈圈横向的凸起条纹，锤头的圆形端面朝向镜头；握把是一根粉色细杆，握把的中段和尾端是亮绿色。 场景：室内客厅的米白色针织绒面地毯，地毯有细密柔软的绒毛纹理；背景是一张浅米色布艺沙发，沙发明显虚化，只作为干净的背景色块。柔和的自然光从画面左前方照过来，没有硬阴影，整体明亮干净。浅景深，焦点在猫身上。手机实拍质感，轻微颗粒噪点。 画面里不要出现任何汉字、英文字母、数字、标牌、招牌、海报、相框、包装盒、杂志、书本、屏幕、logo、水印，也不要任何文字标签。背景里不要出现第三只动物，不要出现镜子或倒影。
+            - generic [ref=e1391]:
+              - button "查看提示词" [ref=e1392]
+              - button "查看大图" [ref=e1393]
+              - button "复用提示词" [ref=e1394]
+          - generic [ref=e1395] [cursor=pointer]:
+            - img "点击预览大图" [ref=e1396]
+            - generic [ref=e1397]:
+              - generic [ref=e1398]: comfyui · 4:3
+              - generic [ref=e1399]: 10-28 08:57
+            - paragraph [ref=e1400]: 3D clay-style render illustration, a still life on a plain wooden tabletop, two plain round ceramic bowls in a soft grey-green glaze sitting side by side at the centre of the frame, large and in the foreground, a woman's hand and forearm in a loose oatmeal beige knit sweater sleeve reaching down from the top of the frame to touch the rim of the left bowl, the right bowl left completely untouched, only the hand and forearm in frame, cropped at the wrist, no face and no head in the frame, close-up still life shot, minimal calm studio scene, on a plain warm off-white seamless background (#F3EFE8), diffused soft studio lighting, gentle contact shadow, muted desaturated palette of sage green warm beige and soft charcoal, minimal editorial illustration style, clean, centered composition, absolutely no text, no letters, no numbers, no logo, no watermark, no signage, no labels, no symbols
+            - generic [ref=e1401]:
+              - button "查看提示词" [ref=e1402]
+              - button "查看大图" [ref=e1403]
+              - button "复用提示词" [ref=e1404]
+          - generic [ref=e1405] [cursor=pointer]:
+            - img "点击预览大图" [ref=e1406]
+            - generic [ref=e1407]:
+              - generic [ref=e1408]: comfyui · 4:3
+              - generic [ref=e1409]: 10-28 08:57
+            - paragraph [ref=e1410]: 3D clay-style render illustration, a rounded clay figure of a woman in her forties with short neat dark hair, a simple featureless clay face with minimal features and no detailed likeness, wearing a loose oatmeal beige knit sweater and soft charcoal wide-leg trousers, walking forward mid-stride with one foot clearly forward and the other pushing off, arms swinging loosely, seen from the side three-quarter view, not looking back, moving steadily away from what is behind her, the whole body from head to shoes complete and small in the middle of the frame with generous empty space above the head and on both sides, wide full body shot, minimal calm studio scene, on a plain warm off-white seamless background (#F3EFE8), diffused soft studio lighting, gentle contact shadow, muted desaturated palette of sage green warm beige and soft charcoal, minimal editorial illustration style, clean, centered composition, absolutely no text, no letters, no numbers, no logo, no watermark, no signage, no labels, no symbols
+            - generic [ref=e1411]:
+              - button "查看提示词" [ref=e1412]
+              - button "查看大图" [ref=e1413]
+              - button "复用提示词" [ref=e1414]
+          - generic [ref=e1415] [cursor=pointer]:
+            - img "点击预览大图" [ref=e1416]
+            - generic [ref=e1417]:
+              - generic [ref=e1418]: comfyui · 4:3
+              - generic [ref=e1419]: 10-28 08:55
+            - paragraph [ref=e1420]: 3D clay-style render illustration, a rounded clay figure of a woman in her forties with short neat dark hair, a simple featureless clay face with minimal features and no detailed likeness, wearing a loose oatmeal beige knit sweater and soft charcoal wide-leg trousers, a low wooden tabletop across the bottom of the frame with two plain ceramic bowls sitting side by side, large and central in the frame, one hand reaching down toward one of the bowls while the other bowl is left untouched, decisive and unhurried at the same time, close-up view of the tabletop, minimal calm studio scene, on a plain warm off-white seamless background (#F3EFE8), diffused soft studio lighting, gentle contact shadow, muted desaturated palette of sage green warm beige and soft charcoal, minimal editorial illustration style, clean, centered composition, absolutely no text, no letters, no numbers, no logo, no watermark, no signage, no labels, no symbols
+            - generic [ref=e1421]:
+              - button "查看提示词" [ref=e1422]
+              - button "查看大图" [ref=e1423]
+              - button "复用提示词" [ref=e1424]
+          - generic [ref=e1425] [cursor=pointer]:
+            - img "点击预览大图" [ref=e1426]
+            - generic [ref=e1427]:
+              - generic [ref=e1428]: comfyui · 4:3
+              - generic [ref=e1429]: 10-28 08:55
+            - paragraph [ref=e1430]: 3D clay-style render illustration, a rounded clay figure of a woman in her forties with short neat dark hair, a simple featureless clay face with minimal features and no detailed likeness, wearing a loose oatmeal beige knit sweater and soft charcoal wide-leg trousers, standing beside a low wooden shelf holding a few plain unbranded bottles and boxes, framed from mid-thigh up so the figure fills most of the frame, a small cloth pouch held loosely in one hand, unhurried and untroubled, taking her time, no urgency, medium shot, minimal calm studio scene, on a plain warm off-white seamless background (#F3EFE8), diffused soft studio lighting, gentle contact shadow, muted desaturated palette of sage green warm beige and soft charcoal, minimal editorial illustration style, clean, centered composition, absolutely no text, no letters, no numbers, no logo, no watermark, no signage, no labels, no symbols
+            - generic [ref=e1431]:
+              - button "查看提示词" [ref=e1432]
+              - button "查看大图" [ref=e1433]
+              - button "复用提示词" [ref=e1434]
+          - generic [ref=e1435] [cursor=pointer]:
+            - img "点击预览大图" [ref=e1436]
+            - generic [ref=e1437]:
+              - generic [ref=e1438]: comfyui · 4:3
+              - generic [ref=e1439]: 10-28 08:55
+            - paragraph [ref=e1440]: 3D clay-style render illustration, a rounded clay figure of a woman in her forties with short neat dark hair, a simple featureless clay face with minimal features and no detailed likeness, wearing a loose oatmeal beige knit sweater and soft charcoal wide-leg trousers, walking forward with an even unhurried stride, framed from mid-thigh up so the figure fills most of the frame, shoulders relaxed, arms swinging loosely, not looking back, moving steadily away from what is behind her, three-quarter back view, medium shot, minimal calm studio scene, on a plain warm off-white seamless background (#F3EFE8), diffused soft studio lighting, gentle contact shadow, muted desaturated palette of sage green warm beige and soft charcoal, minimal editorial illustration style, clean, centered composition, absolutely no text, no letters, no numbers, no logo, no watermark, no signage, no labels, no symbols
+            - generic [ref=e1441]:
+              - button "查看提示词" [ref=e1442]
+              - button "查看大图" [ref=e1443]
+              - button "复用提示词" [ref=e1444]
+          - generic [ref=e1445] [cursor=pointer]:
+            - img "点击预览大图" [ref=e1446]
+            - generic [ref=e1447]:
+              - generic [ref=e1448]: comfyui · 4:3
+              - generic [ref=e1449]: 10-28 08:55
+            - paragraph [ref=e1450]: 3D clay-style render illustration, a rounded clay figure of a woman in her forties with short neat dark hair, a simple featureless clay face with minimal features and no detailed likeness, wearing a loose oatmeal beige knit sweater and soft charcoal wide-leg trousers, standing tall and relaxed, the whole body from head to shoes small and complete in the middle of the frame with generous empty space above the head and on both sides, one hand at her side holding a small plain cloth pouch, chin slightly lifted, looking straight ahead with a calm steady gaze, wide full body shot, minimal calm studio scene, on a plain warm off-white seamless background (#F3EFE8), diffused soft studio lighting, gentle contact shadow, muted desaturated palette of sage green warm beige and soft charcoal, minimal editorial illustration style, clean, centered composition, absolutely no text, no letters, no numbers, no logo, no watermark, no signage, no labels, no symbols
+            - generic [ref=e1451]:
+              - button "查看提示词" [ref=e1452]
+              - button "查看大图" [ref=e1453]
+              - button "复用提示词" [ref=e1454]
+          - generic [ref=e1455] [cursor=pointer]:
+            - img "点击预览大图" [ref=e1456]
+            - generic [ref=e1457]:
+              - generic [ref=e1458]: comfyui · 4:3
+              - generic [ref=e1459]: 10-28 08:49
+            - paragraph [ref=e1460]: 3D clay-style render illustration, a rounded clay figure of a woman in her forties with short neat dark hair, a simple featureless clay face with minimal features and no detailed likeness, wearing a loose oatmeal beige knit sweater and soft charcoal wide-leg trousers, standing at a low table on which two plain ceramic bowls are placed side by side, one hand reaching calmly toward one of the bowls while the other is left untouched on the table, decisive and unhurried at the same time, waist-up three-quarter view, minimal calm studio scene, on a plain warm off-white seamless background (#F3EFE8), diffused soft studio lighting, gentle contact shadow, muted desaturated palette of sage green warm beige and soft charcoal, minimal editorial illustration style, clean, centered composition, absolutely no text, no letters, no numbers, no logo, no watermark, no signage, no labels, no symbols
+            - generic [ref=e1461]:
+              - button "查看提示词" [ref=e1462]
+              - button "查看大图" [ref=e1463]
+              - button "复用提示词" [ref=e1464]
+          - generic [ref=e1465] [cursor=pointer]:
+            - img "点击预览大图" [ref=e1466]
+            - generic [ref=e1467]:
+              - generic [ref=e1468]: comfyui · 4:3
+              - generic [ref=e1469]: 10-28 08:49
+            - paragraph [ref=e1470]: 3D clay-style render illustration, a rounded clay figure of a woman in her forties with short neat dark hair, a simple featureless clay face with minimal features and no detailed likeness, wearing a loose oatmeal beige knit sweater and soft charcoal wide-leg trousers, standing in front of a low wooden shelf holding a few plain unbranded bottles and boxes, a small cloth pouch held loosely in one hand, unhurried and untroubled, taking her time, no urgency, full body, minimal calm studio scene, on a plain warm off-white seamless background (#F3EFE8), diffused soft studio lighting, gentle contact shadow, muted desaturated palette of sage green warm beige and soft charcoal, minimal editorial illustration style, clean, centered composition, absolutely no text, no letters, no numbers, no logo, no watermark, no signage, no labels, no symbols
+            - generic [ref=e1471]:
+              - button "查看提示词" [ref=e1472]
+              - button "查看大图" [ref=e1473]
+              - button "复用提示词" [ref=e1474]
+          - generic [ref=e1475] [cursor=pointer]:
+            - img "点击预览大图" [ref=e1476]
+            - generic [ref=e1477]:
+              - generic [ref=e1478]: comfyui · 4:3
+              - generic [ref=e1479]: 10-28 08:48
+            - paragraph [ref=e1480]: 3D clay-style render illustration, a rounded clay figure of a woman in her forties with short neat dark hair, a simple featureless clay face with minimal features and no detailed likeness, wearing a loose oatmeal beige knit sweater and soft charcoal wide-leg trousers, walking forward on a plain path with an even unhurried stride, shoulders relaxed, arms swinging loosely, not looking back, moving steadily away from what is behind her, full body side three-quarter view, minimal calm studio scene, on a plain warm off-white seamless background (#F3EFE8), diffused soft studio lighting, gentle contact shadow, muted desaturated palette of sage green warm beige and soft charcoal, minimal editorial illustration style, clean, centered composition, absolutely no text, no letters, no numbers, no logo, no watermark, no signage, no labels, no symbols
+            - generic [ref=e1481]:
+              - button "查看提示词" [ref=e1482]
+              - button "查看大图" [ref=e1483]
+              - button "复用提示词" [ref=e1484]
+          - generic [ref=e1485] [cursor=pointer]:
+            - img "点击预览大图" [ref=e1486]
+            - generic [ref=e1487]:
+              - generic [ref=e1488]: comfyui · 4:3
+              - generic [ref=e1489]: 10-28 08:48
+            - paragraph [ref=e1490]: 3D clay-style render illustration, a rounded clay figure of a woman in her forties with short neat dark hair, a simple featureless clay face with minimal features and no detailed likeness, wearing a loose oatmeal beige knit sweater and soft charcoal wide-leg trousers, sitting quietly on a low wooden stool, hands folded together resting on her lap, mouth closed and still, eyes lowered slightly, unhurried and quiet, full body, minimal calm studio scene, on a plain warm off-white seamless background (#F3EFE8), diffused soft studio lighting, gentle contact shadow, muted desaturated palette of sage green warm beige and soft charcoal, minimal editorial illustration style, clean, centered composition, absolutely no text, no letters, no numbers, no logo, no watermark, no signage, no labels, no symbols
+            - generic [ref=e1491]:
+              - button "查看提示词" [ref=e1492]
+              - button "查看大图" [ref=e1493]
+              - button "复用提示词" [ref=e1494]
+          - generic [ref=e1495] [cursor=pointer]:
+            - img "点击预览大图" [ref=e1496]
+            - generic [ref=e1497]:
+              - generic [ref=e1498]: comfyui · 4:3
+              - generic [ref=e1499]: 10-28 08:48
+            - paragraph [ref=e1500]: 3D clay-style render illustration, a rounded clay figure of a woman in her forties with short neat dark hair, a simple featureless clay face with minimal features and no detailed likeness, wearing a loose oatmeal beige knit sweater and soft charcoal wide-leg trousers, sitting at a small round wooden table, one hand calmly pushing a plain unbranded paper bag back across the tabletop, the other hand resting on her knee, torso upright and composed, chin level, no hesitation in the gesture, waist-up three-quarter view, minimal calm studio scene, on a plain warm off-white seamless background (#F3EFE8), diffused soft studio lighting, gentle contact shadow, muted desaturated palette of sage green warm beige and soft charcoal, minimal editorial illustration style, clean, centered composition, absolutely no text, no letters, no numbers, no logo, no watermark, no signage, no labels, no symbols
+            - generic [ref=e1501]:
+              - button "查看提示词" [ref=e1502]
+              - button "查看大图" [ref=e1503]
+              - button "复用提示词" [ref=e1504]
+          - generic [ref=e1505] [cursor=pointer]:
+            - img "点击预览大图" [ref=e1506]
+            - generic [ref=e1507]:
+              - generic [ref=e1508]: comfyui · 4:3
+              - generic [ref=e1509]: 10-28 08:48
+            - paragraph [ref=e1510]: 3D clay-style render illustration, a rounded clay figure of a woman in her forties with short neat dark hair, a simple featureless clay face with minimal features and no detailed likeness, wearing a loose oatmeal beige knit sweater and soft charcoal wide-leg trousers, standing tall and relaxed in a bright open doorway, shoulders loose, one hand at her side holding a small plain cloth pouch, the other hand relaxed at her side, chin slightly lifted, looking straight ahead with a calm steady gaze, full body, minimal calm studio scene, on a plain warm off-white seamless background (#F3EFE8), diffused soft studio lighting, gentle contact shadow, muted desaturated palette of sage green warm beige and soft charcoal, minimal editorial illustration style, clean, centered composition, absolutely no text, no letters, no numbers, no logo, no watermark, no signage, no labels, no symbols
+            - generic [ref=e1511]:
+              - button "查看提示词" [ref=e1512]
+              - button "查看大图" [ref=e1513]
+              - button "复用提示词" [ref=e1514]
+          - generic [ref=e1515] [cursor=pointer]:
+            - img "点击预览大图" [ref=e1516]
+            - generic [ref=e1517]:
+              - generic [ref=e1518]: comfyui · 4:3
+              - generic [ref=e1519]: 10-27 08:59
+            - paragraph [ref=e1520]: 3D clay-style render illustration, a plump rounded clay cat with soft warm grey-beige fur, a cream chest and cream front paws, faint charcoal stripes on the forehead and tail tip, sitting alone in a quiet corner of a minimal room, seen from behind and slightly to the side, turned away from the empty space, tail wrapped around its own body, looking out toward a blank wall, minimal calm studio scene, on a plain warm off-white seamless background (#F3EFE8), diffused soft studio lighting, gentle contact shadow, muted desaturated palette of sage green warm beige and soft charcoal, minimal editorial illustration style, clean, centered composition, absolutely no text, no letters, no numbers, no logo, no watermark, no signage, no labels, no symbols
+            - generic [ref=e1521]:
+              - button "查看提示词" [ref=e1522]
+              - button "查看大图" [ref=e1523]
+              - button "复用提示词" [ref=e1524]
+          - generic [ref=e1525] [cursor=pointer]:
+            - img "点击预览大图" [ref=e1526]
+            - generic [ref=e1527]:
+              - generic [ref=e1528]: comfyui · 4:3
+              - generic [ref=e1529]: 10-27 08:59
+            - paragraph [ref=e1530]: 3D clay-style render illustration, a plump rounded clay cat with soft warm grey-beige fur, a cream chest and cream front paws, faint charcoal stripes on the forehead and tail tip, mid stretch with front legs extended forward and back arched high, hips raised, tail standing straight up, a full body yoga stretch pose on the floor, minimal calm studio scene, on a plain warm off-white seamless background (#F3EFE8), diffused soft studio lighting, gentle contact shadow, muted desaturated palette of sage green warm beige and soft charcoal, minimal editorial illustration style, clean, centered composition, absolutely no text, no letters, no numbers, no logo, no watermark, no signage, no labels, no symbols
+            - generic [ref=e1531]:
+              - button "查看提示词" [ref=e1532]
+              - button "查看大图" [ref=e1533]
+              - button "复用提示词" [ref=e1534]
+          - generic [ref=e1535] [cursor=pointer]:
+            - img "点击预览大图" [ref=e1536]
+            - generic [ref=e1537]:
+              - generic [ref=e1538]: comfyui · 4:3
+              - generic [ref=e1539]: 10-27 08:59
+            - paragraph [ref=e1540]: 3D clay-style render illustration, a plump rounded clay cat with soft warm grey-beige fur, a cream belly and cream paws, faint charcoal stripes on the forehead and tail tip, lying stretched out on its side on a plain low wooden windowsill, belly toward the warm sunlight, eyes half closed and content, tail hanging relaxed over the edge, minimal calm studio scene, on a plain warm off-white seamless background (#F3EFE8), diffused soft studio lighting, gentle contact shadow, muted desaturated palette of sage green warm beige and soft charcoal, minimal editorial illustration style, clean, centered composition, absolutely no text, no letters, no numbers, no logo, no watermark, no signage, no labels, no symbols
+            - generic [ref=e1541]:
+              - button "查看提示词" [ref=e1542]
+              - button "查看大图" [ref=e1543]
+              - button "复用提示词" [ref=e1544]
+          - generic [ref=e1545] [cursor=pointer]:
+            - img "点击预览大图" [ref=e1546]
+            - generic [ref=e1547]:
+              - generic [ref=e1548]: comfyui · 4:3
+              - generic [ref=e1549]: 10-27 08:58
+            - paragraph [ref=e1550]: 3D clay-style render illustration, a plump rounded clay cat with soft warm grey-beige fur, a cream chest and cream front paws, faint charcoal stripes on the forehead and tail tip, eyes closed and peacefully asleep, curled up in a loose round ball on a soft flat cushion, ears relaxed, minimal calm studio scene, on a plain warm off-white seamless background (#F3EFE8), diffused soft studio lighting, gentle contact shadow, muted desaturated palette of sage green warm beige and soft charcoal, minimal editorial illustration style, clean, centered composition, absolutely no text, no letters, no numbers, no logo, no watermark, no signage, no labels, no symbols
+            - generic [ref=e1551]:
+              - button "查看提示词" [ref=e1552]
+              - button "查看大图" [ref=e1553]
+              - button "复用提示词" [ref=e1554]
+          - generic [ref=e1555] [cursor=pointer]:
+            - img "点击预览大图" [ref=e1556]
+            - generic [ref=e1557]:
+              - generic [ref=e1558]: comfyui · 4:3
+              - generic [ref=e1559]: 10-27 08:58
+            - paragraph [ref=e1560]: 3D clay-style render illustration, a plump rounded clay cat with soft warm grey-beige fur, a cream chest and cream front paws, faint charcoal stripes on the forehead and tail tip, big round calm eyes, head lowered into a simple round ceramic food bowl on the floor, eating calmly, tail stretched out straight behind, minimal calm studio scene, on a plain warm off-white seamless background (#F3EFE8), diffused soft studio lighting, gentle contact shadow, muted desaturated palette of sage green warm beige and soft charcoal, minimal editorial illustration style, clean, centered composition, absolutely no text, no letters, no numbers, no logo, no watermark, no signage, no labels, no symbols
+            - generic [ref=e1561]:
+              - button "查看提示词" [ref=e1562]
+              - button "查看大图" [ref=e1563]
+              - button "复用提示词" [ref=e1564]
+  - dialog [ref=e1579]:
+    - generic [ref=e1580]:
+      - generic [ref=e1581]:
+        - strong [ref=e1582]: Playground · 动作库（灰人偶线稿 · 只锚姿势构图）
+        - button "关闭" [active] [ref=e1583] [cursor=pointer]
+      - generic [ref=e1585]:
+        - generic [ref=e1586]:
+          - combobox [ref=e1587]:
+            - option "全部系統"
+            - option "全身单人・性感系 · 80 动作"
+            - option "全身单人・标准系 · 73 动作"
+            - option "上半身单人 · 80 动作"
+            - option "双人 · 55 动作" [selected]
+          - combobox [ref=e1588]:
+            - option "全部分類" [selected]
+            - option "性感·直露系 · 30 动作"
+            - option "躺卧 · 30 动作"
+            - option "坐姿 · 29 动作"
+            - option "站立 · 29 动作"
+            - option "可爱系 · 25 动作"
+            - option "胸前手位·乳沟强调系 · 25 动作"
+            - option "特殊 · 15 动作"
+            - option "跪立·四肢跪趴 · 15 动作"
+            - option "正常位 · 11 动作"
+            - option "跪立 · 10 动作"
+            - option "侧坐·女孩坐 · 8 动作"
+            - option "后背位 · 7 动作"
+            - option "背坐位 · 7 动作"
+            - option "蹲姿 · 6 动作"
+            - option "前倾 · 6 动作"
+            - option "面部贴近系 · 6 动作"
+            - option "骑乘位 · 6 动作"
+            - option "站位 · 4 动作"
+            - option "站位贴身 · 4 动作"
+            - option "后仰·反弓 · 3 动作"
+            - option "扭转 · 3 动作"
+            - option "侧入位 · 3 动作"
+            - option "对坐位 · 2 动作"
+            - option "坐位 · 2 动作"
+            - option "贴身 · 1 动作"
+            - option "坐位贴身 · 1 动作"
+          - textbox "按动作名 / 编号 / id 搜索" [ref=e1589]
+        - generic [ref=e1590]:
+          - generic [ref=e2744] [cursor=pointer]:
+            - strong [ref=e2745]: P001
+            - generic [ref=e2746]: 向き合い片膝を抱え上げる
+          - generic [ref=e2748] [cursor=pointer]:
+            - strong [ref=e2749]: P002
+            - generic [ref=e2750]: 脚の間にうつ伏せで寄り添う
+          - generic [ref=e2752] [cursor=pointer]:
+            - strong [ref=e2753]: P003
+            - generic [ref=e2754]: 足首を持ち上げV字に開く
+          - generic [ref=e2756] [cursor=pointer]:
+            - strong [ref=e2757]: P004
+            - generic [ref=e2758]: 両脚を肩にかけて覆いかぶさる
+          - generic [ref=e2760] [cursor=pointer]:
+            - strong [ref=e2761]: P005
+            - generic [ref=e2762]: 腰を高く持ち上げて顔を寄せる
+          - generic [ref=e2764] [cursor=pointer]:
+            - strong [ref=e2765]: P006
+            - generic [ref=e2766]: 逆さに抱え上げる互い違い
+          - generic [ref=e2768] [cursor=pointer]:
+            - strong [ref=e2769]: P007
+            - generic [ref=e2770]: 膝に手をつき前屈みで立つ
+          - generic [ref=e2772] [cursor=pointer]:
+            - strong [ref=e2773]: P008
+            - generic [ref=e2774]: 脚を絡めて腕を引き合う
+          - generic [ref=e2776] [cursor=pointer]:
+            - strong [ref=e2777]: P009
+            - generic [ref=e2778]: 背中から抱いて膝に座らせる
+          - generic [ref=e2780] [cursor=pointer]:
+            - strong [ref=e2781]: P010
+            - generic [ref=e2782]: 膝の上に横座りで抱かれる
+          - generic [ref=e2784] [cursor=pointer]:
+            - strong [ref=e2785]: P011
+            - generic [ref=e2786]: 脚を伸ばして重なり合う
+          - generic [ref=e2788] [cursor=pointer]:
+            - strong [ref=e2789]: P013
+            - generic [ref=e2790]: 四つん這いの後ろで膝立ち
+          - generic [ref=e2792] [cursor=pointer]:
+            - strong [ref=e2793]: P014
+            - generic [ref=e2794]: 床に手をつき脚を抱えられる
+          - generic [ref=e2796] [cursor=pointer]:
+            - strong [ref=e2797]: P015
+            - generic [ref=e2798]: 脚の間で四つん這いになる
+          - generic [ref=e2800] [cursor=pointer]:
+            - strong [ref=e2801]: P016
+            - generic [ref=e2802]: 脚を預けて膝の上にもたれる
+          - generic [ref=e2804] [cursor=pointer]:
+            - strong [ref=e2805]: P017
+            - generic [ref=e2806]: 脚を腰に絡めて抱き合う
+          - generic [ref=e2808] [cursor=pointer]:
+            - strong [ref=e2809]: P018
+            - generic [ref=e2810]: 背を向けて腰の上に座る
+          - generic [ref=e2812] [cursor=pointer]:
+            - strong [ref=e2813]: P019
+            - generic [ref=e2814]: 背を向けて膝の上でしゃがむ
+          - generic [ref=e2816] [cursor=pointer]:
+            - strong [ref=e2817]: P020
+            - generic [ref=e2818]: 横向きで片脚を肩に預ける
+          - generic [ref=e2820] [cursor=pointer]:
+            - strong [ref=e2821]: P021
+            - generic [ref=e2822]: 上に重なり脚を伸ばす
+          - generic [ref=e2824] [cursor=pointer]:
+            - strong [ref=e2825]: P022
+            - generic [ref=e2826]: 手首を頭上で重ね膝を抱える
+          - generic [ref=e2828] [cursor=pointer]:
+            - strong [ref=e2829]: P023
+            - generic [ref=e2830]: 向き合って腰の上に座る
+          - generic [ref=e2832] [cursor=pointer]:
+            - strong [ref=e2833]: P024
+            - generic [ref=e2834]: 膝で腰を持ち上げる仰向け
+          - generic [ref=e2836] [cursor=pointer]:
+            - strong [ref=e2837]: P025
+            - generic [ref=e2838]: 膝の上で前にもたれる
+          - generic [ref=e2840] [cursor=pointer]:
+            - strong [ref=e2841]: P026
+            - generic [ref=e2842]: 腰を高く抱え上げる仰向け
+          - generic [ref=e2844] [cursor=pointer]:
+            - strong [ref=e2845]: P030
+            - generic [ref=e2846]: 腕を前に伸ばし腰を支えられる
+          - generic [ref=e2848] [cursor=pointer]:
+            - strong [ref=e2849]: P031
+            - generic [ref=e2850]: 立てた膝にもたれて座る
+          - generic [ref=e2852] [cursor=pointer]:
+            - strong [ref=e2853]: P032
+            - generic [ref=e2854]: 上に重なる互い違い
+          - generic [ref=e2856] [cursor=pointer]:
+            - strong [ref=e2857]: P034
+            - generic [ref=e2858]: 顔の上に膝立ちでまたがる
+          - generic [ref=e2860] [cursor=pointer]:
+            - strong [ref=e2861]: P036
+            - generic [ref=e2862]: 後ろ手をついて脚を絡める
+          - generic [ref=e2864] [cursor=pointer]:
+            - strong [ref=e2865]: P037
+            - generic [ref=e2866]: 上げた片脚を抱きしめる
+          - generic [ref=e2868] [cursor=pointer]:
+            - strong [ref=e2869]: P040
+            - generic [ref=e2870]: 覆いかぶさって胸元に口づけ
+          - generic [ref=e2872] [cursor=pointer]:
+            - strong [ref=e2873]: P041
+            - generic [ref=e2874]: 胸を床につけ腰を上げる
+          - generic [ref=e2876] [cursor=pointer]:
+            - strong [ref=e2877]: P042
+            - generic [ref=e2878]: あぐらの上で抱き合う
+          - generic [ref=e2880] [cursor=pointer]:
+            - strong [ref=e2881]: P043
+            - generic [ref=e2882]: 膝を肩まで引き寄せ足首を持つ
+          - generic [ref=e2884] [cursor=pointer]:
+            - strong [ref=e2885]: P044
+            - generic [ref=e2886]: 背中越しに胸元へ手を添える
+          - generic [ref=e2888] [cursor=pointer]:
+            - strong [ref=e2889]: P045
+            - generic [ref=e2890]: 深く前屈し床に手をつく
+          - generic [ref=e2892] [cursor=pointer]:
+            - strong [ref=e2893]: P046
+            - generic [ref=e2894]: 脚を前へ伸ばして座る
+          - generic [ref=e2896] [cursor=pointer]:
+            - strong [ref=e2897]: P047
+            - generic [ref=e2898]: 脚を交差させ片脚を肩へ
+          - generic [ref=e2900] [cursor=pointer]:
+            - strong [ref=e2901]: P048
+            - generic [ref=e2902]: うつ伏せで片脚を持ち上げる
+          - generic [ref=e2904] [cursor=pointer]:
+            - strong [ref=e2905]: P049
+            - generic [ref=e2906]: 抱き合い脚を絡める
+          - generic [ref=e2908] [cursor=pointer]:
+            - strong [ref=e2909]: P050
+            - generic [ref=e2910]: 背伸びして片足を後ろへ
+          - generic [ref=e2912] [cursor=pointer]:
+            - strong [ref=e2913]: P051
+            - generic [ref=e2914]: 耳元でささやき頬に触れる
+          - generic [ref=e2916] [cursor=pointer]:
+            - strong [ref=e2917]: P052
+            - generic [ref=e2918]: 両手首を頭上で押さえる
+          - generic [ref=e2920] [cursor=pointer]:
+            - strong [ref=e2921]: P053
+            - generic [ref=e2922]: 背後から胸元を抱きしめる
+          - generic [ref=e2924] [cursor=pointer]:
+            - strong [ref=e2925]: P054
+            - generic [ref=e2926]: 横抱きにされて背を反らす
+          - generic [ref=e2928] [cursor=pointer]:
+            - strong [ref=e2929]: P055
+            - generic [ref=e2930]: 横座りで片脚を高く伸ばす
+          - generic [ref=e2932] [cursor=pointer]:
+            - strong [ref=e2933]: P056
+            - generic [ref=e2934]: 肘をついて隣から見下ろす
+          - generic [ref=e2936] [cursor=pointer]:
+            - strong [ref=e2937]: P057
+            - generic [ref=e2938]: 脚をかけて添い寝する
+          - generic [ref=e2940] [cursor=pointer]:
+            - strong [ref=e2941]: P058
+            - generic [ref=e2942]: 脚の間で頬杖をつく
+          - generic [ref=e2944] [cursor=pointer]:
+            - strong [ref=e2945]: P059
+            - generic [ref=e2946]: 膝裏を抱えて大きく開く
+          - generic [ref=e2948] [cursor=pointer]:
+            - strong [ref=e2949]: P060
+            - generic [ref=e2950]: 両膝を胸に引き寄せる
+          - generic [ref=e2952] [cursor=pointer]:
+            - strong [ref=e2953]: P061
+            - generic [ref=e2954]: 前屈みの腰を後ろから支える
+          - generic [ref=e2956] [cursor=pointer]:
+            - strong [ref=e2957]: P062
+            - generic [ref=e2958]: 膝の上で脚を腰に回す
+          - generic [ref=e2960] [cursor=pointer]:
+            - strong [ref=e2961]: P063
+            - generic [ref=e2962]: 背中を預けて大きく膝を開く

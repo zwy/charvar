@@ -8,6 +8,7 @@ data/charvar.db
 data/charvar.db.bak-*
 data/generated/
 data/openrouter/
+data/poses/
 out/
 dist/
 *.egg-info/

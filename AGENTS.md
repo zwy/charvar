@@ -12,6 +12,11 @@
 - 手动验证：`curl -s --noproxy '*' http://127.0.0.1:8710/api/version`
 - `start.sh` 顺带跑 `scripts/install_cli.sh`（幂等，见「仓库里的 skills」）；失败不阻断启动。
 
+## 姿势库
+
+参考图第四来源 `pose_id`+`angle`（详见 `docs/姿势库.md`）：**图片禁再分发**，只存 `data/poses/` 不进 git；**role=pose 只锚姿势不锚身份**，pose 时尾句换 pose 版。
+
+
 ## Playground（跨项目调用）
 
 `charvar/adhoc.py` 是「给一段提示词出一张图」的独立通路：不进主体档案 5 槽位、不跑预设批量、不落 runs 表。

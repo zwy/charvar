@@ -136,7 +136,16 @@ def test_generate_classic_stores_references(client):
     assert resp.status_code == 200, resp.text
     result = resp.json()
     assert result["references"] == [
-        {"staged_id": None, "subject_id": "demo_witch", "kind": "front", "run_id": None, "index": None, "role": "front"}
+        {
+            "staged_id": None,
+            "subject_id": "demo_witch",
+            "kind": "front",
+            "run_id": None,
+            "index": None,
+            "role": "front",
+            "pose_id": None,
+            "angle": None,
+        }
     ]
     # 落库后重新取也还在（页面刷新不丢）
     again = client.get(f"/runs/{result['run_id']}").json()

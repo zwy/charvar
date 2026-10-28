@@ -52,6 +52,8 @@ app.add_typer(recipes_app, name="recipes")
 app.add_typer(image_app, name="image")
 app.add_typer(video_app, name="video")
 app.add_typer(tts_app, name="tts")
+pose_app = typer.Typer(help="姿势库（pose-db-01 人偶线稿参考图）", no_args_is_help=True)
+app.add_typer(pose_app, name="pose")
 
 
 def _die(message: str) -> None:
@@ -1425,6 +1427,51 @@ def tts_models(
             except (TypeError, ValueError):
                 pass
         typer.echo("")
+
+
+# ---------- pose（姿势库） ----------
+
+@pose_app.command("import")
+def pose_import_cmd(
+    source: str = typer.Argument("", help="下载目录（缺省 data/poses/pose-db-01/）"),
+) -> None:
+    """把磁盘下载目录灌进 pose_images 表（幂等；先跑 scripts/download_pose_db.py）。"""
+    from charvar import poses as poses_service
+
+    try:
+        info = poses_service.import_catalog(storage.connect(), Path(source) if source else None)
+    except poses_service.PoseError as exc:
+        _die(str(exc))
+    typer.echo(
+        f"姿势库已导入：{info['images']} 张图 · {info['poses']} 个动作（source={info['source']}）"
+    )
+
+
+@pose_app.command("list")
+def pose_list_cmd(
+    line: str = typer.Option("", "--line", help="按系統原文过滤"),
+    category: str = typer.Option("", "--category", help="按分類原文过滤"),
+    query: str = typer.Option("", "--q", "--query", help="按动作名/编号/id 过滤"),
+    json_out: bool = typer.Option(False, "--json", help="以 JSON 输出"),
+) -> None:
+    """浏览姿势库（按动作分组）。"""
+    from charvar import poses as poses_service
+
+    with storage.connect() as conn:
+        data = poses_service.list_poses(conn, line=line, category=category, q=query)
+    if json_out:
+        typer.echo(json.dumps(data, ensure_ascii=False, indent=1))
+        return
+    poses = data["poses"]
+    if not poses:
+        _die("姿势库为空 —— 先跑 scripts/download_pose_db.py，再 charvar pose import")
+    typer.echo(f"共 {len(poses)} 个动作（source={data['source']}）")
+    for p in poses:
+        angles = " / ".join(im["angle"] for im in p["images"])
+        typer.echo(
+            f"{p['number']}\t{p['pose_id']}\t[{p['line']} · {p['category'] or '-'}]"
+            f" {p['title']}　视角：{angles}"
+        )
 
 
 def main() -> None:

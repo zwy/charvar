@@ -13,6 +13,7 @@ const GenRefs = (() => {
     ["side", "侧面（朝向/贴身细节）"],
     ["behind", "背面（后脑/背部）"],
     ["character_sheet", "设定图（整套）"],
+    ["pose", "姿势构图（人偶线稿参照）"],
   ];
   const DEFAULT_ROLE = "front";
 
@@ -271,6 +272,191 @@ const GenRefs = (() => {
     });
   }
 
+  /* ---------- 来源：动作库（pose-db-01，灰人偶线稿只锚姿势构图） ----------
+     与其它来源不同：动作库参考图的 role 固定 pose —— 图里没有角色外观可锚，
+     身份全部来自主体档案或其它参考图。预设页与 Playground 共用此浏览器，
+     onPick 由发起方（add / Playground 的 push）决定落入哪边。 */
+  async function onPickPose() {
+    showPoseBrowser((pick) => {
+      add({
+        source: "pose",
+        pose_id: pick.pose_id,
+        angle: pick.angle,
+        // role 固定 pose；人偶线稿不锚身份，身份交给主体档案或其它参考图
+        role: "pose",
+        name: pick.name,
+        url: pick.url,
+      });
+    });
+  }
+
+  /* 动作库浏览器（共用）：筛选（系統/分類/搜索）→ 点动作进详情 → 选视角 → onPick。
+     复用 image-grid / image-card / image-meta 现成样式。 */
+  function showPoseBrowser(onPick, { title = "动作库（灰人偶线稿 · 只锚姿势构图）" } = {}) {
+    Media.showPanelModal(title, (body, close) => {
+      let allData = null;
+      const filter = { line: "", category: "", q: "" };
+      let grid;
+      let detailEl;
+      body.innerHTML =
+        '<div style="display:flex;flex-direction:column;gap:12px">' +
+        '<div id="pose-filters" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"></div>' +
+        '<div id="pose-grid" class="image-grid ref-picker-grid" style="max-height:60vh;overflow:auto"></div>' +
+        '<div id="pose-detail" hidden></div>' +
+        '</div>';
+      grid = body.querySelector("#pose-grid");
+      detailEl = body.querySelector("#pose-detail");
+
+      function esc(s) {
+        // 沿用 genrefs 现成的 escapeHtml（文件底部已有）；此处别名防拼写
+        return escapeHtml(String(s == null ? "" : s));
+      }
+
+      function renderFilters() {
+        const box = body.querySelector("#pose-filters");
+        if (!box || !allData) return;
+        box.innerHTML = "";
+        const lines = allData.lines || [];
+        const cats = allData.categories || [];
+        const lineSel = document.createElement("select");
+        lineSel.innerHTML =
+          '<option value="">全部系統</option>' +
+          lines
+            .map(function (l) {
+              const label = (l.zh || l.id) + " · " + l.poses + " 动作";
+              return '<option value="' + esc(l.id) + '"' + (filter.line === l.id ? " selected" : "") + ">" + esc(label) + "</option>";
+            })
+            .join("");
+        lineSel.addEventListener("change", function () {
+          filter.line = lineSel.value;
+          renderGrid();
+        });
+        box.appendChild(lineSel);
+
+        const catSel = document.createElement("select");
+        catSel.innerHTML =
+          '<option value="">全部分類</option>' +
+          cats
+            .map(function (c) {
+              const label = (c.zh || c.id) + " · " + c.poses + " 动作";
+              return '<option value="' + esc(c.id) + '"' + (filter.category === c.id ? " selected" : "") + ">" + esc(label) + "</option>";
+            })
+            .join("");
+        catSel.addEventListener("change", function () {
+          filter.category = catSel.value;
+          renderGrid();
+        });
+        box.appendChild(catSel);
+
+        const search = document.createElement("input");
+        search.type = "text";
+        search.placeholder = "按动作名 / 编号 / id 搜索";
+        search.value = filter.q;
+        let timer = null;
+        search.addEventListener("input", function () {
+          clearTimeout(timer);
+          timer = setTimeout(function () {
+            filter.q = search.value.trim().toLowerCase();
+            renderGrid();
+          }, 200);
+        });
+        box.appendChild(search);
+      }
+
+      function filteredPoses() {
+        const poses = (allData && allData.poses) || [];
+        return poses.filter(function (p) {
+          if (filter.line && p.line !== filter.line) return false;
+          if (filter.category && p.category !== filter.category) return false;
+          if (filter.q) {
+            const hay = (p.title + " " + p.number + " " + p.pose_id).toLowerCase();
+            if (hay.indexOf(filter.q) === -1) return false;
+          }
+          return true;
+        });
+      }
+
+      function renderGrid() {
+        const poses = filteredPoses();
+        grid.innerHTML = "";
+        if (!poses.length) {
+          grid.innerHTML = '<span class="hint">没有符合条件的动作 —— 换个筛选条件</span>';
+          return;
+        }
+        poses.forEach(function (p) {
+          const front = (p.images && p.images[0]) || {};
+          const card = document.createElement("div");
+          card.className = "image-card";
+          card.innerHTML =
+            '<img src="' + esc(front.thumb_url) + '" alt="" loading="lazy">' +
+            '<div class="image-meta"><strong>' + esc(p.number) + "</strong><span>" + esc(p.title) + "</span></div>";
+          card.addEventListener("click", function () {
+            showDetail(p);
+          });
+          grid.appendChild(card);
+        });
+      }
+
+      function showDetail(p) {
+        const images = p.images || [];
+        let selected = images[0] || null;
+        detailEl.hidden = false;
+        function renderDetail() {
+          detailEl.innerHTML =
+            '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">' +
+            '<img src="' + esc(selected.thumb_url) + '" alt="" style="max-width:280px;border-radius:12px">' +
+            '<div style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:8px">' +
+            "<div><strong>" + esc(p.number) + " " + esc(p.title) + "</strong></div>" +
+            '<div class="hint">' + esc(p.line_zh || p.line) + " · " + esc(p.category_zh || p.category) + "</div>" +
+            '<div class="actions" id="pose-angle-strip"></div>' +
+            '<div class="actions">' +
+            '<button id="pose-add-btn" type="button" class="primary">加入参考图</button>' +
+            '<button id="pose-back-btn" type="button" class="btn-sm">返回</button>' +
+            "</div>" +
+            "</div>" +
+            "</div>";
+          const strip = detailEl.querySelector("#pose-angle-strip");
+          images.forEach(function (im) {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "btn-sm";
+            btn.textContent = im.angle_zh;
+            if (selected.angle === im.angle) btn.classList.add("active");
+            btn.addEventListener("click", function () {
+              selected = im;
+              renderDetail();
+            });
+            strip.appendChild(btn);
+          });
+          detailEl.querySelector("#pose-add-btn").addEventListener("click", function () {
+            onPick({
+              pose_id: p.pose_id,
+              angle: selected.angle,
+              name: p.number + " " + p.title + " · " + selected.angle_zh,
+              url: selected.thumb_url,
+            });
+            close();
+          });
+          detailEl.querySelector("#pose-back-btn").addEventListener("click", function () {
+            detailEl.hidden = true;
+            detailEl.innerHTML = "";
+          });
+        }
+        renderDetail();
+      }
+
+      api("/poses")
+        .then(function (data) {
+          allData = data;
+          renderFilters();
+          renderGrid();
+        })
+        .catch(function (err) {
+          grid.innerHTML = '<span class="hint">加载失败：' + esc(err.message) + "</span>";
+        });
+    });
+  }
+
   /* ---------- 对外接口 ---------- */
   function specs() {
     return state.references.map((ref) => {
@@ -279,6 +465,9 @@ const GenRefs = (() => {
       else if (ref.source === "subject") {
         spec.subject_id = ref.subject_id;
         spec.kind = ref.kind;
+      } else if (ref.source === "pose") {
+        spec.pose_id = ref.pose_id;
+        spec.angle = ref.angle || "";
       } else {
         spec.run_id = ref.run_id;
         spec.index = ref.index || 0;
@@ -331,6 +520,8 @@ const GenRefs = (() => {
     if (addBtn) addBtn.addEventListener("click", onAddFromSubject);
     const recentBtn = $("#btn-gen-recent-add");
     if (recentBtn) recentBtn.addEventListener("click", onPickRecent);
+    const poseBtn = $("#btn-gen-pose-add");
+    if (poseBtn) poseBtn.addEventListener("click", onPickPose);
     const clearBtn = $("#btn-gen-ref-clear");
     if (clearBtn) clearBtn.addEventListener("click", () => clear().catch(() => {}));
     render();
@@ -346,6 +537,9 @@ const GenRefs = (() => {
     roleLabel,
     ROLES,
     MAX_REFS,
+    // 动作库浏览器（共用）：Playground（adhoc.js）也从这里发起，
+    // onPick 由调用方决定加入哪边
+    showPoseBrowser,
     // 主体档案换了 → 参考图的槽位下拉要重刷（主体只有一个选择器，在①）
     reloadKinds() {
       return loadKindOptions();
