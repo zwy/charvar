@@ -1474,6 +1474,103 @@ def pose_list_cmd(
         )
 
 
+@pose_app.command("action")
+def pose_action_cmd(
+    pose_id: str = typer.Argument(..., help="动作 id，如 full_sexy_P001"),
+    angle: str = typer.Option("", "--angle", help="视角（原文，缺省正面）"),
+    set_text: Optional[str] = typer.Option(
+        None, "--set", help="写入/更新该动作视角的动作描述（空串 = 清掉）"
+    ),
+    json_out: bool = typer.Option(False, "--json", help="以 JSON 输出"),
+) -> None:
+    """读/写单个动作某视角的动作描述（pose_actions 表，动作×视角 双键）。"""
+    from charvar import poses as poses_service
+
+    with storage.connect() as conn:
+        try:
+            data = (
+                poses_service.set_pose_action(conn, pose_id, angle, set_text)
+                if set_text is not None
+                else poses_service.pose_action(conn, pose_id, angle)
+            )
+        except poses_service.PoseError as exc:
+            _die(str(exc))
+    if json_out:
+        typer.echo(json.dumps(data, ensure_ascii=False, indent=1))
+        return
+    text = data["action_text"] if data["action_text"].strip() else "（空 —— 该动作这个视角还没写描述）"
+    typer.echo(f"{data['pose_id']} · {data['angle']}")
+    typer.echo(text)
+
+
+@pose_app.command("prompt")
+def pose_prompt_cmd(
+    pose_id: str = typer.Argument(..., help="动作 id，如 full_sexy_P001"),
+    angle: str = typer.Option("", "--angle", help="视角（原文，缺省正面）"),
+    subject: Optional[str] = typer.Option(None, "--subject", help="主体档案 id（--run 必填，取其 front 槽位图）"),
+    run: bool = typer.Option(False, "--run", help="拼好的提示词直接出图（Playground 通路）"),
+    backend: str = typer.Option("comfyui", "--backend", help="comfyui / openrouter / dreamina"),
+    aspect: str = typer.Option("3:4", "--aspect", help="画幅：3:4/1:1/16:9/…"),
+    resolution: str = typer.Option("1k", "--resolution", help="分辨率档：1k/2k（或 OpenRouter 模型枚举）"),
+    seed: int = typer.Option(0, "--seed", help="0 = 固定复现；换种子出不同图"),
+    negative: Optional[str] = typer.Option(None, "--negative", help="负向提示词（空串 = 明确不用）"),
+    out: Optional[Path] = typer.Option(None, "--out", "-o", help="另外落一份到这个路径"),
+    wait: bool = typer.Option(True, "--wait/--no-wait", help="等待出图完成（默认）"),
+    json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出（提示词不回显）"),
+) -> None:
+    """按动作描述拼 demo 结构的姿势编辑提示词并可选出图。
+
+    <image1> = 主体档案 front 槽位图（角色锚定），<image2> = 人偶线稿（姿势锚定，
+    role=pose 语义）；构图句/背景句/禁令句按库线型（全身/半身/双人）取版本。
+    """
+    from charvar import adhoc as adhoc_service
+    from charvar import paths
+    from charvar import pose_prompt as pose_prompt_module
+    from charvar import poses as poses_service
+
+    with storage.connect() as conn:
+        try:
+            action = poses_service.pose_action(conn, pose_id, angle)
+            row = conn.execute(
+                "SELECT line, number, title FROM pose_images WHERE pose_id = ? AND angle = ?",
+                (action["pose_id"], action["angle"]),
+            ).fetchone()
+            slot = storage.get_subject_image(conn, subject, "front") if subject else None
+        except poses_service.PoseError as exc:
+            _die(str(exc))
+    if row is None:
+        _die("姿势库为空 —— 先跑 scripts/download_pose_db.py，再 charvar pose import")
+    if not action["action_text"].strip():
+        _die(
+            f"该动作视角还没有动作描述：{action['pose_id']} / {action['angle']}\n"
+            f"先写：charvar pose action {action['pose_id']} --angle {action['angle']} --set '动作描述'"
+        )
+    prompt = pose_prompt_module.build_prompt(row["line"], action["action_text"])
+    if not run:
+        typer.echo(prompt)
+        return
+    if not subject:
+        _die("--run 需要 --subject（主体档案 id）")
+    if slot is None or not slot.get("file_path"):
+        _die(f"主体档案没有 front 槽位图：{subject}")
+    subject_file = paths.data_dir() / str(slot["file_path"])
+    if not subject_file.exists():
+        _die(f"主体 front 槽位图文件缺失：{slot['file_path']}")
+    pose_file = poses_service.prepared_reference_file(action["pose_id"], action["angle"])
+    req = adhoc_service.AdhocRequest(
+        prompt=prompt,
+        backend=backend,
+        negative_prompt=negative,
+        reference_paths=[subject_file, pose_file],
+        aspect_ratio=aspect,
+        resolution=resolution,
+        seed=seed,
+        wait=wait,
+        out=out,
+    )
+    _run_adhoc(req, json_out)
+
+
 def main() -> None:
     """console script 入口（pyproject.toml 声明 charvar.cli:main）。"""
     app()

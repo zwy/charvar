@@ -298,6 +298,24 @@ def test_pose_action_double_key_endpoints(data_dir, client):
     assert client.get("/poses/does.not.exist/action").status_code == 400
 
 
+# ---------- 动作描述 → 出图提示词（pose_prompt 分段模板） ----------
+
+def test_pose_prompt_builds_by_line_kind():
+    from charvar import pose_prompt
+
+    full = pose_prompt.build_prompt("全身1人・セクシー系", "呈自然的 S 形曲线")
+    assert full.startswith("<image1>为角色设定参考")  # 主体锚定段在最前
+    assert "摆出<image2>图中的姿势：呈自然的 S 形曲线" in full
+    assert "采用全身构图" in full and full.count("背景简洁，突出角色。") == 1
+    upper = pose_prompt.build_prompt("上半身1人", "双手在头顶上方合成心形")
+    assert "采用半身构图" in upper and "不裁切手指与手臂" in upper
+    pair = pose_prompt.build_prompt("2人絡み", "后方角色环抱前方角色")
+    assert "双人姿势：后方角色环抱前方角色" in pair
+    assert "采用双人全身构图" in pair and "画面固定为两个角色" in pair
+    # 双人锚定句点明两位沿用同一角色外观；未收录线回退全身
+    assert "两位角色都沿用该外观与服装" in pair
+    assert pose_prompt.kind_of_line("乱写的线") == "full"
+    assert pose_prompt.build_prompt("乱写的线", "x") != pair
 # ---------- 参考图解析 ----------
 
 def test_full_and_thumb_file_resolution(data_dir):
