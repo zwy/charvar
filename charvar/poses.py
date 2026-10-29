@@ -89,6 +89,14 @@ def category_zh(category: str) -> str:
     return CATEGORY_ZH.get(category, category)
 
 
+def title_zh(title: str, pose_id: str = "") -> str:
+    """动作名中文翻译（中日对照展示用）；无译文回退原文。"""
+    from charvar.pose_translations import POSE_TITLE_ZH
+
+    mapped = POSE_TITLE_ZH.get(str(pose_id or ""))
+    return str(mapped).strip() if mapped and str(mapped).strip() else title
+
+
 def source_dir() -> Path:
     return paths.data_dir() / "poses" / SOURCE_ID
 
@@ -249,6 +257,8 @@ def list_poses(
                 "line_zh": line_zh(row["line"]),
                 "number": row["number"],
                 "title": row["title"],
+                # 中日对照展示：翻译来自 pose_translations（自有内容，进 git）；缺项回退原文
+                "title_zh": title_zh(row["title"], row["pose_id"]),
                 "category": row["category"],
                 "category_zh": category_zh(row["category"]),
                 "image_count": 0,

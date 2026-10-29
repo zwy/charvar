@@ -567,3 +567,56 @@ td .caption { color: var(--muted); }
 #gen-ref-list .ref-pick { max-width: 240px; }
 #gen-ref-list .ref-name { white-space: normal; word-break: break-word; text-align: center; line-height: 1.4; }
 #gen-ref-list .ref-role { width: 100%; font-size: 11px; padding: 3px 4px; border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; }
+
+/* 行内 .btn-sm 的选中态（动作库的视角切换按钮）：跟 segmented active 同语言 */
+.btn-sm.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-line); font-weight: 600; }
+
+/* 动作库弹层（genrefs.js · master-detail）：左筛选+网格 / 右常驻详情，中日对照。
+   flex 子项必须 min-height:0 —— 否则 min-height:auto 让 288 条的网格把整个
+   弹层撑到内容高（数万 px），内部滚动失效变整页长条。 */
+.pose-browser { display: flex; width: 100%; height: 66vh; min-height: 420px; }
+.pose-master { width: 62%; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-3); border-right: 1px solid var(--line); }
+.pose-toolbar { display: flex; flex-direction: column; gap: var(--sp-2); }
+.pose-toolbar .segmented { align-self: flex-start; flex-wrap: wrap; }
+.pose-toolbar .seg em { font-style: normal; font-weight: 400; font-size: 11px; color: var(--muted); margin-left: 5px; }
+.pose-toolbar-row { display: flex; gap: var(--sp-2); align-items: center; }
+.pose-toolbar-row select { font: inherit; padding: 6px 9px; min-height: var(--ctl-h); max-width: 230px; border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; color: var(--text); }
+.pose-toolbar-row input[type="text"] { flex: 1.5; min-width: 140px; font: inherit; padding: 6px 9px; min-height: var(--ctl-h); border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; color: var(--text); }
+.pose-toolbar-row :is(select, input):focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+/* grid-auto-rows: max-content 与卡片 overflow:visible 是成对的红线：
+   .image-card 基类的 overflow:hidden 会让 auto 行高按 18px（一行文本）收缩、
+   268px 的卡片逐行压叠（实测 96 行只有 3122px 内容高）——二者去其一即修，
+   两个都写是防将来把卡片改回裁剪容器。 */
+#pose-grid { display: grid; flex: 1 1 0; min-height: 0; overflow-y: auto; padding-right: 6px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); grid-auto-rows: max-content; gap: var(--sp-3); align-items: start; }
+.pose-card { padding: 8px; overflow: visible; }
+/* 图盒定高（aspect-ratio 3/4 站点原比例）：不依赖图片加载与 min-height 博弈，
+   img 填满盒（人偶线稿白背景，contain/cover 视觉一致） */
+.pose-thumb { background: #f4f6f9; border-radius: var(--radius-ctl); overflow: hidden; aspect-ratio: 3 / 4; }
+.pose-thumb img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.pose-card.active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+/* 元信息三段：mono 编号 / 中文（主阅读）/ 日文原文（muted）——覆盖基类的 space-between 单行 */
+.pose-card .image-meta { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 1px; min-height: 0; }
+.pose-card strong { font-family: var(--mono); font-size: 12px; color: var(--text); }
+.pose-card .pose-zh { font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.pose-card .pose-jp { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.pose-detail { width: 38%; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4); background: #fafbfd; overflow-y: auto; border-radius: 0 0 var(--radius-card) var(--radius-card); }
+.pose-detail .pose-detail-img { background: #fff; border: 1px solid var(--line); border-radius: var(--radius-panel); padding: var(--sp-3); display: flex; align-items: center; justify-content: center; }
+.pose-detail .pose-detail-img img { display: block; max-width: 100%; max-height: 320px; object-fit: contain; background: #f4f6f9; border-radius: var(--radius-ctl); cursor: zoom-in; }
+.pose-detail-titles h3 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.45; }
+.pose-detail-titles .pose-jp { margin-top: 2px; }
+.pose-jp { font-size: 12px; color: var(--muted); }
+.pose-meta { font-size: 12px; color: var(--muted); }
+.pose-meta em { font-style: normal; }
+.pose-angle-label { font-size: 11px; font-weight: 600; letter-spacing: .05em; color: var(--muted); }
+.pose-angle-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: var(--sp-1); }
+.pose-detail-actions { margin-top: auto; display: flex; flex-direction: column; gap: var(--sp-2); padding-top: var(--sp-2); }
+.pose-detail-actions .primary { width: 100%; }
+.pose-empty { grid-column: 1 / -1; padding: var(--sp-4); text-align: center; font-size: 12px; color: var(--muted); }
+#pose-grid::-webkit-scrollbar, .pose-detail::-webkit-scrollbar { width: 4px; }
+#pose-grid::-webkit-scrollbar-thumb, .pose-detail::-webkit-scrollbar-thumb { background: var(--line); border-radius: 10px; }
+@media (max-width: 720px) {
+  .pose-browser { flex-direction: column; height: auto; }
+  .pose-master { width: 100%; border-right: 0; border-bottom: 1px solid var(--line); }
+  .pose-detail { width: 100%; border-radius: 0; }
+  #pose-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+}

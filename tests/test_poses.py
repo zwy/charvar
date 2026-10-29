@@ -8,6 +8,7 @@ from __future__ import annotations
 import io
 import json
 import pathlib
+import re
 
 import httpx
 import pytest
@@ -142,6 +143,46 @@ def test_unknown_values_fall_back_to_original_text(data_dir):
         data = poses_service.list_poses(conn)
     # 假造的ポーズ名/分類都按原文返回（映射缺项不炸）
     assert all(p["title"] == f"{p['pose_id']} 的动作描述" for p in data["poses"])
+
+
+# ---------- 中日对照（title_zh 译文表） ----------
+
+def test_pose_title_zh_glossary_is_wellformed():
+    from charvar.pose_translations import POSE_TITLE_ZH
+
+    assert len(POSE_TITLE_ZH) >= 288  # 站点 288 个动作全覆盖
+    for pose_id, zh in POSE_TITLE_ZH.items():
+        assert re.fullmatch(r"[A-Za-z0-9_]+", pose_id), pose_id
+        assert zh.strip() and re.search(r"[一-鿿]", zh), (pose_id, zh)
+
+
+def test_title_zh_fallback_and_mapping(data_dir, monkeypatch):
+    from charvar import pose_translations
+
+    _build_fake_pose_data(data_dir)
+    monkeypatch.setitem(pose_translations.POSE_TITLE_ZH, "full_sexy_P001", "S型站立·腰向侧面顶出")
+    monkeypatch.setitem(pose_translations.POSE_TITLE_ZH, "pair60_P010", "")  # 空译文 = 回退原文
+    with storage.connect() as conn:
+        poses_service.import_catalog(conn)
+        data = poses_service.list_poses(conn)
+    by_id = {p["pose_id"]: p for p in data["poses"]}
+    assert by_id["full_sexy_P001"]["title_zh"] == "S型站立·腰向侧面顶出"
+    # 无译文 / 空译文回退日文原文（映射缺项不炸）
+    assert by_id["pair60_P010"]["title_zh"] == by_id["pair60_P010"]["title"]
+    assert poses_service.title_zh("日文原题", "no_such_id") == "日文原题"
+
+
+def test_title_zh_covers_real_catalog_when_present():
+    """真实库在盘上时校验译文覆盖度（站点加新动作而译文缺项会先在这里炸）。"""
+    from charvar.pose_translations import POSE_TITLE_ZH
+
+    catalog = poses_service.catalog_path()
+    if not catalog.exists():
+        pytest.skip("真实 catalog 不在盘上（未跑下载脚本）")
+    items = json.loads(catalog.read_text(encoding="utf-8"))
+    ids = {poses_service.pose_id_from_item_id(item["id"]) for item in items}
+    missing = ids - set(POSE_TITLE_ZH)
+    assert not missing, f"缺 {len(missing)} 条译文：{sorted(missing)[:5]}"
 
 
 # ---------- 参考图解析 ----------

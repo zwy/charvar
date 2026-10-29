@@ -1,0 +1,44 @@
+{
+ "schemaVersion": 1,
+ "targets": {
+  "pose-browser": {
+   "targetKind": "existing-ui",
+   "projectId": "883be7fb-1691-47fa-8dea-5a083d3a2d24",
+   "baselineDraftId": "141b4f51-0d4a-4629-9d25-a23790f949a9",
+   "activeDraftId": "b478e218-2afc-438a-91a0-5546079382d0",
+   "designSystemPath": ".superdesign/design-system.md",
+   "referenceIds": [
+    "56f5144c-62f6-4b02-8963-2107a291cc3f",
+    "eefc5a16-a0e8-4f1c-8f2a-1d9914fcdc5c"
+   ],
+   "contextFiles": [
+    ".superdesign/design-system.md",
+    "web/static/style.css",
+    "web/static/genrefs.js"
+   ],
+   "fingerprints": {
+    ".superdesign/design-system.md": "3689b03243b9854ce9ecfcbd7058bfdd9edc403c6a7e5a5714e47f083486cfe7",
+    "web/static/style.css": "feaed40d0f82d318a28deac2ed86145eb6ee13c830e921fbeb1aa7d586af9fbc",
+    "web/static/genrefs.js": "feebf0a9d036dded8eb96b57af00e0a7a2eea1a725398a3b349b45b0c48145c5"
+   },
+   "drafts": {
+    "141b4f51-0d4a-4629-9d25-a23790f949a9": {
+     "title": "Current 动作库弹层",
+     "visualDirection": "current baseline (pixel reproduction)",
+     "currentVersion": 1
+    },
+    "4717a3c2-ff32-451e-9e04-8d64b4bead99": {
+     "title": "中日对照动作库浏览器",
+     "visualDirection": "bilingual: zh primary, jp muted secondary, same layout",
+     "parentDraftId": "141b4f51-0d4a-4629-9d25-a23790f949a9"
+    },
+    "b478e218-2afc-438a-91a0-5546079382d0": {
+     "title": "Master-Detail 收紧版",
+     "visualDirection": "master-detail 62/38, segmented line tabs, tighter rhythm",
+     "parentDraftId": "141b4f51-0d4a-4629-9d25-a23790f949a9"
+    }
+   },
+   "updatedAt": "2026-10-28T21:48:27+08:00"
+  }
+ }
+}

@@ -1,0 +1,386 @@
+<!DOCTYPE html><html lang="zh-CN"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+  <style>
+    @import url('https://fonts.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap');
+    :root {
+      --bg: #f6f7f9;
+      --card: #ffffff;
+      --line: #e4e7ec;
+      --text: #1c2430;
+      --muted: #6b7686;
+      --accent: #2563eb;
+      --accent-soft: #eef4ff;
+      --accent-line: #d7e4ff;
+      --danger: #dc2626;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --sp-1: 4px;
+      --sp-2: 8px;
+      --sp-3: 12px;
+      --sp-4: 16px;
+      --radius-ctl: 8px;
+      --radius-panel: 10px;
+      --radius-card: 12px;
+      --ctl-h: 35px;
+    }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+    }
+    .image-overlay {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: rgba(14, 19, 26, 0.62);
+      padding: 20px;
+      z-index: 100;
+    }
+    .image-modal {
+      width: 1080px;
+      height: 72vh;
+      background: #fff;
+      border-radius: var(--radius-card);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .modal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: var(--sp-3) var(--sp-4);
+      border-bottom: 1px solid var(--line);
+    }
+    .modal-head strong {
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .modal-main {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+    }
+    /* Left Panel: Master */
+    .master-panel {
+      width: 62%;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--line);
+      padding: var(--sp-3);
+      gap: var(--sp-3);
+    }
+    .master-toolbar {
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-2);
+    }
+    .master-toolbar-row {
+      display: flex;
+      gap: var(--sp-2);
+      align-items: center;
+    }
+    /* Right Panel: Detail */
+    .detail-panel {
+      width: 38%;
+      background: #fafbfd;
+      padding: var(--sp-4);
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-3);
+    }
+    /* Controls */
+    .segmented {
+      display: inline-flex;
+      gap: 2px;
+      padding: 3px;
+      background: #eef0f4;
+      border-radius: var(--radius-panel);
+    }
+    .segmented .seg {
+      border: 0;
+      background: transparent;
+      padding: 4px 12px;
+      border-radius: var(--radius-ctl);
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .segmented .seg.active {
+      background: #fff;
+      color: var(--accent);
+      font-weight: 600;
+      box-shadow: 0 1px 2px rgba(16, 24, 40, 0.12);
+    }
+    select, input[type="text"] {
+      font: inherit;
+      padding: 6px 9px;
+      min-height: var(--ctl-h);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-ctl);
+      background: #fff;
+      color: var(--text);
+      font-size: 12px;
+    }
+    select:focus, input[type="text"]:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+    /* Grid */
+    .image-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--sp-3);
+      overflow-y: auto;
+      padding-right: 8px;
+      flex: 1;
+    }
+    .image-card {
+      display: flex;
+      flex-direction: column;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-panel);
+      overflow: hidden;
+      cursor: pointer;
+      padding: 8px;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .image-card img {
+      display: block;
+      width: 100%;
+      aspect-ratio: 3/4;
+      object-fit: contain;
+      background: #f4f6f9;
+      border-radius: 6px;
+    }
+    .image-card:hover {
+      border-color: var(--accent-line);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+    .image-card.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+    .image-meta {
+      margin-top: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+    .image-meta strong {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text);
+    }
+    .image-meta span {
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    /* Details */
+    .detail-img-box {
+      width: 100%;
+      aspect-ratio: 1/1;
+      background: #f4f6f9;
+      border-radius: var(--radius-panel);
+      padding: var(--sp-3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--line);
+    }
+    .detail-img-box img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+    .detail-titles h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin: 0;
+    }
+    .detail-titles .jp-sub {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .detail-meta-row {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .angle-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+    button {
+      font: inherit;
+      padding: 6px 14px;
+      min-height: var(--ctl-h);
+      border-radius: var(--radius-ctl);
+      border: 1px solid var(--line);
+      background: #fff;
+      cursor: pointer;
+      color: var(--text);
+      transition: all .15s ease;
+      font-size: 12px;
+    }
+    button:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    button.primary:hover {
+      opacity: 0.92;
+      color: #fff;
+    }
+    button.active-seg {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .btn-sm {
+      padding: 4px 10px;
+      min-height: 28px;
+      line-height: 1.5;
+    }
+    .image-grid::-webkit-scrollbar,
+    .detail-panel::-webkit-scrollbar {
+      width: 4px;
+    }
+    .image-grid::-webkit-scrollbar-thumb,
+    .detail-panel::-webkit-scrollbar-thumb {
+      background: var(--line);
+      border-radius: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="image-overlay">
+    <div class="image-modal">
+      <div class="modal-head">
+        <strong>动作库（灰人偶线稿 · 只锚姿势构图）</strong>
+        <button class="btn btn-sm px-4" id="nav-close-btn">关闭</button>
+      </div>
+
+      <div class="modal-main">
+        <!-- Master Panel -->
+        <div class="master-panel">
+          <div class="master-toolbar">
+            <div class="segmented">
+              <button class="seg active" id="filter-seg-all">全部系統</button>
+              <button class="seg" id="filter-seg-s1">全身单人·性感系</button>
+              <button class="seg" id="filter-seg-s2">双人系列</button>
+            </div>
+            <div class="master-toolbar-row">
+              <select class="flex-1" id="filter-cat-select">
+                <option value="all">全部分類</option>
+                <option value="c1">性感·直露系 · 30 动作</option>
+                <option value="c2">站立平衡 · 25 动作</option>
+              </select>
+              <input type="text" placeholder="按动作名 / 编号 / id 搜索" class="flex-[1.5]" id="search-input">
+            </div>
+          </div>
+
+          <div class="image-grid">
+            <div class="image-card active" id="pose-item-p001">
+              <img src="https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/projects/883be7fb-1691-47fa-8dea-5a083d3a2d24/reference-assets/pose-browser-grid-current/mcp-plugin_playwright_playwright-blob-1793193736593-xi83wf.jpg" alt="P001">
+              <div class="image-meta">
+                <strong>P001</strong>
+                <span>向き合い片膝を抱え上げる</span>
+              </div>
+            </div>
+
+            <div class="image-card" id="pose-item-p002">
+              <img src="https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/projects/883be7fb-1691-47fa-8dea-5a083d3a2d24/reference-assets/pose-browser-grid-current/mcp-plugin_playwright_playwright-blob-1793193736593-xi83wf.jpg" style="filter: hue-rotate(90deg)" alt="P002">
+              <div class="image-meta">
+                <strong>P002</strong>
+                <span>脚の間にうつ伏せで寄り添う</span>
+              </div>
+            </div>
+
+            <div class="image-card" id="pose-item-p003">
+              <img src="https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/projects/883be7fb-1691-47fa-8dea-5a083d3a2d24/reference-assets/pose-browser-grid-current/mcp-plugin_playwright_playwright-blob-1793193736593-xi83wf.jpg" style="filter: hue-rotate(180deg)" alt="P003">
+              <div class="image-meta">
+                <strong>P003</strong>
+                <span>足首を持ち上げV字に開く</span>
+              </div>
+            </div>
+
+            <div class="image-card" id="pose-item-p004">
+              <img src="https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/projects/883be7fb-1691-47fa-8dea-5a083d3a2d24/reference-assets/pose-browser-grid-current/mcp-plugin_playwright_playwright-blob-1793193736593-xi83wf.jpg" style="filter: grayscale(1)" alt="P004">
+              <div class="image-meta">
+                <strong>P004</strong>
+                <span>膝立ち背中合わせ</span>
+              </div>
+            </div>
+            
+            <div class="image-card" id="pose-item-p005">
+              <img src="https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/projects/883be7fb-1691-47fa-8dea-5a083d3a2d24/reference-assets/pose-browser-grid-current/mcp-plugin_playwright_playwright-blob-1793193736593-xi83wf.jpg" style="filter: sepia(0.5)" alt="P005">
+              <div class="image-meta">
+                <strong>P005</strong>
+                <span>横向きで腕を組む</span>
+              </div>
+            </div>
+
+            <div class="image-card" id="pose-item-p006">
+              <img src="https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/projects/883be7fb-1691-47fa-8dea-5a083d3a2d24/reference-assets/pose-browser-grid-current/mcp-plugin_playwright_playwright-blob-1793193736593-xi83wf.jpg" style="filter: invert(0.05)" alt="P006">
+              <div class="image-meta">
+                <strong>P006</strong>
+                <span>座って上を見上げる</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Detail Panel -->
+        <div class="detail-panel">
+          <div class="detail-img-box">
+            <img src="https://vgbujcuwptvheqijyjbe.supabase.co/storage/v1/object/public/hmac-uploads/projects/883be7fb-1691-47fa-8dea-5a083d3a2d24/reference-assets/pose-browser-grid-current/mcp-plugin_playwright_playwright-blob-1793193736593-xi83wf.jpg" alt="Preview">
+          </div>
+
+          <div class="detail-titles">
+            <h3 id="detail-title-zh">P001 向き合い片膝を抱え上げる</h3>
+            <div class="jp-sub" id="detail-title-jp">面向对方抬起单膝</div>
+          </div>
+
+          <div class="detail-meta-row" id="detail-category-meta">
+            双人 (Pair) · 站立 (Standing)
+          </div>
+
+          <div class="flex flex-col gap-2">
+            <div class="text-[11px] font-semibold text-gray-400">选择视角</div>
+            <div class="angle-grid">
+              <button class="btn-sm active-seg" id="angle-front">正面</button>
+              <button class="btn-sm" id="angle-top">俯视</button>
+              <button class="btn-sm" id="angle-side">侧面</button>
+              <button class="btn-sm" id="angle-oblique">斜侧</button>
+              <button class="btn-sm" id="angle-bottom">仰视</button>
+              <button class="btn-sm" id="angle-back">背面</button>
+            </div>
+          </div>
+
+          <div class="mt-auto pt-4 flex flex-col gap-2">
+            <button class="primary w-full py-2 h-auto text-sm" id="cta-add-ref">加入参考图</button>
+            <button class="btn btn-sm w-full" id="cta-back">返回</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body></html>
