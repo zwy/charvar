@@ -2,7 +2,7 @@
    —— 网格 CSS 红线、双语规则、筛选交互只修一处，别再两处分叉。容器里搭
    系統页签 + 分類/搜索 + 卡片网格 + 常驻详情（双语标题 / 系統·分類 / 视角切换 /
    动作描述块）。中日对照：中文为主阅读层级、日文原文 muted 小字。
-   动作描述（pose_actions 表）有 → 卡片带「描述」角标、详情块带「复制」；
+   动作描述（pose_actions 表：动作×视角 双键，文本挂 images[] 每视角）有 → 卡片带「描述」角标、详情块跟所选视角带「复制」；
    无 → 详情块给灰字空态。整页没有参考图上下文，不渲染「加入参考图」。 */
 const PoseGallery = (() => {
   function mount({ root, onPick, close, onStat, variant = "modal" }) {
@@ -102,7 +102,7 @@ const PoseGallery = (() => {
         if (filter.category && p.category !== filter.category) return false;
         if (filter.q) {
           const hay = (p.title + " " + (p.title_zh || "") + " " + p.number + " " + p.pose_id +
-            " " + (p.action_text || "")).toLowerCase();
+            " " + (p.images || []).map(function (im) { return im.action_text || ""; }).join(" ")).toLowerCase();
           if (hay.indexOf(filter.q) === -1) return false;
         }
         return true;
@@ -120,7 +120,7 @@ const PoseGallery = (() => {
       }
       poses.forEach(function (p) {
         const front = (p.images && p.images[0]) || {};
-        const hasText = !!(p.action_text && String(p.action_text).trim());
+        const hasText = (p.images || []).some(function (im) { return String(im.action_text || "").trim(); });
         const card = document.createElement("div");
         card.className = "image-card pose-card" + (selectedPose && selectedPose.pose_id === p.pose_id ? " active" : "");
         card.innerHTML =
@@ -184,7 +184,7 @@ const PoseGallery = (() => {
       if (!selectedAngle || !images.some(function (im) { return im.angle === selectedAngle.angle; })) {
         selectedAngle = images[0] || null;
       }
-      const actionText = String(p.action_text || "").trim();
+      const actionText = selectedAngle ? String(selectedAngle.action_text || "").trim() : "";
       detailEl.innerHTML =
         '<div class="pose-detail-img" title="点看大图">' +
         '<img src="' + esc(selectedAngle.thumb_url) + '" alt="' + esc(p.number) + '"></div>' +

@@ -95,14 +95,16 @@ CREATE TABLE IF NOT EXISTS pose_images (
 );
 CREATE INDEX IF NOT EXISTS idx_pose_images_line ON pose_images(line, category);
 CREATE TABLE IF NOT EXISTS pose_actions (
-    -- 用户内容：每动作一条的「动作描述提示词」（动作库页面展示/复制，后续
-    -- 编辑与 AI 起草用；source 区分 manual / ai_draft）。独立于 pose_images：
-    -- 那是可整批重灌的站点索引（pose import upsert 覆盖），用户文案不进它。
-    pose_id TEXT PRIMARY KEY,
+    -- 用户内容：每「动作×视角」一条的动作描述提示词（动作库页面展示/复制/
+    -- 后续编辑与 AI 起草用；source 区分 manual / ai_draft）。独立于
+    -- pose_images（可整批重灌的站点索引，用户文案不进它）。
+    pose_id TEXT NOT NULL,
+    angle TEXT NOT NULL,
     action_text TEXT NOT NULL DEFAULT '',
     source TEXT NOT NULL DEFAULT 'manual',
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (pose_id, angle)
 );
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
@@ -122,6 +124,36 @@ def utcnow() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
+def _rebuild_pose_actions_pk(conn: sqlite3.Connection) -> None:
+    """旧 pose_actions（pose_id 单键）迁到 (pose_id, angle) 双键。
+
+    CREATE TABLE IF NOT EXISTS 撑不出主键变更 —— 检测到旧形状时整表重建，
+    存量动作级描述迁到「正面」（不回退：描述里的画面事实按正面理解）。
+    """
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(pose_actions)")}
+    if not columns or "angle" in columns:
+        return
+    conn.executescript(
+        """
+        CREATE TABLE pose_actions_new (
+            pose_id TEXT NOT NULL,
+            angle TEXT NOT NULL,
+            action_text TEXT NOT NULL DEFAULT '',
+            source TEXT NOT NULL DEFAULT 'manual',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (pose_id, angle)
+        );
+        INSERT INTO pose_actions_new (pose_id, angle, action_text, source, created_at, updated_at)
+            SELECT pose_id, '正面', action_text, source, created_at, updated_at
+            FROM pose_actions;
+        DROP TABLE pose_actions;
+        ALTER TABLE pose_actions_new RENAME TO pose_actions;
+        """
+    )
+    conn.commit()
+
+
 def connect(db_path: Path | None = None) -> sqlite3.Connection:
     path = Path(db_path) if db_path else paths.db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -136,6 +168,7 @@ def connect(db_path: Path | None = None) -> sqlite3.Connection:
             conn.execute(statement)
         except sqlite3.OperationalError:
             pass  # 列已存在等幂等迁移
+    _rebuild_pose_actions_pk(conn)
     return conn
 
 

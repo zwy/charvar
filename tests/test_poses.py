@@ -185,68 +185,115 @@ def test_title_zh_covers_real_catalog_when_present():
     assert not missing, f"缺 {len(missing)} 条译文：{sorted(missing)[:5]}"
 
 
-# ---------- 动作描述（pose_actions 表 + PUT /poses/{pose_id}/action） ----------
+# ---------- 动作描述（pose_actions：动作×视角 双键 + PUT /poses/{pose_id}/action） ----------
 
-def test_pose_action_roundtrip_and_import_preserves(data_dir):
-    """写/清/回读 + 重灌索引不碰用户文案（pose_actions 与重灌索引分层）。"""
+def test_pose_action_double_key_roundtrip(data_dir):
+    """双键：同动作各视角独立读写；空串 = 清该视角；重灌索引不碰用户文案。"""
     _build_fake_pose_data(data_dir)
     with storage.connect() as conn:
         poses_service.import_catalog(conn)
-        data = poses_service.set_pose_action(conn, "full_sexy_P001", "身体基本朝向镜头，呈自然的 S 形曲线。")
-        assert data["action_text"] == "身体基本朝向镜头，呈自然的 S 形曲线。"
-        assert data["source"] == "manual"
-        # 清掉（空串 = 删条目）之后动作还在，描述回空串
-        poses_service.set_pose_action(conn, "full_sexy_P001", "")
-        assert poses_service.pose_action(conn, "full_sexy_P001")["action_text"] == ""
-        assert conn.execute("SELECT COUNT(*) FROM pose_actions").fetchone()[0] == 0
-        # 重灌索引（pose import 幂等 upsert）不碰 pose_actions 的用户文案
-        poses_service.set_pose_action(conn, "full_sexy_P001", "S 型站立")
-        poses_service.set_pose_action(conn, "pair60_P010", "双人交缠姿势")
+        poses_service.set_pose_action(conn, "full_sexy_P001", "正面", "身体基本朝向镜头，呈 S 形曲线。")
+        poses_service.set_pose_action(conn, "full_sexy_P001", "上から", "俯拍：脚部靠近镜头，头顶在画面深处。")
+        got_front = poses_service.pose_action(conn, "full_sexy_P001", "正面")
+        assert got_front["action_text"] == "身体基本朝向镜头，呈 S 形曲线。" and got_front["angle"] == "正面"
+        assert poses_service.pose_action(conn, "full_sexy_P001", "上から")["action_text"].startswith("俯拍")
+        # 没写 = 空串，不回退（描述与参考图必须同视角）
+        assert poses_service.pose_action(conn, "full_sexy_P001", "横")["action_text"] == ""
+        # 清一个视角不影响另一个
+        poses_service.set_pose_action(conn, "full_sexy_P001", "上から", "")
+        assert conn.execute(
+            "SELECT COUNT(*) FROM pose_actions WHERE pose_id='full_sexy_P001'"
+        ).fetchone()[0] == 1
+        # 重灌索引（pose import 幂等 upsert）不碰用户文案
         poses_service.import_catalog(conn)
-        assert poses_service.pose_action(conn, "full_sexy_P001")["action_text"] == "S 型站立"
-        assert poses_service.pose_action(conn, "pair60_P010")["action_text"] == "双人交缠姿势"
-        # 非法 id / 库里没有的动作 → PoseError
+        assert poses_service.pose_action(conn, "full_sexy_P001", "正面")["action_text"] == "身体基本朝向镜头，呈 S 形曲线。"
+        # 非法 id / 非法视角 / 库里没有的组合
         with pytest.raises(poses_service.PoseError):
-            poses_service.set_pose_action(conn, "bad/id!", "x")
+            poses_service.set_pose_action(conn, "bad/id!", "正面", "x")
         with pytest.raises(poses_service.PoseError):
-            poses_service.set_pose_action(conn, "full_sexy_P999", "x")
+            poses_service.set_pose_action(conn, "full_sexy_P001", "斜上方", "x")
+        with pytest.raises(poses_service.PoseError):
+            poses_service.set_pose_action(conn, "full_sexy_P002", "下から", "x")  # P002 只有 4 视角
+        with pytest.raises(poses_service.PoseError):
+            poses_service.set_pose_action(conn, "full_sexy_P999", "正面", "x")
 
 
-def test_list_poses_includes_action_text_and_search_hits(data_dir):
+def test_legacy_pose_level_rows_migrate_to_front(data_dir):
+    """旧单键库的存量行迁到（pose_id, 正面）—— 用户文案不丢。"""
+    import sqlite3
+
+    _build_fake_pose_data(data_dir)  # 先有 catalog，connect 迁移 + import 后才能读
+    db = data_dir / "legacy.db"
+    legacy_schema = """
+    CREATE TABLE IF NOT EXISTS pose_actions (
+        pose_id TEXT PRIMARY KEY,
+        action_text TEXT NOT NULL DEFAULT '',
+        source TEXT NOT NULL DEFAULT 'manual',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    );
+    """
+    with sqlite3.connect(db) as raw:
+        raw.executescript(legacy_schema)
+        raw.execute(
+            "INSERT INTO pose_actions (pose_id, action_text, source, created_at, updated_at)"
+            " VALUES ('full_sexy_P001', '旧动作级描述', 'manual', '2026-10-29 00:00:00', '2026-10-29 00:00:00')"
+        )
+        raw.commit()
+    with storage.connect(db) as conn:
+        poses_service.import_catalog(conn)
+        data = poses_service.pose_action(conn, "full_sexy_P001", "正面")
+        assert data["action_text"] == "旧动作级描述" and data["angle"] == "正面"
+
+
+def test_list_poses_action_text_on_images_and_search(data_dir):
     _build_fake_pose_data(data_dir)
     with storage.connect() as conn:
         poses_service.import_catalog(conn)
-        poses_service.set_pose_action(conn, "full_sexy_P001", "腰胯轻微扭转，呈自然的 S 形曲线")
+        poses_service.set_pose_action(conn, "full_sexy_P001", "正面", "腰胯轻微扭转，呈自然的 S 形曲线")
+        poses_service.set_pose_action(conn, "full_sexy_P001", "横", "侧面：右臂近端叉腰")
         data = poses_service.list_poses(conn)
     by_id = {p["pose_id"]: p for p in data["poses"]}
-    assert by_id["full_sexy_P001"]["action_text"] == "腰胯轻微扭转，呈自然的 S 形曲线"
-    assert by_id["pair60_P010"]["action_text"] == ""
-    # 搜索命中动作描述文本（动作描述与标题都在 haystack 里，中日皆可搜）
-    hit = poses_service.list_poses(conn, q="腰胯轻微")
+    imgs = {im["angle"]: im for im in by_id["full_sexy_P001"]["images"]}
+    assert imgs["正面"]["action_text"] == "腰胯轻微扭转，呈自然的 S 形曲线"
+    assert imgs["横"]["action_text"] == "侧面：右臂近端叉腰"
+    assert imgs["斜め"]["action_text"] == ""
+    # 文本在 images[] 视角上，pose 级不再带（视角级契约）
+    assert "action_text" not in by_id["pair60_P010"]
+    # 搜索命中动作描述文本（任意视角都命中）
+    hit = poses_service.list_poses(conn, q="右臂近端")
     assert [p["pose_id"] for p in hit["poses"]] == ["full_sexy_P001"]
     assert poses_service.list_poses(conn, q="完全不相干的词")["poses"] == []
 
 
-def test_pose_action_endpoints(data_dir, client):
+def test_pose_action_double_key_endpoints(data_dir, client):
     _build_fake_pose_data(data_dir)
     with storage.connect(pathlib.Path(data_dir) / "test.db") as conn:
         poses_service.import_catalog(conn)
-    # PUT 写入 → /poses 清单与 GET 端点都带出同一份文本
-    resp = client.put("/poses/full_sexy_P001/action", json={"action_text": "S 型站立"})
+    resp = client.put("/poses/full_sexy_P001/action", json={"angle": "正面", "action_text": "S 型站立"})
     assert resp.status_code == 200, resp.text
-    assert resp.json()["action_text"] == "S 型站立"
+    assert resp.json()["angle"] == "正面"
     listing = client.get("/poses").json()
     pose = next(p for p in listing["poses"] if p["pose_id"] == "full_sexy_P001")
-    assert pose["action_text"] == "S 型站立"
-    got = client.get("/poses/full_sexy_P001/action")
+    assert pose["images"][0]["action_text"] == "S 型站立"
+    got = client.get("/poses/full_sexy_P001/action")  # 缺省正面
     assert got.status_code == 200 and got.json()["action_text"] == "S 型站立"
-    # 没写过的动作给空串（不 404）
-    empty = client.get("/poses/pair60_P010/action")
-    assert empty.status_code == 200 and empty.json()["action_text"] == ""
-    # 空串 = 清掉，之后 GET 仍 200 空串
-    assert client.put("/poses/full_sexy_P001/action", json={"action_text": ""}).status_code == 200
-    assert client.get("/poses/full_sexy_P001/action").json()["action_text"] == ""
-    # 库里没有的动作 → 404；非法 id → 400
+    assert client.put(
+        "/poses/full_sexy_P001/action", json={"angle": "上から", "action_text": "俯拍视角"}
+    ).status_code == 200
+    assert client.get("/poses/full_sexy_P001/action?angle=上から").json()["action_text"] == "俯拍视角"
+    # 空串 = 清掉该视角，GET 仍 200 空串
+    assert client.put(
+        "/poses/full_sexy_P001/action", json={"angle": "上から", "action_text": ""}
+    ).status_code == 200
+    assert client.get("/poses/full_sexy_P001/action?angle=上から").json()["action_text"] == ""
+    # 非法角度 → 400；库里没有的组合/动作 → 404；非法 id → 400
+    assert client.put(
+        "/poses/full_sexy_P001/action", json={"angle": "斜上方", "action_text": "x"}
+    ).status_code == 400
+    assert client.put(
+        "/poses/full_sexy_P002/action", json={"angle": "下から", "action_text": "x"}
+    ).status_code == 404  # P002 只有 4 视角
     assert client.put("/poses/full_sexy_P999/action", json={"action_text": "x"}).status_code == 404
     assert client.get("/poses/does.not.exist/action").status_code == 400
 

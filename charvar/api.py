@@ -69,8 +69,9 @@ _DREAMINA_CONCURRENCY = max(1, int(os.environ.get("DREAMINA_CONCURRENCY") or 2))
 
 
 class PoseActionUpdate(BaseModel):
-    """动作描述写入（PUT /poses/{pose_id}/action）；空串 = 清掉条目。"""
+    """动作描述写入（PUT /poses/{pose_id}/action）：action_text 空串 = 清掉条目；angle 缺省正面。"""
 
+    angle: str = ""
     action_text: str = ""
 
 
@@ -800,26 +801,28 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     def api_pose_image_full(source: str, pose_id: str, angle: str) -> FileResponse:
         return _pose_image_response(source, pose_id, angle, "full")
 
-    # ---- 动作描述（pose_actions：用户文案；非法 id 拒，库里没有该动作 → 404） ----
+    # ---- 动作描述（pose_actions：动作×视角 双键；非法 id/角度拒，库里没有该组合 → 404） ----
     @app.get("/poses/{pose_id}/action")
-    def api_pose_action_get(pose_id: str) -> dict[str, Any]:
-        """单个动作的动作描述；写过给文本，没写过给空串。"""
+    def api_pose_action_get(pose_id: str, angle: str = Query("")) -> dict[str, Any]:
+        """单个动作某视角的动作描述；angle 缺省正面，没写过给空串。"""
         if not poses_service.POSE_ID_RE.fullmatch(pose_id):
             raise HTTPException(400, f"非法动作 id：{pose_id[:60]}")
         with _db() as conn:
             try:
-                return poses_service.pose_action(conn, pose_id)
+                return poses_service.pose_action(conn, pose_id, angle)
             except poses_service.PoseError as exc:
                 raise HTTPException(404, str(exc)) from exc
 
     @app.put("/poses/{pose_id}/action")
     def api_pose_action_put(pose_id: str, req: PoseActionUpdate) -> dict[str, Any]:
-        """写/清（空串 = 清掉条目）单个动作的动作描述。"""
+        """写/清（action_text 空串 = 清掉条目）单个动作某视角的动作描述。"""
         if not poses_service.POSE_ID_RE.fullmatch(pose_id):
             raise HTTPException(400, f"非法动作 id：{pose_id[:60]}")
+        if req.angle and req.angle not in poses_service.ANGLE_ORDER:
+            raise HTTPException(400, f"未知视角：{req.angle[:30]}")
         with _db() as conn:
             try:
-                return poses_service.set_pose_action(conn, pose_id, req.action_text)
+                return poses_service.set_pose_action(conn, pose_id, req.angle, req.action_text)
             except poses_service.PoseError as exc:
                 raise HTTPException(404, str(exc)) from exc
 

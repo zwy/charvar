@@ -243,7 +243,7 @@ def list_poses(
         "SELECT pi.pose_id, pi.angle, pi.line, pi.number, pi.title, pi.category,"
         " pi.thumb_path, pi.file_path, pa.action_text"
         " FROM pose_images AS pi"
-        " LEFT JOIN pose_actions AS pa ON pa.pose_id = pi.pose_id"
+        " LEFT JOIN pose_actions AS pa ON pa.pose_id = pi.pose_id AND pa.angle = pi.angle"
         + (" WHERE " + " AND ".join(where) if where else "")
         + " ORDER BY pi.line, pi.number, pi.pose_id",
         params,
@@ -261,7 +261,6 @@ def list_poses(
                 "title": row["title"],
                 # 中日对照展示：翻译来自 pose_translations（自有内容，进 git）；缺项回退原文
                 "title_zh": title_zh(row["title"], row["pose_id"]),
-                "action_text": row["action_text"] or "",
                 "category": row["category"],
                 "category_zh": category_zh(row["category"]),
                 "image_count": 0,
@@ -274,6 +273,7 @@ def list_poses(
                 "angle_zh": angle_zh(row["angle"]),
                 "thumb_url": f"/poses/image/{SOURCE_ID}/{row['pose_id']}/{row['angle']}/thumb",
                 "full_url": f"/poses/image/{SOURCE_ID}/{row['pose_id']}/{row['angle']}/full",
+                "action_text": row["action_text"] or "",
             }
         )
         pose["image_count"] += 1
@@ -307,53 +307,67 @@ def list_poses(
     return {"source": SOURCE_ID, "lines": lines, "categories": categories, "poses": poses_list}
 
 
-# ---------- 动作描述（pose_actions：用户文案，不进可重灌的 pose_images 索引） ----------
+# ---------- 动作描述（pose_actions：动作×视角 双键；用户文案，不进可重灌的 pose_images 索引） ----------
 
-def _require_pose(conn: sqlite3.Connection, pose_id: str) -> str:
-    """动作 id 必须是库里的动作 —— pose_actions 挂靠在 pose_images 上，不悬空。"""
+def _require_pose_angle(conn: sqlite3.Connection, pose_id: str, angle: str | None) -> str:
+    """(动作, 视角) 必须是库里的真实组合 —— pose_actions 挂靠在 pose_images 上，不悬空。
+
+    描述里「画面右侧的手臂」这类机位事实只对该视角成立，跟参考图必须同视角
+    才不打架，所以不给「切视角时回退其它视角」——没写就是没写。angle 缺省正面。
+    """
     pose_id = str(pose_id or "").strip()
     if not POSE_ID_RE.fullmatch(pose_id):
         raise PoseError(f"非法动作 id：{pose_id[:60]}")
-    row = conn.execute("SELECT 1 FROM pose_images WHERE pose_id = ?", (pose_id,)).fetchone()
-    if row is None:
-        raise PoseError(f"姿势库没有这个动作：{pose_id}")
-    return pose_id
-
-
-def pose_action(conn: sqlite3.Connection, pose_id: str) -> dict:
-    """单个动作的动作描述；库里没写过 → action_text 给空串（不 404，前端好渲染空态）。"""
-    pose_id = _require_pose(conn, pose_id)
+    angle_key = str(angle or "").strip() or ANGLE_ORDER[0]
+    if angle_key not in ANGLE_ORDER:
+        raise PoseError(f"未知视角：{angle_key[:30]}")
     row = conn.execute(
-        "SELECT pose_id, action_text, source, updated_at FROM pose_actions WHERE pose_id = ?",
-        (pose_id,),
+        "SELECT 1 FROM pose_images WHERE pose_id = ? AND angle = ?", (pose_id, angle_key)
+    ).fetchone()
+    if row is None:
+        raise PoseError(f"姿势库没有这个动作视角：{pose_id} / {angle_key}")
+    return angle_key
+
+
+def pose_action(conn: sqlite3.Connection, pose_id: str, angle: str | None = None) -> dict:
+    """单动作某视角的动作描述；没写过 → action_text 空串（不 404，前端好渲染空态）。"""
+    angle_key = _require_pose_angle(conn, pose_id, angle)
+    row = conn.execute(
+        "SELECT pose_id, angle, action_text, source, updated_at FROM pose_actions"
+        " WHERE pose_id = ? AND angle = ?",
+        (str(pose_id or "").strip(), angle_key),
     ).fetchone()
     return {
-        "pose_id": pose_id,
+        "pose_id": str(pose_id or "").strip(),
+        "angle": angle_key,
         "action_text": row["action_text"] if row else "",
         "source": row["source"] if row else "",
         "updated_at": row["updated_at"] if row else "",
     }
 
 
-def set_pose_action(conn: sqlite3.Connection, pose_id: str, action_text: str, source: str = "manual") -> dict:
-    """写/清（空串 = 清掉条目）一个动作的动作描述；动作必须已在库里。"""
-    pose_id = _require_pose(conn, pose_id)
+def set_pose_action(
+    conn: sqlite3.Connection, pose_id: str, angle: str | None, action_text: str, source: str = "manual"
+) -> dict:
+    """写/清（action_text 空串 = 清掉该视角条目）一个动作某视角的动作描述。"""
+    pose_id = str(pose_id or "").strip()
+    angle_key = _require_pose_angle(conn, pose_id, angle)
     text = str(action_text or "").strip()
     if text:
         from charvar import storage  # 延迟导入，与 _locate 同理由
 
         now = storage.utcnow()
         conn.execute(
-            """INSERT INTO pose_actions (pose_id, action_text, source, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?)
-               ON CONFLICT(pose_id) DO UPDATE SET
+            """INSERT INTO pose_actions (pose_id, angle, action_text, source, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?)
+               ON CONFLICT(pose_id, angle) DO UPDATE SET
                  action_text=excluded.action_text, source=excluded.source, updated_at=excluded.updated_at""",
-            (pose_id, text, str(source or "manual")[:30], now, now),
+            (pose_id, angle_key, text, str(source or "manual")[:30], now, now),
         )
     else:
-        conn.execute("DELETE FROM pose_actions WHERE pose_id = ?", (pose_id,))
+        conn.execute("DELETE FROM pose_actions WHERE pose_id = ? AND angle = ?", (pose_id, angle_key))
     conn.commit()
-    return pose_action(conn, pose_id)
+    return pose_action(conn, pose_id, angle_key)
 
 
 # ---------- 参考图来源解析 ----------
