@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>charvar · 角色变体提示词生成器</title><link rel="stylesheet" href="/static/style.css"><link rel="icon" type="image/svg+xml" href="/static/favicon.svg"><link rel="alternate icon" type="image/png" sizes="1024x1024" href="/static/icon.png"><link rel="apple-touch-icon" href="/static/icon.png"></head><body>
 <header class="topbar"><div class="brand">charvar <span class="sub">角色变体提示词生成器</span></div><nav>
-<button class="tab active" data-tab="gen">预设</button><button class="tab" data-tab="adhoc">Playground</button><button class="tab" data-tab="video">视频</button><button class="tab" data-tab="tts">语音</button><button class="tab" data-tab="recipes">配方</button><button class="tab" data-tab="subjects">主体</button><button class="tab" data-tab="poses">动作</button><button class="tab" data-tab="runs">历史</button><button class="tab" data-tab="settings">设置</button></nav></header>
+<button class="tab active" data-tab="gen">预设</button><button class="tab" data-tab="adhoc">Playground</button><button class="tab" data-tab="video">视频</button><button class="tab" data-tab="tts">语音</button><button class="tab" data-tab="recipes">配方</button><button class="tab" data-tab="subjects">主体</button><button class="tab" data-tab="poses">动作</button><button class="tab" data-tab="costumes">服装</button><button class="tab" data-tab="runs">历史</button><button class="tab" data-tab="settings">设置</button></nav></header>
 <main>
 <section id="tab-gen" class="tab-page active">
 <div class="card"><div class="row-head"><h2>① 生图设置</h2></div>
@@ -134,6 +134,9 @@
 </section>
 <section id="tab-poses" class="tab-page"><div class="card"><div class="row-head"><h2>动作库</h2><span id="pose-page-stat" class="hint"></span></div>
 <div id="pose-page-root"></div>
+</div></section>
+<section id="tab-costumes" class="tab-page"><div class="card"><div class="row-head"><h2>服装库</h2><span id="costume-page-stat" class="hint"></span></div>
+<div id="costume-page-root"></div>
 </div></section>
 <section id="tab-recipes" class="tab-page">
 <div class="card"><div class="row-head"><h2>视频配方</h2><div class="actions"><button id="btn-recipes-refresh">刷新</button></div></div>
@@ -341,4 +344,4 @@
 <div class="card"><div class="row-head"><h2>最近生成</h2><div class="actions"><button id="btn-tts-recent-refresh">刷新</button></div></div>
 <div id="tts-recent" class="image-grid"></div></div>
 </section>
-</main><script src="/static/tables.js"></script><script src="/static/media.js"></script><script src="/static/posegallery.js"></script><script src="/static/genrefs.js"></script><script src="/static/app.js"></script><script src="/static/adhoc.js"></script><script src="/static/video.js"></script><script src="/static/tts.js"></script><script src="/static/recipes.js"></script><script src="/static/posepage.js"></script></body></html>
+</main><script src="/static/tables.js"></script><script src="/static/media.js"></script><script src="/static/posegallery.js"></script><script src="/static/genrefs.js"></script><script src="/static/app.js"></script><script src="/static/adhoc.js"></script><script src="/static/video.js"></script><script src="/static/tts.js"></script><script src="/static/recipes.js"></script><script src="/static/posepage.js"></script><script src="/static/costumegallery.js"></script><script src="/static/costumepage.js"></script></body></html>

@@ -28,6 +28,7 @@ from charvar import dreamina_image
 from charvar import openrouter_image
 from charvar import openrouter_tts
 from charvar import openrouter_video
+from charvar import costumes as costumes_service
 from charvar import poses as poses_service
 from charvar import reference_images
 from charvar.assets import ensure_thumb, resolve_run_asset, sheet_path, thumb_path
@@ -800,6 +801,38 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     @app.get("/poses/image/{source}/{pose_id}/{angle}/full")
     def api_pose_image_full(source: str, pose_id: str, angle: str) -> FileResponse:
         return _pose_image_response(source, pose_id, angle, "full")
+
+    # ---- 服装库（costume-db-01 t2i 架空服装；v1 磁盘直读，未入生图流程） ----
+    @app.get("/costumes")
+    def api_costumes_list(
+        category: str = Query("", description="按目录原文过滤"),
+        q: str = Query("", max_length=60, description="按 id/英文关键词过滤（日文词经站点词表扩写）"),
+    ) -> dict[str, Any]:
+        """服装库浏览：全量清单 + 目录元数据 + 检索词表（客户端过滤）。
+
+        图片 URL 经 /costumes/image/{source}/… 端点伺服，浏览器不给磁盘路径。
+        """
+        try:
+            return costumes_service.list_items(category=category, q=q)
+        except costumes_service.CostumeError as exc:
+            raise HTTPException(404, str(exc)) from exc
+
+    def _costume_image_response(source: str, item_id: str, variant: str) -> FileResponse:
+        if source != costumes_service.SOURCE_ID:
+            raise HTTPException(404, f"没有这个服装库：{source}")
+        try:
+            path = costumes_service.image_file(item_id, variant)
+        except costumes_service.CostumeError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        return FileResponse(path, media_type="image/webp")
+
+    @app.get("/costumes/image/{source}/{item_id}/thumb")
+    def api_costume_image_thumb(source: str, item_id: str) -> FileResponse:
+        return _costume_image_response(source, item_id, "thumb")
+
+    @app.get("/costumes/image/{source}/{item_id}/full")
+    def api_costume_image_full(source: str, item_id: str) -> FileResponse:
+        return _costume_image_response(source, item_id, "full")
 
     # ---- 动作描述（pose_actions：动作×视角 双键；非法 id/角度拒，库里没有该组合 → 404） ----
     @app.get("/poses/{pose_id}/action")

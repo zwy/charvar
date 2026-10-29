@@ -652,3 +652,50 @@ td .caption { color: var(--muted); }
 .pose-browser-page .pose-detail { border-radius: 0 0 var(--radius-panel) var(--radius-panel); }
 .pose-action-text { background: #fafbfd; border: 1px dashed var(--line); border-radius: var(--radius-panel); padding: var(--sp-3); font-size: 12px; line-height: 1.6; color: var(--text); white-space: pre-wrap; word-break: break-word; max-height: 200px; overflow-y: auto; }
 .pose-action-muted { color: var(--muted); }
+
+/* ---------- 服装库（costume-db-01 浏览页，costumegallery.js）
+   布局骨架与动作库同一套「页签 + 搜索 + 网格 + 常驻详情」（.costume-* 与 .pose-*
+   一一对应）；缩略图是 2:3（动作库 3:4），卡片用关键词预览代替双语标题。
+   网格行的收缩红线同 .pose-grid 注释——overflow:hidden 卡片 + auto 行高会逐行压叠。 */
+.costume-browser { display: flex; width: 100%; height: 66vh; min-height: 420px; }
+.costume-master { width: 62%; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-3); border-right: 1px solid var(--line); }
+.costume-toolbar { display: flex; flex-direction: column; gap: var(--sp-2); }
+.costume-toolbar .segmented { align-self: flex-start; flex-wrap: wrap; }
+.costume-toolbar .seg em { font-style: normal; font-weight: 400; font-size: 11px; color: var(--muted); margin-left: 5px; }
+.costume-toolbar-row { display: flex; gap: var(--sp-2); align-items: center; }
+.costume-toolbar-row input[type="text"] { flex: 1; min-width: 160px; font: inherit; padding: 6px 9px; min-height: var(--ctl-h); border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; color: var(--text); }
+.costume-toolbar-row input[type="text"]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.costume-grid { display: grid; flex: 1 1 0; min-height: 0; overflow-y: auto; padding-right: 6px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); grid-auto-rows: max-content; align-items: start; gap: var(--sp-3); }
+.costume-card { padding: 8px; overflow: visible; position: relative; }
+.costume-thumb { background: #f4f6f9; border-radius: var(--radius-ctl); overflow: hidden; aspect-ratio: 2 / 3; }
+.costume-thumb img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.costume-card.active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.costume-card .image-meta { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 1px; min-height: 0; }
+.costume-card strong { font-family: var(--mono); font-size: 12px; color: var(--text); }
+.costume-card .costume-kw { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.costume-detail { width: 38%; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4); background: #fafbfd; overflow-y: auto; border-radius: 0 0 var(--radius-card) var(--radius-card); }
+.costume-detail .costume-detail-img { background: #fff; border: 1px solid var(--line); border-radius: var(--radius-panel); padding: var(--sp-3); display: flex; align-items: center; justify-content: center; }
+.costume-detail .costume-detail-img img { display: block; max-width: 100%; max-height: 420px; object-fit: contain; background: #f4f6f9; border-radius: var(--radius-ctl); cursor: zoom-in; }
+.costume-detail-titles h3 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.45; }
+.costume-jp { font-size: 12px; color: var(--muted); }
+.costume-jp em { font-style: normal; }
+.costume-kw-block { display: flex; flex-direction: column; gap: var(--sp-2); }
+.costume-kw-head { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-2); }
+.costume-kw-label { font-size: 11px; font-weight: 600; letter-spacing: .05em; color: var(--muted); }
+.costume-kw-text { background: #fafbfd; border: 1px dashed var(--line); border-radius: var(--radius-panel); padding: var(--sp-3); font-size: 12px; line-height: 1.6; color: var(--text); word-break: break-word; }
+.costume-kw-muted { color: var(--muted); }
+.costume-detail-actions { margin-top: auto; display: flex; flex-direction: column; gap: var(--sp-2); padding-top: var(--sp-2); }
+.costume-detail-actions .primary { width: 100%; }
+.costume-empty { grid-column: 1 / -1; padding: var(--sp-4); text-align: center; font-size: 12px; color: var(--muted); }
+.costume-grid::-webkit-scrollbar, .costume-detail::-webkit-scrollbar { width: 4px; }
+.costume-grid::-webkit-scrollbar-thumb, .costume-detail::-webkit-scrollbar-thumb { background: var(--line); border-radius: 10px; }
+/* 整页版（costumepage.js「服装」页签）：弹层是 66vh 定高，整页跟随视口高度 */
+.costume-browser-page { height: min(980px, calc(100vh - 210px)); min-height: 520px; }
+.costume-browser-page .costume-detail { border-radius: 0 0 var(--radius-panel) var(--radius-panel); }
+@media (max-width: 720px) {
+  .costume-browser { flex-direction: column; height: auto; }
+  .costume-browser-page { height: auto; min-height: 0; }
+  .costume-master { width: 100%; border-right: 0; border-bottom: 1px solid var(--line); }
+  .costume-detail { width: 100%; border-radius: 0; }
+  .costume-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+}

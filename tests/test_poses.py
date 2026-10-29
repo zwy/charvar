@@ -310,12 +310,72 @@ def test_pose_prompt_builds_by_line_kind():
     upper = pose_prompt.build_prompt("上半身1人", "双手在头顶上方合成心形")
     assert "采用半身构图" in upper and "不裁切手指与手臂" in upper
     pair = pose_prompt.build_prompt("2人絡み", "后方角色环抱前方角色")
-    assert "双人姿势：后方角色环抱前方角色" in pair
+    assert "双人姿势（描述中的甲、乙两位都由该角色担任）：后方角色环抱前方角色" in pair
     assert "采用双人全身构图" in pair and "画面固定为两个角色" in pair
     # 双人锚定句点明两位沿用同一角色外观；未收录线回退全身
     assert "两位角色都沿用该外观与服装" in pair
     assert pose_prompt.kind_of_line("乱写的线") == "full"
     assert pose_prompt.build_prompt("乱写的线", "x") != pair
+    # pair 双主体：image1/image2 分别锚定甲乙，线稿顺移成 image3；非 pair 不吃这个开关
+    pair2 = pose_prompt.build_prompt("2人絡み", "甲从身后环抱乙", pair_two_subjects=True)
+    assert pair2.startswith("<image1>为角色设定参考（担当描述中的「甲」）")
+    assert "<image2>为角色设定参考（担当描述中的「乙」）" in pair2
+    assert "<image3>为姿势参考" in pair2 and "担任描述里的「甲」" in pair2
+    full_still = pose_prompt.build_prompt("全身1人・標準系", "x", pair_two_subjects=True)
+    assert "<image3>" not in full_still
+# ---------- LLM 起稿（pose_describe，mock 通路） ----------
+
+def test_pose_describe_saves_ai_draft_and_validates(data_dir, monkeypatch):
+    import charvar.pose_describe as pd
+
+    _build_fake_pose_data(data_dir)
+    seen: dict = {}
+
+    def fake_llm(messages, model=None):
+        seen["instr"] = messages[0]["content"][0]["text"]
+        seen["has_image"] = any(p.get("type") == "image_url" for p in messages[0]["content"])
+        return "她直立朝向镜头，双臂轻贴身侧，双脚平踩地面。整体是安静的待机站姿。"
+
+    monkeypatch.setattr(pd, "_call_llm", fake_llm)
+    with storage.connect() as conn:
+        poses_service.import_catalog(conn)
+        r = pd.describe_one(conn, "full_sexy_P001", "正面")
+        assert r["status"] == "done" and r["text"].startswith("她直立")
+        # 视觉消息（带图）+ 样板注入
+        assert seen["has_image"] and "样板" in seen["instr"] and "甲（后方人物）" in seen["instr"]
+        src = conn.execute(
+            "SELECT source FROM pose_actions WHERE pose_id='full_sexy_P001' AND angle='正面'"
+        ).fetchone()["source"]
+        assert src == "ai_draft"
+        # 幂等：已写 → skipped；--overwrite 重写
+        assert pd.describe_one(conn, "full_sexy_P001", "正面")["status"] == "skipped"
+        assert pd.describe_one(conn, "full_sexy_P001", "正面", overwrite=True)["status"] == "done"
+        # 双人缺甲乙 → 校验失败
+        r_pair = pd.describe_one(conn, "pair60_P010", "正面")
+        assert r_pair["status"] == "error" and "甲/乙" in r_pair["error"]
+        # dry-run 不落库
+        r_dry = pd.describe_one(conn, "full_sexy_P002", "正面", dry_run=True)
+        assert r_dry["status"] == "draft"
+        assert conn.execute(
+            "SELECT COUNT(*) FROM pose_actions WHERE pose_id='full_sexy_P002'"
+        ).fetchone()[0] == 0
+
+
+def test_pose_describe_batch_counts(data_dir, monkeypatch):
+    import charvar.pose_describe as pd
+
+    _build_fake_pose_data(data_dir)
+    monkeypatch.setattr(pd, "_call_llm", lambda messages, model=None: "她侧转身躯，双臂交叠在胸前，双腿并拢收立，头微微低垂朝向镜头方向。整体是收身站立的安静站姿。")
+    with storage.connect() as conn:
+        poses_service.import_catalog(conn)
+        summary = pd.describe_batch(conn, limit=2)
+        assert summary["done"] == 2 and summary["errors"] == 0
+        again = pd.describe_batch(conn)
+        # 剩余的 pair60_P010：假稿没有甲乙 → 双人校验拦下（errors），不误入库
+        assert again["done"] == 0 and again["errors"] == 1
+        assert conn.execute("SELECT COUNT(*) FROM pose_actions").fetchone()[0] == 2
+
+
 # ---------- 参考图解析 ----------
 
 def test_full_and_thumb_file_resolution(data_dir):

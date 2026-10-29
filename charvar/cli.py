@@ -1508,6 +1508,7 @@ def pose_prompt_cmd(
     pose_id: str = typer.Argument(..., help="动作 id，如 full_sexy_P001"),
     angle: str = typer.Option("", "--angle", help="视角（原文，缺省正面）"),
     subject: Optional[str] = typer.Option(None, "--subject", help="主体档案 id（--run 必填，取其 front 槽位图）"),
+    subject2: Optional[str] = typer.Option(None, "--subject2", help="双人动作的第二主体 id（2人絡み 才有效）"),
     run: bool = typer.Option(False, "--run", help="拼好的提示词直接出图（Playground 通路）"),
     backend: str = typer.Option("comfyui", "--backend", help="comfyui / openrouter / dreamina"),
     aspect: str = typer.Option("3:4", "--aspect", help="画幅：3:4/1:1/16:9/…"),
@@ -1536,6 +1537,7 @@ def pose_prompt_cmd(
                 (action["pose_id"], action["angle"]),
             ).fetchone()
             slot = storage.get_subject_image(conn, subject, "front") if subject else None
+            slot2 = storage.get_subject_image(conn, subject2, "front") if subject2 else None
         except poses_service.PoseError as exc:
             _die(str(exc))
     if row is None:
@@ -1545,9 +1547,15 @@ def pose_prompt_cmd(
             f"该动作视角还没有动作描述：{action['pose_id']} / {action['angle']}\n"
             f"先写：charvar pose action {action['pose_id']} --angle {action['angle']} --set '动作描述'"
         )
-    prompt = pose_prompt_module.build_prompt(row["line"], action["action_text"])
-    if not run:
+    kind = pose_prompt_module.kind_of_line(row["line"])
+    if subject2 and kind != "pair":
+        _die("--subject2 只对双人（2人絡み）动作有效")
+    prompt = pose_prompt_module.build_prompt(
+        row["line"], action["action_text"], pair_two_subjects=bool(subject2)
+    )
+    if not json_out:
         typer.echo(prompt)
+    if not run:
         return
     if not subject:
         _die("--run 需要 --subject（主体档案 id）")
@@ -1557,11 +1565,20 @@ def pose_prompt_cmd(
     if not subject_file.exists():
         _die(f"主体 front 槽位图文件缺失：{slot['file_path']}")
     pose_file = poses_service.prepared_reference_file(action["pose_id"], action["angle"])
+    refs = [subject_file]
+    if subject2:
+        if slot2 is None or not slot2.get("file_path"):
+            _die(f"主体档案没有 front 槽位图：{subject2}")
+        subject_file2 = paths.data_dir() / str(slot2["file_path"])
+        if not subject_file2.exists():
+            _die(f"主体 front 槽位图文件缺失：{slot2['file_path']}")
+        refs.append(subject_file2)
+    refs.append(pose_file)
     req = adhoc_service.AdhocRequest(
         prompt=prompt,
         backend=backend,
         negative_prompt=negative,
-        reference_paths=[subject_file, pose_file],
+        reference_paths=refs,
         aspect_ratio=aspect,
         resolution=resolution,
         seed=seed,
@@ -1569,6 +1586,56 @@ def pose_prompt_cmd(
         out=out,
     )
     _run_adhoc(req, json_out)
+
+
+@pose_app.command("describe")
+def pose_describe_cmd(
+    angle: str = typer.Option("正面", "--angle", help="视角（原文）"),
+    pose_id: list[str] = typer.Option([], "--pose-id", help="只处理指定动作（可重复）"),
+    limit: int = typer.Option(0, "--limit", help="本次最多处理几个（0 = 全部缺描述的）"),
+    model: Optional[str] = typer.Option(None, "--model", help="视觉模型（缺省 = 设置页/env 的 LLM 配置）"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="只起稿打印，不落库"),
+    overwrite: bool = typer.Option(False, "--overwrite", help="已有描述也重写（source 记 ai_draft）"),
+    json_out: bool = typer.Option(False, "--json", help="汇总以 JSON 输出"),
+) -> None:
+    """调用项目 LLM 看缩略图批量起稿动作描述（写入 source=ai_draft）。
+
+    方法与样板见 docs/姿势库.md「动作描述怎么写」；已写的自动跳过，
+    失败的（校验不过/视觉不支持）重跑一遍续传。模型无视觉时用 --model 换。
+    """
+    from charvar import pose_describe
+
+    with storage.connect() as conn:
+        if pose_id:
+            results = []
+            for pid in pose_id:
+                r = pose_describe.describe_one(
+                    conn, pid, angle, model=model, dry_run=dry_run, overwrite=overwrite
+                )
+                head = (r.get("text") or r.get("error") or "")[:40]
+                typer.echo(f"[{r['status']:>7}] {pid} · {angle} | {head}")
+                results.append(r)
+            summary = {
+                "angle": angle,
+                "done": sum(1 for r in results if r["status"] == "done"),
+                "skipped": sum(1 for r in results if r["status"] == "skipped"),
+                "draft": sum(1 for r in results if r["status"] == "draft"),
+                "errors": sum(1 for r in results if r["status"] == "error"),
+                "results": results,
+            }
+        else:
+            try:
+                summary = pose_describe.describe_batch(
+                    conn, angle=angle, limit=limit, model=model, dry_run=dry_run, overwrite=overwrite
+                )
+            except Exception as exc:  # noqa: BLE001 - key/网络统一转友好提示
+                _die(f"{type(exc).__name__}: {exc}")
+    typer.echo(
+        f"汇总：{summary['angle']}  完成 {summary['done']} · 跳过 {summary['skipped']}"
+        f" · 试稿 {summary['draft']} · 失败 {summary['errors']}"
+    )
+    if json_out:
+        typer.echo(json.dumps({k: v for k, v in summary.items() if k != "results"}, ensure_ascii=False))
 
 
 def main() -> None:

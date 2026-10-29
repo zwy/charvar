@@ -85,7 +85,7 @@ _SEGMENTS = {
 _LEAD = {
     "full": "让<image1>图中的角色摆出<image2>图中的姿势：",
     "upper": "让<image1>图中的角色摆出<image2>图中的姿势：",
-    "pair": "让<image1>图中的角色摆出<image2>图中的双人姿势：",
+    "pair": "让<image1>图中的角色摆出<image2>图中的双人姿势（描述中的甲、乙两位都由该角色担任）：",
 }
 
 
@@ -94,14 +94,36 @@ def kind_of_line(line: str) -> str:
     return LINE_KIND.get(str(line or ""), "full")
 
 
-def build_prompt(line: str, action_text: str) -> str:
-    """按线型拼 demo 结构；动作描述必须是已写好的视角级文本。"""
+def build_prompt(line: str, action_text: str, *, pair_two_subjects: bool = False) -> str:
+    """按线型拼 demo 结构；动作描述必须是已写好的视角级文本。
+
+    pair_two_subjects（仅 2人絡み 生效）：双主体版 —— <image1>/<image2> 分别锚定
+    描述里的「甲」「乙」，动作线稿顺移成 <image3>；单主体版保持两人同沿用一张图。
+    """
     kind = LINE_KIND.get(str(line or ""), "full")
     seg = _SEGMENTS[kind]
+    text = str(action_text or "").strip()
+    if kind == "pair" and pair_two_subjects:
+        identity = (
+            "<image1>为角色设定参考（担当描述中的「甲」），保留该角色的面部特征、发型、发色、"
+            "服装、配饰和整体美术风格，不要擅自更换造型。\n\n"
+            "<image2>为角色设定参考（担当描述中的「乙」），保留该角色的面部特征、发型、发色、"
+            "服装、配饰和整体美术风格，不要擅自更换造型。"
+        )
+        mannequin = (
+            "<image3>为姿势参考，仅参考两位人物的动作、重心、四肢位置和整体姿态，"
+            "不参考其人体模型外观、辅助线或线稿画风。"
+        )
+        lead = (
+            "让<image1>图中的角色担任描述里的「甲」、<image2>图中的角色担任「乙」，"
+            "摆出<image3>图中的双人姿势："
+        )
+        parts = [identity, mannequin, lead + text, seg["framing"], seg["background"], seg["guard"]]
+        return "\n\n".join(parts)
     parts = [
         seg["identity"],
         seg["mannequin"],
-        _LEAD[kind] + str(action_text or "").strip(),
+        _LEAD[kind] + text,
         seg["framing"],
         seg["background"],
         seg["guard"],

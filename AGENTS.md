@@ -14,9 +14,11 @@
 
 ## 姿势库
 
-参考图第四来源 `pose_id`+`angle`（详见 `docs/姿势库.md`）：**图片禁再分发**，只存 `data/poses/` 不进 git；**role=pose 只锚姿势不锚身份**，pose 时尾句换 pose 版。
-- 动作描述 pose_actions 表（动作×视角双键；**不进可重灌的 pose_images**）；整页/弹层共用 posegallery.js。
+参考图第四来源 `pose_id`+`angle`（详见 `docs/姿势库.md`）：**图片禁再分发**，只存 `data/poses/` 不进 git；**role=pose 只锚姿势不锚身份**，pose 尾句换 pose 版。动作描述 pose_actions 表为动作×视角双键，不进可重灌的 pose_images；整页/弹层共用 posegallery.js。
 
+## 服装库
+
+costume-db-01（姿势库同作者，见 `docs/服装库.md`）：**图片禁再分发**，只存 `data/costumes/` 不进 git；v1 仅浏览页，未入生图流程。
 
 ## Playground（跨项目调用）
 
@@ -58,10 +60,9 @@
   `data/openrouter/speech-models.json`（三份缓存之一）。
 - **voice 实测必填**（heygen/minimax 不带 voice 一律 400）：目录 `supported_voices`
   非空时请求空值自动取第一项兜底；枚举为空的模型（fish/seed）不发送。
-- **格式协商**：请求显式 > `data/openrouter/tts-capabilities.json` 探测缓存（值级，
-  与生图 capabilities.json 语义不同别混）> 静态表（heygen/gemini→pcm、minimax→mp3）
-  > 不发（API 默认 pcm）；被拒按 400 话术换值重试并记档。裸 PCM 按响应头
-  `rate/channels` 封装 WAV —— **落盘永远是可播的 wav/mp3**。
+- **格式协商**（链与细节见 `docs/语音通路.md`）：请求显式 > 探测缓存
+  （值级，与生图 capabilities.json 语义不同别混）> 静态表 > API 默认；被拒按
+  400 话术换值重试记档。裸 PCM 封 WAV —— **落盘永远是可播的 wav/mp3**。
 - HeyGen 系 5000 字符单次上限提交前拦；响应无费用头，按目录价估算展示；
   默认链 请求显式 > 设置页「OpenRouter 语音」组 > `OP_TTS_MODEL` > 免费档
   `heygen/heygen-voice-1-turbo:free`；声音克隆（input_references）第二期。
@@ -112,7 +113,7 @@
   - 即梦 **3.0/3.1 只有 text2image**：带参考图（即 image2image）时从模型下拉里去掉（`DREAMINA_T2I_ONLY_MODELS`，放 `tables.js` 共享）。
   - 档位选择要记住：切供应商再切回来别重置（`state.comfyTier` / `adhocState.comfyTier` / `state.orResolution`）。
 - ComfyUI 上传的 `remote_name` = `charvar_{run_id}_{index}{suffix}`：`upload_image` 发 `overwrite: true`，同名会互相覆盖。
-- 前端文件：genrefs.js（GenRefs）、app.js、tables.js、posegallery.js、posepage.js；加载顺序 tables → media → posegallery → genrefs → app → adhoc → video → recipes → posepage`（init 在 GenRefs 后；posegallery 在 genrefs 前；tables 在 app 前；共享表是全局 const，顺序错 TDZ 报错）。
+- 前端文件：genrefs.js（GenRefs）、app.js、tables.js、posegallery.js、posepage.js、costumegallery.js、costumepage.js；加载顺序 tables → media → posegallery → genrefs → app → adhoc → video → recipes → posepage → costumegallery → costumepage`（init 在 GenRefs 后；posegallery 在 genrefs 前；tables 在 app 前；共享表是全局 const，顺序错 TDZ 报错）。
 
 ## 全站视觉分组与文案
 
@@ -176,7 +177,7 @@
 
 ## 导入主体档案（外部 Markdown → 系统）
 
-存储位置、双向同步（DB ↔ 仓库）、sha256 溯源指纹、审计闸门与人工改 yaml 的坑见 `docs/主体档案.md`。这里只记 agent 必须知道的规则。
+存储位置、双向同步（DB ↔ 仓库）、sha256 溯源指纹、审计闸门与人工改 yaml 的坑见 `docs/主体档案.md`。
 
 1. 在 `presets/subjects/<id>.yaml` 写档案（id/名/锁定项/extra），随仓库走、可复现。模板另存同名 `<id>.md`。
 2. 建档＋模板一起入库：`python3 -m charvar.cli subject add presets/subjects/<id>.yaml --overwrite`。
@@ -197,7 +198,7 @@ DB → 仓库对偶：`charvar subject export <id>` 快照成 `presets/subjects/
 
 ## 服装预设与贴字
 
-字段与完整规则见 `docs/贴字与服装预设.md`。这里只记 agent 必须知道的规则。
+字段与完整规则见 `docs/贴字与服装预设.md`。
 
 两者都是出图后的组合能力，服务于「视频配方」的合成流水线（出图批 → 贴字 → 本地合成 reel）。
 
@@ -212,7 +213,6 @@ DB → 仓库对偶：`charvar subject export <id>` 快照成 `presets/subjects/
 - 字体解析顺序与「只放可再分发的开源字体」的约定见 `docs/贴字与服装预设.md`。
 - 与 **sticker（带字表情包）** 是两套机制：sticker 的字是提示词驱动（模型原生画字）；贴字是确定性 PIL 后处理。**sticker 预设拒绝服装/发型组合**（语义冲突，400）。
 
-
 ## 发型预设（presets/hairstyles/）
 
 - **层级固定 服装→发型→动作**（服装段前置成第一句，发型句贴锚定句）；`text` 只写头发结构不写发色，≤200 字符。
@@ -221,7 +221,7 @@ DB → 仓库对偶：`charvar subject export <id>` 快照成 `presets/subjects/
 
 ## 视频配方
 
-配方系统的 YAML 字段、步类型、素材声明详见 `docs/配方系统.md`。这里只记 agent 必须知道的规则。
+配方系统的 YAML 字段、步类型、素材声明详见 `docs/配方系统.md`。
 
 - **配方定义** = `presets/recipes/<slug>.yaml` + `<slug>.md` 成对（`charvar/recipes.py`；文档 `doc:` 相对 recipes/ 目录，读不到不阻塞）。大类由末步推导：末步 `video_synth` = 合成配方，末步 `video_model` = 生成配方。YAML 严格模式：未知根/步字段显式报错。
 - **线性步骤**：`images`（建 run，classic 缺省 / `mode: llm` 走 LLM 改写 / `push: comfyui` 自动提交+等待+同步成品 / `run_id: <既有 run>` 绑定不建批 / `fixed_background`+`fixed_lighting` 固定背景光照覆盖通配符池）→ `overlay`（贴字步，`input` 缺省最近一个）→ `video_synth`（本地合成本地 MP4；`use_labeled: true` 时同源 run 的贴字产物优先）。消耗步统一 gate：来源 run 成品没齐停在 waiting 并写原因，不算失败。字段级细节见 `docs/配方系统.md`。
@@ -233,7 +233,7 @@ DB → 仓库对偶：`charvar subject export <id>` 快照成 `presets/subjects/
 
 ### 生成步与参考视频
 
-两类**生成步**：`adhoc_image`（单图，Playground 通路）与 `video_model`（OpenRouter 视频异步作业）。字段表见 `docs/配方系统.md`，这里只记规则：
+两类**生成步**：`adhoc_image`（单图，Playground 通路）与 `video_model`（OpenRouter 视频异步作业）。字段表见 `docs/配方系统.md`：
 
 - **`video_model` 步的异步语义**：提交（`adhoc_video.generate(wait=False)`）→ 轮询 `adhoc_video.refresh` 直到 ready/failed 或超出 `wait_s`（缺省 300s）。超时转 waiting，作业本身在 OpenRouter 继续，continue 续查**不重复提交**。作业 failed → 步 failed；continue **清掉死作业重新提交**（重新计费，失败原因在 outputs.previous_error…）。提交被拒（枚举/key 错）= PresetError → failed，continue 前先修配置。
 - **`adhoc_image` 步的 retry 幂等**：产物在就复用，不重复生成。
