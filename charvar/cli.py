@@ -1547,6 +1547,10 @@ def pose_prompt_cmd(
                 line = row["line"] if row is not None else ""
                 slot_label, slot = poses_service.subject_slot_for_prompt(conn, subject, line)
             slot2 = storage.get_subject_image(conn, subject2, "front") if subject2 else None
+            body_lock: list[str] | None = None
+            if subject and costume:
+                profile = storage.get_subject(conn, subject)
+                body_lock = list(profile.body_lock) if profile else None
         except poses_service.PoseError as exc:
             _die(str(exc))
     if row is None:
@@ -1572,6 +1576,7 @@ def pose_prompt_cmd(
         action["action_text"],
         pair_two_subjects=bool(subject2),
         costume=costume_file is not None,
+        body_lock=body_lock,
     )
     if not json_out:
         typer.echo(prompt)
@@ -1636,7 +1641,14 @@ def costume_prompt_cmd(
     from charvar import pose_prompt as pose_prompt_module
     from charvar import poses as poses_service
 
-    prompt = pose_prompt_module.build_costume_prompt()
+    body_lock: list[str] | None = None
+    slot_label, slot = "front", None
+    if subject:
+        with storage.connect() as conn:
+            profile = storage.get_subject(conn, subject)
+            slot_label, slot = poses_service.subject_slot_for_prompt(conn, subject, "")
+        body_lock = list(profile.body_lock) if profile else None
+    prompt = pose_prompt_module.build_costume_prompt(body_lock=body_lock)
     if not json_out:
         typer.echo(prompt)
     if not run:
@@ -1644,8 +1656,6 @@ def costume_prompt_cmd(
     if not subject:
         _die("--run 需要 --subject（主体档案 id）")
     try:
-        with storage.connect() as conn:
-            slot_label, slot = poses_service.subject_slot_for_prompt(conn, subject, "")
         costume_file = costumes_service.prepared_reference_file(item_id)
     except costumes_service.CostumeError as exc:
         _die(str(exc))

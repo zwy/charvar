@@ -103,6 +103,7 @@ def build_prompt(
     *,
     pair_two_subjects: bool = False,
     costume: bool = False,
+    body_lock: list[str] | None = None,
 ) -> str:
     """按线型拼 demo 结构；动作描述必须是已写好的视角级文本。
 
@@ -142,6 +143,7 @@ def build_prompt(
             ),
             seg["mannequin"],
             _COSTUME_ANCHOR.format(slot=3),
+            _figure_anchor(3, body_lock),
             _LEAD[kind] + text,
             _COSTUME_FUSION,
             seg["framing"],
@@ -184,6 +186,25 @@ _COSTUME_FUSION_NOPOSE = (
 
 _COSTUME_GUARD_APPEND = "不出现原服装残留或两套服装混搭，服装关键细节不缺失。"
 
+_FIGURE_ANCHOR = (
+    "角色身材、身高与四肢比例一律以<image1>为准；<image{slot}>图为服装参考，"
+    "服装的款式、面料与整套搭配（含鞋、袜、包、帽等配件）都要保留，"
+    "并按<image1>角色的身材重新合身。"
+)
+
+
+def _figure_anchor(costume_slot: int, body_lock: list[str] | None) -> str:
+    """换装流的身材锚段：身材归 <image1>，服装图只管款式面料。
+
+    实测背景：服装图是「穿在身上的衣服」，自带隐含身体模板 —— 不锚的话
+    身材会随服装图走（胸部缩水/拉伸拉高）。主体档案 body_lock（可缺省，
+    英文体形锚 1–2 条）原文拼接进来当第二层锚 —— 与服装段「语言不限、
+    不译写」同一约定。
+    """
+    parts = [_FIGURE_ANCHOR.format(slot=costume_slot)]
+    parts.extend(str(x).strip() for x in (body_lock or []) if str(x).strip())
+    return "\n".join(parts)
+
 
 def _guard_with_costume(seg_guard: str) -> str:
     """基础禁令句 + 换装禁令（缝合句号，避免「。；」双标点）。"""
@@ -191,11 +212,11 @@ def _guard_with_costume(seg_guard: str) -> str:
     return base + "；" + _COSTUME_GUARD_APPEND
 
 
-def build_costume_prompt() -> str:
+def build_costume_prompt(body_lock: list[str] | None = None) -> str:
     """单主体 + 服装（无动作参考）→ 全身换装图提示词。
 
     <image1> = 主体档案槽位图（角色锚定），<image2> = 服装参考图；姿态不锚
-    （模型自选自然站姿）。服装锚与换装禁令与 build_prompt(costume=True) 同源。
+    （模型自选自然站姿）。服装锚/身材锚/换装禁令与 build_prompt(costume=True) 同源。
     """
     identity = (
         "<image1>为角色设定参考，保留该角色的面部特征、发型、发色、肤色和整体"
@@ -207,6 +228,7 @@ def build_costume_prompt() -> str:
         [
             identity,
             _COSTUME_ANCHOR.format(slot=2),
+            _figure_anchor(2, body_lock),
             "让<image1>图中的角色穿上<image2>图中的服装，替换原有服装。",
             _COSTUME_FUSION_NOPOSE,
             seg["framing"],
