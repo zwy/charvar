@@ -572,6 +572,26 @@ def test_pose_prompt_costume_layer():
         pose_prompt.build_prompt("2人絡み", "甲环抱乙", costume=True)
 
 
+def test_pose_prompt_costume_keywords():
+    from charvar import pose_prompt
+
+    with_kw = pose_prompt.build_prompt(
+        "全身1人・セクシー系", "呈自然的 S 形曲线", costume=True,
+        costume_keywords="beige knit green corduroy skirt fur jacket boots bag beret",
+    )
+    assert "服装要点（英文关键词，与图一致）：beige knit green corduroy skirt fur jacket boots bag beret。" in with_kw
+    assert "不缺件、不改部件类型" in with_kw
+    # 次序：服装锚 → 要点注记 → 身材锚
+    assert with_kw.index("<image3>为服装参考") < with_kw.index("服装要点") < with_kw.index("身材、身高")
+    # 关键词缺省/空白 → 注记整节消失（旧行为不变）
+    plain = pose_prompt.build_prompt("全身1人・セクシー系", "呈自然的 S 形曲线", costume=True)
+    assert "服装要点" not in plain
+    blank = pose_prompt.build_prompt(
+        "全身1人・セクシー系", "呈自然的 S 形曲线", costume=True, costume_keywords="   ",
+    )
+    assert "服装要点" not in blank
+
+
 def test_build_costume_prompt_no_pose():
     from charvar import pose_prompt
 
@@ -585,3 +605,14 @@ def test_build_costume_prompt_no_pose():
         ["narrow shoulders, slender body"]
     )
     assert "narrow shoulders, slender body" in with_body
+
+
+def test_build_costume_prompt_keywords():
+    from charvar import pose_prompt
+
+    with_kw = pose_prompt.build_costume_prompt(costume_keywords="green corduroy skirt")
+    assert "<image2>服装要点（英文关键词，与图一致）：green corduroy skirt" in with_kw
+    assert "不缺件、不改部件类型" in with_kw
+    # 次序：服装锚 → 要点注记 → 身材锚；缺省时不出现
+    assert with_kw.index("<image2>为服装参考") < with_kw.index("服装要点")
+    assert "服装要点" not in pose_prompt.build_costume_prompt()

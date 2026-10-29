@@ -726,6 +726,55 @@ def _write_manifest(
     return path
 
 
+# ---------- 纯色帧检测（上游偶发黑帧也会 status=ready，别照单全收） ----------
+
+_SOLID_FRAME_ERR = "上游返回纯色帧（整图一种颜色，疑似生图故障）"
+_SOLID_FRAME_CHECK = (32, 32)
+
+
+def _is_solid_frame(data: bytes) -> bool:
+    """整图一种颜色的帧检测（全黑 / 全白 / 任意纯色都算）。
+
+    实测 ComfyUI 偶发返回纯黑帧且无任何报错（像素全 0，manifest照样 ready）。
+    缩到 32×32 后点色数：纯色仍是 1 色，正常图缩放后色数不会掉到 1；
+    解码等异常一律放行 —— 检测器自身故障不该挡住正常出图。
+    """
+    import io
+
+    from PIL import Image
+
+    try:
+        with Image.open(io.BytesIO(data)) as image:
+            colors = image.convert("RGB").resize(_SOLID_FRAME_CHECK).getcolors(maxcolors=2)
+    except Exception:  # noqa: BLE001
+        return False
+    return colors is not None and len(colors) == 1
+
+
+def _reject_solid_frame(
+    req: AdhocRequest,
+    result: AdhocResult,
+    run_id: str,
+    run_dir: Path,
+    db_path: Path | None,
+) -> AdhocResult:
+    """产物为纯色帧时判失败：本机 comfyui 同参数自动重试一次，付费通路直接失败留痕。"""
+    if not (result.status == "ready" and result.image_path and Path(result.image_path).is_file()):
+        return result
+    if not _is_solid_frame(Path(result.image_path).read_bytes()):
+        return result
+    if req.backend != "comfyui":
+        # 付费通路再跑一次就是再扣一次费；判失败，重跑交给调用方
+        raise AdhocError(_SOLID_FRAME_ERR)
+    try:
+        result = _generate_comfyui(req, run_id, run_dir, db_path)
+    except Exception as exc:
+        raise AdhocError(f"{_SOLID_FRAME_ERR}；自动重试也没能出图：{exc}") from exc
+    if result.status == "ready" and result.image_path and _is_solid_frame(Path(result.image_path).read_bytes()):
+        raise AdhocError(f"{_SOLID_FRAME_ERR}；自动重试后仍是纯色帧")
+    return result
+
+
 # ---------- 对外入口 ----------
 
 def generate(req: AdhocRequest, db_path: Path | None = None) -> AdhocResult:
@@ -756,6 +805,12 @@ def generate(req: AdhocRequest, db_path: Path | None = None) -> AdhocResult:
             ),
             error=f"{type(exc).__name__}: {exc}",
         )
+        raise
+    try:
+        result = _reject_solid_frame(req, result, run_id, run_dir, db_path)
+    except Exception as exc:
+        # 留痕：纯色帧判失败与普通失败同一张 manifest 写法；坏帧文件仍在 original/ 供排查
+        _write_manifest(run_dir, req, result, error=f"{type(exc).__name__}: {exc}")
         raise
     result.duration_ms = int((time.time() - started) * 1000)
     _write_out(result, req.out)

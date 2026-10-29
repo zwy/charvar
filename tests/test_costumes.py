@@ -276,3 +276,12 @@ def test_raw_reference_rejects_bad_id(data_dir):
         costumes_service.raw_reference_file("../evil")
     with pytest.raises(costumes_service.CostumeError):
         costumes_service.raw_reference_file("SPR-9999")
+
+
+def test_item_keywords_roundtrip(data_dir):
+    _build_fake_costume_data(data_dir)
+    assert costumes_service.item_keywords("SPR-0001").startswith("ivory frill knit")
+    with pytest.raises(costumes_service.CostumeError):
+        costumes_service.item_keywords("SPR-9999")
+    with pytest.raises(costumes_service.CostumeError):
+        costumes_service.item_keywords("../evil")

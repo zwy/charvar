@@ -14,8 +14,15 @@ from charvar.exporters import comfyui as comfyui_exporter
 
 
 def _png_bytes(color=(200, 100, 50), size=(64, 96)) -> bytes:
+    # mock 产物要 ≥2 色：纯色会被 adhoc 的纯色帧检测当黑帧挡下（黑帧是坏产物）。
+    # 用一块真色块而非单像素扰动 —— 缩到 32×32 时单像素差异会被均值抹平。
     buf = io.BytesIO()
-    Image.new("RGB", size, color).save(buf, format="PNG")
+    image = Image.new("RGB", size, color)
+    image.paste(
+        (max(color[0] - 60, 0), color[1], color[2]),
+        (max(size[0] - 8, 0), 0, size[0], size[1]),
+    )
+    image.save(buf, format="PNG")
     return buf.getvalue()
 
 
@@ -342,7 +349,9 @@ def test_out_writes_explicit_path_with_given_suffix(env, tmp_path, monkeypatch):
 def test_out_content_matches_requested_format(env, tmp_path, monkeypatch):
     """后缀与实际格式不符时要转格式 —— 后缀不能骗人（下游按后缀读会出错）。"""
     webp = io.BytesIO()
-    Image.new("RGB", (32, 32), (200, 30, 30)).save(webp, format="WEBP")
+    image = Image.new("RGB", (32, 32), (200, 30, 30))  # 色块：躲过纯色帧检测
+    image.paste((255, 90, 30), (24, 0, 32, 32))
+    image.save(webp, format="WEBP")
     _fake_openrouter(monkeypatch, images=[webp.getvalue()])
     out = tmp_path / "apple.png"
     adhoc.generate(adhoc.AdhocRequest(prompt="p", backend="openrouter", out=out))
@@ -353,7 +362,9 @@ def test_out_content_matches_requested_format(env, tmp_path, monkeypatch):
 def test_out_without_suffix_keeps_real_format(env, tmp_path, monkeypatch):
     """--out 不给后缀时补上真实扩展名（内容与后缀仍一致）。"""
     webp = io.BytesIO()
-    Image.new("RGB", (32, 32), (30, 30, 200)).save(webp, format="WEBP")
+    image = Image.new("RGB", (32, 32), (30, 30, 200))
+    image.paste((90, 90, 255), (24, 0, 32, 32))
+    image.save(webp, format="WEBP")
     _fake_openrouter(monkeypatch, images=[webp.getvalue()])
     out = tmp_path / "apple"
     result = adhoc.generate(adhoc.AdhocRequest(prompt="p", backend="openrouter", out=out))
@@ -474,7 +485,9 @@ def _fake_dreamina(monkeypatch, *, error=None):
         directory = pathlib.Path(kwargs["download_dir"])
         directory.mkdir(parents=True, exist_ok=True)
         image = directory / "dm-sid_image_1.png"
-        Image.new("RGB", (48, 72), (90, 40, 20)).save(image, format="PNG")
+        dm_image = Image.new("RGB", (48, 72), (90, 40, 20))  # 色块：躲过纯色帧检测
+        dm_image.paste((200, 140, 90), (40, 0, 48, 72))
+        dm_image.save(image, format="PNG")
         return dm.DreaminaGenerateResult(
             submit_id="dm-sid-1",
             gen_status="success",
@@ -573,3 +586,61 @@ def test_dreamina_manifest_records_seed_and_backend(env, monkeypatch):
     assert data["request"]["backend"] == "dreamina"
     assert data["request"]["seed"] == 77  # 即梦不暴露 seed：请求值仅存档
     assert data["result"]["provider"] == "dreamina"
+
+# ---------- 纯色帧检测（C8：上游偶发黑帧不再被当成功收纳） ----------
+
+def _solid_png_bytes(color=(0, 0, 0), size=(64, 96)) -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGB", size, color).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def test_is_solid_frame_detects_uniform_pixels():
+    assert adhoc._is_solid_frame(_solid_png_bytes((0, 0, 0)))
+    assert adhoc._is_solid_frame(_solid_png_bytes((250, 250, 252)))
+    assert not adhoc._is_solid_frame(_png_bytes())  # 双像素色：正常图放行
+    assert not adhoc._is_solid_frame(b"not-an-image")  # 校验自身失败也放行
+
+
+def _frame_gate(monkeypatch, verdicts: list[bool]) -> list[int]:
+    """把纯色帧判定换成按次序回放的桩，并记录调用次数。"""
+    calls: list[int] = []
+
+    def fake(data: bytes) -> bool:
+        calls.append(len(data))
+        return verdicts.pop(0) if verdicts else False
+
+    monkeypatch.setattr(adhoc, "_is_solid_frame", fake)
+    return calls
+
+
+def test_comfy_solid_frame_retried_then_recovers(env, monkeypatch):
+    """第一次纯色帧 → 本机通路同参数自动重试一次 → 第二次正常按成功收纳。"""
+    _mock_comfy(monkeypatch, [], [])
+    _frame_gate(monkeypatch, [True, False])
+    result = adhoc.generate(adhoc.AdhocRequest(prompt="x", backend="comfyui"))
+    assert result.status == "ready"
+    assert result.image_path
+    with pathlib.Path(result.manifest_path).open(encoding="utf-8") as fh:
+        manifest = json.load(fh)
+    assert manifest["error"] == ""
+
+
+def test_comfy_solid_frame_twice_fails_run(env, monkeypatch):
+    """重试后仍纯色 → AdhocError；manifest 记 error 留痕。"""
+    _mock_comfy(monkeypatch, [], [])
+    _frame_gate(monkeypatch, [True, True])
+    with pytest.raises(adhoc.AdhocError, match="自动重试"):
+        adhoc.generate(adhoc.AdhocRequest(prompt="x", backend="comfyui"))
+    run_dir = sorted((env / "generated" / "adhoc").glob("adhoc_*"))[-1]
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert "纯色帧" in manifest["error"]
+
+
+def test_openrouter_solid_frame_fails_without_retry(env, monkeypatch):
+    """付费通路不自动重试（再跑一次就是再扣一次费），判失败留痕。"""
+    calls = _fake_openrouter(monkeypatch)
+    _frame_gate(monkeypatch, [True])
+    with pytest.raises(adhoc.AdhocError, match="纯色帧"):
+        adhoc.generate(adhoc.AdhocRequest(prompt="x", backend="openrouter"))
+    assert len(calls) == 1

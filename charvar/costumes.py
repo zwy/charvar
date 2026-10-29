@@ -234,6 +234,17 @@ def image_file(item_id: str, variant: str) -> Path:
     return path
 # ---------- 生图参考图（role=costume：只锚服装，不锚身份/姿势） ----------
 
+def item_keywords(item_id: str) -> str:
+    """条目的英文关键词（生图「服装要点」注记的原料）；未知 id 报 CostumeError。"""
+    item_id = str(item_id or "").strip()
+    if not ITEM_ID_RE.fullmatch(item_id):
+        raise CostumeError(f"非法服装 id：{item_id[:60]}")
+    for it in _load_catalog():
+        if it["item_id"] == item_id:
+            return it["keywords"]
+    raise CostumeError(f"服装库没有这条服装：{item_id}")
+
+
 def raw_reference_file(item_id: str) -> Path:
     """参考图源文件：无损原寸 png 优先（仅一步有损），缺失回退详情 webp。
 

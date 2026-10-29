@@ -1564,11 +1564,13 @@ def pose_prompt_cmd(
     if subject2 and kind != "pair":
         _die("--subject2 只对双人（2人絡み）动作有效")
     costume_file = None
+    costume_keywords = ""
     if costume:
         if kind == "pair":
             _die("--costume 暂不支持双人（2人絡み）动作")
         try:
             costume_file = costumes_service.prepared_reference_file(costume)
+            costume_keywords = costumes_service.item_keywords(costume)
         except costumes_service.CostumeError as exc:
             _die(str(exc))
     prompt = pose_prompt_module.build_prompt(
@@ -1577,6 +1579,7 @@ def pose_prompt_cmd(
         pair_two_subjects=bool(subject2),
         costume=costume_file is not None,
         body_lock=body_lock,
+        costume_keywords=costume_keywords or None,
     )
     if not json_out:
         typer.echo(prompt)
@@ -1632,8 +1635,8 @@ def costume_prompt_cmd(
     """单主体 + 服装 → 换装全身图提示词（无动作参考）。
 
     <image1> = 主体档案 front 槽位图（角色锚定），<image2> = 服装参考图（换装
-    锚定，role=costume 语义）；要「主体 + 动作 + 服装」用
-    `charvar pose prompt --costume`。
+    锚定，role=costume 语义；catalog 英文关键词拼「服装要点」注记进提示词）。
+    要「主体 + 动作 + 服装」用 `charvar pose prompt --costume`。
     """
     from charvar import adhoc as adhoc_service
     from charvar import costumes as costumes_service
@@ -1641,6 +1644,10 @@ def costume_prompt_cmd(
     from charvar import pose_prompt as pose_prompt_module
     from charvar import poses as poses_service
 
+    try:
+        keywords = costumes_service.item_keywords(item_id)
+    except costumes_service.CostumeError as exc:
+        _die(str(exc))
     body_lock: list[str] | None = None
     slot_label, slot = "front", None
     if subject:
@@ -1648,7 +1655,9 @@ def costume_prompt_cmd(
             profile = storage.get_subject(conn, subject)
             slot_label, slot = poses_service.subject_slot_for_prompt(conn, subject, "")
         body_lock = list(profile.body_lock) if profile else None
-    prompt = pose_prompt_module.build_costume_prompt(body_lock=body_lock)
+    prompt = pose_prompt_module.build_costume_prompt(
+        body_lock=body_lock, costume_keywords=keywords
+    )
     if not json_out:
         typer.echo(prompt)
     if not run:

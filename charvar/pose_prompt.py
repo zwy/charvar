@@ -6,7 +6,8 @@
 ``charvar pose action``）；这里的分段文本是自有内容、进 git。
 服装层（单人生效）：``build_prompt(costume=True)`` 加 <image3> 服装锚 +
 融合段 + 换装禁令（图像来自 costume-db-01，见 docs/服装库.md）；无动作的
-「单主体 + 服装」用 build_costume_prompt（<image1> 主体 + <image2> 服装）。
+「单主体 + 服装」用 build_costume_prompt（<image1> 主体 + <image2> 服装）；
+catalog 英文关键词拼成「服装要点」注记跟在服装锚后（部件清单，不译写）。
 背景/光照先固定一句，后续接 presets/wildcards 的 backgrounds/lighting 池
 再参数化（届时随机一律走 charvar.wildcard.seed_for 派生）。
 """
@@ -104,6 +105,7 @@ def build_prompt(
     pair_two_subjects: bool = False,
     costume: bool = False,
     body_lock: list[str] | None = None,
+    costume_keywords: str | None = None,
 ) -> str:
     """按线型拼 demo 结构；动作描述必须是已写好的视角级文本。
 
@@ -111,6 +113,7 @@ def build_prompt(
     描述里的「甲」「乙」，动作线稿顺移成 <image3>；单主体版保持两人同沿用一张图。
     costume（仅单人生效，双人显式报错）：<image3> = 服装参考图 —— image1 锚定句
     换服装版（锚身份不锚衣着），动作描述之后插「服装融合」段，禁令句追加换装禁令。
+    costume_keywords（可选）：catalog 英文关键词拼「服装要点」注记行，插在服装锚后。
     """
     kind = LINE_KIND.get(str(line or ""), "full")
     seg = _SEGMENTS[kind]
@@ -143,6 +146,7 @@ def build_prompt(
             ),
             seg["mannequin"],
             _COSTUME_ANCHOR.format(slot=3),
+            _costume_keywords(costume_keywords, 3),
             _figure_anchor(3, body_lock),
             _LEAD[kind] + text,
             _COSTUME_FUSION,
@@ -170,6 +174,23 @@ _COSTUME_ANCHOR = (
     "发型、肤色、体型、姿势、背景或画风。未展示的服装部分按同一套结构合理补全，"
     "不额外添加无关装饰。"
 )
+
+_COSTUME_KEYWORDS_LEAD = (
+    "<image{slot}>服装要点（英文关键词，与图一致）：{keywords}。"
+    "按此清单逐项核对服装部件，不缺件、不改部件类型。"
+)
+
+
+def _costume_keywords(keywords: str | None, slot: int) -> str:
+    """服装要点注记：catalog 英文关键词原文整段进提示词（不译写，同服装段约定）。
+
+    单靠图锚定模型会误读部件类型（实测 WIN-0001 长裙三次种子读成长裤，
+    包类配件时有时无）——注记一行写出部件清单，锚定句有文本可依。
+    """
+    text = str(keywords or "").strip()
+    if not text:
+        return ""
+    return _COSTUME_KEYWORDS_LEAD.format(slot=slot, keywords=text)
 
 _COSTUME_FUSION = (
     "把<image3>图中的服装穿在角色身上，替换其原有服装（不是叠穿在原服装外面），"
@@ -212,11 +233,13 @@ def _guard_with_costume(seg_guard: str) -> str:
     return base + "；" + _COSTUME_GUARD_APPEND
 
 
-def build_costume_prompt(body_lock: list[str] | None = None) -> str:
+def build_costume_prompt(
+    body_lock: list[str] | None = None, costume_keywords: str | None = None,
+) -> str:
     """单主体 + 服装（无动作参考）→ 全身换装图提示词。
 
     <image1> = 主体档案槽位图（角色锚定），<image2> = 服装参考图；姿态不锚
-    （模型自选自然站姿）。服装锚/身材锚/换装禁令与 build_prompt(costume=True) 同源。
+    （模型自选自然站姿）。服装锚/身材锚/换装禁令与 build_prompt(costume=True) 同源。 costume_keywords 同 build_prompt。
     """
     identity = (
         "<image1>为角色设定参考，保留该角色的面部特征、发型、发色、肤色和整体"
@@ -228,6 +251,7 @@ def build_costume_prompt(body_lock: list[str] | None = None) -> str:
         [
             identity,
             _COSTUME_ANCHOR.format(slot=2),
+            _costume_keywords(costume_keywords, 2),
             _figure_anchor(2, body_lock),
             "让<image1>图中的角色穿上<image2>图中的服装，替换原有服装。",
             _COSTUME_FUSION_NOPOSE,

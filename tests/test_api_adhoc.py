@@ -362,7 +362,9 @@ def test_adhoc_generate_dreamina_backend(client, monkeypatch):
         directory = _pathlib.Path(kwargs["download_dir"])
         directory.mkdir(parents=True, exist_ok=True)
         image = directory / "sid_image_1.png"
-        _Image.new("RGB", (32, 48), (10, 10, 10)).save(image, format="PNG")
+        dm_image = _Image.new("RGB", (32, 48), (10, 10, 10))  # 色块：躲过纯色帧检测
+        dm_image.paste((120, 120, 120), (24, 0, 32, 48))
+        dm_image.save(image, format="PNG")
         return dm.DreaminaGenerateResult(
             submit_id="dm-1", gen_status="success", images=[image],
             width=32, height=48, model="", ratio="3:4", resolution="2k",
