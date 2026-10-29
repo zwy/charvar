@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>charvar · 主体</title><link rel="stylesheet" href="/static/style.css"><link rel="icon" type="image/svg+xml" href="/static/favicon.svg"><link rel="alternate icon" type="image/png" sizes="1024x1024" href="/static/icon.png"><link rel="apple-touch-icon" href="/static/icon.png"></head><body>
+<!-- 真多页页面文件：顶栏由 nav.js 渲染；分组容器只用 .form-section（见 .superdesign/design-system.md）。
+     脚本清单见文件尾；加新页 = 本文件 + nav.js NAV_PAGES + charvar/api.py 路由表三处同步 -->
+<header class="topbar"></header>
+<main>
+<section id="page-subjects"><div class="card"><div class="row-head"><h2>主体档案</h2><div class="actions"><button id="btn-subject-new">+ 新建</button></div></div>
+<div id="subject-list" class="subject-cards"></div></div>
+<div class="card"><h2 id="subject-form-title">档案详情</h2>
+<div class="form-section"><div class="form-section-title">基本信息</div><div class="form-grid">
+<label>ID（slug）<input type="text" id="s-id" placeholder="silver_witch"></label>
+<label>显示名<input type="text" id="s-name"></label>
+<label>称谓（提示词里的人称）<input type="text" id="s-noun" value="person" placeholder="woman / man / cat"></label>
+<label>LoRA 触发词<input type="text" id="s-trigger" placeholder="留空 = 不用触发词"></label>
+</div></div>
+<div class="form-section"><div class="form-section-title">锁定项<span class="hint">每行一条，拼成一句 Maintain … 进提示词；中英文皆可</span></div><div class="form-grid lock-grid">
+<label>风格锁定<textarea id="s-style" rows="5" placeholder="2d comic book style"></textarea></label>
+<label>外貌锁定<textarea id="s-identity" rows="5" placeholder="long silver-white hair"></textarea></label>
+<label>体型锁定（换装体量锚）<textarea id="s-body" rows="5" placeholder="a very large, full, round bust"></textarea></label>
+<label>服饰锁定<textarea id="s-outfit" rows="5" placeholder="the black witch robe"></textarea></label>
+</div></div>
+<div class="form-section"><div class="form-section-title">补充</div><div class="form-grid">
+<label class="full-row">自由补充（拼到主提示词末尾）<input type="text" id="s-extra"></label>
+</div></div>
+<div class="actions"><button id="btn-subject-save" class="primary">保存</button><button id="btn-subject-delete" class="danger">删除</button></div>
+<details class="import-box"><summary>粘贴 YAML 导入档案</summary><textarea id="s-yaml" rows="8" placeholder="id: silver_witch&#10;name: 银白女巫&#10;subject_noun: woman&#10;trigger_word: sw1tch&#10;style_lock: [the original illustration style]&#10;identity_lock: [long silver-white hair]&#10;outfit_lock: [the black witch robe]"></textarea><div class="actions"><button id="btn-subject-import">解析并保存</button></div></details></div>
+<div class="card" id="subject-images-card" hidden><h2>档案图片（生成变体时可作参考图）</h2>
+<div class="slot-toolbar">
+<span class="hint">先就绪「人物半身像＋三视图」，再生成 / 上传其余 4 种。</span>
+<div class="actions">
+<label class="check seed-inline">统一种子<input type="number" id="slot-seed" value="0"></label>
+<button id="btn-slot-seed-random" type="button" class="btn-sm" title="随机生成一个种子（0–100000）">随机种子</button>
+<button id="btn-slots-draft" class="btn-sm">一键 AI 起草（只补空白）</button>
+<span id="slot-toolbar-status" class="status"></span>
+</div>
+</div>
+<div id="subject-image-slots" class="slot-grid"></div></div>
+<div class="card" id="template-card" hidden><h2>角色全场景通用提示词模板</h2>
+<span class="hint">markdown · LLM 改写时的参考资料</span>
+<div class="actions"><button id="btn-template-edit" class="primary">编辑模板（弹窗）</button><label class="btn file-btn">从 .md 文件载入<input type="file" id="template-file" accept=".md,.markdown,.txt" hidden></label><span id="template-status" class="status"></span></div>
+<div id="template-md-view" class="md-view" hidden></div></div>
+</section>
+</main><script src="/static/core.js"></script><script src="/static/nav.js"></script><script src="/static/media.js"></script><script src="/static/subjects.js"></script></body></html>

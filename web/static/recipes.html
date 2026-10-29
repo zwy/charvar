@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>charvar · 配方</title><link rel="stylesheet" href="/static/style.css"><link rel="icon" type="image/svg+xml" href="/static/favicon.svg"><link rel="alternate icon" type="image/png" sizes="1024x1024" href="/static/icon.png"><link rel="apple-touch-icon" href="/static/icon.png"></head><body>
+<!-- 真多页页面文件：顶栏由 nav.js 渲染；分组容器只用 .form-section（见 .superdesign/design-system.md）。
+     脚本清单见文件尾；加新页 = 本文件 + nav.js NAV_PAGES + charvar/api.py 路由表三处同步 -->
+<header class="topbar"></header>
+<main>
+<section id="page-recipes">
+<div class="card"><div class="row-head"><h2>视频配方</h2><div class="actions"><button id="btn-recipes-refresh">刷新</button></div></div>
+<div class="table-wrap"><table id="recipes-table"><thead><tr><th>配方</th><th>标题</th><th>类别</th><th>步骤链</th><th>操作</th></tr></thead><tbody></tbody></table></div>
+</div>
+<div class="card" id="recipe-detail-card" hidden><div class="row-head"><h2 id="recipe-detail-title">配方详情</h2><div class="actions"><label class="check">种子<input type="number" id="recipe-run-seed" placeholder="配方默认"></label><button id="btn-recipe-run" class="primary">开始运行</button><button id="btn-recipe-doc">查看文档</button></div></div>
+<div id="recipe-steps" class="chip-row"></div>
+<pre id="recipe-doc" class="log" hidden></pre></div>
+<div class="card"><div class="row-head"><h2>配方运行</h2><div class="actions"><button id="btn-recipe-runs-refresh">刷新</button></div></div>
+<div class="table-wrap"><table id="recipe-runs-table"><thead><tr><th>配方运行</th><th>配方</th><th>状态</th><th>种子</th><th>时间</th><th>操作</th></tr></thead><tbody></tbody></table></div></div>
+</section>
+</main><script src="/static/core.js"></script><script src="/static/nav.js"></script><script src="/static/media.js"></script><script src="/static/recipes.js"></script></body></html>

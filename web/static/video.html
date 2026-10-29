@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>charvar · 视频</title><link rel="stylesheet" href="/static/style.css"><link rel="icon" type="image/svg+xml" href="/static/favicon.svg"><link rel="alternate icon" type="image/png" sizes="1024x1024" href="/static/icon.png"><link rel="apple-touch-icon" href="/static/icon.png"></head><body>
+<!-- 真多页页面文件：顶栏由 nav.js 渲染；分组容器只用 .form-section（见 .superdesign/design-system.md）。
+     脚本清单见文件尾；加新页 = 本文件 + nav.js NAV_PAGES + charvar/api.py 路由表三处同步 -->
+<header class="topbar"></header>
+<main>
+<section id="page-video"><div class="card"><div class="row-head"><h2>视频</h2><span class="hint">给一段提示词出一段视频 · 按秒计费，提交前看一眼费用预估</span></div>
+<div class="form-section">
+<div class="form-section-title">模式与参数</div>
+<div class="adhoc-switch">
+<div class="segmented" id="video-mode"><button type="button" class="seg active" data-mode="t2v">文生视频</button><button type="button" class="seg" data-mode="i2v">图生视频（首帧）</button></div>
+<span id="video-model-field" class="hint"></span>
+</div>
+<div class="form-grid">
+<label>模型<select id="video-model"></select></label>
+<label>画幅比例<select id="video-aspect"></select></label>
+<label>分辨率档<select id="video-resolution"></select></label>
+<label>时长<select id="video-duration"></select></label>
+<label id="video-seed-field">种子<input type="number" id="video-seed" placeholder="留空 = 随机；填数值 = 固定复现"></label>
+</div>
+</div>
+<div class="form-section">
+<div class="form-section-title">提示词</div>
+<label aria-label="提示词"><textarea id="video-prompt" rows="5" placeholder="a young woman performs a graceful solo dance ..."></textarea></label>
+</div>
+<div class="form-section" id="video-frame-block" hidden>
+<div class="form-section-title">首帧图</div>
+<span class="hint">用单人全身正面照 —— 多人物拼图会出多人</span>
+<div id="video-frame-list" class="ref-grid"></div>
+<div class="actions">
+<label class="btn file-btn">上传首帧<input type="file" id="video-frame-file" accept="image/*" hidden></label>
+<button id="btn-video-frame-recent" type="button">从最近生成加入</button>
+<select id="video-frame-subject"></select>
+<select id="video-frame-kind"></select>
+<button id="btn-video-frame-add" type="button">从主体档案加入</button>
+<button id="btn-video-frame-clear" type="button">移除首帧</button>
+</div>
+</div>
+<div class="form-section" id="video-refs-block">
+<div class="form-section-title"><span>参考图</span><span id="video-ref-count" class="hint"></span></div>
+<div id="video-ref-list" class="ref-grid"></div>
+<div class="actions">
+<label class="btn file-btn">上传参考图<input type="file" id="video-ref-file" accept="image/*" multiple hidden></label>
+<button id="btn-video-ref-recent" type="button">从最近生成加入</button>
+<select id="video-ref-subject"></select>
+<select id="video-ref-kind"></select>
+<button id="btn-video-ref-add" type="button">从主体档案加入</button>
+<button id="btn-video-ref-clear" type="button">清空参考图</button>
+</div>
+</div>
+<div class="form-section" id="video-vrefs-block">
+<div class="form-section-title">参考视频</div>
+<span class="hint">≤2 条 · mp4/mov/webm ≤48MB · 仅 Seedance gen2+ 接 video_url，其它 provider 忽略</span>
+<div id="video-vref-list" class="ref-grid"></div>
+<div class="actions">
+<label class="btn file-btn">上传参考视频<input type="file" id="video-vref-file" accept="video/mp4,video/webm,video/quicktime,video/mpeg" hidden></label>
+<button id="btn-video-vref-clear" type="button">清空参考视频</button>
+</div>
+</div>
+<div class="actions"><button id="btn-video-generate" class="primary">生成视频</button><span id="video-status" class="status"></span>
+<span class="hint" id="video-cost-hint"></span></div>
+</div>
+<div class="card" id="video-result-card" hidden><div class="row-head"><h2>结果 <span id="video-result-summary"></span></h2><div class="actions">
+<a id="video-dl-video" class="btn" hidden download>下载 MP4</a>
+<a id="video-dl-manifest" class="btn" hidden>manifest.json</a>
+</div></div>
+<div class="video-result"><video id="video-result-player" controls preload="metadata"></video></div>
+<pre id="video-result-log" class="log"></pre></div>
+<div class="card"><div class="row-head"><h2>最近生成</h2><div class="actions"><button id="btn-video-recent-refresh">刷新</button></div></div>
+<div id="video-recent" class="image-grid"></div></div>
+</section>
+</main><script src="/static/core.js"></script><script src="/static/nav.js"></script><script src="/static/tables.js"></script><script src="/static/media.js"></script><script src="/static/video.js"></script></body></html>

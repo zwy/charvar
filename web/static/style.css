@@ -61,8 +61,9 @@ nav { display: flex; flex-wrap: wrap; gap: 6px; }
   white-space: nowrap;
 }
 .tab.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-line); }
-.tab-page { display: none; }
-.tab-page.active { display: block; }
+/* 真多页：顶栏页签由 nav.js 渲染成 <a>,样式沿用 .tab(链接不要下划线/链接色) */
+a.tab { text-decoration: none; color: var(--muted); }
+a.tab.active { color: var(--accent); }
 main { max-width: 1180px; margin: 20px auto; padding: 0 20px; }
 
 .card {

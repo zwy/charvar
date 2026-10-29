@@ -191,6 +191,9 @@ function KIND_LABEL(kind) {
 
 /* ---------- 顶栏按钮绑定（DOMContentLoaded 一次） ---------- */
 document.addEventListener("DOMContentLoaded", () => {
+  /* 真多页：配方页加载即初始化（原来靠旧单页的 tab 切换懒加载） */
+  loadRecipes().catch(() => {});
+  loadRecipeRuns().catch(() => {});
   $("#btn-recipes-refresh").addEventListener("click", loadRecipes);
   $("#btn-recipe-runs-refresh").addEventListener("click", loadRecipeRuns);
   $("#btn-recipe-run").addEventListener("click", async () => {

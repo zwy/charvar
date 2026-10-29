@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>charvar · 语音</title><link rel="stylesheet" href="/static/style.css"><link rel="icon" type="image/svg+xml" href="/static/favicon.svg"><link rel="alternate icon" type="image/png" sizes="1024x1024" href="/static/icon.png"><link rel="apple-touch-icon" href="/static/icon.png"></head><body>
+<!-- 真多页页面文件：顶栏由 nav.js 渲染；分组容器只用 .form-section（见 .superdesign/design-system.md）。
+     脚本清单见文件尾；加新页 = 本文件 + nav.js NAV_PAGES + charvar/api.py 路由表三处同步 -->
+<header class="topbar"></header>
+<main>
+<section id="page-tts"><div class="card"><div class="row-head"><h2>语音</h2><span class="hint">给一段文本出一个音频 · HeyGen 系 5000 字符上限，提交前拦</span></div>
+<div class="form-section">
+<div class="form-section-title">模型与参数</div>
+<div class="adhoc-switch">
+<div class="form-grid">
+<label>模型<select id="tts-model"></select></label>
+<label id="tts-voice-field">voice<select id="tts-voice"></select></label>
+<label>输出格式<select id="tts-format"><option value="">跟随默认（自动协商）</option><option value="mp3">mp3</option><option value="pcm">pcm</option></select></label>
+</div>
+</div>
+<span id="tts-voice-note" class="hint"></span>
+</div>
+<div class="form-section">
+<div class="form-section-title">文本</div>
+<label aria-label="要朗读的文本"><textarea id="tts-text" rows="5" placeholder="要朗读的文本；支持中英文,按模型而定"></textarea></label>
+<span id="tts-char-hint" class="hint"></span>
+</div>
+<div class="actions"><button id="btn-tts-generate" class="primary">合成语音</button><span id="tts-status" class="status"></span></div>
+</div>
+<div class="card" id="tts-result-card" hidden><div class="row-head"><h2>结果 <span id="tts-result-summary"></span></h2><div class="actions">
+<a id="tts-dl-audio" class="btn" hidden download>下载音频</a>
+<a id="tts-dl-manifest" class="btn" hidden>manifest.json</a>
+</div></div>
+<div class="tts-result"><audio id="tts-result-player" controls preload="metadata"></audio></div><p id="tts-result-meta" class="hint"></p></div>
+<div class="card"><div class="row-head"><h2>最近生成</h2><div class="actions"><button id="btn-tts-recent-refresh">刷新</button></div></div>
+<div id="tts-recent" class="image-grid"></div></div>
+</section>
+</main><script src="/static/core.js"></script><script src="/static/nav.js"></script><script src="/static/media.js"></script><script src="/static/tts.js"></script></body></html>

@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>charvar · 预设</title><link rel="stylesheet" href="/static/style.css"><link rel="icon" type="image/svg+xml" href="/static/favicon.svg"><link rel="alternate icon" type="image/png" sizes="1024x1024" href="/static/icon.png"><link rel="apple-touch-icon" href="/static/icon.png"></head><body>
+<!-- 真多页页面文件：顶栏由 nav.js 渲染；分组容器只用 .form-section（见 .superdesign/design-system.md）。
+     脚本清单见文件尾；加新页 = 本文件 + nav.js NAV_PAGES + charvar/api.py 路由表三处同步 -->
+<header class="topbar"></header>
+<main>
+<section id="page-gen">
+<div class="card"><div class="row-head"><h2>① 生图设置</h2></div>
+<div class="form-section">
+<div class="form-section-title">主体与种子</div>
+<div class="form-grid form-grid-2">
+<label>主体档案<select id="gen-subject"></select></label>
+<label id="gen-seed-field">种子<input type="number" id="gen-seed" min="0" placeholder="留空 = 随机（0–100000）"></label>
+</div>
+</div>
+<div class="form-section">
+<div class="form-section-title">供应商参数</div>
+<div class="adhoc-switch">
+<div class="segmented" id="gen-backend"><button type="button" class="seg active" data-backend="comfyui">ComfyUI</button><button type="button" class="seg" data-backend="openrouter">OpenRouter</button><button type="button" class="seg" data-backend="dreamina">即梦</button></div>
+<span id="gen-model-field" class="hint"></span>
+</div>
+<div class="form-grid">
+<label>画幅比例<select id="gen-aspect"></select></label>
+<label id="gen-resolution-field">分辨率<select id="gen-resolution"></select></label>
+<label id="gen-quality-field" hidden>质量档<select id="gen-quality"></select></label>
+<label id="gen-model-select-field" hidden>模型版本<select id="gen-model-select"></select></label>
+<label id="gen-negative-field">负向提示词<input type="text" id="gen-negative" placeholder="留空 = 用 workflow 默认"></label>
+<label class="check" id="gen-wait-field"><input type="checkbox" id="gen-wait"> 等待完成并记录输出文件名</label>
+</div>
+<span id="gen-dim-preview" class="hint"></span>
+</div>
+<div class="form-section">
+<div class="form-section-title"><span>参考图</span><span id="gen-ref-count" class="hint"></span></div>
+<div id="gen-ref-list" class="ref-grid"></div>
+<div class="actions">
+<label class="btn file-btn">上传参考图<input type="file" id="gen-ref-file" accept="image/*" multiple hidden></label>
+<button id="btn-gen-recent-add" type="button">从最近生成加入</button>
+<button id="btn-gen-pose-add" type="button">从动作库加入</button>
+<select id="gen-ref-kind"></select>
+<button id="btn-gen-ref-add" type="button">从主体档案加入</button>
+<button id="btn-gen-ref-clear" type="button">清空参考图</button>
+</div>
+</div>
+</div>
+<div class="card"><div class="row-head"><h2>② 生成提示词</h2></div>
+<div class="form-section">
+<div class="form-section-title">预设与外观</div>
+<div class="gen-mode-row"><span class="field-label">生成模式</span><div class="segmented">
+<button id="gen-mode-classic" class="seg active" data-mode="classic" type="button">经典模板</button>
+<button id="gen-mode-llm" class="seg" data-mode="llm" type="button">LLM 优化</button>
+</div></div>
+<div class="form-grid">
+<label>预设<select id="gen-preset"></select></label>
+<label>发型预设（可选）<select id="gen-hairstyle"><option value="">不用（跟随参考图/档案发型）</option></select></label>
+<label>服装预设（可选，与预设笛卡尔积）<select id="gen-outfit"><option value="">不用（仅动作/表情预设）</option></select></label>
+<label>组合顺序<select id="gen-outfit-order"><option value="outfit_first">服装优先（每件连播全部动作）</option><option value="pose_first">动作优先（每个动作连播全部服装）</option></select></label>
+</div>
+</div>
+<div class="form-section">
+<div class="form-section-title">提示词参数</div>
+<div class="form-grid">
+<label>条数<input type="number" id="gen-count" placeholder="留空 = 预设全部" min="1"></label>
+<label>采样<select id="gen-sampling"><option value="all">all（默认顺序）</option><option value="first">first（取前 N 条）</option><option value="random">random（按种子抽取）</option></select></label>
+<label>拼接分隔符<input type="text" id="gen-separator" value=" "></label>
+<label>固定背景（留空随机）<input type="text" id="gen-fixed-bg" list="bg-options"><datalist id="bg-options"></datalist></label>
+<label class="span2">固定光照（留空随机）<input type="text" id="gen-fixed-light" list="light-options"><datalist id="light-options"></datalist></label>
+<label class="check"><input type="checkbox" id="gen-rand-bg" checked> 随机背景</label>
+<label class="check"><input type="checkbox" id="gen-rand-light" checked> 随机光照</label>
+</div>
+</div>
+<div id="gen-sticker-hint" class="comfy-panel" hidden><span class="hint">含指定中文文字：模型原生出字、须人工验字；按预设 1:1 方图，负向留空时自动注入空负向（清掉内置禁字）；参考图建议「全身正面」。</span></div>
+<div id="gen-llm-panel" class="comfy-panel" hidden>
+<label>提示词语言<select id="gen-llm-language">
+<option value="any" selected>不做强制性限制（默认）</option>
+<option value="zh">强制中文</option>
+<option value="en">强制英文</option>
+</select></label>
+<label class="span2">附加要求（可选，拼进 LLM 改写指令）<input type="text" id="gen-llm-instructions" placeholder="例如：保持浅景深，避免出现文字"></label>
+<span class="hint">LLM 模式需要主体已上传「通用提示词模板」；参考图按第 ① 步的顺序编号分工。</span>
+<span class="hint">提示词语言：默认不限制。「强制中文」适合即梦（中文原生、有字数上限）；带字表情包预设只能英文改写。</span>
+</div>
+<div class="actions"><button id="btn-generate" class="primary">生成提示词</button><span id="gen-status" class="status"></span></div></div>
+<div class="card" id="rounds-bar" hidden>
+<div class="rounds-row"><div class="field-label">轮次</div><div id="rounds-list" class="chip-row"></div><span class="hint" id="rounds-hint">点击切换查看；出图中自动同步</span></div>
+</div>
+<div class="card" id="result-card" hidden><div class="row-head"><h2>③ 生成结果 <span id="result-summary"></span></h2><div class="actions">
+<button id="btn-copy-prompts">复制全部提示词</button><button id="btn-copy-captions">复制全部 caption</button>
+<a id="dl-txt" class="btn" hidden>下载 TXT</a><a id="dl-jsonl" class="btn" hidden>下载 JSONL</a><a id="dl-zip" class="btn" hidden>下载 captions.zip</a><button id="btn-push-image" class="primary">推送生图</button></div></div>
+<pre id="push-result" class="log" hidden></pre>
+<div class="media-toolbar">
+      <button id="btn-sync-images">同步图片</button>
+      <div class="segmented"><button id="btn-view-images" class="seg active" aria-pressed="true">图片墙</button><button id="btn-view-table" class="seg" aria-pressed="false">表格</button></div>
+      <button id="btn-contact-sheet">Contact sheet</button>
+      <button id="btn-overlay">贴字…</button>
+      <button id="btn-video">合成视频</button>
+      <span id="image-status" class="status"></span>
+    </div>
+    <div id="result-images" class="image-grid"></div>
+<div class="table-wrap" id="result-table-wrap"><table id="result-table"><thead><tr><th>#</th><th>变体</th><th>景别</th><th>角度</th><th>表情</th><th>体式</th><th>背景</th><th>光照</th><th>最终提示词</th><th>图片文案</th><th>caption</th></tr></thead><tbody></tbody></table></div></div></section>
+</main><script src="/static/core.js"></script><script src="/static/nav.js"></script><script src="/static/tables.js"></script><script src="/static/media.js"></script><script src="/static/posegallery.js"></script><script src="/static/genrefs.js"></script><script src="/static/gen.js"></script></body></html>

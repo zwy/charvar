@@ -64,6 +64,24 @@ _TEMPLATE_MAX_BYTES = 200_000
 # 30 条 4 路并发约 2 分钟（1K），比串行（8 分钟）可接受。
 _OPENROUTER_CONCURRENCY = 4
 
+# 页面路由表（真多页）：路由 → static 下的 html 文件名。
+# 页面统一挂 /ui/ 前缀 —— 根路径已被 API 占用（/subjects /runs /settings /tts /adhoc /
+# /poses /costumes /recipes 都是数据接口），改 API 前缀要动后端生成 URL 与 CLI 兼容，不做。
+# / 与 /ui/gen 都是预设页。与 web/static/nav.js 的 NAV_PAGES 同源约定 —— 加/改页面时三处同步。
+_PAGE_ROUTES = {
+    "/": "gen.html",
+    "/ui/gen": "gen.html",
+    "/ui/adhoc": "adhoc.html",
+    "/ui/video": "video.html",
+    "/ui/tts": "tts.html",
+    "/ui/recipes": "recipes.html",
+    "/ui/subjects": "subjects.html",
+    "/ui/poses": "poses.html",
+    "/ui/costumes": "costumes.html",
+    "/ui/runs": "runs.html",
+    "/ui/settings": "settings.html",
+}
+
 # 即梦批量生图的并发路数。单张 2K 约 60s（即梦侧排队 + 生成），
 # 2 路并发 30 条约 15 分钟；每张消耗即梦积分/权益，保守开 2（env 可调）。
 _DREAMINA_CONCURRENCY = max(1, int(os.environ.get("DREAMINA_CONCURRENCY") or 2))
@@ -385,14 +403,18 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             # 预设缺失 = 404；配置/格式错误（如无效 schema 2）= 明确的 400 配置错误
             raise HTTPException(getattr(exc, "status", 400), str(exc)) from exc
 
-    # ---- 页面 ----
+    # ---- 页面（真多页：每页面一个 html，路由表与 web/static/nav.js 的 NAV_PAGES 三处同步） ----
     if static_dir is not None and Path(static_dir).exists():
         static_dir = Path(static_dir)
         app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
-        @app.get("/", include_in_schema=False)
-        def index() -> FileResponse:
-            return FileResponse(static_dir / "index.html")
+        for route, filename in _PAGE_ROUTES.items():
+            page_file = static_dir / Path(filename).name
+
+            def _page(page_file: "Path" = page_file) -> FileResponse:
+                return FileResponse(page_file)
+
+            app.get(route, include_in_schema=False)(_page)
 
     # ---- 预设 ----
     @app.get("/presets")

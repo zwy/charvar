@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>charvar · Playground</title><link rel="stylesheet" href="/static/style.css"><link rel="icon" type="image/svg+xml" href="/static/favicon.svg"><link rel="alternate icon" type="image/png" sizes="1024x1024" href="/static/icon.png"><link rel="apple-touch-icon" href="/static/icon.png"></head><body>
+<!-- 真多页页面文件：顶栏由 nav.js 渲染；分组容器只用 .form-section（见 .superdesign/design-system.md）。
+     脚本清单见文件尾；加新页 = 本文件 + nav.js NAV_PAGES + charvar/api.py 路由表三处同步 -->
+<header class="topbar"></header>
+<main>
+<section id="page-adhoc"><div class="card"><div class="row-head"><h2>Playground</h2><span class="hint">给一段提示词出一张图 · 不入档案、不进历史</span></div>
+<div class="form-section">
+<div class="form-section-title">供应商与参数</div>
+<div class="adhoc-switch">
+<div class="segmented" id="adhoc-backend"><button type="button" class="seg active" data-backend="comfyui">ComfyUI</button><button type="button" class="seg" data-backend="openrouter">OpenRouter</button><button type="button" class="seg" data-backend="dreamina">即梦</button></div>
+<div class="segmented seg-sm" id="adhoc-mode"><button type="button" class="seg active" data-mode="t2i">文生图</button><button type="button" class="seg" data-mode="i2i">图片编辑</button></div>
+<span id="adhoc-model-field" class="hint"></span>
+</div>
+<div class="form-grid">
+<label>画幅比例<select id="adhoc-aspect"></select></label>
+<label id="adhoc-resolution-field">分辨率<select id="adhoc-resolution"></select></label>
+<label id="adhoc-model-select-field" hidden>模型版本<select id="adhoc-model-select"></select></label>
+<label id="adhoc-quality-field" hidden>质量档<select id="adhoc-quality"></select></label>
+<label id="adhoc-seed-field">种子<input type="number" id="adhoc-seed" placeholder="留空 = 随机；填数值 = 固定复现"></label>
+<label id="adhoc-negative-field">负向提示词<input type="text" id="adhoc-negative" placeholder="留空 = 用 workflow 默认"></label>
+</div>
+</div>
+<div class="form-section">
+<div class="form-section-title">提示词</div>
+<label aria-label="提示词"><textarea id="adhoc-prompt" rows="5" placeholder="a red apple on a wooden table"></textarea></label>
+</div>
+<div class="form-section" id="adhoc-refs-block" hidden>
+<div class="form-section-title"><span>参考图</span><span id="adhoc-ref-count" class="hint"></span></div>
+<div id="adhoc-ref-list" class="ref-grid"></div>
+<div class="actions">
+<label class="btn file-btn">上传参考图<input type="file" id="adhoc-ref-file" accept="image/*" multiple hidden></label>
+<button id="btn-adhoc-recent-add" type="button">从最近生成加入</button>
+<button id="btn-adhoc-pose-add" type="button">从动作库加入</button>
+<select id="adhoc-ref-subject"></select>
+<select id="adhoc-ref-kind"></select>
+<button id="btn-adhoc-ref-add" type="button">从主体档案加入</button>
+<button id="btn-adhoc-ref-clear" type="button">清空参考图</button>
+</div>
+</div>
+<div id="adhoc-refs-t2i-hint" class="hint" hidden></div>
+<div class="actions"><button id="btn-adhoc-generate" class="primary">出图</button><span id="adhoc-status" class="status"></span></div>
+</div>
+<div class="card" id="adhoc-result-card" hidden><div class="row-head"><h2>结果 <span id="adhoc-result-summary"></span></h2><div class="actions">
+<a id="adhoc-dl-image" class="btn" hidden download>下载原图</a>
+<a id="adhoc-dl-manifest" class="btn" hidden>manifest.json</a>
+</div></div>
+<div class="adhoc-result-wrap"><img id="adhoc-result-image" alt="Playground 结果"></div>
+<pre id="adhoc-result-log" class="log"></pre></div>
+<div class="card"><div class="row-head"><h2>最近生成</h2><div class="actions"><button id="btn-adhoc-recent-refresh">刷新</button></div></div>
+<div id="adhoc-recent" class="image-grid"></div></div>
+</section>
+</main><script src="/static/core.js"></script><script src="/static/nav.js"></script><script src="/static/tables.js"></script><script src="/static/media.js"></script><script src="/static/posegallery.js"></script><script src="/static/genrefs.js"></script><script src="/static/adhoc.js"></script></body></html>

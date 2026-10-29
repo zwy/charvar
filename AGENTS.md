@@ -105,7 +105,7 @@ costume-db-01（姿势库同作者；细则见 `docs/服装库.md`）：**图片
 - **role（分工）**：每张参考图一个 role（`front`/`headshot`/`side`/`behind`/`character_sheet`，缺省 `front`），决定 LLM 锚定句里这张图管哪一摊；主体档案来源自动取槽位 kind 当 role。
 - references 随 `/generate` 存进 run（`GenerateResult.references`），推送生图与单条「重新生成」都按它取图；`regenerate` 优先重放快照里的 references。
 - `reference_kinds` 参数与 CLI 调用路径**仍受支持**（向后兼容），CLI `charvar gen --outfit` 同一套修复生效。
-- OpenRouter 参数档位按 `data/openrouter/api-response.json` 的 `supported_parameters` 动态加载（同 Playground）；即梦分辨率表放 `web/static/tables.js`（app.js 与 adhoc.js 共用，别再各写一份）。
+- OpenRouter 参数档位按 `data/openrouter/api-response.json` 的 `supported_parameters` 动态加载（同 Playground）；即梦分辨率表放 `web/static/tables.js`（gen.js 与 adhoc.js 共用，别再各写一份）。
 - **supported parameters 的几条约定**（两边页面一致）：
   - ComfyUI 没有 provider 枚举，档位固定 charvar 的 `1k`/`2k`（2k = Qwen 官方 ~4.2MP 像素）。
   - OpenRouter 的模型**不在面板里选**，跟设置页的 `t2i`/`i2i` 组默认（带参考图 = i2i 组）；分辨率 / 质量取该模型清单的枚举，没有就不显示。
@@ -113,7 +113,11 @@ costume-db-01（姿势库同作者；细则见 `docs/服装库.md`）：**图片
   - 即梦 **3.0/3.1 只有 text2image**：带参考图（即 image2image）时从模型下拉里去掉（`DREAMINA_T2I_ONLY_MODELS`，放 `tables.js` 共享）。
   - 档位选择要记住：切供应商再切回来别重置（`state.comfyTier` / `adhocState.comfyTier` / `state.orResolution`）。
 - ComfyUI 上传的 `remote_name` = `charvar_{run_id}_{index}{suffix}`：`upload_image` 发 `overwrite: true`，同名会互相覆盖。
-- 前端文件：genrefs.js（GenRefs）、app.js、tables.js、posegallery.js、posepage.js、costumegallery.js、costumepage.js；加载顺序 tables → media → posegallery → genrefs → app → adhoc → video → recipes → posepage → costumegallery → costumepage`（init 在 GenRefs 后；posegallery 在 genrefs 前；tables 在 app 前；共享表是全局 const，顺序错 TDZ 报错）。
+### 前端是真多页
+
+- 页面= `web/static/<name>.html` 挂 `/ui/<name>`；`/` 同预设页。
+- **三处同步**：页面 html + `_PAGE_ROUTES` + `nav.js` `NAV_PAGES`；顶栏由 nav.js 渲染；`tests/test_web_pages.py` 兜底一致性
+- **core.js 独占全站 helper**（`$`/`api`/`escapeHtml`/`SLOT_*`）；页面加载即初始化本页；轮次条 sessionStorage 恢复；历史「查看」=`/ui/gen?run=`。
 
 ## 全站视觉分组与文案
 
@@ -171,7 +175,7 @@ costume-db-01（姿势库同作者；细则见 `docs/服装库.md`）：**图片
 - Playground（`charvar/adhoc.py`）的红线：参考图槽位名从 mapping 读（`image`/`image2`/…），不许写死节点 id；ComfyUI 上传的 remote_name 必须带唯一前缀（`upload_image` 发 `overwrite: true`，同名会互相覆盖 → 队列里的旧 prompt 取到新图）；`--out` 指定的文件后缀与内容必须一致（不一致时转格式，别让后缀骗人）；adhoc 不读 `settings.image_sizes`（那是主体档案槽位的尺寸）；不引入随机源（seed 由调用方显式给）。
 - Playground 的 run_id 直接拼进文件路径（`/adhoc/{run_id}/image` 直接 serve 磁盘文件）：`charvar.adhoc.run_dir()` 用自己的正则校验（`^adhoc_[A-Za-z0-9_.-]+$` 且不含 `..`），比 `assets.safe_run_id` 严 —— 后者放行 `..`。**别退回用 safe_run_id**。
 - 上传的参考图按**实际图片格式**判后缀（用 PIL 读，不信文件名），落 `data/generated/adhoc/_refs/`；出图成功后自动清掉，失败时保留以便重试。
-- **2K 必须用 Qwen-Image-2.1 官方像素表**（`charvar/exporters/comfyui.py` 的 `_QWEN_2K_SIZES`：1:1=2048×2048、4:3=2400×1792、3:4=1792×2400、3:2=2528×1696、2:3=1696×2528、16:9=2752×1536、9:16=1536×2752）。模型原生是**恒定 ~4.2MP 的 2K**（按面积定义，不是长边）——按长边归一算出的 2K 只有原生面积的 56%（16:9 才 2048×1152），模型被迫上采样 → 图糊。**别退回长边归一**。前端 `web/static/app.js` 的 `QWEN_2K_SIZES` 是同一张表，改一处要同步另一处，否则预览像素和实际不符。
+- **2K 必须用 Qwen-Image-2.1 官方像素表**（`charvar/exporters/comfyui.py` 的 `_QWEN_2K_SIZES`：1:1=2048×2048、4:3=2400×1792、3:4=1792×2400、3:2=2528×1696、2:3=1696×2528、16:9=2752×1536、9:16=1536×2752）。模型原生是**恒定 ~4.2MP 的 2K**（按面积定义，不是长边）——按长边归一算出的 2K 只有原生面积的 56%（16:9 才 2048×1152），模型被迫上采样 → 图糊。**别退回长边归一**。前端 `web/static/gen.js` 的 `QWEN_2K_SIZES` 是同一张表，改一处要同步另一处，否则预览像素和实际不符。
 - **档位只有 `1k` / `2k`，没有 4K 档**。官方明说远超 2K 训练尺寸会丢提示词遵循度；实测 4096×4096 耗时 75s（2K 只要 10s）且细节崩坏。`settings_service.ImageSize` 有 validator 把存量设置里的 "4k" 降级到 "1k"（别删 —— 存量 DB 里可能还有）。
 - 2K 官方表**只给 ComfyUI 通路**（跑的是 Qwen-Image-2.1）。OpenRouter 通路（muse/grok/gpt-image）传 `use_model_native=False` 走通用长边归一 —— 那边的模型不认 Qwen 的尺寸表。
 
