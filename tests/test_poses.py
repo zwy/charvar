@@ -323,6 +323,38 @@ def test_pose_prompt_builds_by_line_kind():
     assert "<image3>为姿势参考" in pair2 and "担任描述里的「甲」" in pair2
     full_still = pose_prompt.build_prompt("全身1人・標準系", "x", pair_two_subjects=True)
     assert "<image3>" not in full_still
+
+
+def test_subject_slot_for_prompt_upper_prefers_headshot(data_dir):
+    """半身动作主体参考图用 headshot 槽位；没有半身档位图回退 front；全身/双人恒 front。"""
+    with storage.connect() as conn:
+        conn.execute("DELETE FROM subject_images WHERE subject_id = 'u_char'")
+        storage.upsert_subject_image(conn, {
+            "subject_id": "u_char", "kind": "headshot", "status": "ready",
+            "source": "comfyui", "file_path": "subjects/u_char/headshot.png",
+        })
+        storage.upsert_subject_image(conn, {
+            "subject_id": "u_char", "kind": "front", "status": "ready",
+            "source": "comfyui", "file_path": "subjects/u_char/front.png",
+        })
+        # 上半身动作 → headshot
+        label, row = poses_service.subject_slot_for_prompt(conn, "u_char", "上半身1人")
+        assert label == "headshot" and row["file_path"] == "subjects/u_char/headshot.png"
+        # 全身 / 未收录线 → front（即便有 headshot 行）
+        for line in ("全身1人・セクシー系", "2人絡み", "乱写的线"):
+            label, row = poses_service.subject_slot_for_prompt(conn, "u_char", line)
+            assert label == "front" and row["file_path"] == "subjects/u_char/front.png"
+        # 没有 headshot 行 → 回退 front；完全没有档案时行也是 None
+        conn.execute(
+            "DELETE FROM subject_images WHERE subject_id = 'u_char' AND kind = 'headshot'"
+        )
+        conn.commit()
+        label, row = poses_service.subject_slot_for_prompt(conn, "u_char", "上半身1人")
+        assert label == "front" and row["file_path"] == "subjects/u_char/front.png"
+        label, row = poses_service.subject_slot_for_prompt(conn, "nobody", "上半身1人")
+        assert label == "front" and row is None  # 连 front 都没有：报错信息指向 front
+
+
 # ---------- LLM 起稿（pose_describe，mock 通路） ----------
 
 def test_pose_describe_saves_ai_draft_and_validates(data_dir, monkeypatch):

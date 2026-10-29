@@ -1507,7 +1507,7 @@ def pose_action_cmd(
 def pose_prompt_cmd(
     pose_id: str = typer.Argument(..., help="动作 id，如 full_sexy_P001"),
     angle: str = typer.Option("", "--angle", help="视角（原文，缺省正面）"),
-    subject: Optional[str] = typer.Option(None, "--subject", help="主体档案 id（--run 必填，取其 front 槽位图）"),
+    subject: Optional[str] = typer.Option(None, "--subject", help="主体档案 id（--run 必填；上半身动作用 headshot 槽位，缺则回退 front）"),
     subject2: Optional[str] = typer.Option(None, "--subject2", help="双人动作的第二主体 id（2人絡み 才有效）"),
     run: bool = typer.Option(False, "--run", help="拼好的提示词直接出图（Playground 通路）"),
     backend: str = typer.Option("comfyui", "--backend", help="comfyui / openrouter / dreamina"),
@@ -1521,8 +1521,9 @@ def pose_prompt_cmd(
 ) -> None:
     """按动作描述拼 demo 结构的姿势编辑提示词并可选出图。
 
-    <image1> = 主体档案 front 槽位图（角色锚定），<image2> = 人偶线稿（姿势锚定，
-    role=pose 语义）；构图句/背景句/禁令句按库线型（全身/半身/双人）取版本。
+    <image1> = 主体档案槽位图（角色锚定：上半身动作取 headshot，缺则回退 front；
+    全身/双人取 front），<image2> = 人偶线稿（姿势锚定，role=pose 语义）；
+    构图句/背景句/禁令句按库线型（全身/半身/双人）取版本。
     """
     from charvar import adhoc as adhoc_service
     from charvar import paths
@@ -1536,7 +1537,11 @@ def pose_prompt_cmd(
                 "SELECT line, number, title FROM pose_images WHERE pose_id = ? AND angle = ?",
                 (action["pose_id"], action["angle"]),
             ).fetchone()
-            slot = storage.get_subject_image(conn, subject, "front") if subject else None
+            slot_label = "front"
+            slot = None
+            if subject:
+                line = row["line"] if row is not None else ""
+                slot_label, slot = poses_service.subject_slot_for_prompt(conn, subject, line)
             slot2 = storage.get_subject_image(conn, subject2, "front") if subject2 else None
         except poses_service.PoseError as exc:
             _die(str(exc))
@@ -1560,10 +1565,10 @@ def pose_prompt_cmd(
     if not subject:
         _die("--run 需要 --subject（主体档案 id）")
     if slot is None or not slot.get("file_path"):
-        _die(f"主体档案没有 front 槽位图：{subject}")
+        _die(f"主体档案没有 {slot_label} 槽位图：{subject}")
     subject_file = paths.data_dir() / str(slot["file_path"])
     if not subject_file.exists():
-        _die(f"主体 front 槽位图文件缺失：{slot['file_path']}")
+        _die(f"主体 {slot_label} 槽位图文件缺失：{slot['file_path']}")
     pose_file = poses_service.prepared_reference_file(action["pose_id"], action["angle"])
     refs = [subject_file]
     if subject2:

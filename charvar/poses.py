@@ -440,3 +440,24 @@ def prepared_reference_file(pose_id: str, angle: str | None, db_path=None) -> Pa
     return reference_images.prepared_reference(full, source_dir(), cache_kind)
 
 
+def subject_slot_for_prompt(
+    conn: sqlite3.Connection, subject_id: str, line: str
+) -> tuple[str, dict | None]:
+    """姿势出图的主体参考图槽位：上半身动作取 headshot，缺则回退 front。
+
+    半身构图里 pose 线稿只有躯干，front 全身图的脸太小、身份特征弱；
+    headshot 档位图脸大、特征全。返回（槽位名, subject_images 行或 None）；
+    全身/双人动作恒用 front。
+    """
+    from charvar import pose_prompt as pose_prompt_module
+    from charvar import storage
+
+    label = "headshot" if pose_prompt_module.kind_of_line(line) == "upper" else "front"
+    row = storage.get_subject_image(conn, subject_id, label)
+    if row is None or not str(row.get("file_path") or "").strip():
+        if label != "front":  # 没有半身槽位图就回退 front
+            label = "front"
+            row = storage.get_subject_image(conn, subject_id, "front")
+    return label, row
+
+
