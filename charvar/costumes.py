@@ -105,6 +105,7 @@ def _load_catalog() -> list[dict]:
         category = str(entry.get("カテゴリ") or "").strip()
         thumb_rel = str(entry.get("サムネ") or "").strip()
         image_rel = str(entry.get("画像") or "").strip()
+        png_rel = str(entry.get("原寸") or "").strip()
         if not ITEM_ID_RE.fullmatch(item_id):
             bad.append(item_id[:60] or "(空)")
             continue
@@ -112,6 +113,8 @@ def _load_catalog() -> list[dict]:
             raise CostumeError(f"サムネ 路径不合法：{thumb_rel[:60]}")
         if not _REL_PATH_RE.fullmatch(image_rel) or Path(image_rel).stem != item_id:
             raise CostumeError(f"画像 路径不合法：{image_rel[:60]}")
+        if png_rel and (not _REL_PATH_RE.fullmatch(png_rel) or Path(png_rel).stem != item_id):
+            raise CostumeError(f"原寸 路径不合法：{png_rel[:60]}")
         items.append(
             {
                 "item_id": item_id,
@@ -119,6 +122,7 @@ def _load_catalog() -> list[dict]:
                 "keywords": keywords,
                 "thumb_rel": thumb_rel,
                 "image_rel": image_rel,
+                "png_rel": png_rel,
                 # 检索 haystack：id + 英文关键词 + 日文目录原文 + 中文目录名
                 "hay": " ".join((item_id, keywords, category, category_zh(category))).lower(),
             }
@@ -228,3 +232,31 @@ def image_file(item_id: str, variant: str) -> Path:
     if not path.is_file():
         raise CostumeError(f"图片文件缺失：{rel}（重跑 scripts/download_costume_db.py）")
     return path
+# ---------- 生图参考图（role=costume：只锚服装，不锚身份/姿势） ----------
+
+def raw_reference_file(item_id: str) -> Path:
+    """参考图源文件：无损原寸 png 优先（仅一步有损），缺失回退详情 webp。
+
+    img 与 png 同像素（1366×2048），只差编码；catalog 校验过路径但文件在不在
+    这里才见真章（png_rel 有值而 png 文件缺失 → 回退 webp，不报错）。
+    """
+    item = next((it for it in _load_catalog() if it["item_id"] == item_id), None)
+    if item is None:
+        raise CostumeError(f"服装库没有这条服装：{item_id}")
+    if item["png_rel"]:
+        png = source_dir() / item["png_rel"]
+        if png.is_file():
+            return png
+    return image_file(item_id, "full")
+
+
+def prepared_reference_file(item_id: str) -> Path:
+    """参考图发送用：压缩版（长边 1536 / JPEG q88 + 白底合成），缓存于服装库目录。
+
+    缓存文件名 = costume_{item_id}.jpg，与主体图 / 姿势库同一套 mtime+size 失效判定。
+    """
+    from charvar import reference_images  # 延迟导入避免循环
+
+    return reference_images.prepared_reference(
+        raw_reference_file(item_id), source_dir(), f"costume_{item_id}"
+    )

@@ -545,3 +545,30 @@ def _minimal_subject():
     from charvar.models import SubjectProfile
 
     return SubjectProfile(id="demo", name="Demo")
+
+# ---------- 服装参考（costume，单人生效） ----------
+
+def test_pose_prompt_costume_layer():
+    from charvar import pose_prompt
+
+    plain = pose_prompt.build_prompt("全身1人・セクシー系", "呈自然的 S 形曲线")
+    dressed = pose_prompt.build_prompt("全身1人・セクシー系", "呈自然的 S 形曲线", costume=True)
+    assert "<image3>为服装参考" in dressed and "替换其原有服装" in dressed
+    assert "<image3>" not in plain
+    # image1 锚定句换服装版：不再锚原衣着
+    assert "保留该角色的面部特征、发型、发色、服装、配饰" not in dressed
+    assert "其原有服装不保留" in dressed and "以服装参考为准" in dressed
+    # 换装禁令进禁令句，无双标点
+    assert "两套服装混搭" in dressed and "。；" not in dressed
+    with pytest.raises(ValueError):
+        pose_prompt.build_prompt("2人絡み", "甲环抱乙", costume=True)
+
+
+def test_build_costume_prompt_no_pose():
+    from charvar import pose_prompt
+
+    prompt = pose_prompt.build_costume_prompt()
+    assert "<image2>为服装参考" in prompt
+    assert "<image3>" not in prompt and "摆出" not in prompt
+    assert "穿上<image2>图中的服装" in prompt
+    assert "采用全身构图" in prompt and "两套服装混搭" in prompt and "。；" not in prompt

@@ -54,6 +54,8 @@ app.add_typer(video_app, name="video")
 app.add_typer(tts_app, name="tts")
 pose_app = typer.Typer(help="姿势库（pose-db-01 人偶线稿参考图）", no_args_is_help=True)
 app.add_typer(pose_app, name="pose")
+costume_app = typer.Typer(help="服装库（costume-db-01 服装参考图）", no_args_is_help=True)
+app.add_typer(costume_app, name="costume")
 
 
 def _die(message: str) -> None:
@@ -1509,6 +1511,7 @@ def pose_prompt_cmd(
     angle: str = typer.Option("", "--angle", help="视角（原文，缺省正面）"),
     subject: Optional[str] = typer.Option(None, "--subject", help="主体档案 id（--run 必填；上半身动作用 headshot 槽位，缺则回退 front）"),
     subject2: Optional[str] = typer.Option(None, "--subject2", help="双人动作的第二主体 id（2人絡み 才有效）"),
+    costume: Optional[str] = typer.Option(None, "--costume", help="服装库条目 id（如 SPR-0001；加 <image3> 服装参考，双人动作暂不支持）"),
     run: bool = typer.Option(False, "--run", help="拼好的提示词直接出图（Playground 通路）"),
     backend: str = typer.Option("comfyui", "--backend", help="comfyui / openrouter / dreamina"),
     aspect: str = typer.Option("3:4", "--aspect", help="画幅：3:4/1:1/16:9/…"),
@@ -1526,6 +1529,7 @@ def pose_prompt_cmd(
     构图句/背景句/禁令句按库线型（全身/半身/双人）取版本。
     """
     from charvar import adhoc as adhoc_service
+    from charvar import costumes as costumes_service
     from charvar import paths
     from charvar import pose_prompt as pose_prompt_module
     from charvar import poses as poses_service
@@ -1555,8 +1559,19 @@ def pose_prompt_cmd(
     kind = pose_prompt_module.kind_of_line(row["line"])
     if subject2 and kind != "pair":
         _die("--subject2 只对双人（2人絡み）动作有效")
+    costume_file = None
+    if costume:
+        if kind == "pair":
+            _die("--costume 暂不支持双人（2人絡み）动作")
+        try:
+            costume_file = costumes_service.prepared_reference_file(costume)
+        except costumes_service.CostumeError as exc:
+            _die(str(exc))
     prompt = pose_prompt_module.build_prompt(
-        row["line"], action["action_text"], pair_two_subjects=bool(subject2)
+        row["line"],
+        action["action_text"],
+        pair_two_subjects=bool(subject2),
+        costume=costume_file is not None,
     )
     if not json_out:
         typer.echo(prompt)
@@ -1579,11 +1594,71 @@ def pose_prompt_cmd(
             _die(f"主体 front 槽位图文件缺失：{slot2['file_path']}")
         refs.append(subject_file2)
     refs.append(pose_file)
+    if costume_file is not None:
+        refs.append(costume_file)
     req = adhoc_service.AdhocRequest(
         prompt=prompt,
         backend=backend,
         negative_prompt=negative,
         reference_paths=refs,
+        aspect_ratio=aspect,
+        resolution=resolution,
+        seed=seed,
+        wait=wait,
+        out=out,
+    )
+    _run_adhoc(req, json_out)
+
+
+@costume_app.command("prompt")
+def costume_prompt_cmd(
+    item_id: str = typer.Argument(..., help="服装条目 id，如 SPR-0001"),
+    subject: Optional[str] = typer.Option(None, "--subject", help="主体档案 id（--run 必填，取 front 槽位图）"),
+    run: bool = typer.Option(False, "--run", help="拼好的提示词直接出图（Playground 通路）"),
+    backend: str = typer.Option("comfyui", "--backend", help="comfyui / openrouter / dreamina"),
+    aspect: str = typer.Option("3:4", "--aspect", help="画幅：3:4/1:1/16:9/…"),
+    resolution: str = typer.Option("1k", "--resolution", help="分辨率档：1k/2k（或 OpenRouter 模型枚举）"),
+    seed: int = typer.Option(0, "--seed", help="0 = 固定复现；换种子出不同图"),
+    negative: Optional[str] = typer.Option(None, "--negative", help="负向提示词（空串 = 明确不用）"),
+    out: Optional[Path] = typer.Option(None, "--out", "-o", help="另外落一份到这个路径"),
+    wait: bool = typer.Option(True, "--wait/--no-wait", help="等待出图完成（默认）"),
+    json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出（提示词不回显）"),
+) -> None:
+    """单主体 + 服装 → 换装全身图提示词（无动作参考）。
+
+    <image1> = 主体档案 front 槽位图（角色锚定），<image2> = 服装参考图（换装
+    锚定，role=costume 语义）；要「主体 + 动作 + 服装」用
+    `charvar pose prompt --costume`。
+    """
+    from charvar import adhoc as adhoc_service
+    from charvar import costumes as costumes_service
+    from charvar import paths
+    from charvar import pose_prompt as pose_prompt_module
+    from charvar import poses as poses_service
+
+    prompt = pose_prompt_module.build_costume_prompt()
+    if not json_out:
+        typer.echo(prompt)
+    if not run:
+        return
+    if not subject:
+        _die("--run 需要 --subject（主体档案 id）")
+    try:
+        with storage.connect() as conn:
+            slot_label, slot = poses_service.subject_slot_for_prompt(conn, subject, "")
+        costume_file = costumes_service.prepared_reference_file(item_id)
+    except costumes_service.CostumeError as exc:
+        _die(str(exc))
+    if slot is None or not slot.get("file_path"):
+        _die(f"主体档案没有 {slot_label} 槽位图：{subject}")
+    subject_file = paths.data_dir() / str(slot["file_path"])
+    if not subject_file.exists():
+        _die(f"主体 {slot_label} 槽位图文件缺失：{slot['file_path']}")
+    req = adhoc_service.AdhocRequest(
+        prompt=prompt,
+        backend=backend,
+        negative_prompt=negative,
+        reference_paths=[subject_file, costume_file],
         aspect_ratio=aspect,
         resolution=resolution,
         seed=seed,

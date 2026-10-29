@@ -239,3 +239,40 @@ def test_costumes_endpoints_serve_catalog_and_images(data_dir, client):
     # 404：没有这条服装 / 没有这个库
     assert client.get("/costumes/image/costume-db-01/NOPE-0000/thumb").status_code == 404
     assert client.get("/costumes/image/other-lib/SPR-0001/thumb").status_code == 404
+
+# ---------- 生图参考图（png 优先 / webp 兜底 + 统一压缩缓存） ----------
+# ---------- 生图参考图（png 优先 / webp 兜底 + 统一压缩缓存） ----------
+
+def test_raw_reference_prefers_png_and_falls_back(data_dir):
+    _build_fake_costume_data(data_dir)
+    src = data_dir / "costumes" / costumes_service.SOURCE_ID
+    (src / "png").mkdir(parents=True, exist_ok=True)  # fixture 只建 thumbs/img
+    png = src / "png" / "SPR-0001.png"
+    Image.new("RGB", (1366, 2048), (240, 240, 240)).save(png, format="PNG")
+
+    # 原寸 png 在 → 用 png；压成统一规格（长边 1536 / JPEG），缓存按 item_id
+    assert costumes_service.raw_reference_file("SPR-0001") == png
+    prepared = costumes_service.prepared_reference_file("SPR-0001")
+    assert prepared.name == "costume_SPR-0001.jpg" and prepared.is_file()
+    with Image.open(prepared) as im:
+        assert im.format == "JPEG" and max(im.size) == 1536
+
+    # 无原寸 png（字段有值但文件缺失）→ 回退详情 webp，不报错
+    png.unlink()
+    assert costumes_service.raw_reference_file("SPR-0001").suffix == ".webp"
+    # catalog 缺 原寸 字段也一路可用
+    missing = data_dir / "costumes" / costumes_service.SOURCE_ID / "catalog.json"
+    rows = json.loads(missing.read_text(encoding="utf-8"))
+    for row in rows:
+        row.pop("原寸", None)
+    missing.write_text(json.dumps(rows, ensure_ascii=False), encoding="utf-8")
+    assert costumes_service.raw_reference_file("SPR-0001").suffix == ".webp"
+    assert costumes_service.raw_reference_file("SXY-0099").suffix == ".webp"
+
+
+def test_raw_reference_rejects_bad_id(data_dir):
+    _build_fake_costume_data(data_dir)
+    with pytest.raises(costumes_service.CostumeError):
+        costumes_service.raw_reference_file("../evil")
+    with pytest.raises(costumes_service.CostumeError):
+        costumes_service.raw_reference_file("SPR-9999")

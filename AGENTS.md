@@ -18,7 +18,7 @@
 
 ## 服装库
 
-costume-db-01（姿势库同作者，见 `docs/服装库.md`）：**图片禁再分发**，只存 `data/costumes/` 不进 git；v1 仅浏览页，未入生图流程。
+costume-db-01（姿势库同作者；细则见 `docs/服装库.md`）：**图片禁再分发**，只存 `data/costumes/` 不进 git；CLI 换装已接（见 docs）。
 
 ## Playground（跨项目调用）
 
