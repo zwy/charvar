@@ -587,8 +587,8 @@ td .caption { color: var(--muted); }
    .image-card 基类的 overflow:hidden 会让 auto 行高按 18px（一行文本）收缩、
    268px 的卡片逐行压叠（实测 96 行只有 3122px 内容高）——二者去其一即修，
    两个都写是防将来把卡片改回裁剪容器。 */
-#pose-grid { display: grid; flex: 1 1 0; min-height: 0; overflow-y: auto; padding-right: 6px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); grid-auto-rows: max-content; gap: var(--sp-3); align-items: start; }
-.pose-card { padding: 8px; overflow: visible; }
+.pose-grid { display: grid; flex: 1 1 0; min-height: 0; overflow-y: auto; padding-right: 6px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); grid-auto-rows: max-content; gap: var(--sp-3); align-items: start; }
+.pose-card { padding: 8px; overflow: visible; position: relative; }
 /* 图盒定高（aspect-ratio 3/4 站点原比例）：不依赖图片加载与 min-height 博弈，
    img 填满盒（人偶线稿白背景，contain/cover 视觉一致） */
 .pose-thumb { background: #f4f6f9; border-radius: var(--radius-ctl); overflow: hidden; aspect-ratio: 3 / 4; }
@@ -612,11 +612,43 @@ td .caption { color: var(--muted); }
 .pose-detail-actions { margin-top: auto; display: flex; flex-direction: column; gap: var(--sp-2); padding-top: var(--sp-2); }
 .pose-detail-actions .primary { width: 100%; }
 .pose-empty { grid-column: 1 / -1; padding: var(--sp-4); text-align: center; font-size: 12px; color: var(--muted); }
-#pose-grid::-webkit-scrollbar, .pose-detail::-webkit-scrollbar { width: 4px; }
-#pose-grid::-webkit-scrollbar-thumb, .pose-detail::-webkit-scrollbar-thumb { background: var(--line); border-radius: 10px; }
+.pose-grid::-webkit-scrollbar, .pose-detail::-webkit-scrollbar { width: 4px; }
+.pose-grid::-webkit-scrollbar-thumb, .pose-detail::-webkit-scrollbar-thumb { background: var(--line); border-radius: 10px; }
+/* 卡片「描述」角标：该动作在 pose_actions 写过动作描述——扫一眼知道哪些补过 */
+.pose-desc-badge {
+  position: absolute;
+  top: 13px;
+  right: 13px;
+  z-index: 1;
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+/* 详情栏动作描述块：pose_actions 文本 + 复制按钮；没写过给灰字空态 */
+.pose-action-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.pose-action-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--sp-2);
+}
 @media (max-width: 720px) {
   .pose-browser { flex-direction: column; height: auto; }
+  .pose-browser-page { height: auto; min-height: 0; }
   .pose-master { width: 100%; border-right: 0; border-bottom: 1px solid var(--line); }
   .pose-detail { width: 100%; border-radius: 0; }
-  #pose-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+  .pose-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
 }
+
+/* 整页版（posepage.js「动作」页签）：弹层是 66vh 定高，整页跟随视口高度 */
+.pose-browser-page { height: min(980px, calc(100vh - 210px)); min-height: 520px; }
+/* 卡片有内边距：detail 面板不再贴卡边，底角圆角降一档 */
+.pose-browser-page .pose-detail { border-radius: 0 0 var(--radius-panel) var(--radius-panel); }
+.pose-action-text { background: #fafbfd; border: 1px dashed var(--line); border-radius: var(--radius-panel); padding: var(--sp-3); font-size: 12px; line-height: 1.6; color: var(--text); white-space: pre-wrap; word-break: break-word; max-height: 200px; overflow-y: auto; }
+.pose-action-muted { color: var(--muted); }

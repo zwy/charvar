@@ -185,6 +185,72 @@ def test_title_zh_covers_real_catalog_when_present():
     assert not missing, f"缺 {len(missing)} 条译文：{sorted(missing)[:5]}"
 
 
+# ---------- 动作描述（pose_actions 表 + PUT /poses/{pose_id}/action） ----------
+
+def test_pose_action_roundtrip_and_import_preserves(data_dir):
+    """写/清/回读 + 重灌索引不碰用户文案（pose_actions 与重灌索引分层）。"""
+    _build_fake_pose_data(data_dir)
+    with storage.connect() as conn:
+        poses_service.import_catalog(conn)
+        data = poses_service.set_pose_action(conn, "full_sexy_P001", "身体基本朝向镜头，呈自然的 S 形曲线。")
+        assert data["action_text"] == "身体基本朝向镜头，呈自然的 S 形曲线。"
+        assert data["source"] == "manual"
+        # 清掉（空串 = 删条目）之后动作还在，描述回空串
+        poses_service.set_pose_action(conn, "full_sexy_P001", "")
+        assert poses_service.pose_action(conn, "full_sexy_P001")["action_text"] == ""
+        assert conn.execute("SELECT COUNT(*) FROM pose_actions").fetchone()[0] == 0
+        # 重灌索引（pose import 幂等 upsert）不碰 pose_actions 的用户文案
+        poses_service.set_pose_action(conn, "full_sexy_P001", "S 型站立")
+        poses_service.set_pose_action(conn, "pair60_P010", "双人交缠姿势")
+        poses_service.import_catalog(conn)
+        assert poses_service.pose_action(conn, "full_sexy_P001")["action_text"] == "S 型站立"
+        assert poses_service.pose_action(conn, "pair60_P010")["action_text"] == "双人交缠姿势"
+        # 非法 id / 库里没有的动作 → PoseError
+        with pytest.raises(poses_service.PoseError):
+            poses_service.set_pose_action(conn, "bad/id!", "x")
+        with pytest.raises(poses_service.PoseError):
+            poses_service.set_pose_action(conn, "full_sexy_P999", "x")
+
+
+def test_list_poses_includes_action_text_and_search_hits(data_dir):
+    _build_fake_pose_data(data_dir)
+    with storage.connect() as conn:
+        poses_service.import_catalog(conn)
+        poses_service.set_pose_action(conn, "full_sexy_P001", "腰胯轻微扭转，呈自然的 S 形曲线")
+        data = poses_service.list_poses(conn)
+    by_id = {p["pose_id"]: p for p in data["poses"]}
+    assert by_id["full_sexy_P001"]["action_text"] == "腰胯轻微扭转，呈自然的 S 形曲线"
+    assert by_id["pair60_P010"]["action_text"] == ""
+    # 搜索命中动作描述文本（动作描述与标题都在 haystack 里，中日皆可搜）
+    hit = poses_service.list_poses(conn, q="腰胯轻微")
+    assert [p["pose_id"] for p in hit["poses"]] == ["full_sexy_P001"]
+    assert poses_service.list_poses(conn, q="完全不相干的词")["poses"] == []
+
+
+def test_pose_action_endpoints(data_dir, client):
+    _build_fake_pose_data(data_dir)
+    with storage.connect(pathlib.Path(data_dir) / "test.db") as conn:
+        poses_service.import_catalog(conn)
+    # PUT 写入 → /poses 清单与 GET 端点都带出同一份文本
+    resp = client.put("/poses/full_sexy_P001/action", json={"action_text": "S 型站立"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["action_text"] == "S 型站立"
+    listing = client.get("/poses").json()
+    pose = next(p for p in listing["poses"] if p["pose_id"] == "full_sexy_P001")
+    assert pose["action_text"] == "S 型站立"
+    got = client.get("/poses/full_sexy_P001/action")
+    assert got.status_code == 200 and got.json()["action_text"] == "S 型站立"
+    # 没写过的动作给空串（不 404）
+    empty = client.get("/poses/pair60_P010/action")
+    assert empty.status_code == 200 and empty.json()["action_text"] == ""
+    # 空串 = 清掉，之后 GET 仍 200 空串
+    assert client.put("/poses/full_sexy_P001/action", json={"action_text": ""}).status_code == 200
+    assert client.get("/poses/full_sexy_P001/action").json()["action_text"] == ""
+    # 库里没有的动作 → 404；非法 id → 400
+    assert client.put("/poses/full_sexy_P999/action", json={"action_text": "x"}).status_code == 404
+    assert client.get("/poses/does.not.exist/action").status_code == 400
+
+
 # ---------- 参考图解析 ----------
 
 def test_full_and_thumb_file_resolution(data_dir):

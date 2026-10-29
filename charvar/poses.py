@@ -229,21 +229,23 @@ def list_poses(
     where: list[str] = []
     params: list[str] = []
     if line:
-        where.append("line = ?")
+        where.append("pi.line = ?")
         params.append(line)
     if category:
-        where.append("category = ?")
+        where.append("pi.category = ?")
         params.append(category)
     if q:
-        where.append("(title LIKE ? OR number LIKE ? OR pose_id LIKE ?)")
+        where.append("(pi.title LIKE ? OR pi.number LIKE ? OR pi.pose_id LIKE ? OR pa.action_text LIKE ?)")
         like = f"%{q.strip()}%"
-        params.extend([like, like, like])
+        params.extend([like, like, like, like])
     # 视角排序在 Python 端按 ANGLE_ORDER 固定次序做（SQL 排视角用索引更绕）。
     rows = conn.execute(
-        "SELECT pose_id, angle, line, number, title, category, thumb_path, file_path"
-        " FROM pose_images"
+        "SELECT pi.pose_id, pi.angle, pi.line, pi.number, pi.title, pi.category,"
+        " pi.thumb_path, pi.file_path, pa.action_text"
+        " FROM pose_images AS pi"
+        " LEFT JOIN pose_actions AS pa ON pa.pose_id = pi.pose_id"
         + (" WHERE " + " AND ".join(where) if where else "")
-        + " ORDER BY line, number, pose_id",
+        + " ORDER BY pi.line, pi.number, pi.pose_id",
         params,
     ).fetchall()
 
@@ -259,6 +261,7 @@ def list_poses(
                 "title": row["title"],
                 # 中日对照展示：翻译来自 pose_translations（自有内容，进 git）；缺项回退原文
                 "title_zh": title_zh(row["title"], row["pose_id"]),
+                "action_text": row["action_text"] or "",
                 "category": row["category"],
                 "category_zh": category_zh(row["category"]),
                 "image_count": 0,
@@ -302,6 +305,55 @@ def list_poses(
         )
     ]
     return {"source": SOURCE_ID, "lines": lines, "categories": categories, "poses": poses_list}
+
+
+# ---------- 动作描述（pose_actions：用户文案，不进可重灌的 pose_images 索引） ----------
+
+def _require_pose(conn: sqlite3.Connection, pose_id: str) -> str:
+    """动作 id 必须是库里的动作 —— pose_actions 挂靠在 pose_images 上，不悬空。"""
+    pose_id = str(pose_id or "").strip()
+    if not POSE_ID_RE.fullmatch(pose_id):
+        raise PoseError(f"非法动作 id：{pose_id[:60]}")
+    row = conn.execute("SELECT 1 FROM pose_images WHERE pose_id = ?", (pose_id,)).fetchone()
+    if row is None:
+        raise PoseError(f"姿势库没有这个动作：{pose_id}")
+    return pose_id
+
+
+def pose_action(conn: sqlite3.Connection, pose_id: str) -> dict:
+    """单个动作的动作描述；库里没写过 → action_text 给空串（不 404，前端好渲染空态）。"""
+    pose_id = _require_pose(conn, pose_id)
+    row = conn.execute(
+        "SELECT pose_id, action_text, source, updated_at FROM pose_actions WHERE pose_id = ?",
+        (pose_id,),
+    ).fetchone()
+    return {
+        "pose_id": pose_id,
+        "action_text": row["action_text"] if row else "",
+        "source": row["source"] if row else "",
+        "updated_at": row["updated_at"] if row else "",
+    }
+
+
+def set_pose_action(conn: sqlite3.Connection, pose_id: str, action_text: str, source: str = "manual") -> dict:
+    """写/清（空串 = 清掉条目）一个动作的动作描述；动作必须已在库里。"""
+    pose_id = _require_pose(conn, pose_id)
+    text = str(action_text or "").strip()
+    if text:
+        from charvar import storage  # 延迟导入，与 _locate 同理由
+
+        now = storage.utcnow()
+        conn.execute(
+            """INSERT INTO pose_actions (pose_id, action_text, source, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(pose_id) DO UPDATE SET
+                 action_text=excluded.action_text, source=excluded.source, updated_at=excluded.updated_at""",
+            (pose_id, text, str(source or "manual")[:30], now, now),
+        )
+    else:
+        conn.execute("DELETE FROM pose_actions WHERE pose_id = ?", (pose_id,))
+    conn.commit()
+    return pose_action(conn, pose_id)
 
 
 # ---------- 参考图来源解析 ----------

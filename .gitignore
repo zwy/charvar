@@ -19,3 +19,4 @@ dist/
 .charvar-web-*.pid
 /data/subjects
 /recreate
+.superdesign/tmp/

@@ -15,6 +15,7 @@
 ## 姿势库
 
 参考图第四来源 `pose_id`+`angle`（详见 `docs/姿势库.md`）：**图片禁再分发**，只存 `data/poses/` 不进 git；**role=pose 只锚姿势不锚身份**，pose 时尾句换 pose 版。
+- 动作描述存独立表 `pose_actions`（`GET/PUT /poses/{pose_id}/action`，空串 = 清条目）：**不进 `pose_images`** —— 那是可整批重灌的站点索引，用户文案重灌不丢；顶栏「动作」整页与弹层共用 `posegallery.js` 渲染，别再复制一份。
 
 
 ## Playground（跨项目调用）
@@ -111,8 +112,8 @@
   - 即梦 **3.0/3.1 只有 text2image**：带参考图（即 image2image）时从模型下拉里去掉（`DREAMINA_T2I_ONLY_MODELS`，放 `tables.js` 共享）。
   - 档位选择要记住：切供应商再切回来别重置（`state.comfyTier` / `adhocState.comfyTier` / `state.orResolution`）。
 - ComfyUI 上传的 `remote_name` = `charvar_{run_id}_{index}{suffix}`：`upload_image` 发 `overwrite: true`，同名会互相覆盖。
-- 前端文件：`web/static/genrefs.js`（参考图选择器，导出 `GenRefs`）、`web/static/app.js`（供应商面板 + 推送生图）、`web/static/tables.js`。
-  脚本加载顺序：`tables.js` → `media.js` → `genrefs.js` → `app.js` → `adhoc.js` → `video.js` → `recipes.js`（app.js 的 `init()` 在文件末尾，必须在 `GenRefs` 之后；`tables.js` 必须在 app.js 之前 —— 共享表是全局 const，顺序错会 TDZ 报错）。
+- 前端文件：`web/static/genrefs.js`（参考图选择器，导出 `GenRefs`）、`web/static/app.js`（供应商面板 + 推送生图）、`web/static/tables.js`、`web/static/posegallery.js`（动作库渲染，弹层与整页共用）、`web/static/posepage.js`（顶栏「动作」整页）。
+  脚本加载顺序：`tables.js` → `media.js` → `posegallery.js` → `genrefs.js` → `app.js` → `adhoc.js` → `video.js` → `recipes.js` → `posepage.js`（app.js 的 `init()` 在文件末尾，必须在 `GenRefs` 之后；`posegallery.js` 必须在 genrefs.js 之前 —— 弹层调它；`tables.js` 必须在 app.js 之前 —— 共享表是全局 const，顺序错会 TDZ 报错）。
 
 ## 全站视觉分组与文案
 

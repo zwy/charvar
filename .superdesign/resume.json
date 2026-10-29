@@ -18,8 +18,8 @@
    ],
    "fingerprints": {
     ".superdesign/design-system.md": "3689b03243b9854ce9ecfcbd7058bfdd9edc403c6a7e5a5714e47f083486cfe7",
-    "web/static/style.css": "feaed40d0f82d318a28deac2ed86145eb6ee13c830e921fbeb1aa7d586af9fbc",
-    "web/static/genrefs.js": "feebf0a9d036dded8eb96b57af00e0a7a2eea1a725398a3b349b45b0c48145c5"
+    "web/static/style.css": "cc0d3a387c6ff2bee754e14c74cfb071d2daaaf77bfd6750ee8a7b8d9f0dab89",
+    "web/static/genrefs.js": "be2022f0984534e75ff510784f5c127d9a31e35279a16991d4cb4234f0d6774a"
    },
    "drafts": {
     "141b4f51-0d4a-4629-9d25-a23790f949a9": {
@@ -39,6 +39,68 @@
     }
    },
    "updatedAt": "2026-10-28T21:48:27+08:00"
+  },
+  "pose-page": {
+   "targetKind": "new-ui",
+   "projectId": "883be7fb-1691-47fa-8dea-5a083d3a2d24",
+   "activeDraftId": "aeb27c55-fc9b-4dac-bbde-e5019c55712e",
+   "designSystemPath": ".superdesign/design-system.md",
+   "contextFiles": [
+    ".superdesign/design-system.md",
+    "web/static/index.html:1:5",
+    "web/static/style.css:1:70",
+    "web/static/style.css:319:356",
+    "web/static/style.css:570:622",
+    "web/static/genrefs.js:290:512"
+   ],
+   "fingerprints": {
+    ".superdesign/design-system.md": "3689b03243b9854ce9ecfcbd7058bfdd9edc403c6a7e5a5714e47f083486cfe7",
+    "web/static/index.html": "13b79de4999a4fc67392b49cb86be989f2ea5a4860e8a8254580c5dbf3fa05f2",
+    "web/static/style.css": "cc0d3a387c6ff2bee754e14c74cfb071d2daaaf77bfd6750ee8a7b8d9f0dab89",
+    "web/static/genrefs.js": "be2022f0984534e75ff510784f5c127d9a31e35279a16991d4cb4234f0d6774a"
+   },
+   "sourceTarget": "pose-browser",
+   "sourceDraftId": "b478e218-2afc-438a-91a0-5546079382d0",
+   "drafts": {
+    "aeb27c55-fc9b-4dac-bbde-e5019c55712e": {
+     "title": "动作库 · 整页 master-detail",
+     "visualDirection": "modal master-detail expanded to a full page in the charvar shell: line segmented tabs + cat/search toolbar, 62/38 grid+persistent detail, 动作描述 block, 加入参考图",
+     "parentDraftId": "b478e218-2afc-438a-91a0-5546079382d0",
+     "currentVersion": 1
+    }
+   },
+   "updatedAt": "2026-10-29T00:00:00+08:00"
+  },
+  "pose-page-gallery": {
+   "targetKind": "new-ui",
+   "projectId": "883be7fb-1691-47fa-8dea-5a083d3a2d24",
+   "activeDraftId": "5bcfe300-ab43-4fc4-9227-b9dc7dd9e3e4",
+   "designSystemPath": ".superdesign/design-system.md",
+   "contextFiles": [
+    ".superdesign/design-system.md",
+    "web/static/index.html:1:5",
+    "web/static/style.css:1:70",
+    "web/static/style.css:319:356",
+    "web/static/style.css:570:622",
+    "web/static/genrefs.js:290:512"
+   ],
+   "fingerprints": {
+    ".superdesign/design-system.md": "3689b03243b9854ce9ecfcbd7058bfdd9edc403c6a7e5a5714e47f083486cfe7",
+    "web/static/index.html": "13b79de4999a4fc67392b49cb86be989f2ea5a4860e8a8254580c5dbf3fa05f2",
+    "web/static/style.css": "cc0d3a387c6ff2bee754e14c74cfb071d2daaaf77bfd6750ee8a7b8d9f0dab89",
+    "web/static/genrefs.js": "be2022f0984534e75ff510784f5c127d9a31e35279a16991d4cb4234f0d6774a"
+   },
+   "sourceTarget": "pose-browser",
+   "sourceDraftId": "b478e218-2afc-438a-91a0-5546079382d0",
+   "drafts": {
+    "5bcfe300-ab43-4fc4-9227-b9dc7dd9e3e4": {
+     "title": "动作库 · 画廊+详情抽屉",
+     "visualDirection": "gallery-first: larger cards with per-card desc snippet, no persistent right rail; click opens a static detail drawer overlay with the same detail content",
+     "parentDraftId": "b478e218-2afc-438a-91a0-5546079382d0",
+     "currentVersion": 1
+    }
+   },
+   "updatedAt": "2026-10-29T00:00:00+08:00"
   }
  }
 }

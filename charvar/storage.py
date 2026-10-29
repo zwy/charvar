@@ -94,6 +94,16 @@ CREATE TABLE IF NOT EXISTS pose_images (
     PRIMARY KEY (pose_id, angle)
 );
 CREATE INDEX IF NOT EXISTS idx_pose_images_line ON pose_images(line, category);
+CREATE TABLE IF NOT EXISTS pose_actions (
+    -- 用户内容：每动作一条的「动作描述提示词」（动作库页面展示/复制，后续
+    -- 编辑与 AI 起草用；source 区分 manual / ai_draft）。独立于 pose_images：
+    -- 那是可整批重灌的站点索引（pose import upsert 覆盖），用户文案不进它。
+    pose_id TEXT PRIMARY KEY,
+    action_text TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT 'manual',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value_json TEXT NOT NULL,

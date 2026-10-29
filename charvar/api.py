@@ -68,6 +68,12 @@ _OPENROUTER_CONCURRENCY = 4
 _DREAMINA_CONCURRENCY = max(1, int(os.environ.get("DREAMINA_CONCURRENCY") or 2))
 
 
+class PoseActionUpdate(BaseModel):
+    """动作描述写入（PUT /poses/{pose_id}/action）；空串 = 清掉条目。"""
+
+    action_text: str = ""
+
+
 class ComfyQueueRequest(BaseModel):
     workload: str | None = Field(
         default=None,
@@ -793,6 +799,29 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     @app.get("/poses/image/{source}/{pose_id}/{angle}/full")
     def api_pose_image_full(source: str, pose_id: str, angle: str) -> FileResponse:
         return _pose_image_response(source, pose_id, angle, "full")
+
+    # ---- 动作描述（pose_actions：用户文案；非法 id 拒，库里没有该动作 → 404） ----
+    @app.get("/poses/{pose_id}/action")
+    def api_pose_action_get(pose_id: str) -> dict[str, Any]:
+        """单个动作的动作描述；写过给文本，没写过给空串。"""
+        if not poses_service.POSE_ID_RE.fullmatch(pose_id):
+            raise HTTPException(400, f"非法动作 id：{pose_id[:60]}")
+        with _db() as conn:
+            try:
+                return poses_service.pose_action(conn, pose_id)
+            except poses_service.PoseError as exc:
+                raise HTTPException(404, str(exc)) from exc
+
+    @app.put("/poses/{pose_id}/action")
+    def api_pose_action_put(pose_id: str, req: PoseActionUpdate) -> dict[str, Any]:
+        """写/清（空串 = 清掉条目）单个动作的动作描述。"""
+        if not poses_service.POSE_ID_RE.fullmatch(pose_id):
+            raise HTTPException(400, f"非法动作 id：{pose_id[:60]}")
+        with _db() as conn:
+            try:
+                return poses_service.set_pose_action(conn, pose_id, req.action_text)
+            except poses_service.PoseError as exc:
+                raise HTTPException(404, str(exc)) from exc
 
     # ---- 全局设置 ----
     def _settings_payload(settings: settings_service.AppSettings) -> dict[str, Any]:
