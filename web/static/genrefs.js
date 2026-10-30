@@ -8,7 +8,7 @@
 const GenRefs = (() => {
   const MAX_REFS = 4;
   const ROLES = [
-    ["front", "全身正面（体型/服装/鞋）"],
+    ["front", "全身正面（体型/服饰/鞋）"],
     ["headshot", "半身（脸/发型）"],
     ["side", "侧面（朝向/贴身细节）"],
     ["behind", "背面（后脑/背部）"],

@@ -11,9 +11,13 @@ prompt_text: wearing a black turtleneck sweater, dark blue straight-leg jeans cr
 prompt_source: manual
 ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white
   background: a black turtleneck sweater, dark blue straight-leg jeans cropped above
-  the ankle, brown Chelsea ankle boots with a side zip, a rounded square toe, matte
-  leather and a 3.5 cm block heel, each piece separated and laid flat, neatly arranged,
-  soft studio lighting.'
+  the ankle, a pair of brown Chelsea ankle boots with a side zip, a rounded square
+  toe, matte leather and a 3.5 cm block heel, laid flat and separated with a clear
+  gap between pieces, no pieces overlapping, all edges fully inside the frame with
+  margin around them, realistic relative sizes. Necklines and waistbands toward the
+  top of the frame, hems toward the bottom. Shoes side by side, toes toward the bottom
+  of the frame. Soft diffused studio lighting from the upper left, faint contact shadows.
+  No people, no mannequin, no hangers, no text.'
 subject_policy: {}
 caption_tags:
   milf_a_shirt: slate-violet button-up shirt and brick-red mini skirt

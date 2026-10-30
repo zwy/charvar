@@ -162,14 +162,14 @@ The redesign must not remove or move these — they are the actual workflow:
 - ① must show: 主体档案 · 种子 · 画幅比例 · 分辨率 · 质量档 (OpenRouter) · 模型版本 (即梦)
   · 负向提示词 (ComfyUI) · 等待完成 (ComfyUI) · the backend switch · the reference list
   with its add/remove controls · the 「生成提示词」 and 「推送生图」 buttons
-- ② must show: 生成模式 · 预设 · 服装预设 · 组合顺序 · 条数 · 采样 · 拼接分隔符 ·
+- ② must show: 生成模式 · 预设 · 服饰预设 · 组合顺序 · 条数 · 采样 · 拼接分隔符 ·
   随机背景/光照 · 固定背景/光照
 - ③ must show: the run summary, export actions, 「推送生图」, the image wall / table toggle,
   同步图片 / Contact sheet / 贴字 / 合成视频
 - Conditional visibility rules stay: 质量档 only for OpenRouter, 模型版本 only for 即梦,
   负向提示词 + 等待完成 only for ComfyUI, the LLM extra panel only in LLM mode.
 - All copy is Chinese. Labels stay as they are: 主体档案, 种子, 画幅比例, 分辨率, 质量档,
-  模型版本, 负向提示词, 预设, 服装预设, 组合顺序, 条数, 采样, 拼接分隔符, 参考图,
+  模型版本, 负向提示词, 预设, 服饰预设, 组合顺序, 条数, 采样, 拼接分隔符, 参考图,
   生成模式, 经典模板, LLM 优化, 生成提示词, 推送生图.
 
 ## Fidelity constraint (applies to every draft prompt)

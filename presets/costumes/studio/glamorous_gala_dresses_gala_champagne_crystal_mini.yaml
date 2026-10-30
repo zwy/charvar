@@ -11,8 +11,13 @@ ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure whi
   background: a champagne-gold one-piece mini dress covered in tiny silver-white crystals,
   with two thin shoulder straps and a soft draped neckline, a natural cinched waist,
   a fitted body, the hem at mid-thigh with a fixed asymmetric slanted drape and no
-  fringe, and a pair of champagne-gold thin-strap stiletto sandals with 6 cm heels.  each
-  piece separated and laid flat, neatly arranged, soft studio lighting.'
+  fringe, and a pair of champagne-gold thin-strap stiletto sandals with 6 cm heels.
+  Laid flat and separated with a clear gap between pieces, no pieces overlapping,
+  all edges fully inside the frame with margin around them, realistic relative sizes.
+  Necklines and waistbands toward the top of the frame, hems toward the bottom. Shoes
+  side by side, toes toward the bottom of the frame. Soft diffused studio lighting
+  from the upper left, faint contact shadows. No people, no mannequin, no hangers,
+  no text.'
 subject_policy: {}
 caption_tags:
   gala_crimson_mermaid: crimson off-shoulder satin mermaid gown

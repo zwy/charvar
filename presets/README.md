@@ -27,7 +27,7 @@
 | `actions/` | **动作/表情预设**（主预设下拉的全部来源） | `preset_loader.list_presets()` |
 | `wildcards/` | 背景 / 光照通配符池（`items:` 列表） | 预设的 `backgrounds_ref:` / `lighting_ref:` |
 | `subjects/` | 主体档案样例（`<id>.yaml`）+ 模板导出（`<id>.md`） | `charvar subject add/export` |
-| `costumes/` | 服装库 DB 镜像（`<source>/<item>.yaml`，DB 是运行时真源） | `charvar costume export/import-studio` |
+| `costumes/` | 服饰库 DB 镜像（`<source>/<item>.yaml`，DB 是运行时真源） | `charvar costume export/import-studio` |
 | `hairstyles/` | 发型预设（独立家族，**不进主预设下拉**） | `charvar/hairstyle.py` |
 | `overlays/` | 贴字样式预设（PIL 后处理，不改原图） | `charvar/overlay.py` |
 | `overlays/fonts/` | 贴字字体文件（可选，只放可再分发的开源字体） | 字体解析的第一优先位 |
@@ -45,7 +45,7 @@
 | 动作预设 | 小写 snake_case，`<用途>` | `q21_default_30`、`yoga_complete`、`three_pose_pack` |
 | 通配符池 | `<用途>_v<版本>.yaml`（与动作预设对称） | `backgrounds_v1.yaml`、`lighting_v2.yaml` |
 | 主体档案 | `<id>.yaml` + `<id>.md`，id 全仓库唯一 | `red_bob_glasses.yaml` |
-| 服装 / 发型 / 贴字 / 视频 | `<用途>.yaml` | `stockings_8.yaml`、`label_topleft_shadow.yaml` |
+| 服饰 / 发型 / 贴字 / 视频 | `<用途>.yaml` | `stockings_8.yaml`、`label_topleft_shadow.yaml` |
 | 配方 | `<slug>.yaml` + `<slug>.md` 成对 | `stockings_showcase.yaml` |
 
 两条容易踩的：
@@ -101,21 +101,21 @@
 
 `<id>.md` 是同 id 的**模板导出**（`charvar subject export` 逐字快照），可选。
 
-### 服装家族（costume 双表，`costumes/<source>/` 镜像）
+### 服饰家族（costume 双表，`costumes/<source>/` 镜像）
 
-服装家族住在服装库 DB（`costume_items` studio 条目 + `costume_prompts` 文本层；
+服饰家族住在服饰库 DB（`costume_items` studio 条目 + `costume_prompts` 文本层；
 text = 文本层优先、回退 keywords，**语言不限**、整段逐字进提示词；`label` =
 中文展示名；可选 `caption_tags` 与 `subject_policy`）。`charvar costume
 export <ref>` 快照镜像、`import-studio` 重建；组合顺序由 `outfit_order` 决定；
-**服装段在最终提示词里排第一句**（与 `outfit_order` 无关）。
-详见 `docs/服装库.md` 与 `docs/贴字与服装预设.md`。
+**服饰段在最终提示词里排第一句**（与 `outfit_order` 无关）。
+详见 `docs/服饰库.md` 与 `docs/贴字与服饰预设.md`。
 
 ### 发型预设（`hairstyles/*.yaml`）
 
-`type: hairstyle`，`items: [{id, label, text}]`，同服装预设结构：`text` = 英文发型
+`type: hairstyle`，`items: [{id, label, text}]`，同服饰预设结构：`text` = 英文发型
 描述段（**只写头发结构**：长度/刘海/分缝/层次/卷度，不写发色——发色继承主体档案
 或参考图），`label` = 中文展示名，`caption_tags`（可选）= caption token 映射。
-层级固定 动作→发型→服装（发型层先并、服装层后并），无发型单独的顺序开关。
+层级固定 动作→发型→服饰（发型层先并、服饰层后并），无发型单独的顺序开关。
 约定：identity_lock 里发型只写发色、不写结构；换发型批优先 LLM 模式。
 
 ### 贴字预设（`overlays/*.yaml`）

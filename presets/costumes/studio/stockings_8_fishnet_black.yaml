@@ -8,8 +8,10 @@ prompt_text: wearing black fishnet stockings with a small diamond net
 prompt_source: manual
 ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white
   background: a pair of black fishnet stockings with a small diamond net, laid flat
-  side by side, exactly two stockings, both knee-length in shape, neatly arranged,
-  soft studio lighting.'
+  side by side, exactly two stockings, both knee-length in shape, tops toward the
+  top of the frame and toes toward the bottom, nothing else on the surface. Soft diffused
+  studio lighting from the upper left, faint contact shadows. No people, no mannequin,
+  no hangers, no text.'
 subject_policy:
   clothing: add
   accessories: keep

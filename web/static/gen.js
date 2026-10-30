@@ -469,7 +469,7 @@ $("#btn-generate").addEventListener("click", async () => {
   if ($("#gen-count").value) payload.count = Number($("#gen-count").value);
   if ($("#gen-fixed-bg").value.trim()) payload.fixed_background = $("#gen-fixed-bg").value.trim();
   if ($("#gen-fixed-light").value.trim()) payload.fixed_lighting = $("#gen-fixed-light").value.trim();
-  // 发型/服装组合：选了才带上（笛卡尔积在服务端展开；层级固定 动作→发型→服装）
+  // 发型/服饰组合：选了才带上（笛卡尔积在服务端展开；层级固定 动作→发型→服装）
   if ($("#gen-hairstyle").value) {
     payload.hairstyle_preset = $("#gen-hairstyle").value;
   }
@@ -921,7 +921,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         body.appendChild(label);
         const fromLabel = document.createElement("label");
-        fromLabel.innerHTML = `文字来源<select id="overlay-text-from"><option value="outfit_label">服装名（组合变体）</option><option value="pose_tag">动作名</option><option value="variant_id">变体名</option><option value="fixed">固定文本</option></select>`;
+        fromLabel.innerHTML = `文字来源<select id="overlay-text-from"><option value="outfit_label">服饰名（组合变体）</option><option value="pose_tag">动作名</option><option value="variant_id">变体名</option><option value="fixed">固定文本</option></select>`;
         const fromSel = fromLabel.querySelector("select");
         body.appendChild(fromLabel);
         const fixedLabel = document.createElement("label");

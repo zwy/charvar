@@ -5,7 +5,7 @@
 背景句 → 禁令句。动作描述在 pose_actions 表（动作×视角 双键，写入用
 ``charvar pose action``）；这里的分段文本是自有内容、进 git。
 服装层（单人生效）：``build_prompt(costume=True)`` 加 <image3> 服装锚 +
-融合段 + 换装禁令（图像来自 costume-db-01，见 docs/服装库.md）；无动作的
+融合段 + 换装禁令（图像来自 costume-db-01，见 docs/服饰库.md）；无动作的
 「单主体 + 服装」用 build_costume_prompt（<image1> 主体 + <image2> 服装）；
 catalog 英文关键词拼成「服装要点」注记跟在服装锚后（部件清单，不译写）。
 背景/光照先固定一句，后续接 presets/wildcards 的 backgrounds/lighting 池

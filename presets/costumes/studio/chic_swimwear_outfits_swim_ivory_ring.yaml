@@ -12,8 +12,11 @@ prompt_source: manual
 ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white
   background: an opaque ivory one-piece swimsuit laid flat: two shoulder straps, a
   V-neckline, a champagne-gold ring at the front waist with two cutouts beside it,
-  continuous side and back panels, mid-cut leg openings.  each piece separated and
-  laid flat, neatly arranged, soft studio lighting.'
+  continuous side and back panels, mid-cut leg openings. Laid flat and separated with
+  a clear gap between pieces, no pieces overlapping, all edges fully inside the frame
+  with margin around them, realistic relative sizes. Necklines and waistbands toward
+  the top of the frame, hems toward the bottom. Soft diffused studio lighting from
+  the upper left, faint contact shadows. No people, no mannequin, no hangers, no text.'
 subject_policy: {}
 caption_tags:
   swim_black_triangle: matte black triangle bikini

@@ -95,7 +95,7 @@ class PoseActionUpdate(BaseModel):
 
 
 class CostumePromptTextUpdate(BaseModel):
-    """服装文本层写入（PUT /costumes/{source}/{item}/prompt-text）：text 空串 = 清掉。"""
+    """服饰文本层写入（PUT /costumes/{source}/{item}/prompt-text）：text 空串 = 清掉。"""
 
     text: str = ""
 
@@ -855,13 +855,13 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     def api_pose_image_full(source: str, pose_id: str, angle: str) -> FileResponse:
         return _pose_image_response(source, pose_id, angle, "full")
 
-    # ---- 服装库（costume_items/costume_prompts 双表；索引层由 costume import 重灌） ----
+    # ---- 服饰库（costume_items/costume_prompts 双表；索引层由 costume import 重灌） ----
     @app.get("/costumes")
     def api_costumes_list(
         category: str = Query("", description="按目录原文过滤"),
         q: str = Query("", max_length=60, description="按 id/英文关键词过滤（日文词经站点词表扩写）"),
     ) -> dict[str, Any]:
-        """服装库浏览：全量清单 + 目录元数据 + 检索词表（客户端过滤）。
+        """服饰库浏览：全量清单 + 目录元数据 + 检索词表（客户端过滤）。
 
         图片 URL 经 /costumes/image/{source}/… 端点伺服，浏览器不给磁盘路径。
         """
@@ -886,11 +886,11 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     def api_costume_image_full(source: str, item_id: str) -> FileResponse:
         return _costume_image_response(source, item_id, "full")
 
-    # ---- 服装条目编辑（文本层 / 关键词 / 换装策略 / 收藏 / 参考图重生成） ----
+    # ---- 服饰条目编辑（文本层 / 关键词 / 换装策略 / 收藏 / 参考图重生成） ----
     # id 只认安全字符（ITEM_ID_RE）；studio 条目写完自动同步镜像 yaml（DB 真源）。
     def _costume_ids(source: str, item_id: str) -> tuple[str, str]:
         if not source or not costumes_service.ITEM_ID_RE.fullmatch(item_id):
-            raise HTTPException(400, f"非法服装引用：{source}/{item_id[:60]}")
+            raise HTTPException(400, f"非法服饰引用：{source}/{item_id[:60]}")
         return str(source), str(item_id)
 
     def _costume_export_mirror(conn: object, source_id: str, item_id: str) -> None:
@@ -901,7 +901,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     def api_costume_prompt_text_put(
         source_id: str, item_id: str, req: CostumePromptTextUpdate
     ) -> dict[str, Any]:
-        """写/清（空串 = 清掉）一条服装的文本层（prompt_text，服装段原料）。"""
+        """写/清（空串 = 清掉）一条服饰的文本层（prompt_text，服饰段原料）。"""
         s, i = _costume_ids(source_id, item_id)
         with storage.connect() as conn:
             try:
@@ -1068,10 +1068,10 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         if req.outfit_preset or req.hairstyle_preset:
             if sticker_policy.is_sticker_preset(preset):
                 raise HTTPException(
-                    400, "sticker 预设（带字表情包）不支持服装/发型组合：图片文案与服装段语义冲突"
+                    400, "sticker 预设（带字表情包）不支持服饰/发型组合：图片文案与服饰段语义冲突"
                 )
             try:
-                # 层级固定 动作→发型→服装：发型层先并、服装层后并（outfit.combine
+                # 层级固定 动作→发型→服饰：发型层先并、服饰层后并（outfit.combine
                 # 把发型层产物当输入继续叠），id/text 层级由两层 combine 自然落位。
                 if req.hairstyle_preset:
                     hairstyle_obj = hairstyle_service.load_hairstyle(req.hairstyle_preset)

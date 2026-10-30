@@ -54,7 +54,7 @@ app.add_typer(video_app, name="video")
 app.add_typer(tts_app, name="tts")
 pose_app = typer.Typer(help="姿势库（pose-db-01 人偶线稿参考图）", no_args_is_help=True)
 app.add_typer(pose_app, name="pose")
-costume_app = typer.Typer(help="服装库（costume-db-01 服装参考图）", no_args_is_help=True)
+costume_app = typer.Typer(help="服饰库（costume-db-01 服饰参考图）", no_args_is_help=True)
 app.add_typer(costume_app, name="costume")
 
 
@@ -739,9 +739,9 @@ def presets_show(
 def gen(
     subject: str = typer.Option(..., "--subject", "-s", help="主体档案 id，或 YAML/JSON 文件路径"),
     preset: str = typer.Option("q21_default_30", "--preset", "-p"),
-    outfit: Optional[str] = typer.Option(None, "--outfit", help="服装家族名（服装库 studio 条目，如 stockings_8），与预设笛卡尔积"),
-    outfit_order: str = typer.Option("outfit_first", "--outfit-order", help="组合顺序：outfit_first（默认，每件服装连播全部动作）/pose_first"),
-    hairstyle: Optional[str] = typer.Option(None, "--hairstyle", help="发型预设名（presets/hairstyles/），与预设笛卡尔积；层级 动作→发型→服装"),
+    outfit: Optional[str] = typer.Option(None, "--outfit", help="服饰家族名（服饰库 studio 条目，如 stockings_8），与预设笛卡尔积"),
+    outfit_order: str = typer.Option("outfit_first", "--outfit-order", help="组合顺序：outfit_first（默认，每件服饰连播全部动作）/pose_first"),
+    hairstyle: Optional[str] = typer.Option(None, "--hairstyle", help="发型预设名（presets/hairstyles/），与预设笛卡尔积；层级 动作→发型→服饰"),
     seed: int = typer.Option(0, "--seed"),
     count: Optional[int] = typer.Option(None, "--count", help="None=预设全部"),
     sampling: str = typer.Option("all", "--sampling", help="all/first/random"),
@@ -769,9 +769,9 @@ def gen(
         from charvar.sticker_policy import is_sticker_preset
 
         if is_sticker_preset(preset_obj):
-            _die("sticker 预设（带字表情包）不支持服装/发型组合：图片文案与服装段语义冲突")
+            _die("sticker 预设（带字表情包）不支持服饰/发型组合：图片文案与服饰段语义冲突")
         try:
-            # 层级固定 动作→发型→服装：发型层先并、服装层后并
+            # 层级固定 动作→发型→服饰：发型层先并、服饰层后并
             if hairstyle:
                 hairstyle_obj = hairstyle_service.load_hairstyle(hairstyle)
                 preset_obj = hairstyle_service.combine(preset_obj, hairstyle_obj)
@@ -891,7 +891,7 @@ def overlay_cmd(
     overlay: str = typer.Option(..., "--overlay", "-l", help="贴字预设名（presets/overlays/）"),
     text_from: str = typer.Option(
         "outfit_label", "--text-from",
-        help="outfit_label（服装组合的中文 label）/ pose_tag / variant_id / fixed",
+        help="outfit_label（服饰组合的中文 label）/ pose_tag / variant_id / fixed",
     ),
     text: Optional[str] = typer.Option(None, "--text", help="固定文本（--text-from fixed 时）"),
     items: Optional[str] = typer.Option(None, "--items", help="只处理这些条目序号（逗号分隔；缺省全部）"),
@@ -1511,7 +1511,7 @@ def pose_prompt_cmd(
     angle: str = typer.Option("", "--angle", help="视角（原文，缺省正面）"),
     subject: Optional[str] = typer.Option(None, "--subject", help="主体档案 id（--run 必填；上半身动作用 headshot 槽位，缺则回退 front）"),
     subject2: Optional[str] = typer.Option(None, "--subject2", help="双人动作的第二主体 id（2人絡み 才有效）"),
-    costume: Optional[str] = typer.Option(None, "--costume", help="服装库条目 id（如 SPR-0001；加 <image3> 服装参考，双人动作暂不支持）"),
+    costume: Optional[str] = typer.Option(None, "--costume", help="服饰库条目 id（如 SPR-0001；加 <image3> 服饰参考，双人动作暂不支持）"),
     run: bool = typer.Option(False, "--run", help="拼好的提示词直接出图（Playground 通路）"),
     backend: str = typer.Option("comfyui", "--backend", help="comfyui / openrouter / dreamina"),
     aspect: str = typer.Option("3:4", "--aspect", help="画幅：3:4/1:1/16:9/…"),
@@ -1639,7 +1639,7 @@ def pose_prompt_cmd(
 
 @costume_app.command("prompt")
 def costume_prompt_cmd(
-    item_id: str = typer.Argument(..., help="服装条目 id，如 SPR-0001"),
+    item_id: str = typer.Argument(..., help="服饰条目 id，如 SPR-0001"),
     subject: Optional[str] = typer.Option(None, "--subject", help="主体档案 id（--run 必填，取 front 槽位图）"),
     run: bool = typer.Option(False, "--run", help="拼好的提示词直接出图（Playground 通路）"),
     backend: str = typer.Option("comfyui", "--backend", help="comfyui / openrouter / dreamina"),
@@ -1651,11 +1651,11 @@ def costume_prompt_cmd(
     wait: bool = typer.Option(True, "--wait/--no-wait", help="等待出图完成（默认）"),
     json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出（提示词不回显）"),
 ) -> None:
-    """单主体 + 服装 → 换装全身图提示词（无动作参考）。
+    """单主体 + 服饰 → 换装全身图提示词（无动作参考）。
 
-    <image1> = 主体档案 front 槽位图（角色锚定），<image2> = 服装参考图（换装
+    <image1> = 主体档案 front 槽位图（角色锚定），<image2> = 服饰参考图（换装
     锚定，role=costume 语义；catalog 英文关键词拼「服装要点」注记进提示词）。
-    要「主体 + 动作 + 服装」用 `charvar pose prompt --costume`。
+    要「主体 + 动作 + 服饰」用 `charvar pose prompt --costume`。
     """
     from charvar import adhoc as adhoc_service
     from charvar import costumes as costumes_service
@@ -1702,7 +1702,7 @@ def costume_prompt_cmd(
         _die("--run 需要 --subject（主体档案 id）")
     if not c_has_image:
         _die(
-            "这条服装是纯文本条目（无参考图）—— 图锚定换装用不了；"
+            "这条服饰是纯文本条目（无参考图）—— 图锚定换装用不了；"
             "纯文本换装走预设通路（charvar gen --outfit）"
         )
     try:
@@ -1747,7 +1747,7 @@ def costume_import_cmd() -> None:
 
 @costume_app.command("import-studio")
 def costume_import_studio_cmd() -> None:
-    """presets/costumes/studio/ 镜像逐条 → 自建服装行（source_id=studio，flat_lay）。
+    """presets/costumes/studio/ 镜像逐条 → 自建服饰行（source_id=studio，flat_lay）。
 
     DB 是运行时真源，镜像只是重建快照：已存在整条跳过（不覆盖 DB 里改过的文本），
     缺行按镜像补齐（sort_order 家族次序在内）。镜像由 charvar costume export 维护。
@@ -1769,7 +1769,7 @@ def costume_prompt_text_cmd(
     set_text: Optional[str] = typer.Option(None, "--set", help="写入文本层（空串 = 清掉该条文本）"),
     json_out: bool = typer.Option(False, "--json", help="当前文本层以 JSON 输出"),
 ) -> None:
-    """读/写一条服装的文生图提示词（costume_prompts 表；source=manual）。"""
+    """读/写一条服饰的文生图提示词（costume_prompts 表；source=manual）。"""
     from charvar import costumes as costumes_service
     from charvar import storage
 
@@ -1798,7 +1798,7 @@ def costume_describe_cmd(
     dry_run: bool = typer.Option(False, "--dry-run", help="只起稿打印，不落库"),
     overwrite: bool = typer.Option(False, "--overwrite", help="已有文本也重写"),
 ) -> None:
-    """LLM 看图起稿服装条目的 t2i 提示词（落 costume_prompts，source=ai_draft）。
+    """LLM 看图起稿服饰条目的 t2i 提示词（落 costume_prompts，source=ai_draft）。
 
     幂等：已有文本的条目跳过；--overwrite 重写。LLM 需支持视觉。
     """
@@ -1830,7 +1830,7 @@ def costume_export_cmd(
     ref: str = typer.Argument(..., help="条目引用（source/item 或裸 item）"),
     out: Optional[Path] = typer.Option(None, "--out", help="输出目录（缺省 presets/costumes/<source_id>/）"),
 ) -> None:
-    """单条服装（含文本层）快照回 presets/costumes/<source_id>/<item_id>.yaml。"""
+    """单条服饰（含文本层）快照回 presets/costumes/<source_id>/<item_id>.yaml。"""
     from charvar import costumes as costumes_service
     from charvar import storage
 
@@ -1892,7 +1892,7 @@ def pose_describe_cmd(
         typer.echo(json.dumps({k: v for k, v in summary.items() if k != "results"}, ensure_ascii=False))
 
 
-# ---------- 服装条目编辑（policy / keywords / 收藏 / 制图提示词 / 重生成） ----------
+# ---------- 服饰条目编辑（policy / keywords / 收藏 / 制图提示词 / 重生成） ----------
 
 def _costume_sync_mirror(conn: object, source_id: str, item_id: str) -> None:
     """studio 条目编辑后自动同步镜像 yaml（站点条目无镜像 —— DB 就是它的真源）。"""
@@ -1915,7 +1915,7 @@ def _costume_target(conn: object, ref: str) -> tuple:
 
 @costume_app.command("policy")
 def costume_policy_cmd(
-    ref: str = typer.Argument(..., help="服装条目 ref（如 SPR-0001 或 studio/…）"),
+    ref: str = typer.Argument(..., help="服饰条目 ref（如 SPR-0001 或 studio/…）"),
     clothing: str = typer.Option("", "--clothing", help="replace（整套替换）/ keep（保留衣物） / add（叠加袜类）"),
     accessories: str = typer.Option("", "--accessories", help="remove（摘鞋袜配件）/ keep"),
 ) -> None:
@@ -1953,7 +1953,7 @@ def costume_policy_cmd(
 
 @costume_app.command("favorite")
 def costume_favorite_cmd(
-    ref: str = typer.Argument(..., help="服装条目 ref"),
+    ref: str = typer.Argument(..., help="服饰条目 ref"),
     favorite: bool = typer.Option(None, "--on/--off", help="--on 收藏 / --off 取消；都不给 = 切换"),
 ) -> None:
     """收藏 / 取消收藏（独立用户层表 costume_favorites，catalog 重灌不碰）。"""
@@ -1977,7 +1977,7 @@ def costume_favorite_cmd(
 
 @costume_app.command("keywords")
 def costume_keywords_cmd(
-    ref: str = typer.Argument(..., help="服装条目 ref（关键词编辑只对自建条目开放）"),
+    ref: str = typer.Argument(..., help="服饰条目 ref（关键词编辑只对自建条目开放）"),
     set_value: str = typer.Option(None, "--set", help="新的关键词清单（英文部件短清单；空串 = 清掉；缺省 = 只看）"),
 ) -> None:
     """看 / 写自建条目的关键词（部件短清单：卡片预览 / 检索 / 「服装要点」注记回退）。
@@ -2003,10 +2003,10 @@ def costume_keywords_cmd(
 
 @costume_app.command("ref-prompt")
 def costume_ref_prompt_cmd(
-    ref: str = typer.Argument(..., help="服装条目 ref"),
+    ref: str = typer.Argument(..., help="服饰条目 ref"),
     set_value: str = typer.Option(None, "--set", help="新的平铺制图提示词（空串 = 清掉；缺省 = 只看）"),
 ) -> None:
-    """看 / 写平铺制图提示词（ref_prompt，参考图重生成的原料；与服装段 prompt_text 分层）。
+    """看 / 写平铺制图提示词（ref_prompt，参考图重生成的原料；与服饰段 prompt_text 分层）。
 
     没有制图提示词的条目不能重生成参考图（`charvar costume regen` 会拒绝）。
     """
@@ -2031,7 +2031,7 @@ def costume_ref_prompt_cmd(
 
 @costume_app.command("regen")
 def costume_regen_cmd(
-    ref: str = typer.Argument(..., help="自建服装条目 ref（如 studio/stockings_8_sheer_black_15d）"),
+    ref: str = typer.Argument(..., help="自建服饰条目 ref（如 studio/stockings_8_sheer_black_15d）"),
     seed: int = typer.Option(None, "--seed", help="缺省 = 条目固定种子（同提示词可复现）；换种子重摇"),
     json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出"),
 ) -> None:

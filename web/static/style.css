@@ -654,7 +654,7 @@ td .caption { color: var(--muted); }
 .pose-action-text { background: #fafbfd; border: 1px dashed var(--line); border-radius: var(--radius-panel); padding: var(--sp-3); font-size: 12px; line-height: 1.6; color: var(--text); white-space: pre-wrap; word-break: break-word; max-height: 200px; overflow-y: auto; }
 .pose-action-muted { color: var(--muted); }
 
-/* ---------- 服装库（costume-db-01 浏览页，costumegallery.js）
+/* ---------- 服饰库（costume-db-01 浏览页，costumegallery.js）
    布局骨架与动作库同一套「页签 + 搜索 + 网格 + 常驻详情」（.costume-* 与 .pose-*
    一一对应）；缩略图是 2:3（动作库 3:4），卡片用关键词预览代替双语标题。
    网格行的收缩红线同 .pose-grid 注释——overflow:hidden 卡片 + auto 行高会逐行压叠。 */
@@ -664,8 +664,8 @@ td .caption { color: var(--muted); }
 .costume-toolbar .segmented { align-self: flex-start; flex-wrap: wrap; }
 .costume-toolbar .seg em { font-style: normal; font-weight: 400; font-size: 11px; color: var(--muted); margin-left: 5px; }
 .costume-toolbar-row { display: flex; gap: var(--sp-2); align-items: center; }
-.costume-toolbar-row input[type="text"] { flex: 1; min-width: 160px; font: inherit; padding: 6px 9px; min-height: var(--ctl-h); border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; color: var(--text); }
-.costume-toolbar-row input[type="text"]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.costume-toolbar-row input { flex: 1; min-width: 160px; font: inherit; padding: 6px 9px; min-height: var(--ctl-h); border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; color: var(--text); }
+.costume-toolbar-row input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .costume-grid { display: grid; flex: 1 1 0; min-height: 0; overflow-y: auto; padding-right: 6px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); grid-auto-rows: max-content; align-items: start; gap: var(--sp-3); }
 .costume-card { padding: 8px; overflow: visible; position: relative; }
 .costume-thumb { background: #f4f6f9; border-radius: var(--radius-ctl); overflow: hidden; aspect-ratio: 2 / 3; }
@@ -686,7 +686,7 @@ td .caption { color: var(--muted); }
 .costume-thumb-empty { display: flex; align-items: center; justify-content: center; height: 100%; padding: 0 var(--sp-2); font-size: 11px; color: var(--muted); text-align: center; }
 .costume-detail-noimg { min-height: 140px; cursor: default; }
 /* 徽章 chip：平铺 / 无图纯文本 / 来源 —— 卡片标题行与详情标题区共用一枚 */
-.costume-chip { display: inline-block; flex: none; padding: 1px 7px; border: 1px solid var(--accent); border-radius: 999px; background: var(--accent-soft); color: var(--text); font-size: 10px; line-height: 1.5; white-space: nowrap; }
+.costume-chip { display: inline-block; flex: none; padding: 2px 8px; border: 1px solid var(--accent-line); border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 11px; line-height: 1.5; white-space: nowrap; }
 .costume-chip-muted { border-color: var(--line); background: #fff; color: var(--muted); }
 .costume-card-title { display: flex; align-items: center; gap: 4px; max-width: 100%; min-width: 0; }
 .costume-card-title strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -697,6 +697,7 @@ td .caption { color: var(--muted); }
 .costume-kw-label { font-size: 11px; font-weight: 600; letter-spacing: .05em; color: var(--muted); }
 .costume-kw-text { background: #fafbfd; border: 1px dashed var(--line); border-radius: var(--radius-panel); padding: var(--sp-3); font-size: 12px; line-height: 1.6; color: var(--text); word-break: break-word; }
 .costume-kw-muted { color: var(--muted); }
+.costume-pt-src { font-size: 11px; color: var(--muted); }
 .costume-detail-actions { margin-top: auto; display: flex; flex-direction: column; gap: var(--sp-2); padding-top: var(--sp-2); }
 .costume-detail-actions .primary { width: 100%; }
 .costume-empty { grid-column: 1 / -1; padding: var(--sp-4); text-align: center; font-size: 12px; color: var(--muted); }
@@ -713,26 +714,26 @@ td .caption { color: var(--muted); }
   .costume-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
 }
 
-/* ---- 服装库：收藏 / 编辑 / 换装语义 / 参考图重生成（与 costumegallery.js 配套） ---- */
+/* ---- 服饰库：收藏 / 编辑 / 换装语义 / 参考图重生成（与 costumegallery.js 配套） ---- */
 .costume-thumb { position: relative; }  /* 卡片收藏星标的锚（.image-card overflow 红线不背星标锅） */
 .costume-fav {
-  position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; padding: 0;
-  line-height: 24px; text-align: center; border-radius: 50%;
+  position: absolute; top: 5px; right: 5px; z-index: 1;
+  padding: 3px 8px; font-size: 11px; line-height: 1; border-radius: var(--radius-ctl);
   border: 1px solid var(--line); background: #fff; color: var(--muted);
-  font-size: 13px; cursor: pointer;
+  cursor: pointer;
 }
-.costume-fav.on { color: #e0245e; border-color: #e0245e; }
+.costume-fav.on { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }
 .costume-kw-actions { display: inline-flex; gap: 4px; margin-left: auto; }
 .costume-edit-ta {
   width: 100%; min-height: 96px; resize: vertical; font-size: 12px; line-height: 1.5;
-  padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px;
+  padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-ctl);
   font-family: var(--mono); color: var(--text); background: #fff;
 }
 .costume-edit-row { display: flex; gap: 4px; margin-top: var(--sp-1); }
 .costume-policy-row { display: flex; gap: 4px; align-items: center; margin-top: var(--sp-1); }
 .costume-policy-row select {
   font-size: 12px; padding: 3px 6px; border: 1px solid var(--line);
-  border-radius: 4px; background: #fff; color: var(--text); max-width: 180px;
+  border-radius: var(--radius-ctl); background: #fff; color: var(--text); max-width: 180px;
 }
 .costume-regen-row { display: flex; gap: var(--sp-2); align-items: center; margin-top: var(--sp-1); }
-.costume-detail-fav.on { color: #e0245e; border-color: #e0245e; }
+.costume-detail-fav.on { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }

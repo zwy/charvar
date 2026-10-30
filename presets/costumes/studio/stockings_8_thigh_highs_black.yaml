@@ -9,8 +9,10 @@ prompt_text: wearing sheer black thigh-high stockings with a lace band at mid-th
   bare thighs visible above the tops
 prompt_source: manual
 ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white
-  background: sheer black thigh-high stockings with a lace band at mid-thigh, each
-  piece separated and laid flat, neatly arranged, soft studio lighting.'
+  background: sheer black thigh-high stockings with a lace band at mid-thigh, exactly
+  two stockings laid side by side in the same area, tops toward the top of the frame
+  and toes toward the bottom. Soft diffused studio lighting from the upper left, faint
+  contact shadows. No people, no mannequin, no hangers, no text.'
 subject_policy:
   clothing: add
   accessories: keep

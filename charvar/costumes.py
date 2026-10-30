@@ -1,4 +1,4 @@
-"""服装库（costume_items + costume_prompts 双表，仿 pose 双表分层）。
+"""服饰库（costume_items + costume_prompts 双表，仿 pose 双表分层）。
 
 - ``costume_items``：可重灌索引层 —— 站点快照（costume-db-01）与自建条目
   （studio）通用（display_type / keywords / 图路径 / subject_policy / caption_tags）。
@@ -9,12 +9,12 @@
   侧车降级为 import 期种子。自建条目走 ``charvar costume import-outfits`` 迁入
   与后续 CLI 编辑（DB 是运行时真源，``charvar costume export`` 快照回 presets/）。
 
-图片是 t2i 生成的架空服装（无人物、2:3、白底）。许可同姿势库：作品制作可免费
+图片是 t2i 生成的架空服饰（无人物、2:3、白底）。许可同姿势库：作品制作可免费
 商用、**禁止再分发图片数据本身** —— 目录留在 data/（.gitignore 覆盖），绝不进 git。
 
 与姿势库的差异（后续集成时注意）：
 - 每条一张图，无视角双键；
-- 无名称字段，``キーワード`` 英文服装描述就是提示词原料（站点「説明文をコピー」语义）；
+- 无名称字段，``キーワード`` 英文服饰描述就是提示词原料（站点「説明文をコピー」语义）；
 - catalog 的 ``原寸`` png 与 ``画像`` webp 同像素（1366×2048），网页展示走 webp，
   png 是无损版，留给后续参考图的细部来源。
 """
@@ -113,7 +113,7 @@ def _load_display_types() -> dict[str, str]:
 
 
 class CostumeError(Exception):
-    """服装库错误（catalog 缺失/损坏 / 查不到该条 / 文件缺失）。"""
+    """服饰库错误（catalog 缺失/损坏 / 查不到该条 / 文件缺失）。"""
 
 
 def _is_png(path: Path) -> bool:
@@ -134,7 +134,7 @@ def _is_webp(path: Path) -> bool:
 
 
 def costume_root(source_id: str = SOURCE_ID) -> Path:
-    """某服装 source 的磁盘目录（data/costumes/<source_id>/）；图与 _ref_cache 都在里面。"""
+    """某服饰 source 的磁盘目录（data/costumes/<source_id>/）；图与 _ref_cache 都在里面。"""
     return paths.data_dir() / "costumes" / (str(source_id or SOURCE_ID))
 
 
@@ -310,7 +310,7 @@ def list_items(
     display_type: str = "",
     q: str = "",
 ) -> dict:
-    """服装清单 + 目录元数据 + 检索词表，服装浏览页一次拉全（读 DB；未导入报错提示 import）。
+    """服饰清单 + 目录元数据 + 检索词表，服饰浏览页一次拉全（读 DB；未导入报错提示 import）。
 
     category/display_type 按存储原文过滤；q 逐词 AND（与前端 costumegallery.js 的
     过滤同语义）：对 id/英文关键词/中日目录名大小写不敏感，日文词经 glossary 扩写
@@ -318,7 +318,7 @@ def list_items(
     """
     n_rows = conn.execute("SELECT COUNT(*) FROM costume_items").fetchone()[0]
     if not n_rows:
-        raise CostumeError("服装库还是空的 —— 先跑 charvar costume import")
+        raise CostumeError("服饰库还是空的 —— 先跑 charvar costume import")
     glossary = _load_glossary()
     tokens = [t for t in str(q or "").strip().lower().split() if t]
 
@@ -405,23 +405,23 @@ def resolve_ref(conn: sqlite3.Connection, ref: str) -> sqlite3.Row:
     """
     spec = str(ref or "").strip()
     if not spec:
-        raise CostumeError("缺少服装条目 id（形如 SPR-0001 或 costume-db-01/SPR-0001）")
+        raise CostumeError("缺少服饰条目 id（形如 SPR-0001 或 costume-db-01/SPR-0001）")
     if "/" in spec:
         source_id, _, item_id = spec.partition("/")
         source_id, item_id = source_id.strip(), item_id.strip()
         if not source_id or not ITEM_ID_RE.fullmatch(item_id):
-            raise CostumeError(f"非法服装引用：{spec[:60]}")
+            raise CostumeError(f"非法服饰引用：{spec[:60]}")
     else:
         item_id = spec
         source_id = ""
         if not ITEM_ID_RE.fullmatch(item_id):
-            raise CostumeError(f"非法服装引用：{spec[:60]}")
+            raise CostumeError(f"非法服饰引用：{spec[:60]}")
         hits = conn.execute(
             "SELECT source_id FROM costume_items WHERE item_id = ?",
             (item_id,),
         ).fetchall()
         if not hits:
-            raise CostumeError(f"服装条目不存在（先 charvar costume import）：{item_id}")
+            raise CostumeError(f"服饰条目不存在（先 charvar costume import）：{item_id}")
         if len(hits) > 1:
             raise CostumeError(f"item_id 跨库不唯一，请写全 source/item：{item_id}")
         source_id = hits[0]["source_id"]
@@ -433,7 +433,7 @@ def resolve_ref(conn: sqlite3.Connection, ref: str) -> sqlite3.Row:
         (source_id, item_id),
     ).fetchone()
     if row is None:
-        raise CostumeError(f"服装条目不存在（先 charvar costume import）：{spec}")
+        raise CostumeError(f"服饰条目不存在（先 charvar costume import）：{spec}")
     return row
 
 
@@ -469,7 +469,7 @@ def image_file(ref: str, variant: str, db_path: Path | None = None) -> Path:
     if not rel:
         suffix = "缩略图" if variant == "thumb" else "详情图"
         raise CostumeError(
-            f"这条服装没有{suffix}（纯文本条目或该档位缺文件）：{row['source_id']}/{row['item_id']}"
+            f"这条服饰没有{suffix}（纯文本条目或该档位缺文件）：{row['source_id']}/{row['item_id']}"
         )
     path = costume_root(row["source_id"]) / rel
     if not _is_webp(path):
@@ -532,9 +532,9 @@ def get_costume_prompt(conn: sqlite3.Connection, source_id: str, item_id: str) -
 def set_costume_prompt(
     conn: sqlite3.Connection, source_id: str, item_id: str, text: str, source: str = "manual"
 ) -> dict:
-    """写/清（空串 = 删行）一条服装的文生图提示词；条目必须先在索引层（不悬空）。"""
+    """写/清（空串 = 删行）一条服饰的文生图提示词；条目必须先在索引层（不悬空）。"""
     if item_row(conn, f"{source_id}/{item_id}")["item_id"] != str(item_id or ""):
-        raise CostumeError(f"服装条目不存在（先导入索引层）：{source_id}/{item_id}")
+        raise CostumeError(f"服饰条目不存在（先导入索引层）：{source_id}/{item_id}")
     text = str(text or "").strip()
     now = _now()
     if text:
@@ -557,14 +557,14 @@ def set_costume_prompt(
 def set_ref_prompt(
     conn: sqlite3.Connection, source_id: str, item_id: str, text: str
 ) -> dict:
-    """写/清（空串 = 清掉）一条服装的**平铺制图提示词**（重生成参考图的原料）。
+    """写/清（空串 = 清掉）一条服饰的**平铺制图提示词**（重生成参考图的原料）。
 
-    与服装段（prompt_text）是两层：制图提示词是 t2i 出图指令（平铺模板），服装
+    与服饰段（prompt_text）是两层：制图提示词是 t2i 出图指令（平铺模板），服饰
     段是换装批里进提示词的那句 wearing 文本 —— 混了就互相污染。不影响 source
     （那是 prompt_text 的出处记录）。
     """
     if item_row(conn, f"{source_id}/{item_id}")["item_id"] != str(item_id or ""):
-        raise CostumeError(f"服装条目不存在（先导入索引层）：{source_id}/{item_id}")
+        raise CostumeError(f"服饰条目不存在（先导入索引层）：{source_id}/{item_id}")
     text = str(text or "").strip()
     now = _now()
     if text:
@@ -674,7 +674,7 @@ def import_studio_yaml(conn: sqlite3.Connection) -> dict:
         except (OSError, yaml.YAMLError) as exc:
             raise CostumeError(f"镜像读取失败：{path.name}：{exc}") from exc
         if not isinstance(doc, dict) or doc.get("source_id") != STUDIO_SOURCE_ID:
-            raise CostumeError(f"镜像文件不是 studio 服装条目：{path.name}")
+            raise CostumeError(f"镜像文件不是 studio 服饰条目：{path.name}")
         item_id = str(doc.get("item_id") or "").strip()
         if not ITEM_ID_RE.fullmatch(item_id) or path.stem != item_id:
             raise CostumeError(f"镜像条目 id 非法或与文件名不一致：{path.name} → {item_id[:60]}")
@@ -727,7 +727,7 @@ def import_studio_yaml(conn: sqlite3.Connection) -> dict:
 # ---------- DB → 仓库镜像（仿主体档案 export；DB 是运行时真源） ----------
 
 def export_item(conn: sqlite3.Connection, ref: str, out_dir: Path | None = None) -> Path:
-    """单条服装（含文本层）快照回 presets/costumes/<source_id>/<item_id>.yaml。"""
+    """单条服饰（含文本层）快照回 presets/costumes/<source_id>/<item_id>.yaml。"""
     import yaml
 
     row = resolve_ref(conn, ref)
@@ -822,7 +822,7 @@ def regenerate_reference(
 
     前提与约束：
     - 只对自建（studio）条目开放 —— 站点图是数据资产（catalog 逐字域），重生成无意义；
-    - **必须先有 ref_prompt**（没有制图提示词不能出图 —— 空提示词出的图与服装语义脱节）；
+    - **必须先有 ref_prompt**（没有制图提示词不能出图 —— 空提示词出的图与服饰语义脱节）；
     - 走 Playground 同款 adhoc 通路（不落 runs 表，run 里留 manifest）：2k / 3:4，
       C8 纯色帧检测照常拦截；
     - 旧三档挪 backup/（换稿不丢），三档回写 DB + 镜像 export 同步。
@@ -838,7 +838,7 @@ def regenerate_reference(
     ref_prompt = str(prompt["ref_prompt"] or "").strip()
     if not ref_prompt:
         raise CostumeError(
-            f"这条服装还没有平铺制图提示词（先在文本层写好才能重生成）：{source_id}/{item_id}"
+            f"这条服饰还没有平铺制图提示词（先在文本层写好才能重生成）：{source_id}/{item_id}"
         )
     used_seed = int(seed) if seed is not None else _stable_regenerate_seed(source_id, item_id)
     req = adhoc.AdhocRequest(

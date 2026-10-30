@@ -1,4 +1,4 @@
-"""服装家族（costume 双表 studio 条目）与跨预设笛卡尔积组合。
+"""服饰家族（costume 双表 studio 条目）与跨预设笛卡尔积组合。
 
 角色：
 - 服装数据在 costume_items（studio 条目，display_type=flat_lay）+ costume_prompts
@@ -15,7 +15,7 @@
   - caption 在角度/动作之后追加服装 token（映射取服装预设 caption_tags，缺省=id）；
   - 变体 id = "{outfit_id}__{pose_id}"（outfit_first）或 "{pose_id}__{outfit_id}"
     （pose_first）——顺序决定后续轮播合成（reel）的播放顺序。
-- 独立家族：/presets 的主预设下拉不变，服装家族走 GET /outfit-presets 单独端点。
+- 独立家族：/presets 的主预设下拉不变，服饰家族走 GET /outfit-presets 单独端点。
 """
 from __future__ import annotations
 
@@ -70,7 +70,7 @@ class OutfitPreset(BaseModel):
 # ---------- 加载（costume 双表视图：DB 是运行时真源，presets/outfits 已退役） ----------
 
 def list_outfit_presets(db_path: Path | None = None) -> list[dict[str, Any]]:
-    """服装家族清单：studio 条目按 category（=家族名）分组，家族内按 sort_order。
+    """服饰家族清单：studio 条目按 category（=家族名）分组，家族内按 sort_order。
 
     迁移/重建走 charvar costume import-studio（镜像在 presets/costumes/studio/）；
     家族描述没有 DB 列，返回空串（列表展示用）。库空 / 未迁入 → 空清单，不报错。
@@ -106,7 +106,7 @@ def list_outfit_presets(db_path: Path | None = None) -> list[dict[str, Any]]:
 
 
 def load_outfit(name: str, db_path: Path | None = None) -> OutfitPreset:
-    """服装家族 → OutfitPreset；条目 text = 文本层有值优先、回退 keywords。
+    """服饰家族 → OutfitPreset；条目 text = 文本层有值优先、回退 keywords。
 
     家族名 = studio 条目的 category；native item id = item_id 去掉家族前缀
     （迁移写入格式 {family}_{id}）。id 白名单/重复/文本为空在加载时校验。
@@ -117,7 +117,7 @@ def load_outfit(name: str, db_path: Path | None = None) -> OutfitPreset:
 
     clean = str(name or "").strip()
     if not clean or "/" in clean or "\\" in clean or clean in (".", ".."):
-        raise PresetError(f"服装家族名不合法：{name!r}", status=400)
+        raise PresetError(f"服饰家族名不合法：{name!r}", status=400)
     with storage.connect(db_path) as conn:
         rows = conn.execute(
             "SELECT ci.item_id, ci.category, ci.label, ci.keywords,"
@@ -130,7 +130,7 @@ def load_outfit(name: str, db_path: Path | None = None) -> OutfitPreset:
         ).fetchall()
     if not rows:
         raise PresetError(
-            f"服装库没有这个服装家族（studio）：{clean}"
+            f"服饰库没有这个服饰家族（studio）：{clean}"
             "（家族名 = 自建条目的 category；重建库：charvar costume import-studio）",
             status=404,
         )
@@ -140,11 +140,11 @@ def load_outfit(name: str, db_path: Path | None = None) -> OutfitPreset:
     for r in rows:
         native = r["item_id"][len(clean) + 1:] if r["item_id"].startswith(f"{clean}_") else r["item_id"]
         if not _ID_RE.match(native) or native in seen:
-            raise PresetError(f"服装家族 {clean} 的 item id 非法或重复：{native!r}", status=400)
+            raise PresetError(f"服饰家族 {clean} 的 item id 非法或重复：{native!r}", status=400)
         seen.add(native)
         text = str(r["prompt_text"] or "").strip() or str(r["keywords"] or "").strip()
         if not text:
-            raise PresetError(f"服装家族 {clean} 的 {native} 没有任何描述文本（keywords 与文本层都空）", status=400)
+            raise PresetError(f"服饰家族 {clean} 的 {native} 没有任何描述文本（keywords 与文本层都空）", status=400)
         raw_policy = str(r["subject_policy"] or "").strip()
         if caption_tags is None and str(r["caption_tags"] or "").strip():
             parsed = _json.loads(r["caption_tags"])
@@ -179,7 +179,7 @@ def combine(
     - caption_tags：动作预设的映射 + {"outfit": 服装映射} 合并。
     """
     if order not in COMBINE_ORDERS:
-        raise PresetError(f"服装组合顺序只支持 {'/'.join(COMBINE_ORDERS)}，当前 {order!r}")
+        raise PresetError(f"服饰组合顺序只支持 {'/'.join(COMBINE_ORDERS)}，当前 {order!r}")
     pose_specs = _pose_specs(pose_preset)
     if not pose_specs:
         raise PresetError(f"预设 {pose_preset.name} 没有任何变体")
@@ -195,7 +195,7 @@ def combine(
     for pose, item in pairs:
         spec_id = f"{item.id}__{pose.id}" if order == "outfit_first" else f"{pose.id}__{item.id}"
         if spec_id in seen:
-            raise PresetError(f"服装组合产生重复变体 id：{spec_id}")
+            raise PresetError(f"服饰组合产生重复变体 id：{spec_id}")
         seen.add(spec_id)
         merged_specs.append(
             VariantSpec(

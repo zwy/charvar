@@ -1,10 +1,10 @@
-/* 服装库共享渲染：顶栏「服装」整页（costumepage.js）与后续生图流程弹层同用这一套
+/* 服饰库共享渲染：顶栏「服饰」整页（costumepage.js）与后续生图流程弹层同用这一套
    —— 网格 CSS 红线、检索规则、关键词复制只修一处，别再两处分叉。容器里搭
    来源页签 + 收藏筛选 + 目录页签 + 搜索 + 卡片网格 + 常驻详情（大图 / 徽章行 /
    换装语义 / 关键词块 / 文本层块 / 制图提示词块 + 重生成）。数据源：GET /costumes
    （items 全量返回，客户端过滤；日文搜索词经站点 JA 词表扩写成英文关键词）。
-   站点库条目 = t2i 架空服装（无人物、2:3、白底）；自建库（studio）= 平铺参考图
-   （3:4）+ 中文标签 + 三层文本（keywords 短清单 / prompt_text 服装段 / ref_prompt
+   站点库条目 = t2i 架空服饰（无人物、2:3、白底）；自建库（studio）= 平铺参考图
+   （3:4）+ 中文标签 + 三层文本（keywords 短清单 / prompt_text 服饰段 / ref_prompt
    制图提示词）。展示语义 =「服装锚」（与 pose 的「姿势锚」互补）：将来接生图
    流程时在 genrefs 加 onPick，整页（无参考图上下文）不渲染加图按钮。 */
 
@@ -21,7 +21,7 @@ const CostumeGallery = (() => {
       '<div class="costume-src-tabs segmented"></div>' +
       '<div class="costume-cat-tabs segmented"></div>' +
       '<div class="costume-toolbar-row">' +
-      '<input class="costume-q" type="search" placeholder="按关键词 / id / 中文标签搜索（英文关键词、日文词、id、中文标签均可）">' +
+      '<input class="costume-q" type="search" placeholder="按关键词 / id / 中文标签搜索（中 / 英 / 日文均可）">' +
       "</div>" +
       "</div>" +
       '<div class="costume-grid image-grid"></div>' +
@@ -207,7 +207,7 @@ const CostumeGallery = (() => {
       const items = filteredItems();
       grid.innerHTML = "";
       if (!items.length) {
-        grid.innerHTML = '<div class="costume-empty">没有符合条件的服装 —— 换个筛选条件</div>';
+        grid.innerHTML = '<div class="costume-empty">没有符合条件的服饰 —— 换个筛选条件</div>';
         return;
       }
       items.forEach(function (it) {
@@ -221,7 +221,7 @@ const CostumeGallery = (() => {
             ? '<img src="' + esc(it.thumb_url) + '" alt="" loading="lazy">'
             : '<div class="costume-thumb-empty">无图 · 纯文本</div>') +
           '<button type="button" class="costume-fav' + (it.favorited ? " on" : "") +
-          '" title="收藏">' + (it.favorited ? "♥" : "♡") + "</button>" +
+          '" title="收藏">' + (it.favorited ? "已收藏" : "收藏") + "</button>" +
           "</div>" +
           '<div class="image-meta">' +
           '<div class="costume-card-title">' +
@@ -268,19 +268,21 @@ const CostumeGallery = (() => {
       const rollback = function () {
         it.favorited = !want;
         btn.classList.toggle("on", !want);
-        btn.textContent = !want ? "♥" : "♡";
+        btn.textContent = !want ? "已收藏" : "收藏";
         renderSourceTabs();
+        if (selectedItem === it) renderDetail();
       };
       it.favorited = want;
       btn.classList.toggle("on", want);
-      btn.textContent = want ? "♥" : "♡";
+      btn.textContent = want ? "已收藏" : "收藏";
       renderSourceTabs();
       api("/costumes/" + encodeURIComponent(it.source_id) + "/" + encodeURIComponent(it.item_id) + "/favorite", { method: "POST" })
         .then(function (res) {
           it.favorited = !!res.favorited;
           btn.classList.toggle("on", it.favorited);
-          btn.textContent = it.favorited ? "♥" : "♡";
+          btn.textContent = it.favorited ? "已收藏" : "收藏";
           renderSourceTabs();
+          if (selectedItem === it) renderDetail();
         })
         .catch(function () {
           rollback();
@@ -347,7 +349,7 @@ const CostumeGallery = (() => {
 
     /* ---------- 编辑（一次一个块）：三个文本字段共用一套 ---------- */
     const EDIT_FIELDS = { "keywords": "keywords", "prompt-text": "prompt_text", "ref-prompt": "ref_prompt" };
-    const EDIT_TITLES = { "keywords": "服装关键词", "prompt-text": "文生图提示词（服装段）", "ref-prompt": "平铺制图提示词" };
+    const EDIT_TITLES = { "keywords": "服饰关键词", "prompt-text": "文生图提示词（服饰段）", "ref-prompt": "平铺制图提示词" };
     let editingKind = null;
 
     function isStudio(it) {
@@ -390,7 +392,7 @@ const CostumeGallery = (() => {
     function renderDetail() {
       const it = selectedItem;
       if (!it) {
-        detailEl.innerHTML = '<div class="costume-empty">在左侧选择一套服装</div>';
+        detailEl.innerHTML = '<div class="costume-empty">在左侧选择一套服饰</div>';
         return;
       }
       const displayChip = isFlat(it)
@@ -404,7 +406,7 @@ const CostumeGallery = (() => {
           esc(POLICY_ZH[pol.clothing] || pol.clothing) + "</span>"
         : "";
       const favBtn = '<button type="button" class="btn-sm costume-detail-fav' +
-        (it.favorited ? " on" : "") + '">' + (it.favorited ? "♥ 已收藏" : "♡ 收藏") + "</button>";
+        (it.favorited ? " on" : "") + '">' + (it.favorited ? "已收藏" : "收藏") + "</button>";
 
       /* 文本块（view 态）：头（标题+复制+编辑）+ 正文 */
       function renderTextBlock(kind, it) {
@@ -455,8 +457,7 @@ const CostumeGallery = (() => {
       const polAcc = pol.accessories || "keep";
       const policyBlock =
         '<div class="costume-kw-block" data-block="policy">' +
-        '<div class="costume-kw-head"><span class="costume-kw-label">换装语义</span>' +
-        '<span class="costume-pt-src">换装时对角色原本衣着怎么处理</span></div>' +
+        '<div class="costume-kw-head"><span class="costume-kw-label">换装语义</span></div>' +
         '<div class="costume-policy-row">' +
         '<select class="costume-pol-clothing">' +
         '<option value="replace"' + (polClothing === "replace" ? " selected" : "") + '>整套替换</option>' +

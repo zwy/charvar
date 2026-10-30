@@ -12,8 +12,12 @@ ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure whi
   narrow front V-neckline, an open back ending above the waistline, a natural cinched
   waist, a long slim straight skirt, a left-side slit up to mid-thigh, the hem clearing
   the floor, gold embroidery only along the neckline edge and at one side of the waist,
-  and a pair of black thin-strap stiletto sandals with 7 cm heels.  each piece separated
-  and laid flat, neatly arranged, soft studio lighting.'
+  and a pair of black thin-strap stiletto sandals with 7 cm heels. Laid flat and separated
+  with a clear gap between pieces, no pieces overlapping, all edges fully inside the
+  frame with margin around them, realistic relative sizes. Necklines and waistbands
+  toward the top of the frame, hems toward the bottom. Shoes side by side, toes toward
+  the bottom of the frame. Soft diffused studio lighting from the upper left, faint
+  contact shadows. No people, no mannequin, no hangers, no text.'
 subject_policy: {}
 caption_tags:
   gala_crimson_mermaid: crimson off-shoulder satin mermaid gown

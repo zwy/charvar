@@ -13,7 +13,11 @@ ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure whi
   background: an opaque matte black two-piece bikini laid flat as two separate pieces:
   the top with fixed triangle cups, thin shoulder straps and a continuous underbust
   band, and the bottoms with a mid-rise V-waist, fixed side bands and high-cut leg
-  openings.  each piece separated and laid flat, neatly arranged, soft studio lighting.'
+  openings. Laid flat and separated with a clear gap between pieces, no pieces overlapping,
+  all edges fully inside the frame with margin around them, realistic relative sizes.
+  Necklines and waistbands toward the top of the frame, hems toward the bottom. Soft
+  diffused studio lighting from the upper left, faint contact shadows. No people,
+  no mannequin, no hangers, no text.'
 subject_policy: {}
 caption_tags:
   swim_black_triangle: matte black triangle bikini
