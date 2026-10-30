@@ -1,15 +1,17 @@
 /* 服装库共享渲染：顶栏「服装」整页（costumepage.js）与后续生图流程弹层同用这一套
    —— 网格 CSS 红线、检索规则、关键词复制只修一处，别再两处分叉。容器里搭
-   来源页签 + 目录页签 + 搜索 + 卡片网格 + 常驻详情（大图 / 徽章行 / 关键词块 /
-   文本层块）。数据源：GET /costumes（items 全量返回，客户端过滤；日文搜索词经站点
-   JA 词表扩写成英文关键词）。站点库条目 = t2i 架空服装（无人物、2:3、白底）；
-   自建库（studio）= 平铺参考图（3:4）+ 中文标签 + 文本层（prompt_text 优先于
-   keywords 进批）。展示语义 =「服装锚」（与 pose 的「姿势锚」互补）：将来接生图
+   来源页签 + 收藏筛选 + 目录页签 + 搜索 + 卡片网格 + 常驻详情（大图 / 徽章行 /
+   换装语义 / 关键词块 / 文本层块 / 制图提示词块 + 重生成）。数据源：GET /costumes
+   （items 全量返回，客户端过滤；日文搜索词经站点 JA 词表扩写成英文关键词）。
+   站点库条目 = t2i 架空服装（无人物、2:3、白底）；自建库（studio）= 平铺参考图
+   （3:4）+ 中文标签 + 三层文本（keywords 短清单 / prompt_text 服装段 / ref_prompt
+   制图提示词）。展示语义 =「服装锚」（与 pose 的「姿势锚」互补）：将来接生图
    流程时在 genrefs 加 onPick，整页（无参考图上下文）不渲染加图按钮。 */
+
 const CostumeGallery = (() => {
   function mount({ root, onPick, close, onStat, variant = "modal" }) {
     let allData = null;
-    const filter = { source: "", category: "", q: "" };
+    const filter = { source: "", category: "", q: "", fav: false };
     let selectedItem = null;
 
     root.innerHTML =
@@ -19,7 +21,7 @@ const CostumeGallery = (() => {
       '<div class="costume-src-tabs segmented"></div>' +
       '<div class="costume-cat-tabs segmented"></div>' +
       '<div class="costume-toolbar-row">' +
-      '<input class="costume-q" type="text" placeholder="按关键词 / id / 中文标签搜索（英文关键词、日文词、id、中文标签均可）">' +
+      '<input class="costume-q" type="search" placeholder="按关键词 / id / 中文标签搜索（英文关键词、日文词、id、中文标签均可）">' +
       "</div>" +
       "</div>" +
       '<div class="costume-grid image-grid"></div>' +
@@ -31,6 +33,13 @@ const CostumeGallery = (() => {
 
     /* 来源中文名（自建库与站点库的来源页签/徽章行都读它；未知 id 原样显示） */
     const SOURCE_ZH = { "costume-db-01": "站点库", "studio": "自建库" };
+
+    /* 换装语义显示名（subject_policy.clothing；空策略 = 换装工作流默认整套替换） */
+    const POLICY_ZH = {
+      "replace": "整套替换",
+      "keep": "仅换配件（保留衣物）",
+      "add": "叠加穿搭",
+    };
 
     function esc(s) {
       return escapeHtml(String(s == null ? "" : s));
@@ -53,8 +62,12 @@ const CostumeGallery = (() => {
       }).length;
     }
 
-    /* 来源页签（全部 / 站点库 / 自建库）：计数用总清单（不随目录级筛选联动，避免循环）。
-       目录切换 / 来源切换都要重算对方页签的计数 —— renderTabs 的计数现算。 */
+    function favCount() {
+      return (allData.items || []).filter(function (it) { return it.favorited; }).length;
+    }
+
+    /* 来源页签（全部 / 站点库 / 自建库）+ 收藏筛选 chip（行尾，计数现算；
+       收藏为 0 时隐藏 chip——空筛选 chip 没有存在意义）。 */
     function renderSourceTabs() {
       const tabs = root.querySelector(".costume-src-tabs");
       const total = (allData.items || []).length;
@@ -67,7 +80,7 @@ const CostumeGallery = (() => {
           return [id, SOURCE_ZH[id] || id, counts[id] || 0];
         })
       );
-      tabs.innerHTML = keys
+      let html = keys
         .map(function (k) {
           return (
             '<button type="button" class="seg' + (filter.source === k[0] ? " active" : "") +
@@ -75,10 +88,25 @@ const CostumeGallery = (() => {
           );
         })
         .join("");
+      const n = favCount();
+      if (n) {
+        html +=
+          '<button type="button" class="seg costume-fav-chip' + (filter.fav ? " active" : "") +
+          '" data-fav="1">♥ 收藏 <em>' + n + "</em></button>";
+      }
+      tabs.innerHTML = html;
       [...tabs.children].forEach(function (btn) {
-        btn.addEventListener("click", function () {
+        if (btn.dataset.fav) {
+          btn.addEventListener("click", function () {
+            filter.fav = !filter.fav;
+            renderSourceTabs();
+            renderGrid();
+          });
+          return;
+        }
+        btn.addEventListener("click", function (ev) {
           filter.source = btn.dataset.v;
-          /* 来源切换时目录若被筛空（如站点库下点自建家族），自动回落到「全部目录」 */
+          /* 来源切换时目录若被筛空（如站点库下点自建家族），自动回落「全部目录」 */
           if (filter.category && !catCount(filter.category)) {
             filter.category = "";
           }
@@ -108,7 +136,7 @@ const CostumeGallery = (() => {
         .map(function (k) {
           return (
             '<button type="button" class="seg' + (filter.category === k[0] ? " active" : "") +
-            '" data-v="' + esc(k[0]) + '">' + esc(k[1]) + "<em>" + k[2] + "</em></button>"
+            '" data-v="' + esc(k[0]) + '">' + esc(k[1]) + '<em>' + k[2] + '</em></button>'
           );
         })
         .join("");
@@ -139,6 +167,7 @@ const CostumeGallery = (() => {
     function matches(item) {
       if (filter.source && item.source_id !== filter.source) return false;
       if (filter.category && item.category !== filter.category) return false;
+      if (filter.fav && !item.favorited) return false;
       if (filter.q) {
         const hay = (item.item_id + " " + (item.label || "") + " " + item.keywords + " " +
           (item.prompt_text || "") + " " + item.category +
@@ -170,9 +199,10 @@ const CostumeGallery = (() => {
       return it.display_type === "flat_lay" ? " costume-thumb-34" : "";
     }
 
-    /* 卡片：图位（站点 2:3 / 平铺 3:4）+ 中文 label（站点条目缺省回 id）+ mono id +
-       平铺徽章 + 关键词预览；无图条目渲染占位（服务端对空路径发空 URL）。
-       1407 张缩略图用 lazy 加载。网格行的收缩红线见 style.css .costume-grid 注释。 */
+    /* 卡片：图位（站点 2:3 / 平铺 3:4）+ 收藏星标（右上角，点了不选卡）+ 中文 label
+       （站点条目缺省回 id）+ mono id + 平铺徽章 + 关键词预览；无图条目渲染占位
+       （服务端对空路径发空 URL）。1407 张缩略图用 lazy 加载。网格行的收缩红线见
+       style.css .costume-grid 注释。 */
     function renderGrid() {
       const items = filteredItems();
       grid.innerHTML = "";
@@ -190,6 +220,8 @@ const CostumeGallery = (() => {
           (it.thumb_url
             ? '<img src="' + esc(it.thumb_url) + '" alt="" loading="lazy">'
             : '<div class="costume-thumb-empty">无图 · 纯文本</div>') +
+          '<button type="button" class="costume-fav' + (it.favorited ? " on" : "") +
+          '" title="收藏">' + (it.favorited ? "♥" : "♡") + "</button>" +
           "</div>" +
           '<div class="image-meta">' +
           '<div class="costume-card-title">' +
@@ -203,6 +235,11 @@ const CostumeGallery = (() => {
           "</div>";
         card.addEventListener("click", function () {
           selectItem(it);
+        });
+        const favBtn = card.querySelector(".costume-fav");
+        favBtn.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          toggleFav(it, favBtn);
         });
         grid.appendChild(card);
       });
@@ -220,9 +257,34 @@ const CostumeGallery = (() => {
       return it.display_type === "flat_lay";
     }
 
-    /* 卡片预览行：关键词先行（站库与自建库通用的提示词原料）；无关键词时回退文本层。 */
+    /* 卡片预览行：关键词先行；无关键词回退文本层。 */
     function itemPreview(it) {
       return it.keywords || it.prompt_text || "";
+    }
+
+    /* 收藏：乐观更新（先改内存状态再发请求），失败回滚 + 红角标提示。 */
+    function toggleFav(it, btn) {
+      const want = !it.favorited;
+      const rollback = function () {
+        it.favorited = !want;
+        btn.classList.toggle("on", !want);
+        btn.textContent = !want ? "♥" : "♡";
+        renderSourceTabs();
+      };
+      it.favorited = want;
+      btn.classList.toggle("on", want);
+      btn.textContent = want ? "♥" : "♡";
+      renderSourceTabs();
+      api("/costumes/" + encodeURIComponent(it.source_id) + "/" + encodeURIComponent(it.item_id) + "/favorite", { method: "POST" })
+        .then(function (res) {
+          it.favorited = !!res.favorited;
+          btn.classList.toggle("on", it.favorited);
+          btn.textContent = it.favorited ? "♥" : "♡";
+          renderSourceTabs();
+        })
+        .catch(function () {
+          rollback();
+        });
     }
 
     function selectItem(it) {
@@ -274,9 +336,57 @@ const CostumeGallery = (() => {
       });
     }
 
-    /* 详情栏：大图（无图条目 = 占位）+ 标题（中文 label，站点缺省回 id）+ 目录/家族双语
-       + 徽章行（来源 / 展示形态 / 无图纯文本）+ 关键词块（站点库原料）+ 文本层块
-       （自建库才有；prompt_source 手工维护 / AI 起稿）+ 参考图动作（弹层用）。 */
+    function selectItem(it) {
+      selectedItem = it;
+      const items = filteredItems();
+      [...grid.querySelectorAll(".costume-card")].forEach(function (el, i) {
+        el.classList.toggle("active", !!it && items[i] && items[i].item_id === it.item_id);
+      });
+      renderDetail();
+    }
+
+    /* ---------- 编辑（一次一个块）：三个文本字段共用一套 ---------- */
+    const EDIT_FIELDS = { "keywords": "keywords", "prompt-text": "prompt_text", "ref-prompt": "ref_prompt" };
+    const EDIT_TITLES = { "keywords": "服装关键词", "prompt-text": "文生图提示词（服装段）", "ref-prompt": "平铺制图提示词" };
+    let editingKind = null;
+
+    function isStudio(it) {
+      return it.source_id === "studio";
+    }
+
+    function updateItem(it, changes) {
+      Object.assign(it, changes);
+      /* 卡片预览行也依赖 keywords/prompt_text —— 换了要重画 */
+      renderGrid();
+      renderDetail();
+    }
+
+    function saveEdit(kind, it, value, btn) {
+      const field = EDIT_FIELDS[kind];
+      const body = kind === "prompt-text"
+        ? { text: value }
+        : kind === "keywords" ? { keywords: value } : { ref_prompt: value };
+      btn.disabled = true;
+      btn.textContent = "保存中…";
+      api("/costumes/" + encodeURIComponent(it.source_id) + "/" + encodeURIComponent(it.item_id) + "/" + kind, {
+        method: "PUT",
+        body: JSON.stringify(body),
+      })
+        .then(function () {
+          editingKind = null;
+          const changes = {};
+          changes[field] = value;
+          updateItem(it, changes);
+        })
+        .catch(function (err) {
+          btn.disabled = false;
+          btn.textContent = "保存失败：" + err.message;
+        });
+    }
+
+    /* 详情栏：大图（无图 = 占位）+ 标题 + 目录/家族双语 + 徽章行（来源 / 展示形态 /
+       无图纯文本）+ 换装语义（条目策略，两个下拉 + 保存）+ 关键词块（编辑钮，仅自建）
+       + 文本层块（编辑钮）+ 制图提示词块（编辑钮 + 重新生成参考图，仅自建）。 */
     function renderDetail() {
       const it = selectedItem;
       if (!it) {
@@ -288,6 +398,93 @@ const CostumeGallery = (() => {
         : '<span class="costume-chip costume-chip-muted">隐形模特</span>';
       const sourceChip = '<span class="costume-chip costume-chip-muted">' +
         esc(SOURCE_ZH[it.source_id] || it.source_id) + "</span>";
+      const pol = it.subject_policy || {};
+      const polChip = pol.clothing
+        ? '<span class="costume-chip' + (pol.clothing === "add" ? '' : ' costume-chip-muted') + '">' +
+          esc(POLICY_ZH[pol.clothing] || pol.clothing) + "</span>"
+        : "";
+      const favBtn = '<button type="button" class="btn-sm costume-detail-fav' +
+        (it.favorited ? " on" : "") + '">' + (it.favorited ? "♥ 已收藏" : "♡ 收藏") + "</button>";
+
+      /* 文本块（view 态）：头（标题+复制+编辑）+ 正文 */
+      function renderTextBlock(kind, it) {
+        const field = EDIT_FIELDS[kind];
+        const value = it[field] || "";
+        let body;
+        if (editingKind === kind) {
+          body =
+            '<textarea class="costume-edit-ta" rows="5">' + esc(value) + "</textarea>" +
+            '<div class="costume-edit-row">' +
+            '<button type="button" class="btn-sm costume-edit-save">保存</button>' +
+            '<button type="button" class="btn-sm costume-edit-cancel">取消</button>' +
+            "</div>";
+        } else {
+          body =
+            '<div class="costume-kw-text">' +
+            (value ? esc(value) : '<span class="costume-kw-muted">' +
+              (kind === "ref-prompt" ? "未写 —— 参考图重生成需要先写这个" : "（空）") +
+              "</span>") +
+            "</div>";
+        }
+        const head =
+          '<div class="costume-kw-head">' +
+          '<span class="costume-kw-label">' + esc(EDIT_TITLES[kind]) + "</span>" +
+          '<span class="costume-kw-actions">' +
+          (kind === "prompt-text" && !editingKind
+            ? '<span class="costume-pt-src">' + (it.prompt_source === "ai_draft" ? "AI 起稿" : "手工维护") + "</span>"
+            : "") +
+          '<button type="button" class="btn-sm costume-copy" data-kind="' + kind + '"' +
+          (value ? '' : ' disabled') +
+          '>复制</button>' +
+          '<button type="button" class="btn-sm costume-edit-btn" data-kind="' + kind + '">编辑</button>' +
+          "</span>" +
+          "</div>";
+        return '<div class="costume-kw-block" data-block="' + kind + '">' + head + body + "</div>";
+      }
+
+      /* 编辑块集合：keywords 仅自建可编辑；prompt-text 两库；ref-prompt 仅自建展示 */
+      const blocks = [];
+      blocks.push(renderTextBlock("keywords", it));
+      blocks.push(renderTextBlock("prompt-text", it));
+      if (isStudio(it)) {
+        blocks.push(renderTextBlock("ref-prompt", it));
+      }
+
+      /* 换装语义块（两库都有：策略是逐条目的） */
+      const polClothing = pol.clothing || "replace";
+      const polAcc = pol.accessories || "keep";
+      const policyBlock =
+        '<div class="costume-kw-block" data-block="policy">' +
+        '<div class="costume-kw-head"><span class="costume-kw-label">换装语义</span>' +
+        '<span class="costume-pt-src">换装时对角色原本衣着怎么处理</span></div>' +
+        '<div class="costume-policy-row">' +
+        '<select class="costume-pol-clothing">' +
+        '<option value="replace"' + (polClothing === "replace" ? " selected" : "") + '>整套替换</option>' +
+        '<option value="add"' + (polClothing === "add" ? " selected" : "") + '>叠加穿搭（换/加袜类）</option>' +
+        '<option value="keep"' + (polClothing === "keep" ? " selected" : "") + '>仅换配件</option>' +
+        "</select>" +
+        '<select class="costume-pol-acc">' +
+        '<option value="keep"' + (polAcc === "keep" ? " selected" : "") + '>保留配件</option>' +
+        '<option value="remove"' + (polAcc === "remove" ? " selected" : "") + '>摘掉鞋袜与配件</option>' +
+        "</select>" +
+        '<button type="button" class="btn-sm costume-pol-save">保存</button>' +
+        "</div>" +
+        "</div>";
+
+      /* 重生成行（仅自建 + 已有图）：没有 ref_prompt 时按钮禁用（没提示词不出图） */
+      let regenRow = "";
+      if (isStudio(it) && it.thumb_url) {
+        regenRow =
+          '<div class="costume-regen-row">' +
+          '<button type="button" class="btn-sm costume-regen"' +
+          (!it.ref_prompt ? " disabled" : "") +
+          ">重新生成参考图</button>" +
+          '<span class="costume-kw-muted">约 15 秒 · 旧图自动备份 · ' +
+          (!it.ref_prompt ? "先写好制图提示词才能重生成" : "seed 可复现") +
+          "</span>" +
+          "</div>";
+      }
+
       detailEl.innerHTML =
         (it.image_url
           ? '<div class="costume-detail-img" title="点看大图">' +
@@ -297,41 +494,112 @@ const CostumeGallery = (() => {
         '<div class="costume-detail-titles">' +
         "<h3>" + esc(it.label || it.item_id) + "</h3>" +
         '<div class="costume-jp">' + bilingual(it.category_zh, it.category) + "</div>" +
-        '<div class="costume-tags">' + sourceChip + displayChip +
+        '<div class="costume-tags">' + favBtn + sourceChip + displayChip + polChip +
         (it.image_url
           ? ""
           : '<span class="costume-chip costume-chip-muted">无图 · 纯文本</span>') +
         "</div>" +
         "</div>" +
-        '<div class="costume-kw-block">' +
-        '<div class="costume-kw-head">' +
-        '<span class="costume-kw-label">服装关键词</span>' +
-        (it.keywords ? '<button type="button" class="btn-sm costume-kw-copy">复制</button>' : "") +
-        "</div>" +
-        '<div class="costume-kw-text">' +
-        (it.keywords ? esc(it.keywords) : '<span class="costume-kw-muted">这条没有关键词描述</span>') +
-        "</div>" +
-        "</div>" +
-        (it.prompt_text
-          ? '<div class="costume-kw-block">' +
-            '<div class="costume-kw-head">' +
-            '<span class="costume-kw-label">文生图提示词（文本层）</span>' +
-            '<button type="button" class="btn-sm costume-pt-copy">复制</button>' +
-            "</div>" +
-            '<div class="costume-pt-src">' +
-            (it.prompt_source === "ai_draft" ? "AI 起稿" : "手工维护") +
-            "</div>" +
-            '<div class="costume-kw-text">' + esc(it.prompt_text) + "</div>" +
-            "</div>"
-          : "");
+        policyBlock +
+        blocks.join("") +
+        regenRow;
+
+      /* 事件 */
+      detailEl.querySelector(".costume-detail-fav").addEventListener("click", function () {
+        it.favorited = !it.favorited;
+        updateItem(it, { favorited: it.favorited });
+        api("/costumes/" + encodeURIComponent(it.source_id) + "/" + encodeURIComponent(it.item_id) + "/favorite", { method: "POST" })
+          .then(function (res) {
+            updateItem(it, { favorited: !!res.favorited });
+          })
+          .catch(function () {
+            updateItem(it, { favorited: !it.favorited });
+          });
+      });
+      const detailImg = detailEl.querySelector(".costume-detail-img");
       if (it.image_url) {
-        detailEl.querySelector(".costume-detail-img").addEventListener("click", function () {
+        detailImg.addEventListener("click", function () {
           Media.showImageModal(it.image_url, (it.label || it.item_id) +
             "（" + (it.category_zh || it.category) + "）");
         });
       }
-      wireCopy(detailEl.querySelector(".costume-kw-copy"), it.keywords);
-      wireCopy(detailEl.querySelector(".costume-pt-copy"), it.prompt_text);
+      [...detailEl.querySelectorAll("[data-block]")].forEach(function (block) {
+        /* 复制 / 编辑 / 保存 / 取消 */
+        if (block.dataset.block === "policy") {
+          block.querySelector(".costume-pol-save").addEventListener("click", function () {
+            const clothing = block.querySelector(".costume-pol-clothing").value;
+            const accessories = block.querySelector(".costume-pol-acc").value;
+            const btn = block.querySelector(".costume-pol-save");
+            btn.disabled = true;
+            btn.textContent = "保存中…";
+            api("/costumes/" + encodeURIComponent(it.source_id) + "/" + encodeURIComponent(it.item_id) + "/subject-policy", {
+              method: "PUT",
+              body: JSON.stringify({ clothing: clothing, accessories: accessories }),
+            })
+              .then(function (pol2) {
+                it.subject_policy = pol2;
+                editingKind = null;
+                renderDetail();
+                renderGrid();
+              })
+              .catch(function (err) {
+                btn.disabled = false;
+                btn.textContent = "保存失败";
+              });
+          });
+          return;
+        }
+        const kind = block.dataset.block;
+        const value = it[EDIT_FIELDS[kind]] || "";
+        const copyBtn = block.querySelector(".costume-copy");
+        if (copyBtn && value) wireCopy(copyBtn, value);
+        const editBtn = block.querySelector(".costume-edit-btn");
+        if (editBtn && kind === "keywords" && !isStudio(it)) {
+          editBtn.disabled = true;
+          editBtn.title = "站点条目的关键词是站点数据";
+        } else if (editBtn) {
+          editBtn.addEventListener("click", function () {
+            editingKind = editingKind === kind ? null : kind;
+            renderDetail();
+          });
+        }
+        const saveBtn = block.querySelector(".costume-edit-save");
+        if (saveBtn) {
+          saveBtn.addEventListener("click", function () {
+            saveEdit(kind, it, block.querySelector(".costume-edit-ta").value.trim(), saveBtn);
+          });
+        }
+        const cancelBtn = block.querySelector(".costume-edit-cancel");
+        if (cancelBtn) {
+          cancelBtn.addEventListener("click", function () {
+            editingKind = null;
+            renderDetail();
+          });
+        }
+      });
+      const regenBtn = detailEl.querySelector(".costume-regen");
+      if (regenBtn && !regenBtn.disabled) {
+        regenBtn.addEventListener("click", function () {
+          regenBtn.disabled = true;
+          regenBtn.textContent = "生成中…（约 15 秒）";
+          api("/costumes/" + encodeURIComponent(it.source_id) + "/" + encodeURIComponent(it.item_id) + "/regenerate", {
+            method: "POST",
+            body: JSON.stringify({}),
+          })
+            .then(function (res) {
+              updateItem(it, {
+                thumb_url: "/costumes/image/" + it.source_id + "/" + it.item_id + "/thumb?v=" + encodeURIComponent(res.updated_at),
+                image_url: "/costumes/image/" + it.source_id + "/" + it.item_id + "/full?v=" + encodeURIComponent(res.updated_at),
+              });
+            })
+            .catch(function (err) {
+              regenBtn.textContent = "生成失败";
+              setTimeout(function () {
+                renderDetail();
+              }, 1600);
+            });
+        });
+      }
       const addBtn = detailEl.querySelector(".costume-add-btn");
       if (addBtn) {
         addBtn.addEventListener("click", function () {

@@ -646,3 +646,29 @@ def test_build_costume_prompt_keywords():
     # 次序：服装锚 → 要点注记 → 身材锚；缺省时不出现
     assert with_kw.index("<image2>为服装参考") < with_kw.index("服装要点")
     assert "服装要点" not in pose_prompt.build_costume_prompt()
+# ---------- 换装语义分叉（replace 整套替换 / add 叠加袜类，本批新增） ----------
+
+def test_costume_mode_add_branches():
+    """叠加型：原衣着保留、袜类换上；replace 版仍是整套替换（缺省不变）。"""
+    from charvar import pose_prompt
+
+    add = pose_prompt.build_costume_prompt(costume_policy={"clothing": "add"})
+    assert "其原有服装保留不变" in add          # 身份锚叠加版
+    assert "腿上只穿图中这一双袜类" in add      # 禁令叠加版（正向措辞）
+    assert "替换原有服装" not in add
+    rep = pose_prompt.build_costume_prompt()
+    assert "替换原有服装" in rep
+    assert "袜类" not in rep
+    with pytest.raises(ValueError):
+        pose_prompt.build_costume_prompt(costume_policy={"clothing": "bogus"})
+    # 工作流①（带动作、<image3>）同样分叉
+    p1 = pose_prompt.build_prompt(
+        "全身1人・セクシー系", "呈自然的 S 形曲线",
+        costume=True, costume_policy={"clothing": "add"},
+    )
+    assert "把<image3>图中的袜类穿到角色腿上" in p1
+    assert "原有衣着与鞋帽、包袋等其它配件保持原样" in p1
+    # 无策略 = replace（现有行为零变化）
+    assert "替换其原有服装" in pose_prompt.build_prompt(
+        "全身1人・セクシー系", "呈自然的 S 形曲线", costume=True
+    )

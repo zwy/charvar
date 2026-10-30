@@ -712,3 +712,27 @@ td .caption { color: var(--muted); }
   .costume-detail { width: 100%; border-radius: 0; }
   .costume-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
 }
+
+/* ---- 服装库：收藏 / 编辑 / 换装语义 / 参考图重生成（与 costumegallery.js 配套） ---- */
+.costume-thumb { position: relative; }  /* 卡片收藏星标的锚（.image-card overflow 红线不背星标锅） */
+.costume-fav {
+  position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; padding: 0;
+  line-height: 24px; text-align: center; border-radius: 50%;
+  border: 1px solid var(--line); background: #fff; color: var(--muted);
+  font-size: 13px; cursor: pointer;
+}
+.costume-fav.on { color: #e0245e; border-color: #e0245e; }
+.costume-kw-actions { display: inline-flex; gap: 4px; margin-left: auto; }
+.costume-edit-ta {
+  width: 100%; min-height: 96px; resize: vertical; font-size: 12px; line-height: 1.5;
+  padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px;
+  font-family: var(--mono); color: var(--text); background: #fff;
+}
+.costume-edit-row { display: flex; gap: 4px; margin-top: var(--sp-1); }
+.costume-policy-row { display: flex; gap: 4px; align-items: center; margin-top: var(--sp-1); }
+.costume-policy-row select {
+  font-size: 12px; padding: 3px 6px; border: 1px solid var(--line);
+  border-radius: 4px; background: #fff; color: var(--text); max-width: 180px;
+}
+.costume-regen-row { display: flex; gap: var(--sp-2); align-items: center; margin-top: var(--sp-1); }
+.costume-detail-fav.on { color: #e0245e; border-color: #e0245e; }

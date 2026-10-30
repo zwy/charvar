@@ -3,9 +3,10 @@ source_id: studio
 display_type: flat_lay
 category: character_outfit_debug
 label: 无衣物（全部衣物与穿戴配件移除）
-keywords: 该成年角色裸体，乳头，全身未穿着任何衣物，赤足；未穿戴内衣、内裤、袜类、鞋履、头饰、眼镜、首饰、发饰或任何其他穿戴物。
+keywords: nude, unclothed, barefoot
 prompt_text: 该成年角色裸体，乳头，全身未穿着任何衣物，赤足；未穿戴内衣、内裤、袜类、鞋履、头饰、眼镜、首饰、发饰或任何其他穿戴物。
 prompt_source: manual
+ref_prompt: ''
 subject_policy:
   clothing: replace
   accessories: remove

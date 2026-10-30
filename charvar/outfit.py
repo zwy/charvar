@@ -89,7 +89,15 @@ def list_outfit_presets(db_path: Path | None = None) -> list[dict[str, Any]]:
     for r in rows:
         family = families.setdefault(
             r["category"],
-            {"name": r["category"], "type": "outfit", "version": 1, "count": 0, "description": "", "items": []},
+            {
+                "name": r["category"],
+                "name_zh": costumes.category_zh(r["category"]),
+                "type": "outfit",
+                "version": 1,
+                "count": 0,
+                "description": "",
+                "items": [],
+            },
         )
         native = r["item_id"][len(r["category"]) + 1:] if r["item_id"].startswith(f"{r['category']}_") else r["item_id"]
         family["items"].append({"id": native, "label": r["label"] or native})

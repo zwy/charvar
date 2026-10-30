@@ -107,6 +107,7 @@ def build_prompt(
     body_lock: list[str] | None = None,
     costume_keywords: str | None = None,
     costume_display: str = "ghost",
+    costume_policy: dict | None = None,
 ) -> str:
     """按线型拼 demo 结构；动作描述必须是已写好的视角级文本。
 
@@ -140,22 +141,20 @@ def build_prompt(
         parts = [identity, mannequin, lead + text, seg["framing"], seg["background"], seg["guard"]]
         return "\n\n".join(parts)
     if costume:
+        mode = costume_mode(costume_policy)
+        m = _COSTUME_MODE_SEGMENTS[mode]
         parts = [
-            (
-                "<image1>为角色设定参考，保留该角色的面部特征、发型、发色、肤色和整体"
-                "美术风格，确保生成的是同一个角色，不要擅自更换造型；其原有服装不保留，"
-                "配饰与<image3>服装参考冲突时，以服装参考为准。"
-            ),
+            m["identity"].format(slot=3),
             seg["mannequin"],
             _display_form(costume_display, 3),
-            _COSTUME_ANCHOR.format(slot=3),
+            m["anchor"].format(slot=3),
             _costume_keywords(costume_keywords, 3),
             _figure_anchor(3, body_lock),
             _LEAD[kind] + text,
-            _COSTUME_FUSION,
+            m["fusion_pose"].format(slot=3),
             seg["framing"],
             seg["background"],
-            _guard_with_costume(seg["guard"]),
+            _guard_with_costume(seg["guard"], m["guard"]),
         ]
         return "\n\n".join(part for part in parts if part)
     parts = [
@@ -255,39 +254,95 @@ def _figure_anchor(costume_slot: int, body_lock: list[str] | None) -> str:
     return "\n".join(parts)
 
 
-def _guard_with_costume(seg_guard: str) -> str:
+def _guard_with_costume(seg_guard: str, guard_append: str = _COSTUME_GUARD_APPEND) -> str:
     """基础禁令句 + 换装禁令（缝合句号，避免「。；」双标点）。"""
     base = seg_guard[:-1] if seg_guard.endswith("。") else seg_guard
-    return base + "；" + _COSTUME_GUARD_APPEND
+    return base + "；" + guard_append
+
+
+# 服装参考的换装语义分叉（条目 subject_policy.clothing → 措辞）。
+# replace = 整套替换（现有行为，缺省）；add = 叠加型（丝袜等单件：原衣物保留、
+# 袜类换上）。两个模式逐段对应（身份锚/图锚/融合/禁令/穿上句），全部正向措辞
+# —— 禁句按「显性召唤物」红线写成正向事实（如「只穿图中这一双」而不是「别出现两双」）。
+COSTUME_MODES = ("replace", "add")
+
+_COSTUME_MODE_SEGMENTS: dict[str, dict[str, str]] = {
+    "replace": {
+        "identity": (
+            "<image1>为角色设定参考，保留该角色的面部特征、发型、发色、肤色和整体"
+            "美术风格，确保生成的是同一个角色，不要擅自更换造型；其原有服装不保留，"
+            "配饰与<image{slot}>服装参考冲突时，以服装参考为准。"
+        ),
+        "anchor": _COSTUME_ANCHOR,
+        "fusion_pose": _COSTUME_FUSION,
+        "fusion_nopose": _COSTUME_FUSION_NOPOSE,
+        "guard": _COSTUME_GUARD_APPEND,
+        "wear_lead": "让<image1>图中的角色穿上<image{slot}>图中的服装，替换原有服装。",
+    },
+    "add": {
+        "identity": (
+            "<image1>为角色设定参考，保留该角色的面部特征、发型、发色、肤色和整体"
+            "美术风格，确保生成的是同一个角色，不要擅自更换造型；其原有服装保留不变，"
+            "腿部袜类与<image{slot}>服装参考不一致时，以服装参考为准。"
+        ),
+        "anchor": (
+            "<image{slot}>为袜类参考，仅参考这双袜子的款式：长度（连裤/过膝/及膝）、"
+            "材质、透明度、颜色与光泽；把它完整穿到角色腿上，袜口位置与图中一致；"
+            "若图中含人物，不采用其脸、发型、肤色、体型、姿势、背景或画风。"
+        ),
+        "fusion_pose": (
+            "把<image{slot}>图中的袜类穿到角色腿上：角色原本穿着袜类时直接换成图中"
+            "这一双，原本没穿袜类时就直接穿上；原有衣着与鞋帽、包袋等其它配件保持"
+            "原样不更换；袜类自然贴合腿部，在屈膝、抬腿处产生合理的褶皱与拉伸。"
+        ),
+        "fusion_nopose": (
+            "把<image{slot}>图中的袜类穿到角色腿上：角色原本穿着袜类时直接换成图中"
+            "这一双，原本没穿袜类时就直接穿上；原有衣着与鞋帽、包袋等其它配件保持"
+            "原样不更换；袜类自然贴合腿部，自然站立时产生合理的褶皱与拉伸。"
+        ),
+        "guard": "原有衣着完整保留不更换，腿上只穿图中这一双袜类。",
+        "wear_lead": "让<image1>图中的角色穿上<image{slot}>图中的袜类，其余衣着保留不变。",
+    },
+}
+
+
+def costume_mode(costume_policy: dict | None) -> str:
+    """条目策略 → 措辞模式（缺省/未知 = 整套替换；add 以外不静默发明分叉）。"""
+    clothing = str((costume_policy or {}).get("clothing") or "replace")
+    if clothing not in COSTUME_MODES:
+        raise ValueError(
+            f"未知换装语义：{clothing}（可选 {'/'.join(COSTUME_MODES)}）"
+        )
+    return clothing
 
 
 def build_costume_prompt(
     body_lock: list[str] | None = None,
     costume_keywords: str | None = None,
     costume_display: str = "ghost",
+    costume_policy: dict | None = None,
 ) -> str:
     """单主体 + 服装（无动作参考）→ 全身换装图提示词。
 
     <image1> = 主体档案槽位图（角色锚定），<image2> = 服装参考图；姿态不锚
     （模型自选自然站姿）。服装锚/身材锚/换装禁令与 build_prompt(costume=True) 同源。 costume_keywords 同 build_prompt。
+    costume_policy 条目策略 → 措辞分叉（replace 整套替换 / add 叠加袜类）。
     """
-    identity = (
-        "<image1>为角色设定参考，保留该角色的面部特征、发型、发色、肤色和整体"
-        "美术风格，确保生成的是同一个角色，不要擅自更换造型；其原有服装不保留，"
-        "配饰与<image2>服装参考冲突时，以服装参考为准。"
-    )
+    mode = costume_mode(costume_policy)
+    m = _COSTUME_MODE_SEGMENTS[mode]
+    fusion = m["fusion_nopose"]
     seg = _SEGMENTS["full"]
     return "\n\n".join(
         [
-            identity,
+            m["identity"].format(slot=2),
             _display_form(costume_display, 2),
-            _COSTUME_ANCHOR.format(slot=2),
+            m["anchor"].format(slot=2),
             _costume_keywords(costume_keywords, 2),
             _figure_anchor(2, body_lock),
-            "让<image1>图中的角色穿上<image2>图中的服装，替换原有服装。",
-            _COSTUME_FUSION_NOPOSE,
+            m["wear_lead"].format(slot=2),
+            fusion.format(slot=2),
             seg["framing"],
             seg["background"],
-            _guard_with_costume(seg["guard"]),
+            _guard_with_costume(seg["guard"], m["guard"]),
         ]
     )

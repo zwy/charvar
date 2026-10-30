@@ -1553,6 +1553,7 @@ def pose_prompt_cmd(
                 body_lock = list(profile.body_lock) if profile else None
             costume_note = ""
             costume_display = "ghost"
+            costume_policy: dict | None = None
             if costume:
                 try:
                     c_row = costumes_service.resolve_ref(conn, costume)
@@ -1560,6 +1561,13 @@ def pose_prompt_cmd(
                         conn, f"{c_row['source_id']}/{c_row['item_id']}"
                     )
                     costume_display = c_row["display_type"]
+                    import json as _json
+
+                    costume_policy = (
+                        _json.loads(c_row["subject_policy"])
+                        if str(c_row["subject_policy"] or "").strip()
+                        else None
+                    )
                 except costumes_service.CostumeError as exc:
                     _die(str(exc))
         except poses_service.PoseError as exc:
@@ -1590,6 +1598,7 @@ def pose_prompt_cmd(
         body_lock=body_lock,
         costume_keywords=costume_note or None,
         costume_display=costume_display,
+        costume_policy=costume_policy,
     )
     if not json_out:
         typer.echo(prompt)
@@ -1665,6 +1674,13 @@ def costume_prompt_cmd(
             c_has_image = bool(
                 str(c_row["file_path"] or "").strip() or str(c_row["image_path"] or "").strip()
             )
+            import json as _json
+
+            c_policy = (
+                _json.loads(c_row["subject_policy"])
+                if str(c_row["subject_policy"] or "").strip()
+                else None
+            )
         except costumes_service.CostumeError as exc:
             _die(str(exc))
     body_lock: list[str] | None = None
@@ -1675,7 +1691,8 @@ def costume_prompt_cmd(
             slot_label, slot = poses_service.subject_slot_for_prompt(conn, subject, "")
         body_lock = list(profile.body_lock) if profile else None
     prompt = pose_prompt_module.build_costume_prompt(
-        body_lock=body_lock, costume_keywords=keywords, costume_display=display
+        body_lock=body_lock, costume_keywords=keywords, costume_display=display,
+        costume_policy=c_policy,
     )
     if not json_out:
         typer.echo(prompt)
@@ -1874,6 +1891,170 @@ def pose_describe_cmd(
     if json_out:
         typer.echo(json.dumps({k: v for k, v in summary.items() if k != "results"}, ensure_ascii=False))
 
+
+# ---------- 服装条目编辑（policy / keywords / 收藏 / 制图提示词 / 重生成） ----------
+
+def _costume_sync_mirror(conn: object, source_id: str, item_id: str) -> None:
+    """studio 条目编辑后自动同步镜像 yaml（站点条目无镜像 —— DB 就是它的真源）。"""
+    from charvar import costumes as costumes_service
+
+    if source_id == costumes_service.STUDIO_SOURCE_ID:
+        costumes_service.export_item(conn, f"{source_id}/{item_id}")
+
+
+def _costume_target(conn: object, ref: str) -> tuple:
+    """条目 ref → (source_id, item_id)；查不到直接退出。"""
+    from charvar import costumes as costumes_service
+
+    try:
+        row = costumes_service.item_row(conn, ref)
+    except costumes_service.CostumeError as exc:
+        _die(str(exc))
+    return str(row["source_id"]), str(row["item_id"])
+
+
+@costume_app.command("policy")
+def costume_policy_cmd(
+    ref: str = typer.Argument(..., help="服装条目 ref（如 SPR-0001 或 studio/…）"),
+    clothing: str = typer.Option("", "--clothing", help="replace（整套替换）/ keep（保留衣物） / add（叠加袜类）"),
+    accessories: str = typer.Option("", "--accessories", help="remove（摘鞋袜配件）/ keep"),
+) -> None:
+    """看 / 写条目的换装策略（叠加型 clothing=add：保留原衣着、换/加袜类）。
+
+    策略存 costume_items.subject_policy —— catalog 重灌不碰该列，编辑是持久的；
+    studio 条目写完自动同步镜像 yaml。不带 --clothing/--accessories 时只显示当前策略。
+    """
+    import json as _json
+
+    from charvar import costumes as costumes_service
+    from charvar import storage
+
+    with storage.connect() as conn:
+        source_id, item_id = _costume_target(conn, ref)
+        row = costumes_service.item_row(conn, f"{source_id}/{item_id}")
+        current = _json.loads(row["subject_policy"]) if str(row["subject_policy"] or "").strip() else {}
+        if not clothing and not accessories:
+            typer.echo(_json.dumps(current, ensure_ascii=False))
+            return
+        policy = dict(current)
+        if clothing:
+            policy["clothing"] = clothing
+        if accessories:
+            policy["accessories"] = accessories
+        try:
+            normalized = costumes_service.set_item_policy(conn, source_id, item_id, policy)
+        except (costumes_service.CostumeError, ValueError) as exc:
+            _die(f"策略不合法：{exc}")
+        _costume_sync_mirror(conn, source_id, item_id)
+    typer.echo(
+        f"策略已更新：{source_id}/{item_id} → {_json.dumps(normalized, ensure_ascii=False)}"
+    )
+
+
+@costume_app.command("favorite")
+def costume_favorite_cmd(
+    ref: str = typer.Argument(..., help="服装条目 ref"),
+    favorite: bool = typer.Option(None, "--on/--off", help="--on 收藏 / --off 取消；都不给 = 切换"),
+) -> None:
+    """收藏 / 取消收藏（独立用户层表 costume_favorites，catalog 重灌不碰）。"""
+    from charvar import costumes as costumes_service
+    from charvar import storage
+
+    with storage.connect() as conn:
+        source_id, item_id = _costume_target(conn, ref)
+        try:
+            result = costumes_service.toggle_favorite(
+                conn, source_id, item_id,
+                favorite=None if favorite is None else bool(favorite),
+            )
+        except costumes_service.CostumeError as exc:
+            _die(str(exc))
+    if result["favorite"]:
+        typer.echo(f"已收藏：{result['source_id']}/{result['item_id']}")
+    else:
+        typer.echo(f"已取消收藏：{result['source_id']}/{result['item_id']}")
+
+
+@costume_app.command("keywords")
+def costume_keywords_cmd(
+    ref: str = typer.Argument(..., help="服装条目 ref（关键词编辑只对自建条目开放）"),
+    set_value: str = typer.Option(None, "--set", help="新的关键词清单（英文部件短清单；空串 = 清掉；缺省 = 只看）"),
+) -> None:
+    """看 / 写自建条目的关键词（部件短清单：卡片预览 / 检索 / 「服装要点」注记回退）。
+
+    站点条目的关键词逐字来自 catalog.json（站点数据红线），拒绝修改。
+    """
+    from charvar import costumes as costumes_service
+    from charvar import storage
+
+    with storage.connect() as conn:
+        source_id, item_id = _costume_target(conn, ref)
+        if set_value is None:
+            row = costumes_service.item_row(conn, f"{source_id}/{item_id}")
+            typer.echo(row["keywords"])
+            return
+        try:
+            result = costumes_service.set_keywords(conn, source_id, item_id, set_value)
+        except costumes_service.CostumeError as exc:
+            _die(str(exc))
+        _costume_sync_mirror(conn, source_id, item_id)
+    typer.echo(f"关键词已更新：{result['source_id']}/{result['item_id']}")
+
+
+@costume_app.command("ref-prompt")
+def costume_ref_prompt_cmd(
+    ref: str = typer.Argument(..., help="服装条目 ref"),
+    set_value: str = typer.Option(None, "--set", help="新的平铺制图提示词（空串 = 清掉；缺省 = 只看）"),
+) -> None:
+    """看 / 写平铺制图提示词（ref_prompt，参考图重生成的原料；与服装段 prompt_text 分层）。
+
+    没有制图提示词的条目不能重生成参考图（`charvar costume regen` 会拒绝）。
+    """
+    from charvar import costumes as costumes_service
+    from charvar import storage
+
+    with storage.connect() as conn:
+        source_id, item_id = _costume_target(conn, ref)
+        if set_value is None:
+            prompt = costumes_service.get_costume_prompt(conn, source_id, item_id)
+            typer.echo(prompt["ref_prompt"])
+            return
+        try:
+            result = costumes_service.set_ref_prompt(conn, source_id, item_id, set_value)
+        except costumes_service.CostumeError as exc:
+            _die(str(exc))
+        _costume_sync_mirror(conn, source_id, item_id)
+    typer.echo(
+        f"制图提示词已更新（长度 {len(result['ref_prompt'])}）：{result['source_id']}/{result['item_id']}"
+    )
+
+
+@costume_app.command("regen")
+def costume_regen_cmd(
+    ref: str = typer.Argument(..., help="自建服装条目 ref（如 studio/stockings_8_sheer_black_15d）"),
+    seed: int = typer.Option(None, "--seed", help="缺省 = 条目固定种子（同提示词可复现）；换种子重摇"),
+    json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出"),
+) -> None:
+    """按 ref_prompt 重新生成参考图（ComfyUI 2k 3:4；三档回写 + 旧稿备份 + 镜像同步）。
+
+    前提：自建条目 + 已写平铺制图提示词（没有提示词不能重生成）。
+    """
+    from charvar import costumes as costumes_service
+    from charvar import storage
+
+    with storage.connect() as conn:
+        source_id, item_id = _costume_target(conn, ref)
+    try:
+        result = costumes_service.regenerate_reference(source_id, item_id, seed=seed)
+    except costumes_service.CostumeError as exc:
+        _die(str(exc))
+    if json_out:
+        typer.echo(json.dumps(result, ensure_ascii=False))
+        return
+    typer.echo(
+        f"参考图已重生成：{result['source_id']}/{result['item_id']}"
+        f"（seed {result['seed']}，{result['width']}×{result['height']}）"
+    )
 
 def main() -> None:
     """console script 入口（pyproject.toml 声明 charvar.cli:main）。"""

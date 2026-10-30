@@ -397,7 +397,9 @@ def test_classic_prompt_puts_outfit_first(outfit_db):
     preset = outfit_service.combine(_pose_preset(), outfit_service.load_outfit("stockings_8"))
     result = generate(sub, preset, GenerateRequest(subject=sub, seed=7, count=1))
     prompt = result.items[0].prompt
-    assert prompt.startswith("wearing sheer black nylon pantyhose")
+    # stockings_8 已打叠加策略：classic 拼装给服装段带「保留原衣着」前缀
+    # （subject_policy.CLOTHING_ADD_LEAD），随后仍是 wearing 服装段
+    assert prompt.startswith("保留角色原有衣着不更换，仅在腿部叠加/换穿：wearing sheer black nylon pantyhose")
     assert prompt.index("wearing sheer black nylon pantyhose") < prompt.index("人物正面朝向镜头站立")
 
 

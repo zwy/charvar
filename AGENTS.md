@@ -18,7 +18,10 @@
 
 ## 服装库
 
-costume-db-01（姿势库同作者；细则见 `docs/服装库.md`）：**图片禁再分发**，只存 `data/costumes/` 不进 git；CLI 换装已接（见 docs）。
+costume-db-01（姿势库同作者；细则见 `docs/服装库.md`）：**图片禁再分发**，只存
+`data/costumes/` 不进 git；CLI 换装已接。换装语义（`subject_policy.clothing`）：`replace` 整套替换缺省 / `add` 叠加（保原衣
+换袜）/ `keep`；服装文本三层 keywords / prompt_text（服装段）/ ref_prompt（制图
+提示词），**站点 keywords 逐字不可改**；网页可编辑文本/策略/收藏/重生成（自建）。
 
 ## Playground（跨项目调用）
 
@@ -43,7 +46,7 @@ costume-db-01（姿势库同作者；细则见 `docs/服装库.md`）：**图片
 - 首帧图 = `frame_images`（图生视频，主体一致性靠它；**别用 character_sheet，那是四视图拼图会出多人**——用单人全身正面/front 槽位）；参考图 = `input_references`（≤4）；两者同给时官方语义首帧优先（API 层原样放行，网页 UI 图生视频页签不并送参考图）。
 - 模型默认链：请求显式 > 设置页「OpenRouter 视频」组（DB） > `OP_VIDEO_MODEL` env > heygen/heygen-video-1；API key 与生图同链路（`OP_IMAGE_API_KEY`/`LLM_API_KEY`）。
 - seed：目录标 `seed: false` 的模型不发；时长的 bool 会过 pydantic int 校验，`validate` 里明确拦。
-- 按秒计费（面板按 pricing_skus 出「预计 ≈」只做展示）；heygen-video-1 的便宜档是 480p $0.02/s。
+- 
 
 ### Playground 语音（OpenRouter TTS 通路）
 
@@ -56,7 +59,7 @@ costume-db-01（姿势库同作者；细则见 `docs/服装库.md`）：**图片
   + `charvar tts models`；产物落 `data/generated/adhoc_tts/{id}/`（无 thumbs）。
   **网页入口**：顶栏「语音」页签（`web/static/tts.js`）+ `/tts/*`。改参数名/输出格式
   时 CLI、网页、skill 三处同步。
-- 模型目录走 `GET /api/v1/models?output_modalities=speech`（无独立端点），缓存
+- 模型目录走 `GET /api/v1/models?output_modalities=speech`，缓存
   `data/openrouter/speech-models.json`（三份缓存之一）。
 - **voice 实测必填**（heygen/minimax 不带 voice 一律 400）：目录 `supported_voices`
   非空时请求空值自动取第一项兜底；枚举为空的模型（fish/seed）不发送。
@@ -112,7 +115,6 @@ costume-db-01（姿势库同作者；细则见 `docs/服装库.md`）：**图片
   - 即梦：模型版本下拉空值 = 跟随设置页（`DREAMINA_IMAGE_MODEL`）；**「跟随设置默认」要真跟随**（空值发出去，后端才用设置页/env），不能名义上跟随、实际发硬编码的 2K。
   - 即梦 **3.0/3.1 只有 text2image**：带参考图（即 image2image）时从模型下拉里去掉（`DREAMINA_T2I_ONLY_MODELS`，放 `tables.js` 共享）。
   - 档位选择要记住：切供应商再切回来别重置（`state.comfyTier` / `adhocState.comfyTier` / `state.orResolution`）。
-- ComfyUI 上传的 `remote_name` = `charvar_{run_id}_{index}{suffix}`：`upload_image` 发 `overwrite: true`，同名会互相覆盖。
 ### 前端是真多页
 
 - 页面= `web/static/<name>.html` 挂 `/ui/<name>`；`/` 同预设页。
@@ -126,7 +128,7 @@ costume-db-01（姿势库同作者；细则见 `docs/服装库.md`）：**图片
 - **间距只在 4/8/12/16 阶梯内收紧**：`.card` padding `14px 16px`、`.card > * + *` 用 sp-3、`.form-grid` 行距 sp-2、`.settings-grid`（设置页专用）行距 sp-3（列距均 sp-4）；`.segmented .seg` padding `4px 12px`。500px 断点要同步。
 - **灰字只写「控件里看不到的信息」**：当前生效的 workflow / 模型 / 枚举、当前输出像素、已选参考图数量、不可逆后果（超限硬失败、暂存 24 小时清理、按秒计费、消耗积分）。**删掉**复述控件含义的说明、描述「先做 A 再做 B」的导航文案、重复当前主体的摘要行、以及讲落盘路径 / CLI 用法 / 数据库表这类**实现细节**的长段落（那属于 README）。**每块最多一句灰字**，长说明拆不成一句时宁可删。
 - 参考图区统一形态：组标题 + 右侧「已选 N 张」+ `.ref-empty` 虚线空态框（`#gen-ref-count` / `#adhoc-ref-count` / `#video-ref-count`）。
-- 参考图条目宽度限 `max-width: 240px` + 名字换行；「随机背景 / 随机光照」两个 checkbox 挪到固定背景 / 固定光照之后单独成行（`label.check` 是行内排版，跟普通 label 同排时底边会错位）。
+- 参考图条目宽度限 `max-width: 240px` + 名字换行；「随机背景 / 随机光照」checkbox 在固定背景 / 固定光照之后单独成行（`label.check` 行内排版，与普通 label 同排底边错位）。
 - `.gen-mode-row`（小标题 + 分段控件同一行）、`.form-grid-2`（只有两个字段的组固定 2 列）。
 - 视觉方向与文案策略固化在 `.superdesign/design-system.md` + `.superdesign/init/*.md`；**改任何页面的分组 / 间距 / 文案前先读 design-system.md**，别自创一套。
 

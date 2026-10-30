@@ -31,14 +31,24 @@ class SubjectPolicy(BaseModel):
 
     clothing    replace = 这条服装取代默认服装 → 摘掉 outfit_lock 里的衣物条目
                 keep    = 保留默认衣物（只清鞋袜与配件）
+                add     = 叠加型（丝袜等单件穿搭）：保留默认衣物，只摘**袜类**子句
+                          （原袜让位给这条；鞋帽包等其余配件保留）
     accessories remove  = 摘掉鞋袜与配件（outfit_lock + identity_lock 的配件子句）
                 keep    = 保留配件（配件属于身份锚时用，如眼镜是角色的识别特征）
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    clothing: Literal["replace", "keep"] = "keep"
+    clothing: Literal["replace", "keep", "add"] = "keep"
     accessories: Literal["remove", "keep"] = "keep"
+
+
+# 叠加型（clothing=add）要摘掉的「袜类」词：原衣物的袜类描述让位（换新袜），其余
+# 衣物与鞋/帽/包/首饰等配件全保留 —— 比 accessories=remove 细得多（那个把鞋也摘）。
+_STOCKING_WORDS = (
+    "袜",                            # 丝袜/长袜/袜类/过膝袜/连裤袜/渔网袜 …全被这个字吃到
+    "stocking", "stockings", "pantyhose", "tights", "fishnet", "socks", "hosiery",
+)
 
 
 # 主体锁定项分两类：讲「衣物本体」的，和讲「鞋袜/配件」的。
@@ -158,6 +168,49 @@ def strip_outfit_lock_entry(text: str) -> str:
     return stripped if mentions_clothing(stripped) else ""
 
 
+def mentions_stocking(text: str) -> bool:
+    """这段文字讲的是袜类吗（叠加型要替换的那种；英文按词匹配不误吸 other-socks 词）。"""
+    low = (text or "").lower()
+    if any(w in low for w in ("袜",)):
+        return True
+    return bool(re.search(r"\b(?:stockings?|pantyhose|tights|fishnet|socks|hosiery)\b", low))
+
+
+def strip_stocking_clauses(text: str) -> str:
+    """按**子句**摘掉袜类描述（含「未穿戴袜类」这类负向声明 —— 叠加新袜时要让位）。
+
+    粒度与 strip_accessory_clauses 同款：只摘袜类子句，同条里的衣物/鞋/帽/包都留下。
+    叠加型的语义是「换了这双袜，别的不动」，负向声明（"未穿袜类"）与新袜并存也矛盾。
+    """
+    if not text:
+        return text
+    kept = [c for c in _split_clauses(text) if not mentions_stocking(c)]
+    return "".join(kept).strip().strip("，,、；; ")
+
+
+def strip_stocking_from_entry(text: str) -> str:
+    """outfit_lock 条目级：先摘袜类子句；剩下的还是空壳（纯袜类条目的残句）就整条删。
+
+    实测档案的粒度是**条目 = 一件衣物**：纯袜类条目（"双腿穿裸肤色薄透连脚
+    丝袜，几乎完全透出…"）子句摘完只剩失主描述（"几乎完全透出…"），残句进
+    提示词只会让模型困惑 —— 判法与 strip_outfit_lock_entry 同款：残句里还有
+    其它衣物/配件内容才留。袜+鞋混一条的（制服少女）只摘袜、留鞋。
+    """
+    if not text.strip():
+        return ""
+    if not mentions_stocking(text):
+        return text
+    stripped = strip_stocking_clauses(text)
+    if stripped and (mentions_clothing(stripped) or mentions_accessory(stripped)):
+        return stripped
+    return ""
+
+
+# classic 拼装（composer）给叠加型服装段的前缀：没有这句，动作段+原衣物锁定项会
+# 让模型当成两套服装打架。
+CLOTHING_ADD_LEAD = "保留角色原有衣着不更换，仅在腿部叠加/换穿："
+
+
 def merge_policies(policies: list[dict | SubjectPolicy | None]) -> dict | None:
     """把一批变体的策略合并成一个（**并集**：任一条要求摘除就摘除）。
 
@@ -171,11 +224,9 @@ def merge_policies(policies: list[dict | SubjectPolicy | None]) -> dict | None:
     dumped = [
         p.model_dump() if isinstance(p, SubjectPolicy) else dict(p) for p in clean
     ]
-    clothing = (
-        "replace"
-        if any(p.get("clothing") == "replace" for p in dumped)
-        else "keep"
-    )
+    # 并集语义（任一条要求更激进的摘除就摘除）：替换 > 叠加 > 保留。
+    rank = {"keep": 0, "add": 1, "replace": 2}
+    clothing = max(dumped, key=lambda p: rank.get(p.get("clothing"), 0))["clothing"]
     accessories = (
         "remove"
         if any(p.get("accessories") == "remove" for p in dumped)
@@ -197,6 +248,11 @@ def outfit_policy_note(policy: dict | SubjectPolicy) -> str:
         parts.append(
             "本条服装取代角色原本的衣着，不要写出角色原本那套衣服"
             "（帽子、外套、衬衫、长裤、鞋袜等一律不写）"
+        )
+    if policy.get("clothing") == "add":
+        parts.append(
+            "本条是叠加型穿搭（丝袜等单件）：保留角色原本的衣着不替换，"
+            "仅把腿上的袜类换成本条袜类（原本没穿袜类就直接穿上）"
         )
     if policy.get("accessories") == "remove":
         parts.append(
@@ -232,6 +288,7 @@ def apply_subject_policy(
     """按服装预设声明的策略生成**临时**主体副本（档案本身不动，不写回 DB）。
 
     - clothing=replace：主体 outfit_lock 的衣物条目整条摘掉（这条服装取代默认服装）
+    - clothing=add：保留衣物本体，只摘 outfit_lock 里的**袜类**子句（原袜让位）
     - accessories=remove：摘掉鞋袜与配件（outfit_lock 与 identity_lock 的配件子句）
     - clothing=replace：extra 里「保持同一套默认服装」这类服装一致性短语也摘掉，
       脸/发型/肤色等身份一致性保留
@@ -246,6 +303,11 @@ def apply_subject_policy(
     outfit_lock = list(subject.outfit_lock)
     identity_lock = list(subject.identity_lock)
     extra = subject.extra
+
+    if clothing == "add":
+        outfit_lock = [strip_stocking_from_entry(x) for x in outfit_lock]
+        outfit_lock = [x for x in outfit_lock if x.strip()]
+        extra = strip_stocking_clauses(extra)
 
     if accessories == "remove":
         outfit_lock = [strip_outfit_lock_entry(x) for x in outfit_lock]

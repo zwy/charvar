@@ -155,3 +155,51 @@ def test_policy_note_is_readable():
     assert "取代角色原本的衣着" in note
     assert "不要写出角色的配件" in note
     assert outfit_policy_note({"clothing": "keep", "accessories": "keep"}) == ""
+# ---------- 叠加型（clothing=add：丝袜等单件 —— 保留衣物与配件，只换/加袜类） ----------
+
+ADD = {"clothing": "add", "accessories": "keep"}
+
+
+def _stocking_subject() -> SubjectProfile:
+    """换袜场景样板：白裙 + 白丝袜条目 + 混合袜鞋条目 + 「同一套服装」一致性短语。"""
+    return _subject(
+        outfit_lock=[
+            "上身穿白色缎面连衣裙。领口为方领，四角圆润。",
+            "双腿穿裸肤色薄透连脚丝袜，几乎完全透出肤色，无袜口花边。",
+            "脚穿白色中筒棉袜，罗纹袜口收在小腿中段；白色低帮运动鞋，鞋面干净。",
+        ],
+        extra="保持同一张脸、同一发型与同一套默认服装；黑色丝袜保持到位。",
+    )
+
+
+def test_add_keeps_clothes_while_replacing_stockings():
+    sub = _stocking_subject()
+    out = apply_subject_policy(sub, ADD)
+    joined = " ".join(out.outfit_lock)
+    # 裙子（衣物本体）保留；丝袜整条让位；袜+鞋混合条目只摘袜、鞋留下
+    assert "连衣裙" in joined
+    assert "丝袜" not in joined
+    assert "运动鞋" in joined
+    # extra 的服装一致性短语保留，袜类短语被摘
+    assert "默认服装" in out.extra
+    assert "丝袜" not in out.extra
+    # 原档案不动（临时副本红线）
+    assert "丝袜" in " ".join(sub.outfit_lock)
+
+
+def test_add_merges_below_replace_above_keep():
+    assert merge_policies([ADD, REPLACE]) == {"clothing": "replace", "accessories": "remove"}
+    assert merge_policies([{"clothing": "replace", "accessories": "keep"}, ADD]) == {
+        "clothing": "replace",
+        "accessories": "keep",
+    }
+    assert merge_policies([{"clothing": "keep", "accessories": "keep"}, ADD]) == {
+        "clothing": "add",
+        "accessories": "keep",
+    }
+
+
+def test_add_policy_note():
+    note = outfit_policy_note(ADD)
+    assert "保留角色原本的衣着" in note
+    assert "袜类" in note

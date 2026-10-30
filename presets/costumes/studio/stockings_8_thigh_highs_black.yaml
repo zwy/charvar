@@ -3,12 +3,17 @@ source_id: studio
 display_type: flat_lay
 category: stockings_8
 label: 黑色过膝袜
-keywords: wearing sheer black thigh-high stockings with a lace band at mid-thigh,
-  bare thighs visible above the tops
+keywords: sheer black thigh-high stockings, lace band at mid-thigh, bare thighs above
+  tops
 prompt_text: wearing sheer black thigh-high stockings with a lace band at mid-thigh,
   bare thighs visible above the tops
 prompt_source: manual
-subject_policy: {}
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white
+  background: sheer black thigh-high stockings with a lace band at mid-thigh, each
+  piece separated and laid flat, neatly arranged, soft studio lighting.'
+subject_policy:
+  clothing: add
+  accessories: keep
 caption_tags: {}
 sort_order: 6
 images:

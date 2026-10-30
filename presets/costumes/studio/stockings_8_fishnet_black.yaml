@@ -3,10 +3,16 @@ source_id: studio
 display_type: flat_lay
 category: stockings_8
 label: 黑色渔网袜
-keywords: wearing black fishnet stockings with a small diamond net
+keywords: black fishnet stockings, small diamond net
 prompt_text: wearing black fishnet stockings with a small diamond net
 prompt_source: manual
-subject_policy: {}
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white
+  background: a pair of black fishnet stockings with a small diamond net, laid flat
+  side by side, exactly two stockings, both knee-length in shape, neatly arranged,
+  soft studio lighting.'
+subject_policy:
+  clothing: add
+  accessories: keep
 caption_tags: {}
 sort_order: 5
 images:

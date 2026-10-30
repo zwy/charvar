@@ -3,9 +3,16 @@ source_id: studio
 display_type: flat_lay
 category: glamorous_gala_dresses
 label: 香槟星钻（细肩带水晶短裙）
-keywords: 服装：该成年角色穿着香槟金连衣短裙，不透明底布表面缝缀细小银白水晶，双细肩带、柔和垂褶领口，自然收腰，裙身合体，长度至大腿中段，裙摆采用固定斜向不对称剪裁，无流苏。搭配香槟金细带凉鞋，约6厘米细跟。裸腿，无袜类，无帽子、手套、首饰或手包。
+keywords: champagne gold crystal mini dress, thin straps, asymmetric hem, champagne
+  sandals
 prompt_text: 服装：该成年角色穿着香槟金连衣短裙，不透明底布表面缝缀细小银白水晶，双细肩带、柔和垂褶领口，自然收腰，裙身合体，长度至大腿中段，裙摆采用固定斜向不对称剪裁，无流苏。搭配香槟金细带凉鞋，约6厘米细跟。裸腿，无袜类，无帽子、手套、首饰或手包。
 prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white
+  background: a champagne-gold one-piece mini dress covered in tiny silver-white crystals,
+  with two thin shoulder straps and a soft draped neckline, a natural cinched waist,
+  a fitted body, the hem at mid-thigh with a fixed asymmetric slanted drape and no
+  fringe, and a pair of champagne-gold thin-strap stiletto sandals with 6 cm heels.  each
+  piece separated and laid flat, neatly arranged, soft studio lighting.'
 subject_policy: {}
 caption_tags:
   gala_crimson_mermaid: crimson off-shoulder satin mermaid gown

@@ -20,8 +20,10 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+import shutil
 import sqlite3
 from pathlib import Path
 
@@ -49,8 +51,19 @@ CATEGORY_ZH: dict[str, str] = {
 }
 
 
+# 自建家族（studio category）的中文显示名——页签/下拉/详情的展示用它；slug 只当
+# 标识（DB / 接口参数 / 镜像 yaml 里不变）。没登记的新家族显示原 slug。
+STUDIO_FAMILY_ZH: dict[str, str] = {
+    "stockings_8": "丝袜",
+    "chic_swimwear_outfits": "考究泳装",
+    "glamorous_gala_dresses": "华丽礼服",
+    "mature_milf_outfits": "御姐穿搭",
+    "character_outfit_debug": "调试条款",
+}
+
+
 def category_zh(category: str) -> str:
-    return CATEGORY_ZH.get(category, category)
+    return CATEGORY_ZH.get(category) or STUDIO_FAMILY_ZH.get(category, category)
 
 
 def source_dir() -> Path:
@@ -311,10 +324,13 @@ def list_items(
 
     rows = conn.execute(
         "SELECT ci.source_id, ci.item_id, ci.display_type, ci.category, ci.label,"
-        " ci.keywords, ci.thumb_path, ci.image_path, ci.file_path,"
-        " cp.prompt_text, cp.source AS prompt_source"
+        " ci.keywords, ci.thumb_path, ci.image_path, ci.file_path, ci.updated_at,"
+        " ci.subject_policy,"
+        " cp.prompt_text, cp.source AS prompt_source, cp.ref_prompt AS ref_prompt,"
+        " fav.item_id AS fav_item"
         " FROM costume_items AS ci"
         " LEFT JOIN costume_prompts AS cp ON cp.source_id = ci.source_id AND cp.item_id = ci.item_id"
+        " LEFT JOIN costume_favorites AS fav ON fav.source_id = ci.source_id AND fav.item_id = ci.item_id"
     ).fetchall()
 
     sources: dict[str, int] = {}
@@ -345,13 +361,17 @@ def list_items(
                 "display_type": r["display_type"],
                 "prompt_text": r["prompt_text"] or "",
                 "prompt_source": r["prompt_source"] or "",
-                # 纯文本条目（图路径空）→ URL 出空串，前端渲染占位而不是破图
+                "ref_prompt": str(r["ref_prompt"] or ""),
+                "subject_policy": json.loads(r["subject_policy"]) if r["subject_policy"] else {},
+                "favorited": r["fav_item"] is not None,
+                # 纯文本条目（图路径空）→ URL 出空串，前端渲染占位而不是破图；
+                # URL 带 updated_at 当版本参 —— 换图（重生成）后浏览器缓存自然失效
                 "thumb_url": (
-                    f"/costumes/image/{r['source_id']}/{r['item_id']}/thumb"
+                    f"/costumes/image/{r['source_id']}/{r['item_id']}/thumb?v={r['updated_at']}"
                     if str(r["thumb_path"] or "").strip() else ""
                 ),
                 "image_url": (
-                    f"/costumes/image/{r['source_id']}/{r['item_id']}/full"
+                    f"/costumes/image/{r['source_id']}/{r['item_id']}/full?v={r['updated_at']}"
                     if str(r["image_path"] or "").strip() else ""
                 ),
             }
@@ -406,7 +426,7 @@ def resolve_ref(conn: sqlite3.Connection, ref: str) -> sqlite3.Row:
             raise CostumeError(f"item_id 跨库不唯一，请写全 source/item：{item_id}")
         source_id = hits[0]["source_id"]
     row = conn.execute(
-        "SELECT ci.*, cp.prompt_text AS prompt_text"
+        "SELECT ci.*, cp.prompt_text AS prompt_text, cp.ref_prompt AS ref_prompt"
         " FROM costume_items AS ci LEFT JOIN costume_prompts AS cp"
         " ON cp.source_id = ci.source_id AND cp.item_id = ci.item_id"
         " WHERE ci.source_id = ? AND ci.item_id = ?",
@@ -495,7 +515,7 @@ def prepared_reference_file(ref: str, db_path: Path | None = None) -> Path:
 def get_costume_prompt(conn: sqlite3.Connection, source_id: str, item_id: str) -> dict:
     """单条文本层行；没写过 = prompt_text 空串（不 404，前端好渲染空态）。"""
     row = conn.execute(
-        "SELECT prompt_text, source, updated_at FROM costume_prompts"
+        "SELECT prompt_text, ref_prompt, source, updated_at FROM costume_prompts"
         " WHERE source_id = ? AND item_id = ?",
         (str(source_id or ""), str(item_id or "")),
     ).fetchone()
@@ -503,6 +523,7 @@ def get_costume_prompt(conn: sqlite3.Connection, source_id: str, item_id: str) -
         "source_id": str(source_id or ""),
         "item_id": str(item_id or ""),
         "prompt_text": row["prompt_text"] if row else "",
+        "ref_prompt": row["ref_prompt"] if row else "",
         "prompt_source": row["source"] if row else "",
         "updated_at": row["updated_at"] if row else "",
     }
@@ -531,6 +552,105 @@ def set_costume_prompt(
         )
     conn.commit()
     return get_costume_prompt(conn, source_id, item_id)
+
+
+def set_ref_prompt(
+    conn: sqlite3.Connection, source_id: str, item_id: str, text: str
+) -> dict:
+    """写/清（空串 = 清掉）一条服装的**平铺制图提示词**（重生成参考图的原料）。
+
+    与服装段（prompt_text）是两层：制图提示词是 t2i 出图指令（平铺模板），服装
+    段是换装批里进提示词的那句 wearing 文本 —— 混了就互相污染。不影响 source
+    （那是 prompt_text 的出处记录）。
+    """
+    if item_row(conn, f"{source_id}/{item_id}")["item_id"] != str(item_id or ""):
+        raise CostumeError(f"服装条目不存在（先导入索引层）：{source_id}/{item_id}")
+    text = str(text or "").strip()
+    now = _now()
+    if text:
+        conn.execute(
+            """INSERT INTO costume_prompts (source_id, item_id, prompt_text, ref_prompt, source, created_at, updated_at)
+               VALUES (?, ?, '', ?, 'manual', ?, ?)
+               ON CONFLICT(source_id, item_id) DO UPDATE SET
+                 ref_prompt=excluded.ref_prompt, updated_at=excluded.updated_at""",
+            (str(source_id), str(item_id), text, now, now),
+        )
+    else:
+        conn.execute(
+            "UPDATE costume_prompts SET ref_prompt = '', updated_at = ?"
+            " WHERE source_id = ? AND item_id = ?",
+            (now, str(source_id), str(item_id)),
+        )
+    conn.commit()
+    return get_costume_prompt(conn, source_id, item_id)
+
+
+# ---------- 条目编辑（keywords / 换装策略 / 收藏：DB 真源，重灌不碰） ----------
+
+def set_keywords(conn: sqlite3.Connection, source_id: str, item_id: str, keywords: str) -> dict:
+    """改自建条目的关键词（部件短清单：卡片预览 / 检索 / 「服装要点」注记回退）。
+
+    站点条目的 keywords 逐字来自 catalog.json（站点数据红线），拒绝修改。
+    """
+    source_id, item_id = str(source_id or ""), str(item_id or "")
+    if source_id != STUDIO_SOURCE_ID:
+        raise CostumeError(
+            f"站点条目的关键词是站点数据（逐字保留），只有自建条目可改：{source_id}/{item_id}"
+        )
+    item_row(conn, f"{source_id}/{item_id}")  # 不存在报错
+    cleaned = str(keywords or "").strip()
+    conn.execute(
+        "UPDATE costume_items SET keywords = ?, updated_at = ?"
+        " WHERE source_id = ? AND item_id = ?",
+        (cleaned, _now(), source_id, item_id),
+    )
+    conn.commit()
+    return {"source_id": source_id, "item_id": item_id, "keywords": cleaned}
+
+
+def set_item_policy(conn: sqlite3.Connection, source_id: str, item_id: str, policy: dict) -> dict:
+    """写条目的换装策略（clothing/accessories）；两库都允许 —— 站点条目可手动
+    标记叠加型（catalog 重灌不碰该列，编辑是持久的）。调用方负责 export 同步镜像。
+    """
+    from charvar.subject_policy import SubjectPolicy  # 延迟导入（含 pydantic 校验）
+
+    source_id, item_id = str(source_id or ""), str(item_id or "")
+    item_row(conn, f"{source_id}/{item_id}")  # 不存在报错
+    normalized = SubjectPolicy.model_validate(policy or {}).model_dump()
+    conn.execute(
+        "UPDATE costume_items SET subject_policy = ?, updated_at = ?"
+        " WHERE source_id = ? AND item_id = ?",
+        (json.dumps(normalized, ensure_ascii=False), _now(), source_id, item_id),
+    )
+    conn.commit()
+    return normalized
+
+
+def toggle_favorite(
+    conn: sqlite3.Connection, source_id: str, item_id: str, *, favorite: bool | None = None
+) -> dict:
+    """收藏/取消收藏（favorite=None = 切换；显式 bool = 设定）。独立用户态表，重灌不碰。
+    """
+    source_id, item_id = str(source_id or ""), str(item_id or "")
+    item_row(conn, f"{source_id}/{item_id}")  # 不存在报错
+    now = _now()
+    exists = conn.execute(
+        "SELECT 1 FROM costume_favorites WHERE source_id = ? AND item_id = ?",
+        (source_id, item_id),
+    ).fetchone()
+    state = not bool(exists) if favorite is None else bool(favorite)
+    if state and not exists:
+        conn.execute(
+            "INSERT INTO costume_favorites (source_id, item_id, created_at) VALUES (?, ?, ?)",
+            (source_id, item_id, now),
+        )
+    elif not state and exists:
+        conn.execute(
+            "DELETE FROM costume_favorites WHERE source_id = ? AND item_id = ?",
+            (source_id, item_id),
+        )
+    conn.commit()
+    return {"source_id": source_id, "item_id": item_id, "favorite": state}
 
 
 # ---------- 自建条目（studio：从 export 镜像自举；display_type=flat_lay） ----------
@@ -588,12 +708,16 @@ def import_studio_yaml(conn: sqlite3.Connection) -> dict:
             ),
         )
         text = str(doc.get("prompt_text") or "").strip()
+        ref_prompt = str(doc.get("ref_prompt") or "").strip()
         prompt = get_costume_prompt(conn, STUDIO_SOURCE_ID, item_id)
-        if text and not prompt["prompt_text"].strip():
+        if (text or ref_prompt) and not (
+            prompt["prompt_text"].strip() or prompt["ref_prompt"].strip()
+        ):
             conn.execute(
-                """INSERT INTO costume_prompts (source_id, item_id, prompt_text, source, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (STUDIO_SOURCE_ID, item_id, text, str(doc.get("prompt_source") or "manual")[:30], now, now),
+                """INSERT INTO costume_prompts (source_id, item_id, prompt_text, ref_prompt, source, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (STUDIO_SOURCE_ID, item_id, text, ref_prompt,
+                 str(doc.get("prompt_source") or "manual")[:30], now, now),
             )
         added += 1
     conn.commit()
@@ -617,6 +741,7 @@ def export_item(conn: sqlite3.Connection, ref: str, out_dir: Path | None = None)
         "keywords": row["keywords"],
         "prompt_text": prompt["prompt_text"],
         "prompt_source": prompt["prompt_source"],
+        "ref_prompt": prompt["ref_prompt"],
         "subject_policy": json.loads(row["subject_policy"]) if row["subject_policy"] else {},
         "caption_tags": json.loads(row["caption_tags"]) if row["caption_tags"] else {},
         "sort_order": row["sort_order"],
@@ -631,3 +756,112 @@ def export_item(conn: sqlite3.Connection, ref: str, out_dir: Path | None = None)
     path = target / f"{row['item_id']}.yaml"
     path.write_text(yaml.safe_dump(doc, allow_unicode=True, sort_keys=False), encoding="utf-8")
     return path
+
+
+# ---------- 自建条目参考图重生成（ref_prompt → ComfyUI 平铺图 → 三档回写） ----------
+
+def _stable_regenerate_seed(source_id: str, item_id: str) -> int:
+    """缺省种子：条目身份派生的**确定性**值（同提示词重生成可复现；非随机源）。"""
+    digest = hashlib.sha256(f"costume-regen:{source_id}/{item_id}".encode("utf-8")).hexdigest()
+    return int(digest[:8], 16) % 1_000_000_000
+
+
+def write_tier_images(data: bytes, source_id: str, item_id: str) -> dict:
+    """原图字节 → 三档落盘（png 原寸逐字 / img 长边 2048 webp q90 / thumbs 宽 360 webp q88）。"""
+    import io
+
+    from PIL import Image
+
+    root = costume_root(source_id)
+    for sub in ("png", "img", "thumbs"):
+        (root / sub).mkdir(parents=True, exist_ok=True)
+    png_path = root / "png" / f"{item_id}.png"
+    png_path.write_bytes(data)
+    with Image.open(io.BytesIO(data)) as im:
+        w, h = im.size
+        scale = 2048 / max(w, h)
+        im.resize((round(w * scale), round(h * scale)), Image.LANCZOS).save(
+            root / "img" / f"{item_id}.webp", "WEBP", quality=90
+        )
+        im.resize((360, round(h * 360 / w)), Image.LANCZOS).save(
+            root / "thumbs" / f"{item_id}.webp", "WEBP", quality=88
+        )
+    return {
+        "file_path": f"png/{item_id}.png",
+        "image_path": f"img/{item_id}.webp",
+        "thumb_path": f"thumbs/{item_id}.webp",
+    }
+
+
+def _backup_tiers(source_id: str, item_id: str) -> None:
+    """重生成前把旧三档挪进 backup/<item_id>/<时间戳>/（覆盖换稿不丢旧稿）。
+
+    目录内保留 png/img/thumbs 相对布局 —— img 与 thumbs 的文件名相同（都是
+    <item_id>.webp），平铺到一个目录会互相覆盖。
+    """
+    root = costume_root(source_id)
+    rels = [f"png/{item_id}.png", f"img/{item_id}.webp", f"thumbs/{item_id}.webp"]
+    existing = [rel for rel in rels if (root / rel).exists()]
+    if not existing:
+        return
+    stamp = _now().replace(":", "").replace(" ", "T").replace("-", "")
+    for rel in existing:
+        dest = root / "backup" / item_id / stamp / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(root / rel), str(dest))
+
+
+def regenerate_reference(
+    source_id: str,
+    item_id: str,
+    *,
+    seed: int | None = None,
+    db_path: Path | None = None,
+) -> dict:
+    """按该条目的平铺制图提示词（ref_prompt）重新生成参考图，同步等待 ComfyUI（约 10-15s）。
+
+    前提与约束：
+    - 只对自建（studio）条目开放 —— 站点图是数据资产（catalog 逐字域），重生成无意义；
+    - **必须先有 ref_prompt**（没有制图提示词不能出图 —— 空提示词出的图与服装语义脱节）；
+    - 走 Playground 同款 adhoc 通路（不落 runs 表，run 里留 manifest）：2k / 3:4，
+      C8 纯色帧检测照常拦截；
+    - 旧三档挪 backup/（换稿不丢），三档回写 DB + 镜像 export 同步。
+    """
+    from charvar import adhoc
+    from charvar import storage
+
+    if str(source_id or "") != STUDIO_SOURCE_ID:
+        raise CostumeError("参考图重生成只对自建（studio）条目开放（站点图是数据资产）")
+    with storage.connect(db_path) as conn:
+        item_row(conn, f"{source_id}/{item_id}")  # 不存在报错
+        prompt = get_costume_prompt(conn, source_id, item_id)
+    ref_prompt = str(prompt["ref_prompt"] or "").strip()
+    if not ref_prompt:
+        raise CostumeError(
+            f"这条服装还没有平铺制图提示词（先在文本层写好才能重生成）：{source_id}/{item_id}"
+        )
+    used_seed = int(seed) if seed is not None else _stable_regenerate_seed(source_id, item_id)
+    req = adhoc.AdhocRequest(
+        prompt=ref_prompt, backend="comfyui", aspect_ratio="3:4", resolution="2k", seed=used_seed
+    )
+    result = adhoc.generate(req, db_path)
+    data = Path(result.image_path).read_bytes()
+    _backup_tiers(source_id, item_id)
+    rels = write_tier_images(data, source_id, item_id)
+    now = _now()
+    with storage.connect(db_path) as conn:
+        conn.execute(
+            "UPDATE costume_items SET file_path = ?, image_path = ?, thumb_path = ?, updated_at = ?"
+            " WHERE source_id = ? AND item_id = ?",
+            (rels["file_path"], rels["image_path"], rels["thumb_path"], now, source_id, item_id),
+        )
+        conn.commit()
+        export_item(conn, f"{source_id}/{item_id}")
+    return {
+        "source_id": source_id,
+        "item_id": item_id,
+        "seed": used_seed,
+        "width": result.width,
+        "height": result.height,
+        "updated_at": now,
+    }

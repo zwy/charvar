@@ -134,10 +134,18 @@ CREATE TABLE IF NOT EXISTS costume_prompts (
     -- 用户文本层（类 pose_actions）：每条服装的文生图提示词；catalog 重灌绝不碰。
     source_id TEXT NOT NULL,
     item_id TEXT NOT NULL,
-    prompt_text TEXT NOT NULL DEFAULT '',
+    prompt_text TEXT NOT NULL DEFAULT '',         -- 服装段（wearing 语义，进批的服装文本）
+    ref_prompt TEXT NOT NULL DEFAULT '',          -- 平铺制图提示词（参考图重生成用；空 = 没写过）
     source TEXT NOT NULL DEFAULT 'manual',        -- manual / ai_draft
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
+    PRIMARY KEY (source_id, item_id)
+);
+CREATE TABLE IF NOT EXISTS costume_favorites (
+    -- 收藏态（用户层，同 pose 双表分层哲学）：catalog 重灌绝不碰。
+    source_id TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
     PRIMARY KEY (source_id, item_id)
 );
 """
@@ -147,6 +155,7 @@ _MIGRATIONS = """
 ALTER TABLE comfy_prompts ADD COLUMN output_files TEXT;
 ALTER TABLE subject_images ADD COLUMN provider TEXT;
 ALTER TABLE costume_items ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE costume_prompts ADD COLUMN ref_prompt TEXT NOT NULL DEFAULT '';
 """
 
 

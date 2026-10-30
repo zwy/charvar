@@ -3,11 +3,18 @@ source_id: studio
 display_type: flat_lay
 category: stockings_8
 label: 黑丝15D
-keywords: wearing sheer black nylon pantyhose, 15 denier, glossy see-through finish
+keywords: sheer black nylon pantyhose, 15 denier, glossy see-through
 prompt_text: wearing sheer black nylon pantyhose, 15 denier, glossy see-through finish,
   slightly milky translucent finish
 prompt_source: manual
-subject_policy: {}
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white
+  background: one pair of sheer black nylon pantyhose with closed feet, 15 denier,
+  very thin sheer nylon, glossy see-through finish, a thin narrow sheer waistband
+  of the same nylon, the two legs laid flat side by side as a single garment, neatly
+  arranged, soft studio lighting.'
+subject_policy:
+  clothing: add
+  accessories: keep
 caption_tags: {}
 sort_order: 0
 images:

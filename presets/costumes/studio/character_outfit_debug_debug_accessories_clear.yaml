@@ -3,9 +3,10 @@ source_id: studio
 display_type: flat_lay
 category: character_outfit_debug
 label: 仅清配件（保留原衣服，移除鞋袜等）
-keywords: 保留该成年角色原有的上身与下身衣物，仅移除全部袜类、鞋履、头饰、眼镜、首饰、发饰及其他穿戴配件，双脚赤足；不替换、不新增原有上身与下身衣物。
+keywords: unchanged outfit, accessories removed, barefoot
 prompt_text: 保留该成年角色原有的上身与下身衣物，仅移除全部袜类、鞋履、头饰、眼镜、首饰、发饰及其他穿戴配件，双脚赤足；不替换、不新增原有上身与下身衣物。
 prompt_source: manual
+ref_prompt: ''
 subject_policy:
   clothing: keep
   accessories: remove

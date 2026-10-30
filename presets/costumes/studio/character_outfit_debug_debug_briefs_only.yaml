@@ -3,9 +3,10 @@ source_id: studio
 display_type: flat_lay
 category: character_outfit_debug
 label: 仅内裤（其余衣物与配件全部移除）
-keywords: 该成年角色仅穿着一条素色、不透明的中腰灰色内裤，上身赤裸，乳头，赤足；除此之外，未穿戴任何其他衣物、袜类、鞋履、头饰、眼镜、首饰或发饰。
+keywords: plain grey opaque mid-rise briefs, bare torso, barefoot
 prompt_text: 该成年角色仅穿着一条素色、不透明的中腰灰色内裤，上身赤裸，乳头，赤足；除此之外，未穿戴任何其他衣物、袜类、鞋履、头饰、眼镜、首饰或发饰。
 prompt_source: manual
+ref_prompt: ''
 subject_policy:
   clothing: replace
   accessories: remove

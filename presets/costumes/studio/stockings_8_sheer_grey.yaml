@@ -3,10 +3,16 @@ source_id: studio
 display_type: flat_lay
 category: stockings_8
 label: 灰丝
-keywords: wearing sheer grey nylon pantyhose, soft smoke-grey translucent finish
+keywords: sheer grey nylon pantyhose, soft smoke-grey translucent
 prompt_text: wearing sheer grey nylon pantyhose, soft smoke-grey translucent finish
 prompt_source: manual
-subject_policy: {}
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white
+  background: one pair of sheer grey nylon pantyhose with closed feet, soft smoke-grey
+  translucent finish, a thin narrow sheer waistband of the same nylon, the two legs
+  laid flat side by side as a single garment, neatly arranged, soft studio lighting.'
+subject_policy:
+  clothing: add
+  accessories: keep
 caption_tags: {}
 sort_order: 3
 images:

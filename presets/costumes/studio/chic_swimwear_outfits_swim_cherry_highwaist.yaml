@@ -3,13 +3,17 @@ source_id: studio
 display_type: flat_lay
 category: chic_swimwear_outfits
 label: 樱桃复古（樱桃红高腰比基尼）
-keywords: wearing an opaque matte cherry-red bikini with wide shoulder straps, a sweetheart
-  neckline, vertical cup seams and matching navel-high bottoms with raised leg openings,
-  barefoot, no stockings
+keywords: cherry-red bikini, wide straps, sweetheart neckline, navel-high bottoms,
+  raised leg openings
 prompt_text: wearing an opaque matte cherry-red bikini with wide shoulder straps,
   a sweetheart neckline, vertical cup seams and matching navel-high bottoms with raised
   leg openings, barefoot, no stockings
 prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white
+  background: an opaque matte cherry-red two-piece bikini laid flat as two separate
+  pieces: the top with wide shoulder straps, a sweetheart neckline and vertical cup
+  seams, and the navel-high bottoms with raised leg openings.  each piece separated
+  and laid flat, neatly arranged, soft studio lighting.'
 subject_policy: {}
 caption_tags:
   swim_black_triangle: matte black triangle bikini

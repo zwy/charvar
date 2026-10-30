@@ -3,13 +3,16 @@ source_id: studio
 display_type: flat_lay
 category: chic_swimwear_outfits
 label: 翡翠斜肩（翡翠绿单肩连体泳衣）
-keywords: wearing an opaque deep emerald one-piece swimsuit with a sheen, one wide
-  left shoulder strap, diagonal neckline, bare right shoulder, fitted waist, mid-low
-  back, mid-cut legs, barefoot, no stockings
+keywords: emerald one-shoulder swimsuit, diagonal neckline, mid-cut legs
 prompt_text: wearing an opaque deep emerald one-piece swimsuit with a sheen, one wide
   left shoulder strap, diagonal neckline, bare right shoulder, fitted waist, mid-low
   back, mid-cut legs, barefoot, no stockings
 prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white
+  background: an opaque deep emerald one-piece swimsuit with a subtle sheen laid flat:
+  one wide shoulder strap on the left, a diagonal neckline, the right shoulder panel
+  bare, a fitted waist, a mid-low back, mid-cut leg openings.  each piece separated
+  and laid flat, neatly arranged, soft studio lighting.'
 subject_policy: {}
 caption_tags:
   swim_black_triangle: matte black triangle bikini

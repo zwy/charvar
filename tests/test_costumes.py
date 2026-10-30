@@ -335,8 +335,11 @@ def test_import_studio_yaml_and_skip_on_rerun(data_dir):
         assert row["category"] == "stockings_8" and row["label"] == fam["items"][0]["label"]
         assert row["keywords"] and row["file_path"].endswith(".png")  # 镜像带平铺图三档路径（24/28 条；debug 4 条无图）
         pr = costumes_service.get_costume_prompt(conn, "studio", f"stockings_8_{fam['items'][0]['id']}")
-        assert pr["prompt_text"].startswith(row["keywords"])  # 文本层是 keywords 的超集（真库编辑后导出的镜像）
+        # 已分层：keywords = 英文部件短清单；prompt_text = 完整服装段 —— 提炼后两值互不相同
+        assert row["keywords"] and pr["prompt_text"]
+        assert pr["prompt_text"] != row["keywords"]
         assert pr["prompt_source"] == "manual"
+        assert pr["ref_prompt"].startswith("Flat lay")  # 镜像带制图提示词（重生成原料）
 
         # 重跑幂等：全部跳过
         d2 = costumes_service.import_studio_yaml(conn)
@@ -479,3 +482,106 @@ def test_costumes_endpoints_serve_catalog_and_images(data_dir, client):
     # 404：没有这条服装 / 没有这个库 / 空库提示
     assert client.get("/costumes/image/costume-db-01/NOPE-0000/thumb").status_code == 404
     assert client.get("/costumes/image/other-lib/SPR-0001/thumb").status_code == 404
+# ---------- 编辑 / 收藏 / 制图提示词 / 重生成守卫（本批新功能） ----------
+
+def test_favorites_toggle_and_survive_reimport(data_dir):
+    """收藏在独立用户层表：切换一次生效，catalog 重灌绝不碰。"""
+    _imported(data_dir)
+    with storage.connect() as conn:
+        assert costumes_service.toggle_favorite(conn, "costume-db-01", "SPR-0001")["favorite"] is True
+        assert costumes_service.toggle_favorite(conn, "costume-db-01", "SPR-0001")["favorite"] is False
+        costumes_service.toggle_favorite(conn, "costume-db-01", "SPR-0001")
+    costumes_service.import_catalog(storage.connect().__enter__())  # 重灌（幂等）
+    with storage.connect() as conn:
+        data = costumes_service.list_items(conn)
+        row = next(it for it in data["items"] if it["item_id"] == "SPR-0001")
+        assert row["favorited"] is True
+
+
+def test_set_keywords_studio_only_and_rejected_for_site(data_dir):
+    """站点条目的 keywords 逐字来自 catalog（站点数据红线），只有自建条目可改。"""
+    _imported(data_dir)
+    with storage.connect() as conn:
+        costumes_service.import_catalog(conn)
+        with pytest.raises(costumes_service.CostumeError):
+            costumes_service.set_keywords(conn, "costume-db-01", "SPR-0001", "hacked keywords")
+        with pytest.raises(costumes_service.CostumeError):
+            costumes_service.set_keywords(conn, "studio", "不存在的条目", "x")
+
+
+def test_ref_prompt_layer_and_regeneration_guards(data_dir):
+    """ref_prompt 是独立文本层（重生成原料）；缺它/非自建条目重生成显式拒绝。"""
+    _imported(data_dir)
+    with storage.connect() as conn:
+        costumes_service.set_ref_prompt(conn, "costume-db-01", "SPR-0001", "Flat lay test prompt")
+        prompt = costumes_service.get_costume_prompt(conn, "costume-db-01", "SPR-0001")
+        assert prompt["ref_prompt"] == "Flat lay test prompt"
+        data = costumes_service.list_items(conn)
+        row = next(it for it in data["items"] if it["item_id"] == "SPR-0001")
+        assert row["ref_prompt"] == "Flat lay test prompt"
+        # 清掉
+        costumes_service.set_ref_prompt(conn, "costume-db-01", "SPR-0001", "")
+        assert costumes_service.get_costume_prompt(conn, "costume-db-01", "SPR-0001")["ref_prompt"] == ""
+    # 重生成守卫（都不碰 ComfyUI 就先拒绝）：站点条目 / 不存在的自建条目 / 无制图提示词
+    with pytest.raises(costumes_service.CostumeError):
+        costumes_service.regenerate_reference("costume-db-01", "SPR-0001")
+    with pytest.raises(costumes_service.CostumeError):
+        costumes_service.regenerate_reference("studio", "no_such_item_xyz")
+    with storage.connect() as conn:
+        costumes_service.import_studio_yaml(conn)
+        with pytest.raises(costumes_service.CostumeError):
+            costumes_service.regenerate_reference("studio", "character_outfit_debug_debug_unclothed")
+
+
+def test_list_items_carries_policy_and_ref_prompt(data_dir):
+    """清单行透出 subject_policy / ref_prompt / favorited（编辑面板的数据源）。"""
+    _imported(data_dir)
+    with storage.connect() as conn:
+        costumes_service.set_item_policy(conn, "costume-db-01", "SPR-0001", {"clothing": "add"})
+        costumes_service.set_ref_prompt(conn, "costume-db-01", "SPR-0001", "Flat lay x")
+        costumes_service.toggle_favorite(conn, "costume-db-01", "SPR-0001")
+        data = costumes_service.list_items(conn, category="春")
+        row = next(it for it in data["items"] if it["item_id"] == "SPR-0001")
+        assert row["subject_policy"] == {"clothing": "add", "accessories": "keep"}
+        assert row["ref_prompt"] == "Flat lay x"
+        assert row["favorited"] is True
+        all_rows = costumes_service.list_items(conn)["items"]
+        other = next(it for it in all_rows if it["item_id"] != "SPR-0001")
+        assert other["subject_policy"] == {} and other["favorited"] is False# ---------- 服装条目编辑端点（本批新增） ----------
+
+def test_costume_edit_endpoints(data_dir, client):
+    """文本层（两库）/ 关键词（仅自建）/ 换装策略 / 收藏的 API 与清单透出。"""
+    _imported(data_dir)
+    with storage.connect() as conn:
+        costumes_service.import_studio_yaml(conn)
+    # 文本层：站点条目也允许（source=manual）
+    r = client.put("/costumes/costume-db-01/SPR-0001/prompt-text", json={"text": "wearing a test outfit"})
+    assert r.status_code == 200 and r.json()["prompt_text"] == "wearing a test outfit"
+    assert r.json()["prompt_source"] == "manual"
+    # 站点 keywords 拒绝（站点逐字红线）
+    assert client.put("/costumes/costume-db-01/SPR-0001/keywords", json={"keywords": "x"}).status_code == 400
+    # 自建 keywords / 策略 / 收藏
+    r = client.put("/costumes/studio/stockings_8_sheer_white/keywords", json={"keywords": "sheer white pantyhose"})
+    assert r.status_code == 200 and r.json()["keywords"] == "sheer white pantyhose"
+    r = client.put("/costumes/studio/stockings_8_sheer_white/subject-policy", json={"clothing": "replace"})
+    assert r.status_code == 200 and r.json() == {"clothing": "replace", "accessories": "keep"}
+    r = client.post("/costumes/studio/stockings_8_sheer_white/favorite")
+    assert r.status_code == 200 and r.json() == {"favorited": True}
+    data = client.get("/costumes").json()
+    row = next(it for it in data["items"] if it["item_id"] == "stockings_8_sheer_white")
+    assert row["favorited"] is True
+    assert row["subject_policy"] == {"clothing": "replace", "accessories": "keep"}
+    # ref_prompt 端点 + 透出
+    r = client.put("/costumes/studio/stockings_8_sheer_white/ref-prompt", json={"ref_prompt": "Flat lay test"})
+    assert r.status_code == 200 and r.json()["ref_prompt"] == "Flat lay test"
+
+
+def test_costume_regenerate_guards(data_dir, client):
+    """重生成守卫（不触发 ComfyUI 就先拒绝）：站点条目 / 无制图提示词的自建条目。"""
+    _imported(data_dir)
+    with storage.connect() as conn:
+        costumes_service.import_studio_yaml(conn)
+    r = client.post("/costumes/costume-db-01/SPR-0001/regenerate", json={})
+    assert r.status_code == 400 and "studio" in r.json()["detail"]
+    r = client.post("/costumes/studio/character_outfit_debug_debug_unclothed/regenerate", json={})
+    assert r.status_code == 400 and "制图提示词" in r.json()["detail"]

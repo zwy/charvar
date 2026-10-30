@@ -3,13 +3,17 @@ source_id: studio
 display_type: flat_lay
 category: chic_swimwear_outfits
 label: 黑曜极简（黑色细肩带比基尼）
-keywords: wearing an opaque matte black bikini with fixed triangle cups, thin shoulder
-  straps, a continuous underbust band, mid-rise V-waist bottoms, fixed side bands
-  and high-cut legs, barefoot, no stockings
+keywords: black triangle-cup bikini, thin straps, underbust band, mid-rise V-waist
+  bottoms, high-cut legs
 prompt_text: wearing an opaque matte black bikini with fixed triangle cups, thin shoulder
   straps, a continuous underbust band, mid-rise V-waist bottoms, fixed side bands
   and high-cut legs, barefoot, no stockings
 prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white
+  background: an opaque matte black two-piece bikini laid flat as two separate pieces:
+  the top with fixed triangle cups, thin shoulder straps and a continuous underbust
+  band, and the bottoms with a mid-rise V-waist, fixed side bands and high-cut leg
+  openings.  each piece separated and laid flat, neatly arranged, soft studio lighting.'
 subject_policy: {}
 caption_tags:
   swim_black_triangle: matte black triangle bikini

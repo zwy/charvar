@@ -3,10 +3,16 @@ source_id: studio
 display_type: flat_lay
 category: stockings_8
 label: 黑丝80D
-keywords: wearing opaque black velvet pantyhose, 80 denier, fully matte coverage
+keywords: opaque black velvet pantyhose, 80 denier, matte
 prompt_text: wearing opaque black velvet pantyhose, 80 denier, fully matte coverage
 prompt_source: manual
-subject_policy: {}
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white
+  background: one pair of opaque black velvet pantyhose with closed feet, 80 denier,
+  fully matte coverage, a thin narrow waistband of the same fabric, the two legs laid
+  flat side by side as a single garment, neatly arranged, soft studio lighting.'
+subject_policy:
+  clothing: add
+  accessories: keep
 caption_tags: {}
 sort_order: 4
 images:

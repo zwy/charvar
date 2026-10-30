@@ -369,7 +369,7 @@ async function loadOutfits() {
   for (const o of state.outfits) {
     const opt = document.createElement("option");
     opt.value = o.name;
-    opt.textContent = `${o.name}（${o.count} 档）`;
+    opt.textContent = `${o.name_zh || o.name}（${o.count} 档）`;
     sel.appendChild(opt);
   }
 }

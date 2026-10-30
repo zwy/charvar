@@ -26,7 +26,10 @@ from charvar.models import (
 )
 from charvar.preset_loader import ListPreset, MatrixPreset, Preset, PresetError
 from charvar.sticker_policy import is_sticker_preset, render_lettering_block, sticker_meta
-from charvar.subject_policy import apply_subject_policy
+from charvar.subject_policy import (
+    CLOTHING_ADD_LEAD,
+    apply_subject_policy,
+)
 from charvar.wildcard import expand_inline, rng_for, seed_for
 
 logger = logging.getLogger(__name__)
@@ -349,6 +352,10 @@ def generate(subject: SubjectProfile, preset: Preset, req: GenerateRequest) -> G
             )
             outfit_text, _ = expand_inline(outfit_raw, rng)
             outfit_text = terminate_sentence(outfit_text)
+            if (spec.outfit_policy or {}).get("clothing") == "add":
+                # 叠加型（丝袜等单件）：原衣物锁定项保留在提示词里，服装段要带
+                # 叠加指令，否则提示词里读起来是两套服装打架。
+                outfit_text = CLOTHING_ADD_LEAD + outfit_text
         else:
             variant_raw = render(
                 spec.text,

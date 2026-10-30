@@ -94,6 +94,37 @@ class PoseActionUpdate(BaseModel):
     action_text: str = ""
 
 
+class CostumePromptTextUpdate(BaseModel):
+    """服装文本层写入（PUT /costumes/{source}/{item}/prompt-text）：text 空串 = 清掉。"""
+
+    text: str = ""
+
+
+class CostumeKeywordsUpdate(BaseModel):
+    """自建条目关键词写入（PUT …/keywords）：站点条目拒绝。"""
+
+    keywords: str = ""
+
+
+class CostumeRefPromptUpdate(BaseModel):
+    """平铺制图提示词写入（PUT /costumes/{source}/{item}/ref-prompt）。"""
+
+    ref_prompt: str = ""
+
+
+class CostumePolicyUpdate(BaseModel):
+    """条目换装策略写入（PUT /costumes/{source}/{item}/subject-policy）：clothing/accessories。"""
+
+    clothing: str = ""
+    accessories: str = ""
+
+
+class CostumeRegenerateRequest(BaseModel):
+    """参考图重生成（POST /costumes/{source}/{item}/regenerate）：seed 缺省 = 条目固定种子。"""
+
+    seed: int | None = None
+
+
 class ComfyQueueRequest(BaseModel):
     workload: str | None = Field(
         default=None,
@@ -854,6 +885,106 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     @app.get("/costumes/image/{source}/{item_id}/full")
     def api_costume_image_full(source: str, item_id: str) -> FileResponse:
         return _costume_image_response(source, item_id, "full")
+
+    # ---- 服装条目编辑（文本层 / 关键词 / 换装策略 / 收藏 / 参考图重生成） ----
+    # id 只认安全字符（ITEM_ID_RE）；studio 条目写完自动同步镜像 yaml（DB 真源）。
+    def _costume_ids(source: str, item_id: str) -> tuple[str, str]:
+        if not source or not costumes_service.ITEM_ID_RE.fullmatch(item_id):
+            raise HTTPException(400, f"非法服装引用：{source}/{item_id[:60]}")
+        return str(source), str(item_id)
+
+    def _costume_export_mirror(conn: object, source_id: str, item_id: str) -> None:
+        if source_id == costumes_service.STUDIO_SOURCE_ID:
+            costumes_service.export_item(conn, f"{source_id}/{item_id}")
+
+    @app.put("/costumes/{source_id}/{item_id}/prompt-text")
+    def api_costume_prompt_text_put(
+        source_id: str, item_id: str, req: CostumePromptTextUpdate
+    ) -> dict[str, Any]:
+        """写/清（空串 = 清掉）一条服装的文本层（prompt_text，服装段原料）。"""
+        s, i = _costume_ids(source_id, item_id)
+        with storage.connect() as conn:
+            try:
+                result = costumes_service.set_costume_prompt(conn, s, i, req.text)
+            except costumes_service.CostumeError as exc:
+                raise HTTPException(404, str(exc)) from exc
+            _costume_export_mirror(conn, s, i)
+        return result
+
+    @app.put("/costumes/{source_id}/{item_id}/keywords")
+    def api_costume_keywords_put(
+        source_id: str, item_id: str, req: CostumeKeywordsUpdate
+    ) -> dict[str, Any]:
+        """写自建条目的关键词（部件短清单）；站点条目是站点数据，拒绝。"""
+        s, i = _costume_ids(source_id, item_id)
+        with storage.connect() as conn:
+            try:
+                return costumes_service.set_keywords(conn, s, i, req.keywords)
+            except costumes_service.CostumeError as exc:
+                raise HTTPException(400, str(exc)) from exc
+
+    @app.put("/costumes/{source_id}/{item_id}/ref-prompt")
+    def api_costume_ref_prompt_put(
+        source_id: str, item_id: str, req: CostumeRefPromptUpdate
+    ) -> dict[str, Any]:
+        """写/清（空串 = 清掉）平铺制图提示词（ref_prompt，参考图重生成的原料）。"""
+        s, i = _costume_ids(source_id, item_id)
+        with storage.connect() as conn:
+            try:
+                result = costumes_service.set_ref_prompt(conn, s, i, req.ref_prompt)
+            except costumes_service.CostumeError as exc:
+                raise HTTPException(404, str(exc)) from exc
+            _costume_export_mirror(conn, s, i)
+        return result
+
+    @app.put("/costumes/{source_id}/{item_id}/subject-policy")
+    def api_costume_policy_put(
+        source_id: str, item_id: str, req: CostumePolicyUpdate
+    ) -> dict[str, Any]:
+        """写条目的换装策略（叠加/替换/保留；站点条目也可手动标记叠加型）。"""
+        s, i = _costume_ids(source_id, item_id)
+        with storage.connect() as conn:
+            try:
+                row = costumes_service.item_row(conn, f"{s}/{i}")
+            except costumes_service.CostumeError as exc:
+                raise HTTPException(404, str(exc)) from exc
+            current = dict(json.loads(row["subject_policy"])) if str(row["subject_policy"] or "").strip() else {}
+            policy = dict(current)
+            if req.clothing:
+                policy["clothing"] = req.clothing
+            if req.accessories:
+                policy["accessories"] = req.accessories
+            try:
+                normalized = costumes_service.set_item_policy(conn, s, i, policy)
+            except (costumes_service.CostumeError, ValueError) as exc:
+                raise HTTPException(400, f"策略不合法：{exc}") from exc
+            _costume_export_mirror(conn, s, i)
+        return normalized
+
+    @app.post("/costumes/{source_id}/{item_id}/favorite")
+    def api_costume_favorite_post(source_id: str, item_id: str) -> dict[str, Any]:
+        """收藏 / 取消收藏（切换）。"""
+        s, i = _costume_ids(source_id, item_id)
+        with storage.connect() as conn:
+            try:
+                result = costumes_service.toggle_favorite(conn, s, i)
+            except costumes_service.CostumeError as exc:
+                raise HTTPException(404, str(exc)) from exc
+        return {"favorited": result["favorite"]}
+
+    @app.post("/costumes/{source_id}/{item_id}/regenerate")
+    def api_costume_regenerate_post(
+        source_id: str, item_id: str, req: CostumeRegenerateRequest
+    ) -> dict[str, Any]:
+        """按 ref_prompt 重生成自建条目的参考图（同步等待 ComfyUI，约 10-15s）。
+
+        没有制图提示词（ref_prompt 空）报 400 —— 没有提示词不能出图。
+        """
+        s, i = _costume_ids(source_id, item_id)
+        try:
+            return costumes_service.regenerate_reference(s, i, seed=req.seed)
+        except costumes_service.CostumeError as exc:
+            raise HTTPException(400, str(exc)) from exc
 
     # ---- 动作描述（pose_actions：动作×视角 双键；非法 id/角度拒，库里没有该组合 → 404） ----
     @app.get("/poses/{pose_id}/action")

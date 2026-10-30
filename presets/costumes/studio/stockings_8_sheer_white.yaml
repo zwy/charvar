@@ -3,10 +3,13 @@ source_id: studio
 display_type: flat_lay
 category: stockings_8
 label: 白丝
-keywords: wearing sheer white nylon pantyhose, slightly milky translucent finish
+keywords: sheer white pantyhose
 prompt_text: wearing sheer white nylon pantyhose, slightly milky translucent finish
 prompt_source: manual
-subject_policy: {}
+ref_prompt: Flat lay test
+subject_policy:
+  clothing: replace
+  accessories: keep
 caption_tags: {}
 sort_order: 2
 images:

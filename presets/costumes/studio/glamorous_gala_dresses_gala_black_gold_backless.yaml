@@ -3,9 +3,17 @@ source_id: studio
 display_type: flat_lay
 category: glamorous_gala_dresses
 label: 黑金夜宴（挂颈露背长裙）
-keywords: 服装：该成年角色穿着黑色不透明丝绒连衣长裙，挂颈、正面窄V领，背部开口止于腰线上方；自然收腰，裙身修长直筒，人物左侧开衩至大腿中段，裙摆不拖地。金色刺绣仅沿领缘与腰侧分布。搭配黑色细带凉鞋，约7厘米细跟。裸腿，无袜类，无帽子、手套、首饰或手包。
+keywords: black velvet halter backless gown, narrow V-neck, gold embroidery along
+  collar and waist, black strappy sandals
 prompt_text: 服装：该成年角色穿着黑色不透明丝绒连衣长裙，挂颈、正面窄V领，背部开口止于腰线上方；自然收腰，裙身修长直筒，人物左侧开衩至大腿中段，裙摆不拖地。金色刺绣仅沿领缘与腰侧分布。搭配黑色细带凉鞋，约7厘米细跟。裸腿，无袜类，无帽子、手套、首饰或手包。
 prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white
+  background: a black opaque velvet one-piece maxi dress with a halter neck and a
+  narrow front V-neckline, an open back ending above the waistline, a natural cinched
+  waist, a long slim straight skirt, a left-side slit up to mid-thigh, the hem clearing
+  the floor, gold embroidery only along the neckline edge and at one side of the waist,
+  and a pair of black thin-strap stiletto sandals with 7 cm heels.  each piece separated
+  and laid flat, neatly arranged, soft studio lighting.'
 subject_policy: {}
 caption_tags:
   gala_crimson_mermaid: crimson off-shoulder satin mermaid gown
