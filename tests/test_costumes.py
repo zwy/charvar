@@ -285,3 +285,22 @@ def test_item_keywords_roundtrip(data_dir):
         costumes_service.item_keywords("SPR-9999")
     with pytest.raises(costumes_service.CostumeError):
         costumes_service.item_keywords("../evil")
+
+
+def test_item_display_type_sidecar(data_dir):
+    _build_fake_costume_data(data_dir)
+    # 缺省：侧车没有这条 → ghost
+    assert costumes_service.item_display_type("SPR-0001") == "ghost"
+    assert all(r["display_type"] == "ghost" for r in costumes_service.list_items()["items"])
+    # 侧车覆盖 → flat_lay（mtime+size 缓存，写文件即生效）；未覆盖条目仍 ghost
+    sidecar = data_dir / "costumes" / costumes_service.SOURCE_ID / "display_types.json"
+    sidecar.write_text(json.dumps({"SPR-0001": "flat_lay"}, ensure_ascii=False), encoding="utf-8")
+    assert costumes_service.item_display_type("SPR-0001") == "flat_lay"
+    assert costumes_service.item_row("SXY-0099")["display_type"] == "ghost"
+    # 坏值 / 坏 id：自家文件要严，整批拒绝
+    sidecar.write_text(json.dumps({"SPR-0001": "hanging"}), encoding="utf-8")
+    with pytest.raises(costumes_service.CostumeError):
+        costumes_service.item_row("SPR-0001")
+    sidecar.write_text(json.dumps({"../evil": "flat_lay"}), encoding="utf-8")
+    with pytest.raises(costumes_service.CostumeError):
+        costumes_service.item_row("SPR-0001")

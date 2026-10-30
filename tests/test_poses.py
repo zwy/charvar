@@ -567,7 +567,12 @@ def test_pose_prompt_costume_layer():
         body_lock=["her build is about six heads tall, narrow shoulders"],
     )
     assert "her build is about six heads tall, narrow shoulders" in plain_guarded
-    assert "身材" in dressed and "不额外添加无关装饰" in dressed
+    # 锚尾禁句与悬空配件机制句共存：禁句拦凭空添加（平铺实测没禁句会凭空发明包），
+    # 采纳靠悬空点名机制句 —— 两者职责不同
+    assert "不额外添加无关装饰" in dressed and "悬空放置的配件" in dressed
+    # 悬空展示配件机制点名（WIN-0001 贝雷帽实测：不点名参考图里悬空摆放的帽子就丢）
+    assert "悬空放置的配件" in dressed and "装到角色身上" in dressed
+    assert "清单上列出的每件都要出现在画面里" in dressed
     with pytest.raises(ValueError):
         pose_prompt.build_prompt("2人絡み", "甲环抱乙", costume=True)
 
@@ -605,6 +610,31 @@ def test_build_costume_prompt_no_pose():
         ["narrow shoulders, slender body"]
     )
     assert "narrow shoulders, slender body" in with_body
+    # 无动作版同一份服装锚（含悬空配件点名）
+    assert "悬空放置的配件" in prompt and "装到角色身上" in prompt
+
+
+def test_costume_display_form_clause():
+    from charvar import pose_prompt
+
+    # 缺省 ghost：形态句恒在，且在服装锚之前（「这张图是什么」先说）
+    dressed = pose_prompt.build_prompt("全身1人・セクシー系", "呈自然的 S 形曲线", costume=True)
+    assert "隐形模特（ghost mannequin）展示图" in dressed
+    assert dressed.index("隐形模特") < dressed.index("<image3>为服装参考")
+    # flat_lay：换平铺句，ghost 句消失；无动作版同一分叉
+    flat = pose_prompt.build_prompt(
+        "全身1人・セクシー系", "呈自然的 S 形曲线", costume=True, costume_display="flat_lay",
+    )
+    assert "服装平铺展示图（俯视平铺陈列）" in flat and "隐形模特" not in flat
+    assert "按穿搭关系在角色身上正确组合穿着" in flat
+    flat2 = pose_prompt.build_costume_prompt(costume_display="flat_lay")
+    assert "服装平铺展示图" in flat2 and "隐形模特" not in flat2
+    assert "隐形模特" in pose_prompt.build_costume_prompt()
+    # typo 显式报错，不静默退化成 ghost
+    with pytest.raises(ValueError):
+        pose_prompt.build_prompt(
+            "全身1人・セクシー系", "呈自然的 S 形曲线", costume=True, costume_display="hanging",
+        )
 
 
 def test_build_costume_prompt_keywords():

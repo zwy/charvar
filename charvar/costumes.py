@@ -60,6 +60,40 @@ def glossary_path() -> Path:
     return source_dir() / "glossary.json"
 
 
+def display_types_path() -> Path:
+    return source_dir() / "display_types.json"
+
+
+# 展示形态（display_type）：ghost = 隐形模特（ghost mannequin）——无头无身、服装保持
+# 穿着的立体形态悬空陈列；flat_lay = 平铺展示——俯视平铺陈列。站点 catalog 没有这个
+# 字段且 1407 条实测全 ghost（缺省缺条 = ghost）；侧车文件只记要覆盖的条目。
+# catalog.json 逐字保留红线不动，类型数据进侧车（display_types.json 同目录）。
+DISPLAY_TYPES: tuple[str, ...] = ("ghost", "flat_lay")
+_display_types_cache: dict = {"mtime_size": None, "map": {}}
+
+
+def _load_display_types() -> dict[str, str]:
+    """读侧车 display_types.json（mtime+size 失效）；坏条目整批拒绝 —— 自家文件要严。"""
+    stamp = _mtime_size(display_types_path())
+    if stamp == _display_types_cache["mtime_size"]:
+        return _display_types_cache["map"]
+    mapping: dict[str, str] = {}
+    if stamp is not None:
+        try:
+            raw = json.loads(display_types_path().read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise CostumeError(f"display_types.json 读取失败：{exc}") from exc
+        if not isinstance(raw, dict):
+            raise CostumeError("display_types.json 必须是 {item_id: 类型} 对象")
+        for item_id, value in raw.items():
+            if not ITEM_ID_RE.fullmatch(str(item_id)) or value not in DISPLAY_TYPES:
+                raise CostumeError(f"display_types.json 条目不合法：{item_id}: {value}")
+            mapping[item_id] = value
+    _display_types_cache["mtime_size"] = stamp
+    _display_types_cache["map"] = mapping
+    return mapping
+
+
 class CostumeError(Exception):
     """服装库错误（catalog 缺失/损坏 / 查不到该条 / 文件缺失）。"""
 
@@ -68,7 +102,7 @@ class CostumeError(Exception):
 # 住 path 漂移与 ../ 逃逸 —— item_id 会在 _load_catalog 里再对一遍文件名）。
 _REL_PATH_RE = re.compile(r"^(?:thumbs|img|png)/[A-Za-z0-9._-]+\.(?:webp|png|jpg|jpeg)$")
 
-# catalog 每条 → 归一化行：{item_id, category, keywords, thumb_rel, image_rel, hay}
+# catalog 每条 → 归一化行：{item_id, category, keywords, thumb_rel, image_rel, hay, display_type}
 _catalog_cache: dict = {"mtime_size": None, "items": []}
 _glossary_cache: dict = {"mtime_size": None, "ja": {}}
 
@@ -82,17 +116,29 @@ def _mtime_size(path: Path) -> tuple[int, int] | None:
 
 
 def _load_catalog() -> list[dict]:
-    """读 catalog.json（mtime+size 失效判定）并整批校验，坏一条就整批报错。"""
-    stamp = _mtime_size(catalog_path())
-    if stamp is not None and stamp == _catalog_cache["mtime_size"]:
-        return _catalog_cache["items"]
-    if stamp is None:
-        raise CostumeError(
-            f"找不到 catalog.json：{catalog_path()}（先跑 scripts/download_costume_db.py）"
-        )
+    """catalog.json → 归一化行（mtime+size 失效判定含侧车 display_types.json；坏行整批拒绝）。"""
+    stamp = (_mtime_size(catalog_path()), _mtime_size(display_types_path()))
+    if stamp != _catalog_cache["mtime_size"]:
+        _cache_rows(stamp, _parse_catalog())
+    for it in _catalog_cache["items"]:
+        it["display_type"] = _load_display_types().get(it["item_id"], "ghost")
+    return _catalog_cache["items"]
+
+
+def _cache_rows(stamp, items: list[dict]) -> None:
+    _catalog_cache["mtime_size"] = stamp
+    _catalog_cache["items"] = items
+
+
+def _parse_catalog() -> list[dict]:
+    """解析 + 整批校验（不含 display_type —— 那在 _load_catalog 里并侧车合并）。"""
     try:
         raw = json.loads(catalog_path().read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except OSError as exc:
+        raise CostumeError(
+            f"找不到 catalog.json：{catalog_path()}（先跑 scripts/download_costume_db.py）"
+        ) from exc
+    except json.JSONDecodeError as exc:
         raise CostumeError(f"catalog.json 读取失败：{exc}") from exc
     if not isinstance(raw, list) or not raw:
         raise CostumeError("catalog.json 为空或不是数组")
@@ -129,8 +175,6 @@ def _load_catalog() -> list[dict]:
         )
     if bad:
         raise CostumeError(f"发现 {len(bad)} 条 id 不合法（如 {bad[0]}…），整批拒绝")
-    _catalog_cache["mtime_size"] = stamp
-    _catalog_cache["items"] = items
     return items
 
 
@@ -191,6 +235,7 @@ def list_items(*, category: str = "", q: str = "") -> dict:
                 "category": it["category"],
                 "category_zh": category_zh(it["category"]),
                 "keywords": it["keywords"],
+                "display_type": it["display_type"],
                 "thumb_url": f"/costumes/image/{SOURCE_ID}/{it['item_id']}/thumb",
                 "image_url": f"/costumes/image/{SOURCE_ID}/{it['item_id']}/full",
             }
@@ -234,15 +279,25 @@ def image_file(item_id: str, variant: str) -> Path:
     return path
 # ---------- 生图参考图（role=costume：只锚服装，不锚身份/姿势） ----------
 
-def item_keywords(item_id: str) -> str:
-    """条目的英文关键词（生图「服装要点」注记的原料）；未知 id 报 CostumeError。"""
+def item_row(item_id: str) -> dict:
+    """整条归一化行；未知 id 报 CostumeError（keywords / display_type 等 accessor 共用）。"""
     item_id = str(item_id or "").strip()
     if not ITEM_ID_RE.fullmatch(item_id):
         raise CostumeError(f"非法服装 id：{item_id[:60]}")
     for it in _load_catalog():
         if it["item_id"] == item_id:
-            return it["keywords"]
+            return it
     raise CostumeError(f"服装库没有这条服装：{item_id}")
+
+
+def item_keywords(item_id: str) -> str:
+    """条目的英文关键词（生图「服装要点」注记的原料）；未知 id 报 CostumeError。"""
+    return item_row(item_id)["keywords"]
+
+
+def item_display_type(item_id: str) -> str:
+    """条目的展示形态（ghost / flat_lay，缺省 ghost）；未知 id 报 CostumeError。"""
+    return item_row(item_id)["display_type"]
 
 
 def raw_reference_file(item_id: str) -> Path:
@@ -251,9 +306,7 @@ def raw_reference_file(item_id: str) -> Path:
     img 与 png 同像素（1366×2048），只差编码；catalog 校验过路径但文件在不在
     这里才见真章（png_rel 有值而 png 文件缺失 → 回退 webp，不报错）。
     """
-    item = next((it for it in _load_catalog() if it["item_id"] == item_id), None)
-    if item is None:
-        raise CostumeError(f"服装库没有这条服装：{item_id}")
+    item = item_row(item_id)
     if item["png_rel"]:
         png = source_dir() / item["png_rel"]
         if png.is_file():

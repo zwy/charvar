@@ -1565,12 +1565,14 @@ def pose_prompt_cmd(
         _die("--subject2 只对双人（2人絡み）动作有效")
     costume_file = None
     costume_keywords = ""
+    costume_display = "ghost"
     if costume:
         if kind == "pair":
             _die("--costume 暂不支持双人（2人絡み）动作")
         try:
             costume_file = costumes_service.prepared_reference_file(costume)
             costume_keywords = costumes_service.item_keywords(costume)
+            costume_display = costumes_service.item_display_type(costume)
         except costumes_service.CostumeError as exc:
             _die(str(exc))
     prompt = pose_prompt_module.build_prompt(
@@ -1580,6 +1582,7 @@ def pose_prompt_cmd(
         costume=costume_file is not None,
         body_lock=body_lock,
         costume_keywords=costume_keywords or None,
+        costume_display=costume_display,
     )
     if not json_out:
         typer.echo(prompt)
@@ -1646,6 +1649,7 @@ def costume_prompt_cmd(
 
     try:
         keywords = costumes_service.item_keywords(item_id)
+        display = costumes_service.item_display_type(item_id)
     except costumes_service.CostumeError as exc:
         _die(str(exc))
     body_lock: list[str] | None = None
@@ -1656,7 +1660,7 @@ def costume_prompt_cmd(
             slot_label, slot = poses_service.subject_slot_for_prompt(conn, subject, "")
         body_lock = list(profile.body_lock) if profile else None
     prompt = pose_prompt_module.build_costume_prompt(
-        body_lock=body_lock, costume_keywords=keywords
+        body_lock=body_lock, costume_keywords=keywords, costume_display=display
     )
     if not json_out:
         typer.echo(prompt)

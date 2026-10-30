@@ -106,13 +106,15 @@ def build_prompt(
     costume: bool = False,
     body_lock: list[str] | None = None,
     costume_keywords: str | None = None,
+    costume_display: str = "ghost",
 ) -> str:
     """按线型拼 demo 结构；动作描述必须是已写好的视角级文本。
 
     pair_two_subjects（仅 2人絡み 生效）：双主体版 —— <image1>/<image2> 分别锚定
     描述里的「甲」「乙」，动作线稿顺移成 <image3>；单主体版保持两人同沿用一张图。
     costume（仅单人生效，双人显式报错）：<image3> = 服装参考图 —— image1 锚定句
-    换服装版（锚身份不锚衣着），动作描述之后插「服装融合」段，禁令句追加换装禁令。
+    换服装版（锚身份不锚衣着），动作描述之后插「服装融合」段，禁令句追加换装禁令。 costume_display 按条目的
+    展示形态选「这张图是什么」说明句（ghost = 隐形模特，flat_lay = 平铺展示）。
     costume_keywords（可选）：catalog 英文关键词拼「服装要点」注记行，插在服装锚后。
     """
     kind = LINE_KIND.get(str(line or ""), "full")
@@ -145,6 +147,7 @@ def build_prompt(
                 "配饰与<image3>服装参考冲突时，以服装参考为准。"
             ),
             seg["mannequin"],
+            _display_form(costume_display, 3),
             _COSTUME_ANCHOR.format(slot=3),
             _costume_keywords(costume_keywords, 3),
             _figure_anchor(3, body_lock),
@@ -168,11 +171,26 @@ def build_prompt(
 
 # ---------- 服装参考（costume-db-01 取图；role=costume 只锚服装） ----------
 
+# 展示形态说明（对应 costume 库 display_type；进服装锚之前的一句「这张图是什么」）。
+# ghost = 隐形模特：无头无身、服装保持穿着立体形态悬空陈列（悬空配件机制由
+# 配件锚那一层点名）；flat_lay = 平铺：分开平放是陈列不是穿着，组合语义显式转移。
+_DISPLAY_FORM_CLAUSES = {
+    "ghost": (
+        "{image}是隐形模特（ghost mannequin）展示图：图中没有头和身体，"
+        "服装保持穿上时的立体形态悬空陈列。"
+    ),
+    "flat_lay": (
+        "{image}是服装平铺展示图（俯视平铺陈列）：衣物分开平放是展示方式，"
+        "不是穿着效果；按穿搭关系在角色身上正确组合穿着，成图是正常人体视角。"
+    ),
+}
+
 _COSTUME_ANCHOR = (
-    "<image{slot}>为服装参考，仅参考其中服装的款式、轮廓、配色、面料质感、图案、"
-    "领口、袖型、腰线、衣摆与层次结构，完整还原该套服装；若图中含人物，不采用其脸、"
-    "发型、肤色、体型、姿势、背景或画风。未展示的服装部分按同一套结构合理补全，"
-    "不额外添加无关装饰。"
+    "<image{slot}>为服装参考，仅参考其中的服装与整套配件：服装参考其款式、轮廓、"
+    "配色、面料质感、图案、领口、袖型、腰线、衣摆与层次结构；配件参考鞋、袜、帽、"
+    "围巾、手套、包等随身物品的款式与用法；参考图中单独摆放或悬空放置的配件（如帽子、包）也是这套造型的组成部分，同样要装到角色身上：帽子戴在头上、围巾围在脖子上、包挎在肩上或拿在手里。服装与全部配件一起完整还原，清单上列出的每件都要出现在画面里；若图中含"
+    "人物，不采用其脸、发型、肤色、体型、姿势、背景或画风。未展示的服装部分按"
+    "同一套结构合理补全，不额外添加无关装饰。"
 )
 
 _COSTUME_KEYWORDS_LEAD = (
@@ -191,6 +209,16 @@ def _costume_keywords(keywords: str | None, slot: int) -> str:
     if not text:
         return ""
     return _COSTUME_KEYWORDS_LEAD.format(slot=slot, keywords=text)
+
+
+def _display_form(display: str, slot: int) -> str:
+    """展示形态句；未知形态显式报错（typo 不能静默退化成 ghost）。"""
+    value = str(display or "ghost")
+    if value not in _DISPLAY_FORM_CLAUSES:
+        raise ValueError(
+            f"未知服装展示形态：{display}（可选 {'/'.join(_DISPLAY_FORM_CLAUSES)}）"
+        )
+    return _DISPLAY_FORM_CLAUSES[value].format(image=f"<image{slot}>")
 
 _COSTUME_FUSION = (
     "把<image3>图中的服装穿在角色身上，替换其原有服装（不是叠穿在原服装外面），"
@@ -234,7 +262,9 @@ def _guard_with_costume(seg_guard: str) -> str:
 
 
 def build_costume_prompt(
-    body_lock: list[str] | None = None, costume_keywords: str | None = None,
+    body_lock: list[str] | None = None,
+    costume_keywords: str | None = None,
+    costume_display: str = "ghost",
 ) -> str:
     """单主体 + 服装（无动作参考）→ 全身换装图提示词。
 
@@ -250,6 +280,7 @@ def build_costume_prompt(
     return "\n\n".join(
         [
             identity,
+            _display_form(costume_display, 2),
             _COSTUME_ANCHOR.format(slot=2),
             _costume_keywords(costume_keywords, 2),
             _figure_anchor(2, body_lock),
