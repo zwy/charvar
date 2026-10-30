@@ -1551,6 +1551,17 @@ def pose_prompt_cmd(
             if subject and costume:
                 profile = storage.get_subject(conn, subject)
                 body_lock = list(profile.body_lock) if profile else None
+            costume_note = ""
+            costume_display = "ghost"
+            if costume:
+                try:
+                    c_row = costumes_service.resolve_ref(conn, costume)
+                    costume_note = costumes_service.note_text(
+                        conn, f"{c_row['source_id']}/{c_row['item_id']}"
+                    )
+                    costume_display = c_row["display_type"]
+                except costumes_service.CostumeError as exc:
+                    _die(str(exc))
         except poses_service.PoseError as exc:
             _die(str(exc))
     if row is None:
@@ -1564,15 +1575,11 @@ def pose_prompt_cmd(
     if subject2 and kind != "pair":
         _die("--subject2 只对双人（2人絡み）动作有效")
     costume_file = None
-    costume_keywords = ""
-    costume_display = "ghost"
     if costume:
         if kind == "pair":
             _die("--costume 暂不支持双人（2人絡み）动作")
         try:
             costume_file = costumes_service.prepared_reference_file(costume)
-            costume_keywords = costumes_service.item_keywords(costume)
-            costume_display = costumes_service.item_display_type(costume)
         except costumes_service.CostumeError as exc:
             _die(str(exc))
     prompt = pose_prompt_module.build_prompt(
@@ -1581,7 +1588,7 @@ def pose_prompt_cmd(
         pair_two_subjects=bool(subject2),
         costume=costume_file is not None,
         body_lock=body_lock,
-        costume_keywords=costume_keywords or None,
+        costume_keywords=costume_note or None,
         costume_display=costume_display,
     )
     if not json_out:
@@ -1647,11 +1654,19 @@ def costume_prompt_cmd(
     from charvar import pose_prompt as pose_prompt_module
     from charvar import poses as poses_service
 
-    try:
-        keywords = costumes_service.item_keywords(item_id)
-        display = costumes_service.item_display_type(item_id)
-    except costumes_service.CostumeError as exc:
-        _die(str(exc))
+    c_has_image = True
+    with storage.connect() as conn:
+        try:
+            c_row = costumes_service.resolve_ref(conn, item_id)
+            keywords = costumes_service.note_text(
+                conn, f"{c_row['source_id']}/{c_row['item_id']}"
+            )
+            display = c_row["display_type"]
+            c_has_image = bool(
+                str(c_row["file_path"] or "").strip() or str(c_row["image_path"] or "").strip()
+            )
+        except costumes_service.CostumeError as exc:
+            _die(str(exc))
     body_lock: list[str] | None = None
     slot_label, slot = "front", None
     if subject:
@@ -1668,6 +1683,11 @@ def costume_prompt_cmd(
         return
     if not subject:
         _die("--run 需要 --subject（主体档案 id）")
+    if not c_has_image:
+        _die(
+            "这条服装是纯文本条目（无参考图）—— 图锚定换装用不了；"
+            "纯文本换装走预设通路（charvar gen --outfit）"
+        )
     try:
         costume_file = costumes_service.prepared_reference_file(item_id)
     except costumes_service.CostumeError as exc:
@@ -1689,6 +1709,120 @@ def costume_prompt_cmd(
         out=out,
     )
     _run_adhoc(req, json_out)
+
+
+@costume_app.command("import")
+def costume_import_cmd() -> None:
+    """磁盘 catalog.json + display_types.json 侧车 → costume_items 索引（幂等重灌）。
+
+    costume_prompts（用户文本层）绝不碰 —— pose_actions 同红线。缺图/魔数不符整批拒绝。
+    """
+    from charvar import costumes as costumes_service
+    from charvar import storage
+
+    with storage.connect() as conn:
+        try:
+            data = costumes_service.import_catalog(conn, costumes_service.SOURCE_ID)
+        except costumes_service.CostumeError as exc:
+            _die(str(exc))
+    typer.echo(f"导入完成：{data['items']} 条 → costume_items（{data['source_id']}）")
+
+
+@costume_app.command("import-outfits")
+def costume_import_outfits_cmd() -> None:
+    """presets/outfits/*.yaml → 自建服装行（source_id=studio，display_type=flat_lay）。
+
+    每条 item_id = {预设名}_{条目 id}；text 双写 keywords 与文本层（source=manual）；
+    已存在的条目整条跳过（重跑不覆盖 DB 里改过的文本），家族新增条重跑即补。
+    """
+    from charvar import costumes as costumes_service
+    from charvar import storage
+
+    with storage.connect() as conn:
+        try:
+            data = costumes_service.import_outfit_presets(conn)
+        except costumes_service.CostumeError as exc:
+            _die(str(exc))
+    typer.echo(f"自建条目：新增 {data['added']}，跳过（已存在）{data['skipped']}")
+
+
+@costume_app.command("prompt-text")
+def costume_prompt_text_cmd(
+    ref: str = typer.Argument(..., help="条目引用（SPR-0001 或 costume-db-01/SPR-0001）"),
+    set_text: Optional[str] = typer.Option(None, "--set", help="写入文本层（空串 = 清掉该条文本）"),
+    json_out: bool = typer.Option(False, "--json", help="当前文本层以 JSON 输出"),
+) -> None:
+    """读/写一条服装的文生图提示词（costume_prompts 表；source=manual）。"""
+    from charvar import costumes as costumes_service
+    from charvar import storage
+
+    with storage.connect() as conn:
+        try:
+            row = costumes_service.resolve_ref(conn, ref)
+        except costumes_service.CostumeError as exc:
+            _die(str(exc))
+        source_id, item_id = row["source_id"], row["item_id"]
+        if set_text is None:
+            data = costumes_service.get_costume_prompt(conn, source_id, item_id)
+            typer.echo(json.dumps(data, ensure_ascii=False, indent=2) if json_out else data["prompt_text"])
+            return
+        data = costumes_service.set_costume_prompt(conn, source_id, item_id, set_text)
+    typer.echo(
+        f"已更新 costume_prompts：{source_id}/{item_id}"
+        f"（{len(data['prompt_text'])} 字符，source={data['prompt_source']}）"
+    )
+
+
+@costume_app.command("describe")
+def costume_describe_cmd(
+    refs: list[str] = typer.Argument(None, help="条目引用（可多个；source/item 或裸 item）"),
+    limit: int = typer.Option(0, "--limit", help="本次最多处理几个（0 = 全部给出的）"),
+    model: Optional[str] = typer.Option(None, "--model", help="视觉模型（缺省 = 设置页/env 的 LLM 配置）"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="只起稿打印，不落库"),
+    overwrite: bool = typer.Option(False, "--overwrite", help="已有文本也重写"),
+) -> None:
+    """LLM 看图起稿服装条目的 t2i 提示词（落 costume_prompts，source=ai_draft）。
+
+    幂等：已有文本的条目跳过；--overwrite 重写。LLM 需支持视觉。
+    """
+    from charvar import costume_describe
+    from charvar import storage
+
+    if not refs:
+        _die("给出至少一个条目引用（如 SPR-0001）")
+    picks = list(refs)
+    if limit and limit < len(picks):
+        picks = picks[:limit]
+    with storage.connect() as conn:
+        for ref in picks:
+            try:
+                data = costume_describe.describe_one(
+                    conn, ref, model=model, dry_run=dry_run, overwrite=overwrite
+                )
+            except Exception as exc:  # noqa: BLE001 - 单条失败不拦批次
+                typer.echo(f"[{ref}] 起稿失败：{type(exc).__name__}: {exc}")
+                continue
+            line = f"[{data['ref']}] {data['status']}"
+            if data.get("text"):
+                line += f"：{data['text'][:120]}"
+            typer.echo(line)
+
+
+@costume_app.command("export")
+def costume_export_cmd(
+    ref: str = typer.Argument(..., help="条目引用（source/item 或裸 item）"),
+    out: Optional[Path] = typer.Option(None, "--out", help="输出目录（缺省 presets/costumes/<source_id>/）"),
+) -> None:
+    """单条服装（含文本层）快照回 presets/costumes/<source_id>/<item_id>.yaml。"""
+    from charvar import costumes as costumes_service
+    from charvar import storage
+
+    with storage.connect() as conn:
+        try:
+            path = costumes_service.export_item(conn, ref, out)
+        except costumes_service.CostumeError as exc:
+            _die(str(exc))
+    typer.echo(f"已导出：{path}")
 
 
 @pose_app.command("describe")

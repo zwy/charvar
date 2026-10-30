@@ -111,6 +111,34 @@ CREATE TABLE IF NOT EXISTS settings (
     value_json TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS costume_items (
+    -- 可重灌索引层：站点快照（costume-db-01）与自建条目（studio）通用；
+    -- 用户文本（prompt_text）不进这层 —— 在 costume_prompts（同 pose 双表分层）。
+    source_id TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    display_type TEXT NOT NULL DEFAULT 'ghost',   -- ghost / flat_lay / …新值须配提示词句
+    category TEXT NOT NULL DEFAULT '',
+    label TEXT NOT NULL DEFAULT '',               -- 中文展示名（站点条目缺省 = item_id 语义）
+    keywords TEXT NOT NULL DEFAULT '',            -- 「服装要点」注记的原料
+    file_path TEXT NOT NULL DEFAULT '',           -- 参考图原寸（png；data/ 相对路径；空 = 纯文本服装）
+    image_path TEXT NOT NULL DEFAULT '',          -- 详情图（img/webp）
+    thumb_path TEXT NOT NULL DEFAULT '',          -- 缩略图（thumbs/webp）
+    subject_policy TEXT NOT NULL DEFAULT '',      -- json：clothing/accessories 策略（为空 = 无策略）
+    caption_tags TEXT NOT NULL DEFAULT '',        -- json：贴字 caption token 映射（为空 = 缺省 id）
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (source_id, item_id)
+);
+CREATE TABLE IF NOT EXISTS costume_prompts (
+    -- 用户文本层（类 pose_actions）：每条服装的文生图提示词；catalog 重灌绝不碰。
+    source_id TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    prompt_text TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT 'manual',        -- manual / ai_draft
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (source_id, item_id)
+);
 """
 
 # 已存在的旧库补列（SQLite 无静默 ALTER，逐一尝试即可）

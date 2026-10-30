@@ -824,7 +824,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     def api_pose_image_full(source: str, pose_id: str, angle: str) -> FileResponse:
         return _pose_image_response(source, pose_id, angle, "full")
 
-    # ---- 服装库（costume-db-01 t2i 架空服装；v1 磁盘直读，未入生图流程） ----
+    # ---- 服装库（costume_items/costume_prompts 双表；索引层由 costume import 重灌） ----
     @app.get("/costumes")
     def api_costumes_list(
         category: str = Query("", description="按目录原文过滤"),
@@ -834,16 +834,15 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
 
         图片 URL 经 /costumes/image/{source}/… 端点伺服，浏览器不给磁盘路径。
         """
-        try:
-            return costumes_service.list_items(category=category, q=q)
-        except costumes_service.CostumeError as exc:
-            raise HTTPException(404, str(exc)) from exc
+        with storage.connect() as conn:
+            try:
+                return costumes_service.list_items(conn, category=category, q=q)
+            except costumes_service.CostumeError as exc:
+                raise HTTPException(404, str(exc)) from exc
 
     def _costume_image_response(source: str, item_id: str, variant: str) -> FileResponse:
-        if source != costumes_service.SOURCE_ID:
-            raise HTTPException(404, f"没有这个服装库：{source}")
         try:
-            path = costumes_service.image_file(item_id, variant)
+            path = costumes_service.image_file(f"{source}/{item_id}", variant)
         except costumes_service.CostumeError as exc:
             raise HTTPException(404, str(exc)) from exc
         return FileResponse(path, media_type="image/webp")
