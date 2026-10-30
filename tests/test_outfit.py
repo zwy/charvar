@@ -1,11 +1,18 @@
-"""服装预设（presets/outfits/）：解析校验 / 笛卡尔积组合 / caption 融合 / 顺序。"""
+"""服装家族（costume 双表 studio）：加载（DB 视图）/ 笛卡尔积组合 / caption 融合 / 顺序。
+
+仓库镜像 = presets/costumes/studio/*.yaml（charvar costume import-studio 装库）；
+DB 是运行时真源。用 tmp env + 镜像自举或直插行验证，不依赖真库。
+"""
 from __future__ import annotations
 
-from pathlib import Path
+import json
+import pathlib
 
 import pytest
+from fastapi.testclient import TestClient
 
 from charvar import outfit as outfit_service
+from charvar import storage
 from charvar.caption import build_caption
 from charvar.composer import generate
 from charvar.models import GenerateRequest, SubjectProfile, VariantSpec
@@ -13,31 +20,21 @@ from charvar.preset_loader import (
     ListPreset,
     MatrixPreset,
     PresetError,
-    load,
 )
+from charvar.subject_policy import SubjectPolicy
 
 
-_OUTFIT_YAML = """
-name: demo_outfits
-type: outfit
-version: 1
-description: 测试服装
-items:
-- id: sheer_black
-  label: 黑丝
-  text: wearing sheer black nylon pantyhose
-- id: white_thick
-  label: 白丝
-  text: wearing opaque white pantyhose
-caption_tags:
-  sheer_black: sheer black pantyhose
-"""
-
-
-def _write_outfit(tmp_path: Path) -> Path:
-    path = tmp_path / "demo_outfits.yaml"
-    path.write_text(_OUTFIT_YAML, encoding="utf-8")
-    return path
+def _outfit() -> outfit_service.OutfitPreset:
+    """组合引擎测试用的家族（原 demo_outfits yaml 等价物）。"""
+    return outfit_service.OutfitPreset(
+        name="demo_outfits",
+        description="测试服装",
+        items=[
+            outfit_service.OutfitItem(id="sheer_black", label="黑丝", text="wearing sheer black nylon pantyhose"),
+            outfit_service.OutfitItem(id="white_thick", label="白丝", text="wearing opaque white pantyhose"),
+        ],
+        caption_tags={"sheer_black": "sheer black pantyhose"},
+    )
 
 
 def _pose_preset() -> ListPreset:
@@ -68,40 +65,101 @@ def _pose_preset() -> ListPreset:
     )
 
 
-def test_parse_and_list(tmp_path, monkeypatch):
-    path = _write_outfit(tmp_path)
-    preset = outfit_service.parse_outfit_file(path)
-    assert preset.name == "demo_outfits"
-    assert [i.id for i in preset.items] == ["sheer_black", "white_thick"]
-    assert [i.label for i in preset.items] == ["黑丝", "白丝"]
+# ---------- DB 视图加载 ----------
 
-    def fake_dir():
-        return tmp_path
+def _seed_outfits(name: str, items: list[dict], caption_tags: dict | None = None) -> None:
+    """往（隔离 env 的）studio 库直插一个家族。items = [{id,label,text,policy?}]。"""
+    from charvar import costumes as costumes_service
 
-    monkeypatch.setattr(outfit_service, "outfits_dir", fake_dir)
+    with storage.connect() as conn:
+        for idx, it in enumerate(items):
+            now = storage.utcnow()
+            conn.execute(
+                """INSERT INTO costume_items
+                   (source_id, item_id, display_type, category, label, keywords,
+                    file_path, image_path, thumb_path, subject_policy, caption_tags,
+                    sort_order, created_at, updated_at)
+                   VALUES (?, ?, 'flat_lay', ?, ?, ?, '', '', '', ?, ?, ?, ?, ?)""",
+                (
+                    costumes_service.STUDIO_SOURCE_ID,
+                    f"{name}_{it['id']}",
+                    name,
+                    it["label"],
+                    it["text"],
+                    json.dumps(it["policy"], ensure_ascii=False) if it.get("policy") else "",
+                    json.dumps(caption_tags, ensure_ascii=False) if caption_tags else "",
+                    idx,
+                    now,
+                    now,
+                ),
+            )
+        conn.commit()
+
+
+@pytest.fixture()
+def outfit_db(tmp_path, monkeypatch):
+    """隔离数据目录 + 装好仓库镜像服装（DB 是真源，测试不碰真库）。"""
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    from charvar import costumes as costumes_service
+
+    with storage.connect() as conn:
+        data = costumes_service.import_studio_yaml(conn)
+    assert data["added"] >= 5  # 仓库镜像自带的自建服装
+    return tmp_path
+
+
+def test_list_and_load_from_db(tmp_path, monkeypatch):
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    _seed_outfits(
+        "demo_outfits",
+        [
+            {"id": "sheer_black", "label": "黑丝", "text": "wearing sheer black nylon pantyhose"},
+            {"id": "white_thick", "label": "白丝", "text": "wearing opaque white pantyhose"},
+        ],
+        caption_tags={"sheer_black": "sheer black pantyhose"},
+    )
     listed = outfit_service.list_outfit_presets()
     assert len(listed) == 1
-    assert listed[0]["count"] == 2
-    assert listed[0]["items"][0]["label"] == "黑丝"
+    assert listed[0]["name"] == "demo_outfits" and listed[0]["count"] == 2
+    assert listed[0]["items"][0] == {"id": "sheer_black", "label": "黑丝"}
+    loaded = outfit_service.load_outfit("demo_outfits")
+    assert [i.id for i in loaded.items] == ["sheer_black", "white_thick"]  # sort_order 次序
+    assert [i.label for i in loaded.items] == ["黑丝", "白丝"]
+    assert loaded.caption_tags["sheer_black"] == "sheer black pantyhose"
+
+    # 文本层优先（DB 编辑实时进批）
+    with storage.connect() as conn:
+        from charvar import costumes as costumes_service
+
+        costumes_service.set_costume_prompt(
+            conn, "studio", "demo_outfits_sheer_black", "edited sheer black text"
+        )
+    reloaded = outfit_service.load_outfit("demo_outfits")
+    assert reloaded.items[0].text == "edited sheer black text"
+    assert reloaded.items[1].text == "wearing opaque white pantyhose"
 
 
-def test_parse_rejects_bad_fields(tmp_path):
-    bad = _OUTFIT_YAML.replace("label: 黑丝\n  text: wearing sheer black nylon pantyhose",
-                               "label: 黑丝\n  text: wearing sheer black nylon pantyhose\n- id: 黑丝.中\n  label: x\n  text: y")
-    path = tmp_path / "bad.yaml"
-    path.write_text(bad, encoding="utf-8")
+def test_load_rejects_bad_rows(tmp_path, monkeypatch):
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    # 非法 native id（CJK/点号）
+    _seed_outfits("bad_ids", [{"id": "黑丝.中", "label": "x", "text": "text here"}])
     with pytest.raises(PresetError):
-        outfit_service.parse_outfit_file(path)
-
-    dup = _OUTFIT_YAML.replace("- id: white_thick", "- id: sheer_black")
-    path.write_text(dup, encoding="utf-8")
+        outfit_service.load_outfit("bad_ids")
+    # （id 重复在 DB 主键层就挡掉，加载时的重复校验只对跨前缀剥离失配等极端情况兜底）
+    # 文本全空
+    _seed_outfits("blank_text", [{"id": "b", "label": "B", "text": "   "}])
     with pytest.raises(PresetError):
-        outfit_service.parse_outfit_file(path)
+        outfit_service.load_outfit("blank_text")
+    # 未知家族 → 404
+    with pytest.raises(PresetError) as exc_info:
+        outfit_service.load_outfit("no_such_family")
+    assert getattr(exc_info.value, "status", None) == 404
 
 
-def test_combine_outfit_first_order_and_text(tmp_path):
-    outfit = outfit_service.parse_outfit_file(_write_outfit(tmp_path))
-    combined = outfit_service.combine(_pose_preset(), outfit, "outfit_first")
+# ---------- 笛卡尔积组合（引擎不受存储切换影响） ----------
+
+def test_combine_outfit_first_order_and_text():
+    combined = outfit_service.combine(_pose_preset(), _outfit(), "outfit_first")
     assert isinstance(combined, ListPreset)
     assert combined.name == "demo_pose+demo_outfits"
     ids = [s.id for s in combined.variants]
@@ -123,26 +181,22 @@ def test_combine_outfit_first_order_and_text(tmp_path):
     assert combined.preferred_aspect_ratio == _pose_preset().preferred_aspect_ratio
 
 
-def test_combine_pose_first_order(tmp_path):
-    outfit = outfit_service.parse_outfit_file(_write_outfit(tmp_path))
-    combined = outfit_service.combine(_pose_preset(), outfit, "pose_first")
+def test_combine_pose_first_order():
+    combined = outfit_service.combine(_pose_preset(), _outfit(), "pose_first")
     assert [s.id for s in combined.variants] == [
         "wave_hand__sheer_black", "wave_hand__white_thick",
         "stand_still__sheer_black", "stand_still__white_thick",
     ]
 
 
-def test_combine_rejects_unknown_order(tmp_path):
-    outfit = outfit_service.parse_outfit_file(_write_outfit(tmp_path))
+def test_combine_rejects_unknown_order():
     with pytest.raises(PresetError):
-        outfit_service.combine(_pose_preset(), outfit, "random")
+        outfit_service.combine(_pose_preset(), _outfit(), "random")
 
 
-def test_matrix_pose_preset_combines(tmp_path):
-    """matrix 预设（维度组合）同样能 × 服装预设。"""
-    import yaml
-
-    raw = yaml.safe_load("""
+def test_matrix_pose_preset_combines():
+    """matrix 预设（维度组合）同样能 × 服装家族。"""
+    raw = __import__("yaml").safe_load("""
 name: demo_matrix
 type: matrix
 version: 1
@@ -159,20 +213,17 @@ rules:
     parsed = MatrixPreset.model_validate(
         {**raw, "dimensions": raw["dimensions"], "rules": raw["rules"]}
     )
-    outfit = outfit_service.parse_outfit_file(_write_outfit(tmp_path))
-    combined = outfit_service.combine(parsed, outfit, "outfit_first")
-    ids = [s.id for s in combined.variants]
-    assert ids == ["sheer_black__full_front", "white_thick__full_front"]
+    combined = outfit_service.combine(parsed, _outfit(), "outfit_first")
+    assert [s.id for s in combined.variants] == ["sheer_black__full_front", "white_thick__full_front"]
 
 
-def test_generate_run_and_meta(silver_witch, tmp_path, monkeypatch):
+def test_generate_run_and_meta(silver_witch):
     """组合走 composer.generate：caption 带 outfit token，meta 带服装与中文 label。
 
     run_id 里组合名的 + 必须已消毒（assets.safe_run_id 只认字母数字 _ . -）——
     否则推送 ComfyUI 落盘那一刻才炸。
     """
-    outfit = outfit_service.parse_outfit_file(_write_outfit(tmp_path))
-    combined = outfit_service.combine(_pose_preset(), outfit, "outfit_first")
+    combined = outfit_service.combine(_pose_preset(), _outfit(), "outfit_first")
     req = GenerateRequest(subject=silver_witch, seed=7)
     result = generate(silver_witch, combined, req)
     assert result.preset == "demo_pose+demo_outfits"
@@ -193,18 +244,19 @@ def test_generate_run_and_meta(silver_witch, tmp_path, monkeypatch):
     assert result.items == again.items
 
 
-def test_repo_stockings_yaml_parses():
-    """仓库自带的 stockings_8 解析合法（8 档、label 齐全）。"""
+def test_stockings_family_from_mirror(outfit_db):
+    """仓库镜像里的 stockings_8 装库后加载合法（8 档、label 齐全、次序 = 播放次序）。"""
     preset = outfit_service.load_outfit("stockings_8")
-    assert len(preset.items) == 8
+    assert [i.id for i in preset.items] == [
+        "sheer_black_15d", "sheer_nude_20d", "sheer_white", "sheer_grey",
+        "opaque_black_80d", "fishnet_black", "thigh_highs_black", "thigh_highs_white",
+    ]
     assert all(i.label for i in preset.items)
     assert all(len(i.text) <= 200 for i in preset.items)  # 稀释红线：服装段必须短
-    ids = {i.id for i in preset.items}
-    assert {"sheer_black_15d", "fishnet_black", "thigh_highs_white"} <= ids
 
 
-def test_outfit_presets_not_in_main_listing(monkeypatch, tmp_path):
-    """服装预设住在 presets/outfits/ 子目录，不混进主预设下拉。"""
+def test_outfit_presets_not_in_main_listing():
+    """服装家族不混进主预设下拉（/outfit-presets 是独立端点）。"""
     from charvar.preset_loader import list_presets
 
     names = {p["name"] for p in list_presets()}
@@ -215,18 +267,23 @@ def test_outfit_presets_not_in_main_listing(monkeypatch, tmp_path):
 
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
-    import pathlib
-
-    from fastapi.testclient import TestClient
-
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
     from charvar.api import build_app
 
-    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
     app = build_app(static_dir=None, db_path=pathlib.Path(tmp_path) / "test.db")
     return TestClient(app)
 
 
+def _seed_client_studio(client):
+    from charvar import costumes as costumes_service
+
+    with storage.connect() as conn:  # env 已隔离：与 build_app 的库同目录约定
+        data = costumes_service.import_studio_yaml(conn)
+    assert data["added"] >= 5
+
+
 def test_api_outfit_endpoints(client):
+    _seed_client_studio(client)
     listed = client.get("/outfit-presets").json()
     assert isinstance(listed, list)
     assert any(p["name"] == "stockings_8" for p in listed)
@@ -247,6 +304,7 @@ def _make_subject(client):
 
 def test_api_generate_with_outfit(client):
     _make_subject(client)
+    _seed_client_studio(client)
     # 白裙丝袜动作预设（3 变体）× stockings_8（8 件）= 24 条
     req = {
         "subject_id": "demo_witch",
@@ -265,7 +323,7 @@ def test_api_generate_with_outfit(client):
     assert first["meta"]["outfit_label"] == "黑丝15D"
     assert "sheer black" in first["caption"] or "sheer_black_15d" in first["caption"]
 
-    # 未知服装预设 → 404；sticker 预设 + 服装 → 400
+    # 未知服装家族 → 404；sticker 预设 + 服装 → 400
     bad = client.post("/generate", json={**req, "outfit_preset": "no_such_outfit"})
     assert bad.status_code == 404
 
@@ -273,6 +331,7 @@ def test_api_generate_with_outfit(client):
     resp = client.post("/generate", json=sticker_req)
     if resp.status_code != 400:  # 仓库若没有 sticker 预设就不验这条
         raise AssertionError(f"sticker+outfit 应被拒绝：{resp.status_code}")
+
 
 # ---------- 中文服装段 / 位置 / 主体锁策略 ----------
 
@@ -299,57 +358,37 @@ def test_chinese_outfit_coverage():
 
 
 def test_outfit_text_can_be_chinese():
-    """服装段的语言不限：中文服装预设能解析、能组合。"""
-    yaml_text = f"""
-name: demo_cn_outfits
-type: outfit
-version: 1
-items:
-- id: briefs
-  label: 仅内裤
-  text: {_CHINESE_OUTFIT}
-"""
-    import tempfile
-    from pathlib import Path
-
-    with tempfile.TemporaryDirectory() as td:
-        p = Path(td) / "demo_cn_outfits.yaml"
-        p.write_text(yaml_text, encoding="utf-8")
-        preset = outfit_service.parse_outfit_file(p)
-        assert preset.items[0].text == _CHINESE_OUTFIT
-        merged = outfit_service.combine(_pose_preset(), preset)
-        assert merged.variants[0].outfit_text == _CHINESE_OUTFIT
+    """服装段的语言不限：中文服装段能装载、能组合（不译写）。"""
+    preset = outfit_service.OutfitPreset(
+        name="demo_cn_outfits",
+        items=[outfit_service.OutfitItem(id="briefs", label="仅内裤", text=_CHINESE_OUTFIT)],
+    )
+    assert preset.items[0].text == _CHINESE_OUTFIT
+    merged = outfit_service.combine(_pose_preset(), preset)
+    assert merged.variants[0].outfit_text == _CHINESE_OUTFIT
 
 
 def test_combine_carries_subject_policy():
     """服装条目声明的 subject_policy 要透传到变体。"""
-    import tempfile
-    from pathlib import Path
-
-    yaml_text = """
-name: demo_policy_outfits
-type: outfit
-version: 1
-items:
-- id: briefs
-  label: 仅内裤
-  text: wearing grey briefs only, barefoot
-  subject_policy:
-    clothing: replace
-    accessories: remove
-"""
-    with tempfile.TemporaryDirectory() as td:
-        p = Path(td) / "demo_policy_outfits.yaml"
-        p.write_text(yaml_text, encoding="utf-8")
-        preset = outfit_service.parse_outfit_file(p)
-        merged = outfit_service.combine(_pose_preset(), preset)
-        assert merged.variants[0].outfit_policy == {
-            "clothing": "replace",
-            "accessories": "remove",
-        }
+    preset = outfit_service.OutfitPreset(
+        name="demo_policy_outfits",
+        items=[
+            outfit_service.OutfitItem(
+                id="briefs",
+                label="仅内裤",
+                text="wearing grey briefs only, barefoot",
+                subject_policy=SubjectPolicy(clothing="replace", accessories="remove"),
+            )
+        ],
+    )
+    merged = outfit_service.combine(_pose_preset(), preset)
+    assert merged.variants[0].outfit_policy == {
+        "clothing": "replace",
+        "accessories": "remove",
+    }
 
 
-def test_classic_prompt_puts_outfit_first():
+def test_classic_prompt_puts_outfit_first(outfit_db):
     """classic：服装段是提示词第一句，动作段在其后。"""
     from charvar.composer import generate
     from charvar.models import SubjectProfile

@@ -1,0 +1,23 @@
+item_id: chic_swimwear_outfits_swim_emerald_asymmetric
+source_id: studio
+display_type: flat_lay
+category: chic_swimwear_outfits
+label: 翡翠斜肩（翡翠绿单肩连体泳衣）
+keywords: wearing an opaque deep emerald one-piece swimsuit with a sheen, one wide
+  left shoulder strap, diagonal neckline, bare right shoulder, fitted waist, mid-low
+  back, mid-cut legs, barefoot, no stockings
+prompt_text: wearing an opaque deep emerald one-piece swimsuit with a sheen, one wide
+  left shoulder strap, diagonal neckline, bare right shoulder, fitted waist, mid-low
+  back, mid-cut legs, barefoot, no stockings
+prompt_source: manual
+subject_policy: {}
+caption_tags:
+  swim_black_triangle: matte black triangle bikini
+  swim_cherry_highwaist: cherry-red high-waisted bikini
+  swim_ivory_ring: ivory ring-detail one-piece swimsuit
+  swim_emerald_asymmetric: emerald one-shoulder swimsuit
+sort_order: 3
+images:
+  file_path: png/chic_swimwear_outfits_swim_emerald_asymmetric.png
+  image_path: img/chic_swimwear_outfits_swim_emerald_asymmetric.webp
+  thumb_path: thumbs/chic_swimwear_outfits_swim_emerald_asymmetric.webp

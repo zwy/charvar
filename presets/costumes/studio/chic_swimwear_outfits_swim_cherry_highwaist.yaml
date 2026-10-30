@@ -1,0 +1,23 @@
+item_id: chic_swimwear_outfits_swim_cherry_highwaist
+source_id: studio
+display_type: flat_lay
+category: chic_swimwear_outfits
+label: 樱桃复古（樱桃红高腰比基尼）
+keywords: wearing an opaque matte cherry-red bikini with wide shoulder straps, a sweetheart
+  neckline, vertical cup seams and matching navel-high bottoms with raised leg openings,
+  barefoot, no stockings
+prompt_text: wearing an opaque matte cherry-red bikini with wide shoulder straps,
+  a sweetheart neckline, vertical cup seams and matching navel-high bottoms with raised
+  leg openings, barefoot, no stockings
+prompt_source: manual
+subject_policy: {}
+caption_tags:
+  swim_black_triangle: matte black triangle bikini
+  swim_cherry_highwaist: cherry-red high-waisted bikini
+  swim_ivory_ring: ivory ring-detail one-piece swimsuit
+  swim_emerald_asymmetric: emerald one-shoulder swimsuit
+sort_order: 1
+images:
+  file_path: png/chic_swimwear_outfits_swim_cherry_highwaist.png
+  image_path: img/chic_swimwear_outfits_swim_cherry_highwaist.webp
+  thumb_path: thumbs/chic_swimwear_outfits_swim_cherry_highwaist.webp

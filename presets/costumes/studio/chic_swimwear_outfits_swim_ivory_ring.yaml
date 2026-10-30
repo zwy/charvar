@@ -1,0 +1,23 @@
+item_id: chic_swimwear_outfits_swim_ivory_ring
+source_id: studio
+display_type: flat_lay
+category: chic_swimwear_outfits
+label: 象牙环扣（象牙白小镂空连体泳衣）
+keywords: wearing an opaque ivory one-piece swimsuit, two shoulder straps, V-neck,
+  a champagne-gold front waist ring, two cutouts beside it, continuous side and back
+  panels, mid-cut legs, barefoot, no stockings
+prompt_text: wearing an opaque ivory one-piece swimsuit, two shoulder straps, V-neck,
+  a champagne-gold front waist ring, two cutouts beside it, continuous side and back
+  panels, mid-cut legs, barefoot, no stockings
+prompt_source: manual
+subject_policy: {}
+caption_tags:
+  swim_black_triangle: matte black triangle bikini
+  swim_cherry_highwaist: cherry-red high-waisted bikini
+  swim_ivory_ring: ivory ring-detail one-piece swimsuit
+  swim_emerald_asymmetric: emerald one-shoulder swimsuit
+sort_order: 2
+images:
+  file_path: png/chic_swimwear_outfits_swim_ivory_ring.png
+  image_path: img/chic_swimwear_outfits_swim_ivory_ring.webp
+  thumb_path: thumbs/chic_swimwear_outfits_swim_ivory_ring.webp

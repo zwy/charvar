@@ -1,0 +1,21 @@
+item_id: character_outfit_debug_debug_unclothed
+source_id: studio
+display_type: flat_lay
+category: character_outfit_debug
+label: 无衣物（全部衣物与穿戴配件移除）
+keywords: 该成年角色裸体，乳头，全身未穿着任何衣物，赤足；未穿戴内衣、内裤、袜类、鞋履、头饰、眼镜、首饰、发饰或任何其他穿戴物。
+prompt_text: 该成年角色裸体，乳头，全身未穿着任何衣物，赤足；未穿戴内衣、内裤、袜类、鞋履、头饰、眼镜、首饰、发饰或任何其他穿戴物。
+prompt_source: manual
+subject_policy:
+  clothing: replace
+  accessories: remove
+caption_tags:
+  debug_briefs_only: grey briefs only, no accessories
+  debug_unclothed: unclothed figure study, no wearables
+  debug_sport_baseline: grey sports bra and boxer briefs, no accessories
+  debug_accessories_clear: original garments, barefoot and no accessories
+sort_order: 1
+images:
+  file_path: ''
+  image_path: ''
+  thumb_path: ''

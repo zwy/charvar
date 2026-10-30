@@ -18,6 +18,17 @@ from PIL import Image
 
 from charvar import llm_compose
 from charvar.api import build_app
+
+@pytest.fixture(autouse=True)
+def _studio_outfit_db(tmp_path, monkeypatch):
+    """隔离数据目录 + 从仓库镜像装 studio 服装家族（服装家族现住 costume 双表，不碰真库）。"""
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    from charvar import costumes as costumes_service
+    from charvar import storage
+
+    with storage.connect() as conn:
+        costumes_service.import_studio_yaml(conn)
+
 from charvar.preset_loader import load
 
 

@@ -125,6 +125,7 @@ CREATE TABLE IF NOT EXISTS costume_items (
     thumb_path TEXT NOT NULL DEFAULT '',          -- 缩略图（thumbs/webp）
     subject_policy TEXT NOT NULL DEFAULT '',      -- json：clothing/accessories 策略（为空 = 无策略）
     caption_tags TEXT NOT NULL DEFAULT '',        -- json：贴字 caption token 映射（为空 = 缺省 id）
+    sort_order INTEGER NOT NULL DEFAULT 0,        -- 家族内次序（outfit 组合变体 = reel 播放次序）
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     PRIMARY KEY (source_id, item_id)
@@ -145,6 +146,7 @@ CREATE TABLE IF NOT EXISTS costume_prompts (
 _MIGRATIONS = """
 ALTER TABLE comfy_prompts ADD COLUMN output_files TEXT;
 ALTER TABLE subject_images ADD COLUMN provider TEXT;
+ALTER TABLE costume_items ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;
 """
 
 

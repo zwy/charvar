@@ -1,0 +1,15 @@
+item_id: stockings_8_fishnet_black
+source_id: studio
+display_type: flat_lay
+category: stockings_8
+label: 黑色渔网袜
+keywords: wearing black fishnet stockings with a small diamond net
+prompt_text: wearing black fishnet stockings with a small diamond net
+prompt_source: manual
+subject_policy: {}
+caption_tags: {}
+sort_order: 5
+images:
+  file_path: png/stockings_8_fishnet_black.png
+  image_path: img/stockings_8_fishnet_black.webp
+  thumb_path: thumbs/stockings_8_fishnet_black.webp

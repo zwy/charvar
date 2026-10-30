@@ -1,0 +1,19 @@
+item_id: glamorous_gala_dresses_gala_crimson_mermaid
+source_id: studio
+display_type: flat_lay
+category: glamorous_gala_dresses
+label: 绯红鱼尾（露肩缎面长裙）
+keywords: 服装：该成年角色穿着深绯红不透明厚缎连衣长裙，一字露肩、浅心形领口，胸前少量横向褶皱，自然收腰，腰臀剪裁合体，膝部以下展开鱼尾，后摆带短拖尾；一侧腰部固定一枚小型水晶扣，无开衩。搭配绯红细带凉鞋，约7厘米细跟。裸腿，无袜类，无帽子、手套、首饰或手包。
+prompt_text: 服装：该成年角色穿着深绯红不透明厚缎连衣长裙，一字露肩、浅心形领口，胸前少量横向褶皱，自然收腰，腰臀剪裁合体，膝部以下展开鱼尾，后摆带短拖尾；一侧腰部固定一枚小型水晶扣，无开衩。搭配绯红细带凉鞋，约7厘米细跟。裸腿，无袜类，无帽子、手套、首饰或手包。
+prompt_source: manual
+subject_policy: {}
+caption_tags:
+  gala_crimson_mermaid: crimson off-shoulder satin mermaid gown
+  gala_black_gold_backless: black and gold halter backless velvet gown
+  gala_champagne_crystal_mini: champagne crystal spaghetti-strap mini dress
+  gala_emerald_one_shoulder: emerald one-shoulder draped satin gown
+sort_order: 0
+images:
+  file_path: png/glamorous_gala_dresses_gala_crimson_mermaid.png
+  image_path: img/glamorous_gala_dresses_gala_crimson_mermaid.webp
+  thumb_path: thumbs/glamorous_gala_dresses_gala_crimson_mermaid.webp

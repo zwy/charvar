@@ -1,0 +1,15 @@
+item_id: stockings_8_sheer_white
+source_id: studio
+display_type: flat_lay
+category: stockings_8
+label: 白丝
+keywords: wearing sheer white nylon pantyhose, slightly milky translucent finish
+prompt_text: wearing sheer white nylon pantyhose, slightly milky translucent finish
+prompt_source: manual
+subject_policy: {}
+caption_tags: {}
+sort_order: 2
+images:
+  file_path: png/stockings_8_sheer_white.png
+  image_path: img/stockings_8_sheer_white.webp
+  thumb_path: thumbs/stockings_8_sheer_white.webp

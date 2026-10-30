@@ -312,7 +312,7 @@ def list_items(
     rows = conn.execute(
         "SELECT ci.source_id, ci.item_id, ci.display_type, ci.category, ci.label,"
         " ci.keywords, ci.thumb_path, ci.image_path, ci.file_path,"
-        " cp.prompt_text"
+        " cp.prompt_text, cp.source AS prompt_source"
         " FROM costume_items AS ci"
         " LEFT JOIN costume_prompts AS cp ON cp.source_id = ci.source_id AND cp.item_id = ci.item_id"
     ).fetchall()
@@ -344,8 +344,16 @@ def list_items(
                 "keywords": r["keywords"],
                 "display_type": r["display_type"],
                 "prompt_text": r["prompt_text"] or "",
-                "thumb_url": f"/costumes/image/{r['source_id']}/{r['item_id']}/thumb",
-                "image_url": f"/costumes/image/{r['source_id']}/{r['item_id']}/full",
+                "prompt_source": r["prompt_source"] or "",
+                # 纯文本条目（图路径空）→ URL 出空串，前端渲染占位而不是破图
+                "thumb_url": (
+                    f"/costumes/image/{r['source_id']}/{r['item_id']}/thumb"
+                    if str(r["thumb_path"] or "").strip() else ""
+                ),
+                "image_url": (
+                    f"/costumes/image/{r['source_id']}/{r['item_id']}/full"
+                    if str(r["image_path"] or "").strip() else ""
+                ),
             }
         )
     # 目录按站点固定次序（CATEGORY_ORDER）排；未收录原文退居其后按字符串排（自建条目如此）
@@ -356,9 +364,12 @@ def list_items(
     for cat, n in sorted(category_counts.items()):
         if cat not in CATEGORY_ORDER:
             categories.append({"id": cat, "zh": category_zh(cat), "count": n})
+    # sources 稳定次序：站点库在前、自建库在后（行顺序来自 SELECT，不能依赖其稳定性）
+    source_order = {sid: i for i, sid in enumerate([SOURCE_ID, STUDIO_SOURCE_ID])}
+    source_rows = sorted(sources.items(), key=lambda kv: (source_order.get(kv[0], 99), kv[0]))
     return {
         "source": SOURCE_ID,
-        "sources": [{"id": sid, "count": n} for sid, n in sources.items()],
+        "sources": [{"id": sid, "count": n} for sid, n in source_rows],
         "categories": categories,
         "glossary": glossary,
         "items": out,
@@ -522,61 +533,71 @@ def set_costume_prompt(
     return get_costume_prompt(conn, source_id, item_id)
 
 
-# ---------- 自建条目（outfits 迁移 → studio；display_type=flat_lay） ----------
+# ---------- 自建条目（studio：从 export 镜像自举；display_type=flat_lay） ----------
 
-def import_outfit_presets(conn: sqlite3.Connection) -> dict:
-    """presets/outfits/*.yaml → 自建服装行（source_id=studio，display_type=flat_lay）。
+def import_studio_yaml(conn: sqlite3.Connection) -> dict:
+    """presets/costumes/studio/*.yaml（export 镜像逐条）→ costume_items（insert-if-missing）。
 
-    item_id = ``{preset.name}_{item.id}``（家族+条目双前缀防跨家族重名）；text 双写
-    keywords 与 costume_prompts.prompt_text（source=manual）—— 它本来就是合法的
-    文生图服装提示词，正好当新表结构的首批真实数据。纯文本条目（无图，合法状态；
-    参考图后补）。已存在的 item **整条跳过**（重跑迁移不许覆盖 DB 里改过的文本；
-    家族新增条目重跑即补）。
+    DB 是运行时真源，镜像文件只是重建快照：已存在的行整条跳过（不覆盖用户在 DB
+    里改过的 keywords/文本层/label），缺行按镜像补齐（sort_order 家族次序在内）。
+    逐条文件名必须与其 item_id 一致，id 只认安全字符 —— 路径拼不过校验整批拒绝。
     """
-    from charvar import outfit as outfit_service
+    import yaml
 
+    base = paths.presets_dir() / "costumes" / STUDIO_SOURCE_ID
+    files = sorted(base.glob("*.yaml"))
     added = 0
     skipped = 0
-    presets = outfit_service.list_outfit_presets()
-    for entry in presets:
-        preset = outfit_service.load_outfit(entry["name"])
-        tags = dict(preset.caption_tags or {})
-        for it in preset.items:
-            item_id = f"{preset.name}_{it.id}"
-            if not ITEM_ID_RE.fullmatch(item_id) or not ITEM_ID_RE.fullmatch(it.id):
-                raise CostumeError(f"家族 {preset.name} 条目 id 不合法：{it.id[:60]}")
-            exists = conn.execute(
-                "SELECT 1 FROM costume_items WHERE source_id = ? AND item_id = ?",
-                (STUDIO_SOURCE_ID, item_id),
-            ).fetchone()
-            if exists:
-                skipped += 1
-                continue
-            policy = ""
-            if it.subject_policy is not None:
-                data = it.subject_policy
-                if hasattr(data, "model_dump"):
-                    data = data.model_dump()
-                policy = json.dumps(data, ensure_ascii=False) if data else ""
-            now = _now()
-            conn.execute(
-                """INSERT INTO costume_items
-                   (source_id, item_id, display_type, category, label, keywords,
-                    file_path, image_path, thumb_path, subject_policy, caption_tags, created_at, updated_at)
-                   VALUES (?, ?, 'flat_lay', ?, ?, ?, '', '', '', ?, ?, ?, ?)""",
-                (
-                    STUDIO_SOURCE_ID, item_id, preset.name, it.label, it.text,
-                    policy, json.dumps(tags, ensure_ascii=False) if tags else "", now, now,
-                ),
-            )
+    for path in files:
+        try:
+            doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError) as exc:
+            raise CostumeError(f"镜像读取失败：{path.name}：{exc}") from exc
+        if not isinstance(doc, dict) or doc.get("source_id") != STUDIO_SOURCE_ID:
+            raise CostumeError(f"镜像文件不是 studio 服装条目：{path.name}")
+        item_id = str(doc.get("item_id") or "").strip()
+        if not ITEM_ID_RE.fullmatch(item_id) or path.stem != item_id:
+            raise CostumeError(f"镜像条目 id 非法或与文件名不一致：{path.name} → {item_id[:60]}")
+        if doc.get("display_type") not in DISPLAY_TYPES:
+            raise CostumeError(f"镜像条目 display_type 非法：{path.name} → {doc.get('display_type')}")
+        exists = conn.execute(
+            "SELECT 1 FROM costume_items WHERE source_id = ? AND item_id = ?",
+            (STUDIO_SOURCE_ID, item_id),
+        ).fetchone()
+        if exists:
+            skipped += 1
+            continue
+        images = doc.get("images") or {}
+        now = _now()
+        conn.execute(
+            """INSERT INTO costume_items
+               (source_id, item_id, display_type, category, label, keywords,
+                file_path, image_path, thumb_path, subject_policy, caption_tags,
+                sort_order, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                STUDIO_SOURCE_ID, item_id, doc["display_type"], str(doc.get("category") or ""),
+                str(doc.get("label") or ""), str(doc.get("keywords") or ""),
+                str(images.get("file_path") or ""), str(images.get("image_path") or ""),
+                str(images.get("thumb_path") or ""),
+                json.dumps(doc.get("subject_policy") or {}, ensure_ascii=False)
+                if doc.get("subject_policy") else "",
+                json.dumps(doc.get("caption_tags") or {}, ensure_ascii=False)
+                if doc.get("caption_tags") else "",
+                int(doc.get("sort_order") or 0), now, now,
+            ),
+        )
+        text = str(doc.get("prompt_text") or "").strip()
+        prompt = get_costume_prompt(conn, STUDIO_SOURCE_ID, item_id)
+        if text and not prompt["prompt_text"].strip():
             conn.execute(
                 """INSERT INTO costume_prompts (source_id, item_id, prompt_text, source, created_at, updated_at)
-                   VALUES (?, ?, ?, 'manual', ?, ?)""",
-                (STUDIO_SOURCE_ID, item_id, it.text, now, now),
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (STUDIO_SOURCE_ID, item_id, text, str(doc.get("prompt_source") or "manual")[:30], now, now),
             )
-            added += 1
+        added += 1
     conn.commit()
-    return {"added": added, "skipped": skipped}
+    return {"added": added, "skipped": skipped, "dir": str(base)}
 
 
 # ---------- DB → 仓库镜像（仿主体档案 export；DB 是运行时真源） ----------
@@ -598,6 +619,7 @@ def export_item(conn: sqlite3.Connection, ref: str, out_dir: Path | None = None)
         "prompt_source": prompt["prompt_source"],
         "subject_policy": json.loads(row["subject_policy"]) if row["subject_policy"] else {},
         "caption_tags": json.loads(row["caption_tags"]) if row["caption_tags"] else {},
+        "sort_order": row["sort_order"],
         "images": {
             "file_path": row["file_path"],
             "image_path": row["image_path"],

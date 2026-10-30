@@ -1,0 +1,21 @@
+item_id: character_outfit_debug_debug_accessories_clear
+source_id: studio
+display_type: flat_lay
+category: character_outfit_debug
+label: 仅清配件（保留原衣服，移除鞋袜等）
+keywords: 保留该成年角色原有的上身与下身衣物，仅移除全部袜类、鞋履、头饰、眼镜、首饰、发饰及其他穿戴配件，双脚赤足；不替换、不新增原有上身与下身衣物。
+prompt_text: 保留该成年角色原有的上身与下身衣物，仅移除全部袜类、鞋履、头饰、眼镜、首饰、发饰及其他穿戴配件，双脚赤足；不替换、不新增原有上身与下身衣物。
+prompt_source: manual
+subject_policy:
+  clothing: keep
+  accessories: remove
+caption_tags:
+  debug_briefs_only: grey briefs only, no accessories
+  debug_unclothed: unclothed figure study, no wearables
+  debug_sport_baseline: grey sports bra and boxer briefs, no accessories
+  debug_accessories_clear: original garments, barefoot and no accessories
+sort_order: 3
+images:
+  file_path: ''
+  image_path: ''
+  thumb_path: ''

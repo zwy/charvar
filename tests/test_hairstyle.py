@@ -163,19 +163,11 @@ def test_layered_combine_hair_then_outfit(tmp_path):
     pose = _pose_preset()
     hair_combined = hairstyle_service.combine(pose, hair)
 
-    outfit_yaml = """
-name: demo_skirt
-type: outfit
-version: 1
-description: 测试服装
-items:
-- id: mini_skirt
-  label: 短裙
-  text: wearing a brick-red mini skirt
-"""
-    out_path = tmp_path / "demo_skirt.yaml"
-    out_path.write_text(outfit_yaml, encoding="utf-8")
-    outfit = outfit_service.parse_outfit_file(out_path)
+    outfit = outfit_service.OutfitPreset(
+        name="demo_skirt",
+        description="测试服装",
+        items=[outfit_service.OutfitItem(id="mini_skirt", label="短裙", text="wearing a brick-red mini skirt")],
+    )
 
     combined = outfit_service.combine(hair_combined, outfit, "outfit_first")
     ids = [s.id for s in combined.variants]
@@ -280,6 +272,11 @@ def _make_subject(client):
 
 
 def test_api_generate_with_hairstyle(client):
+    from charvar import costumes as costumes_service
+    from charvar import storage
+
+    with storage.connect() as conn:
+        costumes_service.import_studio_yaml(conn)
     _make_subject(client)
     # three_pose_pack（3 变体）× popular_hairstyles_v1_4（4 款）= 12 条
     req = {

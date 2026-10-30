@@ -1,0 +1,23 @@
+item_id: chic_swimwear_outfits_swim_black_triangle
+source_id: studio
+display_type: flat_lay
+category: chic_swimwear_outfits
+label: 黑曜极简（黑色细肩带比基尼）
+keywords: wearing an opaque matte black bikini with fixed triangle cups, thin shoulder
+  straps, a continuous underbust band, mid-rise V-waist bottoms, fixed side bands
+  and high-cut legs, barefoot, no stockings
+prompt_text: wearing an opaque matte black bikini with fixed triangle cups, thin shoulder
+  straps, a continuous underbust band, mid-rise V-waist bottoms, fixed side bands
+  and high-cut legs, barefoot, no stockings
+prompt_source: manual
+subject_policy: {}
+caption_tags:
+  swim_black_triangle: matte black triangle bikini
+  swim_cherry_highwaist: cherry-red high-waisted bikini
+  swim_ivory_ring: ivory ring-detail one-piece swimsuit
+  swim_emerald_asymmetric: emerald one-shoulder swimsuit
+sort_order: 0
+images:
+  file_path: png/chic_swimwear_outfits_swim_black_triangle.png
+  image_path: img/chic_swimwear_outfits_swim_black_triangle.webp
+  thumb_path: thumbs/chic_swimwear_outfits_swim_black_triangle.webp

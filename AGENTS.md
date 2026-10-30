@@ -206,7 +206,7 @@ DB → 仓库对偶：`charvar subject export <id>` 快照成 `presets/subjects/
 
 两者都是出图后的组合能力，服务于「视频配方」的合成流水线（出图批 → 贴字 → 本地合成 reel）。
 
-- **服装预设** = `presets/outfits/*.yaml`（`charvar/outfit.py`）：每条 = 服装描述段 `text`（**语言不限**：中文/英文都合法，整段进提示词，不译写）+ 中文 `label`（贴字/展示用）+ 可选 `caption_tags`（id → 英文 caption token，缺省 = id）+ 可选 `subject_policy`。独立家族，**不进主预设下拉**。
+- **服装家族** = 服装库 DB（`costume_items` studio 条目 + `costume_prompts` 文本层；`text` 文本层优先，**语言不限**不译写）+ 中文 `label` + 可选 `caption_tags`/`subject_policy`。独立家族，**不进主预设下拉**；yaml 预设退役，镜像 `presets/costumes/`（`costume export/import-studio`）。
 - **服装段排在提示词最前面**（换装图里服装是主角）：classic 由 `composer` 拼装时拆出来放第一句，LLM 由系统规则要求写成第一句（在参考图锚定句之前）。**这跟 `outfit_order` 无关**——那控制组合顺序（变体 id `{outfit_id}__{pose_id}`），不是 prompt 内各段的位置。
 - **服装段要短**：≤200 字符（稀释红线）。服装段已改到最前，更别把动作段挤没。
 - **换装要解掉主体的旧衣物锁**：条目可声明 `subject_policy`（`clothing: replace` 摘掉主体旧衣物；`accessories: remove` 摘掉鞋袜与配件）。摘的是**临时主体副本**（`charvar/subject_policy.py`），档案不动；identity_lock 只摘配件**子句**，脸/发型发色/体态保留。LLM 模式档案块整批共享 → 批内策略不一致时按并集摘并在 warnings 声明。

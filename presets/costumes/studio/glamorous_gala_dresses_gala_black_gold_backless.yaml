@@ -1,0 +1,19 @@
+item_id: glamorous_gala_dresses_gala_black_gold_backless
+source_id: studio
+display_type: flat_lay
+category: glamorous_gala_dresses
+label: 黑金夜宴（挂颈露背长裙）
+keywords: 服装：该成年角色穿着黑色不透明丝绒连衣长裙，挂颈、正面窄V领，背部开口止于腰线上方；自然收腰，裙身修长直筒，人物左侧开衩至大腿中段，裙摆不拖地。金色刺绣仅沿领缘与腰侧分布。搭配黑色细带凉鞋，约7厘米细跟。裸腿，无袜类，无帽子、手套、首饰或手包。
+prompt_text: 服装：该成年角色穿着黑色不透明丝绒连衣长裙，挂颈、正面窄V领，背部开口止于腰线上方；自然收腰，裙身修长直筒，人物左侧开衩至大腿中段，裙摆不拖地。金色刺绣仅沿领缘与腰侧分布。搭配黑色细带凉鞋，约7厘米细跟。裸腿，无袜类，无帽子、手套、首饰或手包。
+prompt_source: manual
+subject_policy: {}
+caption_tags:
+  gala_crimson_mermaid: crimson off-shoulder satin mermaid gown
+  gala_black_gold_backless: black and gold halter backless velvet gown
+  gala_champagne_crystal_mini: champagne crystal spaghetti-strap mini dress
+  gala_emerald_one_shoulder: emerald one-shoulder draped satin gown
+sort_order: 1
+images:
+  file_path: png/glamorous_gala_dresses_gala_black_gold_backless.png
+  image_path: img/glamorous_gala_dresses_gala_black_gold_backless.webp
+  thumb_path: thumbs/glamorous_gala_dresses_gala_black_gold_backless.webp

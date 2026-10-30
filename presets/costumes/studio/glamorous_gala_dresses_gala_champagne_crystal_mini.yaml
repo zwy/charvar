@@ -1,0 +1,19 @@
+item_id: glamorous_gala_dresses_gala_champagne_crystal_mini
+source_id: studio
+display_type: flat_lay
+category: glamorous_gala_dresses
+label: 香槟星钻（细肩带水晶短裙）
+keywords: 服装：该成年角色穿着香槟金连衣短裙，不透明底布表面缝缀细小银白水晶，双细肩带、柔和垂褶领口，自然收腰，裙身合体，长度至大腿中段，裙摆采用固定斜向不对称剪裁，无流苏。搭配香槟金细带凉鞋，约6厘米细跟。裸腿，无袜类，无帽子、手套、首饰或手包。
+prompt_text: 服装：该成年角色穿着香槟金连衣短裙，不透明底布表面缝缀细小银白水晶，双细肩带、柔和垂褶领口，自然收腰，裙身合体，长度至大腿中段，裙摆采用固定斜向不对称剪裁，无流苏。搭配香槟金细带凉鞋，约6厘米细跟。裸腿，无袜类，无帽子、手套、首饰或手包。
+prompt_source: manual
+subject_policy: {}
+caption_tags:
+  gala_crimson_mermaid: crimson off-shoulder satin mermaid gown
+  gala_black_gold_backless: black and gold halter backless velvet gown
+  gala_champagne_crystal_mini: champagne crystal spaghetti-strap mini dress
+  gala_emerald_one_shoulder: emerald one-shoulder draped satin gown
+sort_order: 2
+images:
+  file_path: png/glamorous_gala_dresses_gala_champagne_crystal_mini.png
+  image_path: img/glamorous_gala_dresses_gala_champagne_crystal_mini.webp
+  thumb_path: thumbs/glamorous_gala_dresses_gala_champagne_crystal_mini.webp

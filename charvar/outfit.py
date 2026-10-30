@@ -1,8 +1,12 @@
-"""服装预设（presets/outfits/*.yaml）与跨预设笛卡尔积组合。
+"""服装家族（costume 双表 studio 条目）与跨预设笛卡尔积组合。
 
 角色：
-- 服装预设是新的 YAML 预设家族：每条 = 英文服装描述段（text）+ 中文展示名（label）
-  + caption token 映射；与独立于主体的动作/表情预设配套使用。
+- 服装数据在 costume_items（studio 条目，display_type=flat_lay）+ costume_prompts
+  （文本层，prompt_text 优先于 keywords —— DB 编辑实时进批）；家族 = category 列，
+  家族内次序 = sort_order（outfit 组合变体次序 = reel 播放次序）。仓库镜像在
+  presets/costumes/studio/（charvar costume import-studio 装库）；yaml 预设文件退役。
+每条服装 = 服装描述段（text）+ 中文展示名（label）+ caption token 映射；
+与独立于主体的动作/表情预设配套使用。
 - 组合（combine）：动作/表情预设（list 或 matrix）× 服装预设 → 合成 list 预设
   （变体 = 笛卡尔积），composer / llm_compose 拿到的仍是一张普通 ListPreset，
   两条出图路径零改动。
@@ -11,8 +15,7 @@
   - caption 在角度/动作之后追加服装 token（映射取服装预设 caption_tags，缺省=id）；
   - 变体 id = "{outfit_id}__{pose_id}"（outfit_first）或 "{pose_id}__{outfit_id}"
     （pose_first）——顺序决定后续轮播合成（reel）的播放顺序。
-- 独立家族：list_presets() 只扫 presets/*.yaml 顶层，服装预设
-  在 presets/outfits/ 子目录，不会混进主预设下拉。
+- 独立家族：/presets 的主预设下拉不变，服装家族走 GET /outfit-presets 单独端点。
 """
 from __future__ import annotations
 
@@ -20,10 +23,8 @@ import re
 from pathlib import Path
 from typing import Any, Literal
 
-import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
-from charvar import paths
 from charvar.composer import expand_matrix, terminate_sentence
 from charvar.models import VariantSpec
 from charvar.preset_loader import ListPreset, MatrixPreset, PresetError
@@ -66,74 +67,89 @@ class OutfitPreset(BaseModel):
     caption_tags: dict[str, str] | None = None
 
 
-def outfits_dir() -> Path:
-    return paths.presets_dir() / "outfits"
+# ---------- 加载（costume 双表视图：DB 是运行时真源，presets/outfits 已退役） ----------
 
+def list_outfit_presets(db_path: Path | None = None) -> list[dict[str, Any]]:
+    """服装家族清单：studio 条目按 category（=家族名）分组，家族内按 sort_order。
 
-def parse_outfit_file(path: Path) -> OutfitPreset:
-    if not path.exists():
-        raise PresetError(f"服装预设文件不存在：{path}", status=404)
-    with path.open("r", encoding="utf-8") as f:
-        raw = yaml.safe_load(f)
-    if not isinstance(raw, dict):
-        raise PresetError(f"服装预设 {path} 不是合法 YAML 映射")
-    try:
-        preset = OutfitPreset.model_validate(raw)
-    except Exception as exc:  # pydantic ValidationError 等 → 统一 400
-        raise PresetError(f"服装预设 {path} 校验失败：\n{exc}") from exc
-    seen: set[str] = set()
-    for item in preset.items:
-        if not _ID_RE.match(item.id):
-            raise PresetError(
-                f"服装预设 {path.name} 的 id 非法：{item.id!r}"
-                "（只允许字母/数字/下划线/连字符，且以字母或数字开头）"
-            )
-        if item.id in seen:
-            raise PresetError(f"服装预设 {path.name} 的 item id 重复：{item.id}")
-        seen.add(item.id)
-        if not item.label.strip():
-            raise PresetError(f"服装预设 {path.name} 的 {item.id} 缺少 label（中文展示名，贴字用）")
-        if not item.text.strip():
-            raise PresetError(f"服装预设 {path.name} 的 {item.id} 缺少 text（英文服装描述段）")
-    return preset
+    迁移/重建走 charvar costume import-studio（镜像在 presets/costumes/studio/）；
+    家族描述没有 DB 列，返回空串（列表展示用）。库空 / 未迁入 → 空清单，不报错。
+    """
 
+    from charvar import costumes, storage
 
-def resolve_outfit(name: str) -> Path:
-    """按服装预设名定位 YAML（presets/outfits/<name>.yaml；可带 .yaml 后缀）。"""
-    base = outfits_dir()
-    if "/" in name or "\\" in name or name in (".", ".."):
-        raise PresetError(f"服装预设名不合法：{name!r}")
-    if not name.endswith(".yaml"):
-        name = f"{name}.yaml"
-    return base / name
-
-
-def load_outfit(name: str) -> OutfitPreset:
-    path = resolve_outfit(name)
-    return parse_outfit_file(path)
-
-
-def list_outfit_presets() -> list[dict[str, Any]]:
-    base = outfits_dir()
-    result: list[dict[str, Any]] = []
-    if not base.exists():
-        return result
-    for path in sorted(base.glob("*.yaml")):
-        try:
-            preset = parse_outfit_file(path)
-        except PresetError:
-            continue
-        result.append(
-            {
-                "name": preset.name,
-                "type": preset.type,
-                "version": preset.version,
-                "count": len(preset.items),
-                "description": preset.description,
-                "items": [{"id": i.id, "label": i.label} for i in preset.items],
-            }
+    with storage.connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT item_id, category, label"
+            " FROM costume_items WHERE source_id = ?"
+            " ORDER BY category, sort_order, item_id",
+            (costumes.STUDIO_SOURCE_ID,),
+        ).fetchall()
+    families: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        family = families.setdefault(
+            r["category"],
+            {"name": r["category"], "type": "outfit", "version": 1, "count": 0, "description": "", "items": []},
         )
-    return result
+        native = r["item_id"][len(r["category"]) + 1:] if r["item_id"].startswith(f"{r['category']}_") else r["item_id"]
+        family["items"].append({"id": native, "label": r["label"] or native})
+        family["count"] += 1
+    return list(families.values())
+
+
+def load_outfit(name: str, db_path: Path | None = None) -> OutfitPreset:
+    """服装家族 → OutfitPreset；条目 text = 文本层有值优先、回退 keywords。
+
+    家族名 = studio 条目的 category；native item id = item_id 去掉家族前缀
+    （迁移写入格式 {family}_{id}）。id 白名单/重复/文本为空在加载时校验。
+    """
+    import json as _json
+
+    from charvar import costumes, storage
+
+    clean = str(name or "").strip()
+    if not clean or "/" in clean or "\\" in clean or clean in (".", ".."):
+        raise PresetError(f"服装家族名不合法：{name!r}", status=400)
+    with storage.connect(db_path) as conn:
+        rows = conn.execute(
+            "SELECT ci.item_id, ci.category, ci.label, ci.keywords,"
+            " ci.subject_policy, ci.caption_tags, cp.prompt_text"
+            " FROM costume_items AS ci LEFT JOIN costume_prompts AS cp"
+            " ON cp.source_id = ci.source_id AND cp.item_id = ci.item_id"
+            " WHERE ci.source_id = ? AND ci.category = ?"
+            " ORDER BY ci.sort_order, ci.item_id",
+            (costumes.STUDIO_SOURCE_ID, clean),
+        ).fetchall()
+    if not rows:
+        raise PresetError(
+            f"服装库没有这个服装家族（studio）：{clean}"
+            "（家族名 = 自建条目的 category；重建库：charvar costume import-studio）",
+            status=404,
+        )
+    items: list[OutfitItem] = []
+    seen: set[str] = set()
+    caption_tags: dict[str, str] | None = None
+    for r in rows:
+        native = r["item_id"][len(clean) + 1:] if r["item_id"].startswith(f"{clean}_") else r["item_id"]
+        if not _ID_RE.match(native) or native in seen:
+            raise PresetError(f"服装家族 {clean} 的 item id 非法或重复：{native!r}", status=400)
+        seen.add(native)
+        text = str(r["prompt_text"] or "").strip() or str(r["keywords"] or "").strip()
+        if not text:
+            raise PresetError(f"服装家族 {clean} 的 {native} 没有任何描述文本（keywords 与文本层都空）", status=400)
+        raw_policy = str(r["subject_policy"] or "").strip()
+        if caption_tags is None and str(r["caption_tags"] or "").strip():
+            parsed = _json.loads(r["caption_tags"])
+            caption_tags = dict(parsed) if parsed else None
+        items.append(
+            OutfitItem(
+                id=native,
+                label=str(r["label"] or "").strip() or native,
+                text=text,
+                subject_policy=SubjectPolicy.model_validate(_json.loads(raw_policy)) if raw_policy else None,
+            )
+        )
+    return OutfitPreset(name=clean, items=items, caption_tags=caption_tags)
 
 
 def _pose_specs(preset: ListPreset | MatrixPreset) -> list[VariantSpec]:

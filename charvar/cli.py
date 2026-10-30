@@ -739,7 +739,7 @@ def presets_show(
 def gen(
     subject: str = typer.Option(..., "--subject", "-s", help="主体档案 id，或 YAML/JSON 文件路径"),
     preset: str = typer.Option("q21_default_30", "--preset", "-p"),
-    outfit: Optional[str] = typer.Option(None, "--outfit", help="服装预设名（presets/outfits/），与预设笛卡尔积"),
+    outfit: Optional[str] = typer.Option(None, "--outfit", help="服装家族名（服装库 studio 条目，如 stockings_8），与预设笛卡尔积"),
     outfit_order: str = typer.Option("outfit_first", "--outfit-order", help="组合顺序：outfit_first（默认，每件服装连播全部动作）/pose_first"),
     hairstyle: Optional[str] = typer.Option(None, "--hairstyle", help="发型预设名（presets/hairstyles/），与预设笛卡尔积；层级 动作→发型→服装"),
     seed: int = typer.Option(0, "--seed"),
@@ -1728,19 +1728,19 @@ def costume_import_cmd() -> None:
     typer.echo(f"导入完成：{data['items']} 条 → costume_items（{data['source_id']}）")
 
 
-@costume_app.command("import-outfits")
-def costume_import_outfits_cmd() -> None:
-    """presets/outfits/*.yaml → 自建服装行（source_id=studio，display_type=flat_lay）。
+@costume_app.command("import-studio")
+def costume_import_studio_cmd() -> None:
+    """presets/costumes/studio/ 镜像逐条 → 自建服装行（source_id=studio，flat_lay）。
 
-    每条 item_id = {预设名}_{条目 id}；text 双写 keywords 与文本层（source=manual）；
-    已存在的条目整条跳过（重跑不覆盖 DB 里改过的文本），家族新增条重跑即补。
+    DB 是运行时真源，镜像只是重建快照：已存在整条跳过（不覆盖 DB 里改过的文本），
+    缺行按镜像补齐（sort_order 家族次序在内）。镜像由 charvar costume export 维护。
     """
     from charvar import costumes as costumes_service
     from charvar import storage
 
     with storage.connect() as conn:
         try:
-            data = costumes_service.import_outfit_presets(conn)
+            data = costumes_service.import_studio_yaml(conn)
         except costumes_service.CostumeError as exc:
             _die(str(exc))
     typer.echo(f"自建条目：新增 {data['added']}，跳过（已存在）{data['skipped']}")

@@ -1,0 +1,19 @@
+item_id: glamorous_gala_dresses_gala_emerald_one_shoulder
+source_id: studio
+display_type: flat_lay
+category: glamorous_gala_dresses
+label: 翡翠流光（单肩斜褶长裙）
+keywords: 服装：该成年角色穿着深翡翠绿不透明厚缎连衣长裙，人物左肩为宽肩带，右肩露出，斜领口；斜向褶皱汇聚于人物右腰，衣身连续无镂空，自然收腰，裙身修长微展，人物右侧开衩至膝上，后摆轻微曳地，无独立披风或飘带。搭配深绿色细带凉鞋，约7厘米细跟。裸腿，无袜类，无帽子、手套、首饰或手包。
+prompt_text: 服装：该成年角色穿着深翡翠绿不透明厚缎连衣长裙，人物左肩为宽肩带，右肩露出，斜领口；斜向褶皱汇聚于人物右腰，衣身连续无镂空，自然收腰，裙身修长微展，人物右侧开衩至膝上，后摆轻微曳地，无独立披风或飘带。搭配深绿色细带凉鞋，约7厘米细跟。裸腿，无袜类，无帽子、手套、首饰或手包。
+prompt_source: manual
+subject_policy: {}
+caption_tags:
+  gala_crimson_mermaid: crimson off-shoulder satin mermaid gown
+  gala_black_gold_backless: black and gold halter backless velvet gown
+  gala_champagne_crystal_mini: champagne crystal spaghetti-strap mini dress
+  gala_emerald_one_shoulder: emerald one-shoulder draped satin gown
+sort_order: 3
+images:
+  file_path: png/glamorous_gala_dresses_gala_emerald_one_shoulder.png
+  image_path: img/glamorous_gala_dresses_gala_emerald_one_shoulder.webp
+  thumb_path: thumbs/glamorous_gala_dresses_gala_emerald_one_shoulder.webp

@@ -1,0 +1,21 @@
+item_id: character_outfit_debug_debug_sport_baseline
+source_id: studio
+display_type: flat_lay
+category: character_outfit_debug
+label: 基础运动内搭（灰色运动背心＋平角内裤）
+keywords: 该成年角色仅穿着一件素色、不透明的灰色运动背心和一条配套的中腰灰色平角内裤，赤足；除此之外，未穿戴任何其他衣物、袜类、鞋履、头饰、眼镜、首饰或发饰。
+prompt_text: 该成年角色仅穿着一件素色、不透明的灰色运动背心和一条配套的中腰灰色平角内裤，赤足；除此之外，未穿戴任何其他衣物、袜类、鞋履、头饰、眼镜、首饰或发饰。
+prompt_source: manual
+subject_policy:
+  clothing: replace
+  accessories: remove
+caption_tags:
+  debug_briefs_only: grey briefs only, no accessories
+  debug_unclothed: unclothed figure study, no wearables
+  debug_sport_baseline: grey sports bra and boxer briefs, no accessories
+  debug_accessories_clear: original garments, barefoot and no accessories
+sort_order: 2
+images:
+  file_path: ''
+  image_path: ''
+  thumb_path: ''

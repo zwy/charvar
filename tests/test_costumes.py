@@ -322,50 +322,64 @@ def test_note_text_prefers_prompt_layer(data_dir):
 
 # ---------- studio 迁移（outfits 预设 → flat_lay 自建条目） ----------
 
-def test_import_outfit_presets_and_skip_on_rerun(data_dir):
+def test_import_studio_yaml_and_skip_on_rerun(data_dir):
+    """镜像自举：缺行补齐（含 sort_order 家族次序）、已存在整条跳过、DB 编辑不覆盖。"""
     from charvar import outfit as outfit_service
 
-    preset = outfit_service.load_outfit(outfit_service.list_outfit_presets()[0]["name"])
-    first = preset.items[0]
-    expected_id = f"{preset.name}_{first.id}"
-    expected_tags = json.dumps(dict(preset.caption_tags or {}), ensure_ascii=False) if preset.caption_tags else ""
-
     with storage.connect() as conn:
-        d1 = costumes_service.import_outfit_presets(conn)
+        d1 = costumes_service.import_studio_yaml(conn)
         assert d1["added"] >= 5 and d1["skipped"] == 0
-        row = costumes_service.item_row(conn, f"studio/{expected_id}")
+        fam = [f for f in outfit_service.list_outfit_presets() if f["name"] == "stockings_8"][0]
+        row = costumes_service.item_row(conn, f"studio/stockings_8_{fam['items'][0]['id']}")
         assert row["display_type"] == "flat_lay"
-        assert row["category"] == preset.name and row["label"] == first.label
-        assert row["keywords"] == first.text  # text 双写索引层
-        pr = costumes_service.get_costume_prompt(conn, "studio", expected_id)
-        assert pr["prompt_text"] == first.text and pr["prompt_source"] == "manual"  # 双写文本层
-        if preset.caption_tags:
-            assert json.loads(row["caption_tags"]) == dict(preset.caption_tags)
-        assert row["file_path"] == "" and row["image_path"] == ""  # 纯文本条目（合法状态）
+        assert row["category"] == "stockings_8" and row["label"] == fam["items"][0]["label"]
+        assert row["keywords"] and row["file_path"].endswith(".png")  # 镜像带平铺图三档路径（24/28 条；debug 4 条无图）
+        pr = costumes_service.get_costume_prompt(conn, "studio", f"stockings_8_{fam['items'][0]['id']}")
+        assert pr["prompt_text"].startswith(row["keywords"])  # 文本层是 keywords 的超集（真库编辑后导出的镜像）
+        assert pr["prompt_source"] == "manual"
 
         # 重跑幂等：全部跳过
-        d2 = costumes_service.import_outfit_presets(conn)
+        d2 = costumes_service.import_studio_yaml(conn)
         assert d2["added"] == 0 and d2["skipped"] == d1["added"]
 
-        # DB 真源：修过文本层后重跑迁移不覆盖
-        costumes_service.set_costume_prompt(conn, "studio", expected_id, "edited prompt text")
-        costumes_service.import_outfit_presets(conn)
-        assert costumes_service.get_costume_prompt(conn, "studio", expected_id)["prompt_text"] == "edited prompt text"
-    assert expected_tags == expected_tags  # 占位断言防误删 tags 变量
+        # DB 真源：修过文本层后重装镜像不覆盖
+        costumes_service.set_costume_prompt(conn, "studio", f"stockings_8_{fam['items'][0]['id']}", "edited prompt text")
+        costumes_service.import_studio_yaml(conn)
+        assert costumes_service.get_costume_prompt(
+            conn, "studio", f"stockings_8_{fam['items'][0]['id']}"
+        )["prompt_text"] == "edited prompt text"
 
 
 def test_studio_text_only_item_rejects_reference(data_dir):
-    """纯文本条目（无图）合法存在，但参考图解析显式报错（不给半死路径）。"""
-    from charvar import outfit as outfit_service
+    """纯文本条目（无图）合法存在，但参考图解析显式报错（不给半死路径）。
 
+    钉死 debug 家族（唯四保持无图的条目）：给其它自建条目补图后，
+    镜像 import 会带上路径，任意 first 出来的 studio 条目不再保证无图。
+    """
     with storage.connect() as conn:
-        costumes_service.import_outfit_presets(conn)
-        preset = outfit_service.load_outfit(outfit_service.list_outfit_presets()[0]["name"])
-        ref = f"studio/{preset.name}_{preset.items[0].id}"
+        costumes_service.import_studio_yaml(conn)
+        ref = "studio/character_outfit_debug_debug_unclothed"
         with pytest.raises(costumes_service.CostumeError, match="详情图"):
             costumes_service.raw_reference_file(ref)
         with pytest.raises(costumes_service.CostumeError, match="详情图"):
             costumes_service.image_file(ref, "full")
+
+
+def test_list_items_imageless_urls_empty(data_dir):
+    """无图条目（纯文本）的浏览条目图 URL 出空串，前端渲染占位而不是破图。"""
+    now = "2026-10-30 00:00:00"
+    with storage.connect() as conn:
+        conn.execute(
+            "INSERT INTO costume_items (source_id, item_id, display_type, category, label,"
+            " keywords, file_path, image_path, thumb_path, subject_policy, caption_tags,"
+            " sort_order, created_at, updated_at)"
+            " VALUES ('studio', 'text_only_item', 'flat_lay', 'demo_family', '纯文本条目',"
+            " 'a plain text item', '', '', '', '', '', 0, ?, ?)",
+            (now, now),
+        )
+        data = costumes_service.list_items(conn)
+        it = next(i for i in data["items"] if i["source_id"] == "studio")
+    assert it["thumb_url"] == "" and it["image_url"] == ""
 
 
 # ---------- display_type（侧车降级为 import 期种子） ----------

@@ -680,6 +680,18 @@ td .caption { color: var(--muted); }
 .costume-detail-titles h3 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.45; }
 .costume-jp { font-size: 12px; color: var(--muted); }
 .costume-jp em { font-style: normal; }
+/* 平铺条目（flat_lay）缩略图是 3:4，与站点 2:3 同框 contain 会上下留灰带 —— 换框比例 */
+.costume-thumb-34 { aspect-ratio: 3 / 4; }
+/* 纯文本条目（无图）的卡位与详情占位 */
+.costume-thumb-empty { display: flex; align-items: center; justify-content: center; height: 100%; padding: 0 var(--sp-2); font-size: 11px; color: var(--muted); text-align: center; }
+.costume-detail-noimg { min-height: 140px; cursor: default; }
+/* 徽章 chip：平铺 / 无图纯文本 / 来源 —— 卡片标题行与详情标题区共用一枚 */
+.costume-chip { display: inline-block; flex: none; padding: 1px 7px; border: 1px solid var(--accent); border-radius: 999px; background: var(--accent-soft); color: var(--text); font-size: 10px; line-height: 1.5; white-space: nowrap; }
+.costume-chip-muted { border-color: var(--line); background: #fff; color: var(--muted); }
+.costume-card-title { display: flex; align-items: center; gap: 4px; max-width: 100%; min-width: 0; }
+.costume-card-title strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.costume-card .costume-card-id { font-family: var(--mono); font-size: 11px; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.costume-tags { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
 .costume-kw-block { display: flex; flex-direction: column; gap: var(--sp-2); }
 .costume-kw-head { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-2); }
 .costume-kw-label { font-size: 11px; font-weight: 600; letter-spacing: .05em; color: var(--muted); }

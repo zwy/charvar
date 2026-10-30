@@ -27,7 +27,7 @@
 | `actions/` | **动作/表情预设**（主预设下拉的全部来源） | `preset_loader.list_presets()` |
 | `wildcards/` | 背景 / 光照通配符池（`items:` 列表） | 预设的 `backgrounds_ref:` / `lighting_ref:` |
 | `subjects/` | 主体档案样例（`<id>.yaml`）+ 模板导出（`<id>.md`） | `charvar subject add/export` |
-| `outfits/` | 服装预设（独立家族，**不进主预设下拉**） | `charvar/outfit.py` |
+| `costumes/` | 服装库 DB 镜像（`<source>/<item>.yaml`，DB 是运行时真源） | `charvar costume export/import-studio` |
 | `hairstyles/` | 发型预设（独立家族，**不进主预设下拉**） | `charvar/hairstyle.py` |
 | `overlays/` | 贴字样式预设（PIL 后处理，不改原图） | `charvar/overlay.py` |
 | `overlays/fonts/` | 贴字字体文件（可选，只放可再分发的开源字体） | 字体解析的第一优先位 |
@@ -101,13 +101,14 @@
 
 `<id>.md` 是同 id 的**模板导出**（`charvar subject export` 逐字快照），可选。
 
-### 服装预设（`outfits/*.yaml`）
+### 服装家族（costume 双表，`costumes/<source>/` 镜像）
 
-`type: outfit`，`items: [{id, label, text}]`：`text` = 服装描述段（**语言不限**：
-中文/英文都合法，整段逐字进提示词），`label` = 中文展示名。可选 `caption_tags`
-（id → 英文 token）与 `subject_policy`（换装时对主体档案锁定项做什么）。
-组合顺序由请求的 `outfit_order` 决定；**服装段在最终提示词里排第一句**
-（与 `outfit_order` 无关）。详见 `docs/贴字与服装预设.md`。
+服装家族住在服装库 DB（`costume_items` studio 条目 + `costume_prompts` 文本层；
+text = 文本层优先、回退 keywords，**语言不限**、整段逐字进提示词；`label` =
+中文展示名；可选 `caption_tags` 与 `subject_policy`）。`charvar costume
+export <ref>` 快照镜像、`import-studio` 重建；组合顺序由 `outfit_order` 决定；
+**服装段在最终提示词里排第一句**（与 `outfit_order` 无关）。
+详见 `docs/服装库.md` 与 `docs/贴字与服装预设.md`。
 
 ### 发型预设（`hairstyles/*.yaml`）
 
