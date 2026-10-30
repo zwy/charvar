@@ -89,7 +89,8 @@ tighten *within* it, do not invent new values.
 
 ### Radii
 `--radius-ctl: 8px` (inputs, buttons) · `--radius-panel: 10px` (dashed panels, image
-cards) · `--radius-card: 12px` (page cards, modals) · `999px` pills (chip, badge).
+cards) · `--radius-card: 12px` (page cards, modals) · `999px` pills (chip, badge;
+动作库/服饰库的内容徽章例外：方形小徽章，见 `.pose-desc-badge` / `.costume-badge`).
 
 ### Control sizing
 `--ctl-h: 35px` standard input/select/button height; checkbox rows borrow it to

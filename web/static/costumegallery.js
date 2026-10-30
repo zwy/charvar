@@ -225,7 +225,7 @@ const CostumeGallery = (() => {
           "</div>" +
           '<div class="image-meta">' +
           '<div class="costume-card-title">' +
-          (isFlat(it) ? '<span class="costume-chip">平铺</span>' : "") +
+          (isFlat(it) ? '<span class="costume-badge">平铺</span>' : "") +
           "<strong>" + esc(it.label || it.item_id) + "</strong>" +
           "</div>" +
           (it.label
@@ -396,13 +396,13 @@ const CostumeGallery = (() => {
         return;
       }
       const displayChip = isFlat(it)
-        ? '<span class="costume-chip">平铺</span>'
-        : '<span class="costume-chip costume-chip-muted">隐形模特</span>';
-      const sourceChip = '<span class="costume-chip costume-chip-muted">' +
+        ? '<span class="costume-badge">平铺</span>'
+        : '<span class="costume-badge costume-badge-muted">隐形模特</span>';
+      const sourceChip = '<span class="costume-badge costume-badge-muted">' +
         esc(SOURCE_ZH[it.source_id] || it.source_id) + "</span>";
       const pol = it.subject_policy || {};
       const polChip = pol.clothing
-        ? '<span class="costume-chip' + (pol.clothing === "add" ? '' : ' costume-chip-muted') + '">' +
+        ? '<span class="costume-badge' + (pol.clothing === "add" ? '' : ' costume-badge-muted') + '">' +
           esc(POLICY_ZH[pol.clothing] || pol.clothing) + "</span>"
         : "";
       const favBtn = '<button type="button" class="btn-sm costume-detail-fav' +
@@ -433,7 +433,7 @@ const CostumeGallery = (() => {
           '<span class="costume-kw-label">' + esc(EDIT_TITLES[kind]) + "</span>" +
           '<span class="costume-kw-actions">' +
           (kind === "prompt-text" && !editingKind
-            ? '<span class="costume-pt-src">' + (it.prompt_source === "ai_draft" ? "AI 起稿" : "手工维护") + "</span>"
+            ? '<span class="costume-badge costume-badge-muted">' + (it.prompt_source === "ai_draft" ? "AI 起稿" : "手工维护") + "</span>"
             : "") +
           '<button type="button" class="btn-sm costume-copy" data-kind="' + kind + '"' +
           (value ? '' : ' disabled') +
@@ -498,7 +498,7 @@ const CostumeGallery = (() => {
         '<div class="costume-tags">' + favBtn + sourceChip + displayChip + polChip +
         (it.image_url
           ? ""
-          : '<span class="costume-chip costume-chip-muted">无图 · 纯文本</span>') +
+          : '<span class="costume-badge costume-badge-muted">无图 · 纯文本</span>') +
         "</div>" +
         "</div>" +
         policyBlock +

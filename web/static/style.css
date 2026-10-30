@@ -14,7 +14,8 @@
   --sp-2: 8px;
   --sp-3: 12px;
   --sp-4: 16px;
-  /* 圆角阶梯：输入/按钮 8 · 面板与图文卡 10 · 页面卡/弹层 12；chip/badge 用胶囊 */
+  /* 圆角阶梯：输入/按钮 8 · 面板与图文卡 10 · 页面卡/弹层 12；chip/badge 用胶囊
+     （动作库描述徽章与服饰库徽章例外：方形小徽章） */
   --radius-ctl: 8px;
   --radius-panel: 10px;
   --radius-card: 12px;
@@ -685,19 +686,22 @@ td .caption { color: var(--muted); }
 /* 纯文本条目（无图）的卡位与详情占位 */
 .costume-thumb-empty { display: flex; align-items: center; justify-content: center; height: 100%; padding: 0 var(--sp-2); font-size: 11px; color: var(--muted); text-align: center; }
 .costume-detail-noimg { min-height: 140px; cursor: default; }
-/* 徽章 chip：平铺 / 无图纯文本 / 来源 —— 卡片标题行与详情标题区共用一枚 */
-.costume-chip { display: inline-block; flex: none; padding: 2px 8px; border: 1px solid var(--accent-line); border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 11px; line-height: 1.5; white-space: nowrap; }
-.costume-chip-muted { border-color: var(--line); background: #fff; color: var(--muted); }
+/* 徽章：形状对齐动作库 .pose-desc-badge（小方形无圆角），颜色由变体子类控制 */
+.costume-badge {
+  display: inline-block; flex: none; padding: 3px 8px; font-size: 11px; line-height: 1;
+  border: 1px solid var(--accent-line); background: var(--accent-soft); color: var(--accent);
+  white-space: nowrap;
+}
+.costume-badge-muted { background: #f4f6f9; color: var(--muted); border-color: var(--line); }
 .costume-card-title { display: flex; align-items: center; gap: 4px; max-width: 100%; min-width: 0; }
 .costume-card-title strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .costume-card .costume-card-id { font-family: var(--mono); font-size: 11px; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.costume-tags { display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+.costume-tags { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; }  /* 不拉伸徽章：同行的 .btn-sm 收藏钮更高 */
 .costume-kw-block { display: flex; flex-direction: column; gap: var(--sp-2); }
 .costume-kw-head { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-2); }
 .costume-kw-label { font-size: 11px; font-weight: 600; letter-spacing: .05em; color: var(--muted); }
 .costume-kw-text { background: #fafbfd; border: 1px dashed var(--line); border-radius: var(--radius-panel); padding: var(--sp-3); font-size: 12px; line-height: 1.6; color: var(--text); word-break: break-word; }
 .costume-kw-muted { color: var(--muted); }
-.costume-pt-src { font-size: 11px; color: var(--muted); }
 .costume-detail-actions { margin-top: auto; display: flex; flex-direction: column; gap: var(--sp-2); padding-top: var(--sp-2); }
 .costume-detail-actions .primary { width: 100%; }
 .costume-empty { grid-column: 1 / -1; padding: var(--sp-4); text-align: center; font-size: 12px; color: var(--muted); }
@@ -718,12 +722,13 @@ td .caption { color: var(--muted); }
 .costume-thumb { position: relative; }  /* 卡片收藏星标的锚（.image-card overflow 红线不背星标锅） */
 .costume-fav {
   position: absolute; top: 5px; right: 5px; z-index: 1;
-  padding: 3px 8px; font-size: 11px; line-height: 1; border-radius: var(--radius-ctl);
+  min-height: 0;  /* button 元素吃全站 min-height 35 —— 卡片小徽章压回内容高 */
+  padding: 2px 7px; font-size: 11px; line-height: 1; border-radius: 0;
   border: 1px solid var(--line); background: #fff; color: var(--muted);
   cursor: pointer;
 }
 .costume-fav.on { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }
-.costume-kw-actions { display: inline-flex; gap: 4px; margin-left: auto; }
+.costume-kw-actions { display: inline-flex; gap: 4px; margin-left: auto; align-items: center; }  /* 不拉伸徽章：同行的 .btn-sm 复制/编辑钮更高 */
 .costume-edit-ta {
   width: 100%; min-height: 96px; resize: vertical; font-size: 12px; line-height: 1.5;
   padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-ctl);
