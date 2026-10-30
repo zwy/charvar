@@ -672,3 +672,33 @@ def test_costume_mode_add_branches():
     assert "替换其原有服装" in pose_prompt.build_prompt(
         "全身1人・セクシー系", "呈自然的 S 形曲线", costume=True
     )
+# ---------- 收藏（pose_favorites：用户层，对齐服饰库） ----------
+
+def test_pose_favorites_toggle_and_survive_reimport(data_dir):
+    """收藏在独立用户层表：切换一次生效，pose_images 重灌绝不碰；不存在的动作报错。"""
+    _build_fake_pose_data(data_dir)
+    with storage.connect() as conn:
+        poses_service.import_catalog(conn)
+        assert poses_service.toggle_favorite(conn, "full_sexy_P001")["favorite"] is True
+        assert poses_service.toggle_favorite(conn, "full_sexy_P001")["favorite"] is False
+        poses_service.toggle_favorite(conn, "full_sexy_P001")
+    with storage.connect() as conn:
+        poses_service.import_catalog(conn)  # 重灌（幂等）
+        data = poses_service.list_poses(conn)
+        row = next(p for p in data["poses"] if p["pose_id"] == "full_sexy_P001")
+        assert row["favorited"] is True
+        other = next(p for p in data["poses"] if p["pose_id"] != "full_sexy_P001")
+        assert other["favorited"] is False
+
+
+def test_pose_favorite_endpoint(data_dir, client):
+    """POST /poses/{pose_id}/favorite 切换 + 清单透出 favorited；未知动作 404。"""
+    _build_fake_pose_data(data_dir)
+    with storage.connect(pathlib.Path(data_dir) / "test.db") as conn:
+        poses_service.import_catalog(conn)
+    assert client.post("/poses/full_sexy_P002/favorite").json() == {"favorited": True}
+    listing = client.get("/poses").json()
+    row = next(p for p in listing["poses"] if p["pose_id"] == "full_sexy_P002")
+    assert row["favorited"] is True
+    assert client.post("/poses/full_sexy_P002/favorite").json() == {"favorited": False}
+    assert client.post("/poses/full_sexy_NOPE/favorite").status_code == 404

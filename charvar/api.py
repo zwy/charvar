@@ -1011,6 +1011,18 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             except poses_service.PoseError as exc:
                 raise HTTPException(404, str(exc)) from exc
 
+    @app.post("/poses/{pose_id}/favorite")
+    def api_pose_favorite_post(pose_id: str) -> dict[str, Any]:
+        """收藏 / 取消收藏（切换）。"""
+        if not poses_service.POSE_ID_RE.fullmatch(pose_id):
+            raise HTTPException(400, f"非法动作 id：{pose_id[:60]}")
+        with _db() as conn:
+            try:
+                result = poses_service.toggle_favorite(conn, pose_id)
+            except poses_service.PoseError as exc:
+                raise HTTPException(404, str(exc)) from exc
+        return {"favorited": result["favorite"]}
+
     # ---- 全局设置 ----
     def _settings_payload(settings: settings_service.AppSettings) -> dict[str, Any]:
         data = settings.model_dump()

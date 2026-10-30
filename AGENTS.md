@@ -14,7 +14,7 @@
 
 ## 姿势库
 
-参考图第四来源 `pose_id`+`angle`（详见 `docs/姿势库.md`）：**图片禁再分发**，只存 `data/poses/` 不进 git；**role=pose 只锚姿势不锚身份**，pose 尾句换 pose 版。动作描述 pose_actions 表为动作×视角双键，不进可重灌的 pose_images；整页/弹层共用 posegallery.js。
+参考图第四来源 `pose_id`+`angle`（详见 `docs/姿势库.md`）：**图片禁再分发**，只存 `data/poses/` 不进 git；**role=pose 只锚姿势不锚身份**，pose 尾句换 pose 版。动作描述 pose_actions / 收藏 pose_favorites 皆用户层重灌不碰（网页可编辑描述）；整页/弹层共用 posegallery.js。
 
 ## 服饰库
 

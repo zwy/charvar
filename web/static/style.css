@@ -593,7 +593,7 @@ td .caption { color: var(--muted); }
 .pose-card { padding: 8px; overflow: visible; position: relative; }
 /* 图盒定高（aspect-ratio 3/4 站点原比例）：不依赖图片加载与 min-height 博弈，
    img 填满盒（人偶线稿白背景，contain/cover 视觉一致） */
-.pose-thumb { background: #f4f6f9; border-radius: var(--radius-ctl); overflow: hidden; aspect-ratio: 3 / 4; }
+.pose-thumb { background: #f4f6f9; border-radius: var(--radius-ctl); overflow: hidden; aspect-ratio: 3 / 4; position: relative; }  /* 收藏徽章锚 */
 .pose-thumb img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .pose-card.active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 /* 元信息三段：mono 编号 / 中文（主阅读）/ 日文原文（muted）——覆盖基类的 space-between 单行 */
@@ -616,19 +616,7 @@ td .caption { color: var(--muted); }
 .pose-empty { grid-column: 1 / -1; padding: var(--sp-4); text-align: center; font-size: 12px; color: var(--muted); }
 .pose-grid::-webkit-scrollbar, .pose-detail::-webkit-scrollbar { width: 4px; }
 .pose-grid::-webkit-scrollbar-thumb, .pose-detail::-webkit-scrollbar-thumb { background: var(--line); border-radius: 10px; }
-/* 卡片「描述」角标：该动作在 pose_actions 写过动作描述——扫一眼知道哪些补过 */
-.pose-desc-badge {
-  position: absolute;
-  top: 13px;
-  right: 13px;
-  z-index: 1;
-  font-size: 11px;
-  line-height: 1;
-  padding: 3px 8px;
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-/* 详情栏动作描述块：pose_actions 文本 + 复制按钮；没写过给灰字空态 */
+/* 详情栏动作描述块：pose_actions 文本 + 复制/编辑按钮 + 收藏；没写过给灰字空态 */
 .pose-action-block {
   display: flex;
   flex-direction: column;
@@ -654,6 +642,9 @@ td .caption { color: var(--muted); }
 .pose-browser-page .pose-detail { border-radius: 0 0 var(--radius-panel) var(--radius-panel); }
 .pose-action-text { background: #fafbfd; border: 1px dashed var(--line); border-radius: var(--radius-panel); padding: var(--sp-3); font-size: 12px; line-height: 1.6; color: var(--text); white-space: pre-wrap; word-break: break-word; max-height: 200px; overflow-y: auto; }
 .pose-action-muted { color: var(--muted); }
+/* 详情收藏钮行 + 动作描述编辑控件（对齐服饰库徽章行/编辑块的语言） */
+.pose-tags { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; }
+.pose-action-btns { display: inline-flex; gap: 4px; }
 
 /* ---------- 服饰库（costume-db-01 浏览页，costumegallery.js）
    布局骨架与动作库同一套「页签 + 搜索 + 网格 + 常驻详情」（.costume-* 与 .pose-*
@@ -720,21 +711,21 @@ td .caption { color: var(--muted); }
 
 /* ---- 服饰库：收藏 / 编辑 / 换装语义 / 参考图重生成（与 costumegallery.js 配套） ---- */
 .costume-thumb { position: relative; }  /* 卡片收藏星标的锚（.image-card overflow 红线不背星标锅） */
-.costume-fav {
+.costume-fav, .pose-fav {
   position: absolute; top: 5px; right: 5px; z-index: 1;
   min-height: 0;  /* button 元素吃全站 min-height 35 —— 卡片小徽章压回内容高 */
   padding: 2px 7px; font-size: 11px; line-height: 1; border-radius: 0;
   border: 1px solid var(--line); background: #fff; color: var(--muted);
   cursor: pointer;
 }
-.costume-fav.on { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }
+.costume-fav.on, .pose-fav.on { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }
 .costume-kw-actions { display: inline-flex; gap: 4px; margin-left: auto; align-items: center; }  /* 不拉伸徽章：同行的 .btn-sm 复制/编辑钮更高 */
-.costume-edit-ta {
+.costume-edit-ta, .pose-edit-ta {
   width: 100%; min-height: 96px; resize: vertical; font-size: 12px; line-height: 1.5;
   padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-ctl);
   font-family: var(--mono); color: var(--text); background: #fff;
 }
-.costume-edit-row { display: flex; gap: 4px; margin-top: var(--sp-1); }
+.costume-edit-row, .pose-edit-row { display: flex; gap: 4px; margin-top: var(--sp-1); }
 .costume-policy-row { display: flex; gap: 4px; align-items: center; margin-top: var(--sp-1); }
 .costume-policy-row select {
   font-size: 12px; padding: 3px 6px; border: 1px solid var(--line);

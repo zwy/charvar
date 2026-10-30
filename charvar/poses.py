@@ -241,12 +241,14 @@ def list_poses(
     # 视角排序在 Python 端按 ANGLE_ORDER 固定次序做（SQL 排视角用索引更绕）。
     rows = conn.execute(
         "SELECT pi.pose_id, pi.angle, pi.line, pi.number, pi.title, pi.category,"
-        " pi.thumb_path, pi.file_path, pa.action_text"
+        " pi.thumb_path, pi.file_path, pa.action_text,"
+        " pf.pose_id AS fav_pose"
         " FROM pose_images AS pi"
         " LEFT JOIN pose_actions AS pa ON pa.pose_id = pi.pose_id AND pa.angle = pi.angle"
+        " LEFT JOIN pose_favorites AS pf ON pf.source_id = ? AND pf.pose_id = pi.pose_id"
         + (" WHERE " + " AND ".join(where) if where else "")
         + " ORDER BY pi.line, pi.number, pi.pose_id",
-        params,
+        [SOURCE_ID] + params,
     ).fetchall()
 
     grouped: dict[str, dict] = {}
@@ -265,6 +267,7 @@ def list_poses(
                 "category_zh": category_zh(row["category"]),
                 "image_count": 0,
                 "images": [],
+                "favorited": row["fav_pose"] is not None,
             },
         )
         pose["images"].append(
@@ -368,6 +371,37 @@ def set_pose_action(
         conn.execute("DELETE FROM pose_actions WHERE pose_id = ? AND angle = ?", (pose_id, angle_key))
     conn.commit()
     return pose_action(conn, pose_id, angle_key)
+
+
+# ---------- 收藏（pose_favorites：用户态；pose_images 重灌绝不碰） ----------
+
+def toggle_favorite(conn: sqlite3.Connection, pose_id: str, *, favorite: bool | None = None) -> dict:
+    """收藏/取消收藏（favorite=None = 切换；显式 bool = 设定）。独立用户态表，重灌不碰；
+    source_id 沿 pose_images.source 取值（pose-db-01；自建库未来开新值即换键位，表不迁）。"""
+    pose_id = str(pose_id or "").strip()
+    if not POSE_ID_RE.fullmatch(pose_id):
+        raise PoseError(f"非法动作 id：{pose_id[:60]}")
+    if conn.execute("SELECT 1 FROM pose_images WHERE pose_id = ?", (pose_id,)).fetchone() is None:
+        raise PoseError(f"姿势库没有这个动作：{pose_id[:60]}")
+    exists = conn.execute(
+        "SELECT 1 FROM pose_favorites WHERE source_id = ? AND pose_id = ?",
+        (SOURCE_ID, pose_id),
+    ).fetchone()
+    state = not bool(exists) if favorite is None else bool(favorite)
+    from charvar import storage  # 延迟导入（utcnow），与 set_pose_action 同理由
+
+    if state and not exists:
+        conn.execute(
+            "INSERT INTO pose_favorites (source_id, pose_id, created_at) VALUES (?, ?, ?)",
+            (SOURCE_ID, pose_id, storage.utcnow()),
+        )
+    elif not state and exists:
+        conn.execute(
+            "DELETE FROM pose_favorites WHERE source_id = ? AND pose_id = ?",
+            (SOURCE_ID, pose_id),
+        )
+    conn.commit()
+    return {"pose_id": pose_id, "favorite": state}
 
 
 # ---------- 参考图来源解析 ----------

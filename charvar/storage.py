@@ -106,6 +106,14 @@ CREATE TABLE IF NOT EXISTS pose_actions (
     updated_at TEXT NOT NULL,
     PRIMARY KEY (pose_id, angle)
 );
+CREATE TABLE IF NOT EXISTS pose_favorites (
+    -- 收藏态（用户层，同 costume_favorites / pose_actions 哲学）：pose_images 重灌绝不碰。
+    -- source_id 现在只有 pose-db-01；自建库（后续）= 新 source 值，键位预留不用迁表。
+    source_id TEXT NOT NULL,
+    pose_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (source_id, pose_id)
+);
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value_json TEXT NOT NULL,
