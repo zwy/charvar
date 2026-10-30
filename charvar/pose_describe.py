@@ -72,9 +72,9 @@ FEWSHOT: list[tuple[str, str, str]] = [
 ]
 
 
-def thumb_data_url(pose_id: str, angle: str) -> str:
+def thumb_data_url(pose_id: str, angle: str, source: str = "") -> str:
     """该动作该视角的缩略图 → jpeg data URL（300×400，单张几十 KB）。"""
-    thumb = poses_service.thumb_image_file(pose_id, angle)
+    thumb = poses_service.thumb_image_file(pose_id, angle, source=source or poses_service.SOURCE_ID)
     b64 = base64.b64encode(thumb.read_bytes()).decode("ascii")
     return f"data:image/jpeg;base64,{b64}"
 
@@ -133,15 +133,17 @@ def describe_one(
     model: str | None = None,
     dry_run: bool = False,
     overwrite: bool = False,
+    source: str = "",
 ) -> dict:
-    """给一个动作视角起稿；已写且不 overwrite → skipped。"""
+    """给一个动作视角起稿；已写且不 overwrite → skipped。缺省给线稿库。"""
+    source = str(source or "").strip() or poses_service.SOURCE_ID
     row = conn.execute(
-        "SELECT line, number, title FROM pose_images WHERE pose_id = ? AND angle = ?",
-        (pose_id, angle),
+        "SELECT line, number, title FROM pose_images WHERE source = ? AND pose_id = ? AND angle = ?",
+        (source, pose_id, angle),
     ).fetchone()
     if row is None:
         return {"pose_id": pose_id, "angle": angle, "status": "error", "error": "库中没有该动作视角"}
-    current = poses_service.pose_action(conn, pose_id, angle)["action_text"]
+    current = poses_service.pose_action(conn, pose_id, angle, source)["action_text"]
     if current.strip() and not overwrite:
         return {"pose_id": pose_id, "angle": angle, "status": "skipped", "text": current}
     from charvar.pose_translations import POSE_TITLE_ZH
@@ -163,7 +165,7 @@ def describe_one(
         return {"pose_id": pose_id, "angle": angle, "status": "error", "error": str(exc), "text": draft}
     if dry_run:
         return {"pose_id": pose_id, "angle": angle, "status": "draft", "text": draft}
-    data = poses_service.set_pose_action(conn, pose_id, angle, draft, source="ai_draft")
+    data = poses_service.set_pose_action(conn, pose_id, angle, draft, source="ai_draft", source_id=source)
     return {"pose_id": pose_id, "angle": angle, "status": "done", "text": data["action_text"]}
 
 
@@ -175,13 +177,16 @@ def describe_batch(
     model: str | None = None,
     dry_run: bool = False,
     overwrite: bool = False,
+    source: str = "",
 ) -> dict:
-    """按浏览次序给缺描述的动作视角批量起稿；返回汇总。"""
+    """按浏览次序给缺描述的动作视角批量起稿；返回汇总。只扫一个库。"""
+    source = str(source or "").strip() or poses_service.SOURCE_ID
     data = poses_service.list_poses(conn)
     todo = [
         p["pose_id"]
         for p in data["poses"]
-        if not any(
+        if p["source"] == source
+        and not any(
             im["angle"] == angle and (im["action_text"] or "").strip() for im in p["images"]
         )
     ]
@@ -189,7 +194,7 @@ def describe_batch(
     results: list[dict] = []
     for pose_id in todo:
         result = describe_one(
-            conn, pose_id, angle, model=model, dry_run=dry_run, overwrite=overwrite
+            conn, pose_id, angle, model=model, dry_run=dry_run, overwrite=overwrite, source=source
         )
         results.append(result)
         head = (result.get("text") or result.get("error") or "")[:40]

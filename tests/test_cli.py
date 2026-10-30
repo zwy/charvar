@@ -728,3 +728,93 @@ def test_subject_prompt_out_writes_file(_export_env, monkeypatch, tmp_path):
     result = runner.invoke(cli.app, ["subject", "prompt", "front", "--material", "x", "--out", str(target)])
     assert result.exit_code == 0, result.output
     assert target.read_text(encoding="utf-8").strip() == "written prompt"
+
+
+# ---------- 三库组合生图流（pose prompt --face / costume prompt --face） ----------
+
+@pytest.fixture()
+def libs_dir(tmp_path, monkeypatch):
+    """三库假数据各一份 + 灌库（pose/costume/face），CLI 冒烟不发真网。"""
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    from tests.test_costumes import _build_fake_costume_data
+    from tests.test_faces import _build_fake_face_data
+    from tests.test_poses import _build_fake_pose_data
+
+    from charvar import costumes as costumes_service
+    from charvar import faces as faces_service
+    from charvar import poses as poses_service
+
+    _build_fake_pose_data(tmp_path)
+    _build_fake_costume_data(tmp_path)
+    _build_fake_face_data(tmp_path)
+    with storage.connect() as conn:
+        poses_service.import_catalog(conn)
+        costumes_service.import_catalog(conn)
+        faces_service.import_catalog(conn)
+        poses_service.set_pose_action(conn, "full_sexy_P001", "正面", "呈自然的 S 形曲线")
+    return tmp_path
+
+
+def _capture_adhoc(monkeypatch):
+    captured = {}
+
+    def _fake_run(req, json_out=False):
+        captured["req"] = req
+
+    monkeypatch.setattr(cli, "_run_adhoc", _fake_run)
+    return captured
+
+
+def test_pose_prompt_cmd_face_costume_combo(libs_dir, monkeypatch):
+    """工作流① 三库组合：--face（前缀解析）+ 姿势 + 服饰 → refs 序 [face, pose, costume]。"""
+    captured = _capture_adhoc(monkeypatch)
+    result = runner.invoke(
+        cli.app,
+        ["pose", "prompt", "full_sexy_P001",
+         "--face", "faceaaa", "--costume", "SPR-0001", "--run",
+         "--body-lock", "slender hourglass figure"],
+    )
+    assert result.exit_code == 0, result.output + _stderr(result)
+    req = captured["req"]
+    assert "脸部参考" in req.prompt and "服装完全按<image3>服饰参考穿着" in req.prompt
+    assert "slender hourglass figure" in req.prompt  # --body-lock 进 face 版身材锚
+    names = [p.name for p in req.reference_paths]
+    assert names[0].startswith("face_faceaaa") and names[0].endswith(".jpg")
+    assert "full_sexy_P001" in names[1]
+    assert "SPR-0001" in names[2]
+
+
+def test_pose_prompt_cmd_face_styling(libs_dir):
+    """--face 精确 id + source/id 前缀消歧；styling 段与主体档案同身份句（整库无分叉）。"""
+    result = runner.invoke(cli.app, ["pose", "prompt", "full_sexy_P001", "--face", "styleccc33333"])
+    assert result.exit_code == 0, result.output + _stderr(result)
+    assert "<image1>为角色设定参考" in result.output  # styling 段 = 主体档案版文本
+
+
+def test_pose_prompt_cmd_face_resolution_errors(libs_dir):
+    """多命中列候选；零命中提示 face list --q；与 --subject 互斥报错。"""
+    multi = runner.invoke(cli.app, ["pose", "prompt", "full_sexy_P001", "--face", "face"])
+    assert multi.exit_code != 0 and "给更长前缀" in _stderr(multi)
+    zero = runner.invoke(cli.app, ["pose", "prompt", "full_sexy_P001", "--face", "zzzzzz"])
+    assert zero.exit_code != 0 and "face list --q" in _stderr(zero)
+    both = runner.invoke(
+        cli.app, ["pose", "prompt", "full_sexy_P001", "--face", "faceaaa11111", "--subject", "demo"]
+    )
+    assert both.exit_code != 0 and "互斥" in _stderr(both)
+
+
+def test_costume_prompt_cmd_face(libs_dir, monkeypatch):
+    """工作流② 三库版子集：--face + 服饰 → refs 序 [face, costume]，face 版穿上句。"""
+    captured = _capture_adhoc(monkeypatch)
+    result = runner.invoke(
+        cli.app,
+        ["costume", "prompt", "SPR-0001", "--face", "face-db-01/faceaaa11111", "--run"],
+    )
+    assert result.exit_code == 0, result.output + _stderr(result)
+    req = captured["req"]
+    assert "脸部参考" in req.prompt and "服装完全按<image2>服饰参考穿着" in req.prompt
+    assert "穿上<image2>图中的服装，完整还原图中整套搭配" in req.prompt
+    names = [p.name for p in req.reference_paths]
+    assert "faceaaa11111" in names[0] and "SPR-0001" in names[1]
+    no_id = runner.invoke(cli.app, ["costume", "prompt", "SPR-0001", "--run"])
+    assert no_id.exit_code != 0 and "--face" in _stderr(no_id)

@@ -92,6 +92,23 @@ _LEAD = {
     "pair": "让<image1>图中的角色摆出<image2>图中的双人姿势（描述中的甲、乙两位都由该角色担任）：",
 }
 
+# depth 姿势库（pose-db-02）的 mannequin 段版本：深度图锚前后遮挡（白=近），
+# 不是线稿 —— 禁令点名「别画成人偶/深度图」。slot 位随双人双主体换位（缺省 2）。
+_MANNEQUIN_DEPTH: dict[str, str] = {
+    "full": (
+        "<image{slot}>为姿势参考（灰度深度图，越白越靠前），仅参考人物的身体动作、"
+        "重心、四肢位置、前后遮挡关系和整体姿态；不要把成图画成人偶或深度图。"
+    ),
+    "upper": (
+        "<image{slot}>为姿势参考（灰度深度图，越白越靠前），仅参考人物的身体动作、"
+        "重心、四肢位置、前后遮挡关系和整体姿态；不要把成图画成人偶或深度图。"
+    ),
+    "pair": (
+        "<image{slot}>为姿势参考（灰度深度图，越白越靠前），仅参考两位人物的动作、"
+        "重心、四肢位置、前后遮挡关系和整体姿态；不要把成图画成人偶或深度图。"
+    ),
+}
+
 
 def kind_of_line(line: str) -> str:
     """线（系統原文）→ 线型；未知线回退全身。"""
@@ -108,6 +125,8 @@ def build_prompt(
     costume_keywords: str | None = None,
     costume_display: str = "ghost",
     costume_policy: dict | None = None,
+    pose_display: str = "line",
+    face_section: str | None = None,
 ) -> str:
     """按线型拼 demo 结构；动作描述必须是已写好的视角级文本。
 
@@ -117,12 +136,58 @@ def build_prompt(
     换服装版（锚身份不锚衣着），动作描述之后插「服装融合」段，禁令句追加换装禁令。 costume_display 按条目的
     展示形态选「这张图是什么」说明句（ghost = 隐形模特，flat_lay = 平铺展示）。
     costume_keywords（可选）：catalog 英文关键词拼「服装要点」注记行，插在服装锚后。
+    pose_display（可选）：姿势参考库的展示形态（line=人偶线稿 缺省 / depth=深度图，
+    白=近）—— mannequin 段换深度图版锚前后遮挡；未知形态显式报错。
+    face_section（可选，人脸库身份锚）：face/styling 段条目当 <image1>（与主体档案
+    互斥，调用方把门）。styling 段与主体档案完全同文本；face 段（正面胸像）换
+    face 版身份句/身材锚/融合句 —— 见 face 分段家族注释。双人线显式报错。
     """
     kind = LINE_KIND.get(str(line or ""), "full")
     seg = _SEGMENTS[kind]
+    if pose_display not in ("line", "depth"):
+        raise ValueError(f"未知姿势参考展示形态：{pose_display}（可选 line/depth）")
+    if face_section is not None and face_section not in ("face", "styling"):
+        raise ValueError(f"未知人脸条目形态：{face_section}（可选 face/styling）")
+    mannequin = (
+        _MANNEQUIN_DEPTH[kind].format(slot=3 if (kind == "pair" and pair_two_subjects) else 2)
+        if pose_display == "depth"
+        else seg["mannequin"]
+    )
     text = str(action_text or "").strip()
     if costume and kind == "pair":
         raise ValueError("双人动作暂不支持服装参考（仅单人两类工作流接入服装）")
+    if face_section and kind == "pair":
+        raise ValueError("双人动作暂不支持人脸身份锚（仅单人生效）")
+    if face_section == "face" and costume:
+        mode = costume_mode(costume_policy)
+        m = _COSTUME_MODE_SEGMENTS[mode]
+        identity = _FACE_IDENTITY_REPLACE if mode == "replace" else _FACE_IDENTITY_ADD
+        fusion = _COSTUME_FUSION_FACE if mode == "replace" else m["fusion_pose"]
+        guard = _FACE_GUARD_REPLACE if mode == "replace" else _FACE_GUARD_ADD
+        parts = [
+            identity.format(slot=3),
+            mannequin,
+            _display_form(costume_display, 3),
+            m["anchor"].format(slot=3),
+            _costume_keywords(costume_keywords, 3),
+            _figure_anchor_face(3, body_lock),
+            _LEAD[kind] + text,
+            fusion.format(slot=3) if mode == "add" else fusion,
+            seg["framing"],
+            seg["background"],
+            _guard_with_costume(seg["guard"], guard),
+        ]
+        return "\n\n".join(part for part in parts if part)
+    if face_section == "face" and not costume:
+        parts = [
+            _FACE_IDENTITY_PLAIN,
+            mannequin,
+            _LEAD[kind] + text,
+            seg["framing"],
+            seg["background"],
+            seg["guard"],
+        ]
+        return "\n\n".join(part for part in parts if part)
     if kind == "pair" and pair_two_subjects:
         identity = (
             "<image1>为角色设定参考（担当描述中的「甲」），保留该角色的面部特征、发型、发色、"
@@ -131,8 +196,12 @@ def build_prompt(
             "服装、配饰和整体美术风格，不要擅自更换造型。"
         )
         mannequin = (
-            "<image3>为姿势参考，仅参考两位人物的动作、重心、四肢位置和整体姿态，"
-            "不参考其人体模型外观、辅助线或线稿画风。"
+            _MANNEQUIN_DEPTH["pair"].format(slot=3)
+            if pose_display == "depth"
+            else (
+                "<image3>为姿势参考，仅参考两位人物的动作、重心、四肢位置和整体姿态，"
+                "不参考其人体模型外观、辅助线或线稿画风。"
+            )
         )
         lead = (
             "让<image1>图中的角色担任描述里的「甲」、<image2>图中的角色担任「乙」，"
@@ -145,7 +214,7 @@ def build_prompt(
         m = _COSTUME_MODE_SEGMENTS[mode]
         parts = [
             m["identity"].format(slot=3),
-            seg["mannequin"],
+            mannequin,
             _display_form(costume_display, 3),
             m["anchor"].format(slot=3),
             _costume_keywords(costume_keywords, 3),
@@ -159,7 +228,7 @@ def build_prompt(
         return "\n\n".join(part for part in parts if part)
     parts = [
         seg["identity"],
-        seg["mannequin"],
+        mannequin,
         _LEAD[kind] + text,
         seg["framing"],
         seg["background"],
@@ -316,22 +385,112 @@ def costume_mode(costume_policy: dict | None) -> str:
     return clothing
 
 
+# ---------- 人脸身份锚（face-db-01 条目当 <image1>；与 --subject 互斥，见 CLI） ----------
+#
+# face 段条目（正面向き，胸像）只有脸/发型/发色 —— 没有服装与身材信息，所以：
+# 身份句不锚（也不提）图中服装；身材锚换 face 版（模型按美术风格自洽 + body_lock 原文）；
+# 换装融合句去掉「替换其原有服装」（没有原服装可替换 —— 提了反而召唤出底装残留）。
+# styling 段条目（整体造型，全身）保留服装/身材信息，身份句/身材锚与主体档案版
+# 完全同文本，不另设分叉。
+
+_FACE_IDENTITY_PLAIN = (
+    "<image1>为角色脸部参考，保留该角色的面部特征、发型、发色和整体美术风格，"
+    "确保生成的是同一个角色，不要擅自更换造型。"
+)
+
+_FACE_IDENTITY_REPLACE = (
+    "<image1>为角色脸部参考，保留该角色的面部特征、发型、发色和整体美术风格，"
+    "确保生成的是同一个角色，不要擅自更换造型；图中没有服装与身材信息，"
+    "服装完全按<image{slot}>服饰参考穿着。"
+)
+
+_FACE_IDENTITY_ADD = (
+    "<image1>为角色脸部参考，保留该角色的面部特征、发型、发色和整体美术风格，"
+    "确保生成的是同一个角色，不要擅自更换造型；角色的基础衣着按其美术风格自然搭配，"
+    "腿部袜类与<image{slot}>服装参考不一致时，以服装参考为准。"
+)
+
+# 体形锚（face 段版）：没有 <image1> 身材可锚 → 正向自洽句 + body_lock 原文
+# （第二层锚同 _figure_anchor 约定）。
+_FIGURE_ANCHOR_FACE = (
+    "角色身材、身高与四肢比例保持自然协调、整体匀称，与该角色的美术风格一致；"
+    "<image{slot}>图为服装参考，服装的款式、面料与整套搭配（含鞋、袜、包、帽等配件）"
+    "都要保留，并按角色自身的身材重新合身。"
+)
+
+# face 段的换装融合句（replace 版）：照 _COSTUME_FUSION 但去掉「替换其原有服装（不是
+# 叠穿在原服装外面）」—— face 图没有原服装，提它反而召唤底装残留。
+_COSTUME_FUSION_FACE = (
+    "把<image3>图中的服装穿在角色身上，服装按图中整套搭配完整还原，忠实保留可见的"
+    "款式、配色、面料质感与图案细节；服装自然适配角色体型与动作，"
+    "在抬臂、弯肘、叉腰与屈膝处产生合理的褶皱、拉伸和遮挡，叉腰或贴身的手位于衣物外侧；"
+    "保留服装关键识别细节，不要为了展示服装而改变姿势。"
+)
+
+# 工作流②（无动作）的 face 版融合句（服装槽位 = <image2>）。
+_COSTUME_FUSION_FACE_NOPOSE = (
+    "把<image2>图中的服装穿在角色身上，服装按图中整套搭配完整还原，忠实保留可见的"
+    "款式、配色、面料质感与图案细节；服装自然适配角色体型，"
+    "自然站立时产生合理的褶皱与遮挡；保留服装关键识别细节。"
+)
+
+_FACE_GUARD_REPLACE = "不出现两套服装混搭，服装关键细节不缺失。"
+_FACE_GUARD_ADD = "基础衣着自然稳定不中途更换，腿上只穿图中这一双袜类。"
+
+# 工作流②（无动作）的 face 版穿上引导句（replace/add 各一）。
+_FACE_WEAR_LEAD_REPLACE = "让<image1>图中的角色穿上<image{slot}>图中的服装，完整还原图中整套搭配。"
+_FACE_WEAR_LEAD_ADD = "让<image1>图中的角色穿上<image{slot}>图中的袜类。"
+
+
+def _figure_anchor_face(costume_slot: int, body_lock: list[str] | None) -> str:
+    """face 版身材锚段：身材不来自图（正面向き胸像），自洽句 + body_lock 原文。"""
+    parts = [_FIGURE_ANCHOR_FACE.format(slot=costume_slot)]
+    parts.extend(str(x).strip() for x in (body_lock or []) if str(x).strip())
+    return "\n".join(parts)
+
+
 def build_costume_prompt(
     body_lock: list[str] | None = None,
     costume_keywords: str | None = None,
     costume_display: str = "ghost",
     costume_policy: dict | None = None,
+    face_section: str | None = None,
 ) -> str:
     """单主体 + 服装（无动作参考）→ 全身换装图提示词。
 
     <image1> = 主体档案槽位图（角色锚定），<image2> = 服装参考图；姿态不锚
     （模型自选自然站姿）。服装锚/身材锚/换装禁令与 build_prompt(costume=True) 同源。 costume_keywords 同 build_prompt。
     costume_policy 条目策略 → 措辞分叉（replace 整套替换 / add 叠加袜类）。
+    face_section（可选，人脸库身份锚）：face/styling 条目当 <image1>（与主体档案
+    互斥），同 build_prompt 的 face 分段家族 —— face 段换 face 版身份句/身材锚/
+    穿上引导句/融合句。
     """
     mode = costume_mode(costume_policy)
     m = _COSTUME_MODE_SEGMENTS[mode]
-    fusion = m["fusion_nopose"]
     seg = _SEGMENTS["full"]
+    if face_section == "face":
+        identity = _FACE_IDENTITY_REPLACE if mode == "replace" else _FACE_IDENTITY_ADD
+        figure = _figure_anchor_face(2, body_lock)
+        wear_lead = (
+            _FACE_WEAR_LEAD_REPLACE if mode == "replace" else _FACE_WEAR_LEAD_ADD
+        ).format(slot=2)
+        fusion = _COSTUME_FUSION_FACE_NOPOSE if mode == "replace" else m["fusion_nopose"]
+        guard = _FACE_GUARD_REPLACE if mode == "replace" else _FACE_GUARD_ADD
+        return "\n\n".join(
+            [
+                identity.format(slot=2),
+                _display_form(costume_display, 2),
+                m["anchor"].format(slot=2),
+                _costume_keywords(costume_keywords, 2),
+                figure,
+                wear_lead,
+                fusion,
+                seg["framing"],
+                seg["background"],
+                _guard_with_costume(seg["guard"], guard),
+            ]
+        )
+    fusion = m["fusion_nopose"]
     return "\n\n".join(
         [
             m["identity"].format(slot=2),

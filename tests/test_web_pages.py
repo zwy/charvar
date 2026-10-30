@@ -19,6 +19,7 @@ PAGE_NEEDLE_IDS = {
     "subjects": ["s-id", "subject-image-slots"],
     "poses": ["pose-page-root"],
     "costumes": ["costume-page-root"],
+    "faces": ["face-page-root"],
     "runs": ["runs-table"],
     "settings": ["set-llm-base", "set-or-t2i-model", "settings-sizes"],
 }

@@ -224,6 +224,8 @@ def rewrite_prompts(
     composition_policy: str = "legacy",
     language: str = "any",
     barefoot: bool = False,
+    pose_types: dict[int, str] | None = None,
+    face_types: dict[int, str] | None = None,
 ) -> dict[str, str]:
     """一次（或分批）chat_json 调用，返回 {variant_id: prompt}。
 
@@ -232,11 +234,20 @@ def rewrite_prompts(
     单批有缺失/截断/被拒（sticker 禁字句）时，用缺失的 id 缩批补调一次；
     仍缺失 → LLMError（附被拒原因，可定位）。
     校验：每个 intent 的 id 都必须出现且 prompt 非空。
-    ref_kinds 按顺序分配 <image1>、<image2>… 标签。
+    ref_kinds 按顺序分配 <image1>、<image2>… 标签；pose_types（可选）按下标给
+    姿势库参考的展示形态（line/depth），挂进 ref dict（锚定分句按它换 depth 版）；
+    face_types（可选）同理由给人脸库条目的 section（face/styling）。
     """
     if not intents:
         raise llm.LLMError("没有可改写的变体")
-    refs = [{"kind": kind, "tag": f"<image{i + 1}>"} for i, kind in enumerate(ref_kinds)]
+    refs = []
+    for i, kind in enumerate(ref_kinds):
+        ref = {"kind": kind, "tag": f"<image{i + 1}>"}
+        if pose_types and i in pose_types:
+            ref["display_type"] = pose_types[i]
+        if face_types and i in face_types:
+            ref["display_type"] = face_types[i]
+        refs.append(ref)
     rewritten: dict[str, str] = {}
     rejected: dict[str, list[str]] = {}
     chunks = [intents[i : i + max_per_call] for i in range(0, len(intents), max_per_call)]
@@ -275,8 +286,15 @@ def generate_llm(
     reference_kinds: list[str],
     *,
     config: dict | None = None,
+    pose_types: dict[int, str] | None = None,
+    face_types: dict[int, str] | None = None,
 ) -> GenerateResult:
     """LLM 模式入口：改写提示词并组装标准 GenerateResult（落 runs 表）。
+
+    pose_types（可选）：姿势库参考图所在下标 → 展示形态（line/depth）——
+    depth 的锚定分句按深度图措辞（llm_prompts 的 pose_depth 分句）。
+    face_types（可选）：人脸库参考图所在下标 → section（face/styling）——
+    styling 的锚定分句按造型图措辞（llm_prompts 的 face_styling 分句）。
 
     sticker（required_label）：改写结果先 normalize，再由共享编译器按 spec 的
     display_text 原文追加唯一 lettering block（与 classic 相同，中文不改写）。
@@ -338,6 +356,8 @@ def generate_llm(
         barefoot=any(
             is_barefoot_outfit(str(intent.get("outfit") or "")) for intent in intents
         ),
+        pose_types=pose_types,
+        face_types=face_types,
     )
     items: list[PromptItem] = []
     missing_outfit: list[str] = []

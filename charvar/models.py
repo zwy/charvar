@@ -104,16 +104,20 @@ class VariantSpec(BaseModel):
 class ReferenceSpec(BaseModel):
     """参考图规格：来源 + 在提示词里的分工（role）。
 
-    来源四种（与 Playground 同源）：
+    来源五种（与 Playground 同源）：
     - ``staged_id``：上传暂存的图（``/adhoc/references`` 暂存池）；
     - ``subject_id`` + ``kind``：主体档案的图片槽位；
     - ``run_id``：Playground「最近生成」的原图；
-    - ``pose_id`` + ``angle``：姿势库（pose-db-01）的人偶线稿 —— 只锚姿势构图，
-      不锚任何身份外观（脸/发型/服装/配色来自主体档案或其它参考图）。
+    - ``pose_id`` + ``angle``：姿势库（``source`` 选库，缺省 pose-db-01）的无细节
+      灰人偶线稿/深度图 —— 只锚姿势构图，不锚任何身份外观
+      （脸/发型/服装/配色来自主体档案或其它参考图）；
+    - ``face_id``：人脸库（``source`` 选库，缺省 face-db-01）的 AI 架构虚构人物
+      正面参考图 —— 锚这个人的脸（face 形态）或脸+发型+服装（styling 形态）。
 
     ``role`` 决定这张图在 LLM 改写的锚定句里管哪一摊
-    （front/headshot/side/behind/character_sheet/pose）；pose 来源缺省 ``pose``，
-    其余缺省按 ``front`` 处理。不接受任意路径 —— 那是把文件读权限开给了浏览器。
+    （front/headshot/side/behind/character_sheet/pose/face）；pose 来源缺省
+    ``pose``、face 来源缺省 ``face``，其余缺省按 ``front`` 处理。不接受任意路径
+    —— 那是把文件读权限开给了浏览器。
     """
 
     staged_id: str | None = None
@@ -123,9 +127,25 @@ class ReferenceSpec(BaseModel):
     role: str | None = None
     # charvar run 的第几张原图（run_id 来源时用；缺省第 1 张）
     index: int | None = None
-    # 姿势库来源：动作 id（如 full_sexy_P001）+ 视角（缺省正面）
+    # 姿势库来源：动作 id（如 full_sexy_P001）+ 视角（缺省正面）+ 库 id
+    #（POSE_SOURCES 登记；存量 run 无 source 字段 → 回退 pose-db-01）。
     pose_id: str | None = None
     angle: str | None = None
+    source: str | None = None
+    # 人脸库来源：条目 id（face_items 主键含 face 库 id）。
+    face_id: str | None = None
+
+    def pose_source(self) -> str:
+        """姿势库 id：显式 source > 缺省库（存量 run 的规格没有该字段）。"""
+        from charvar.poses import SOURCE_ID  # 延迟导入避免循环
+
+        return str(self.source or "").strip() or SOURCE_ID
+
+    def face_source(self) -> str:
+        """人脸库 id：显式 source > 缺省库（face 库沿用同一条 source 字段）。"""
+        from charvar.faces import SOURCE_ID  # 延迟导入避免循环
+
+        return str(self.source or "").strip() or SOURCE_ID
 
 
 class GenerateRequest(BaseModel):

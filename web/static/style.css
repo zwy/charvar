@@ -583,7 +583,7 @@ td .caption { color: var(--muted); }
 .pose-toolbar .seg em { font-style: normal; font-weight: 400; font-size: 11px; color: var(--muted); margin-left: 5px; }
 .pose-toolbar-row { display: flex; gap: var(--sp-2); align-items: center; }
 .pose-toolbar-row select { font: inherit; padding: 6px 9px; min-height: var(--ctl-h); max-width: 230px; border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; color: var(--text); }
-.pose-toolbar-row input[type="text"] { flex: 1.5; min-width: 140px; font: inherit; padding: 6px 9px; min-height: var(--ctl-h); border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; color: var(--text); }
+.pose-toolbar-row input { flex: 1.5; min-width: 140px; font: inherit; padding: 6px 9px; min-height: var(--ctl-h); border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; color: var(--text); }
 .pose-toolbar-row :is(select, input):focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 /* grid-auto-rows: max-content 与卡片 overflow:visible 是成对的红线：
    .image-card 基类的 overflow:hidden 会让 auto 行高按 18px（一行文本）收缩、
@@ -643,7 +643,7 @@ td .caption { color: var(--muted); }
 .pose-action-text { background: #fafbfd; border: 1px dashed var(--line); border-radius: var(--radius-panel); padding: var(--sp-3); font-size: 12px; line-height: 1.6; color: var(--text); white-space: pre-wrap; word-break: break-word; max-height: 200px; overflow-y: auto; }
 .pose-action-muted { color: var(--muted); }
 /* 详情收藏钮行 + 动作描述编辑控件（对齐服饰库徽章行/编辑块的语言） */
-.pose-tags { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; }
+.pose-tags, .costume-tags, .face-tags { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; }  /* 三库详情收藏钮行同一组声明（不拉伸行内 .btn-sm） */
 .pose-action-btns { display: inline-flex; gap: 4px; }
 
 /* ---------- 服饰库（costume-db-01 浏览页，costumegallery.js）
@@ -656,7 +656,7 @@ td .caption { color: var(--muted); }
 .costume-toolbar .segmented { align-self: flex-start; flex-wrap: wrap; }
 .costume-toolbar .seg em { font-style: normal; font-weight: 400; font-size: 11px; color: var(--muted); margin-left: 5px; }
 .costume-toolbar-row { display: flex; gap: var(--sp-2); align-items: center; }
-.costume-toolbar-row input { flex: 1; min-width: 160px; font: inherit; padding: 6px 9px; min-height: var(--ctl-h); border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; color: var(--text); }
+.costume-toolbar-row input { flex: 1.5; min-width: 140px; font: inherit; padding: 6px 9px; min-height: var(--ctl-h); border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; color: var(--text); }  /* 三库搜索框同一组声明（type=search 带清除×） */
 .costume-toolbar-row input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .costume-grid { display: grid; flex: 1 1 0; min-height: 0; overflow-y: auto; padding-right: 6px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); grid-auto-rows: max-content; align-items: start; gap: var(--sp-3); }
 .costume-card { padding: 8px; overflow: visible; position: relative; }
@@ -678,16 +678,15 @@ td .caption { color: var(--muted); }
 .costume-thumb-empty { display: flex; align-items: center; justify-content: center; height: 100%; padding: 0 var(--sp-2); font-size: 11px; color: var(--muted); text-align: center; }
 .costume-detail-noimg { min-height: 140px; cursor: default; }
 /* 徽章：形状对齐动作库 .pose-desc-badge（小方形无圆角），颜色由变体子类控制 */
-.costume-badge {
+.costume-badge, .pose-badge {
   display: inline-block; flex: none; padding: 3px 8px; font-size: 11px; line-height: 1;
   border: 1px solid var(--accent-line); background: var(--accent-soft); color: var(--accent);
   white-space: nowrap;
 }
-.costume-badge-muted { background: #f4f6f9; color: var(--muted); border-color: var(--line); }
+.costume-badge-muted, .pose-badge-muted { background: #f4f6f9; color: var(--muted); border-color: var(--line); }
 .costume-card-title { display: flex; align-items: center; gap: 4px; max-width: 100%; min-width: 0; }
 .costume-card-title strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .costume-card .costume-card-id { font-family: var(--mono); font-size: 11px; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.costume-tags { display: flex; flex-wrap: wrap; gap: var(--sp-1); align-items: center; }  /* 不拉伸徽章：同行的 .btn-sm 收藏钮更高 */
 .costume-kw-block { display: flex; flex-direction: column; gap: var(--sp-2); }
 .costume-kw-head { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-2); }
 .costume-kw-label { font-size: 11px; font-weight: 600; letter-spacing: .05em; color: var(--muted); }
@@ -711,14 +710,14 @@ td .caption { color: var(--muted); }
 
 /* ---- 服饰库：收藏 / 编辑 / 换装语义 / 参考图重生成（与 costumegallery.js 配套） ---- */
 .costume-thumb { position: relative; }  /* 卡片收藏星标的锚（.image-card overflow 红线不背星标锅） */
-.costume-fav, .pose-fav {
+.costume-fav, .pose-fav, .face-fav {
   position: absolute; top: 5px; right: 5px; z-index: 1;
   min-height: 0;  /* button 元素吃全站 min-height 35 —— 卡片小徽章压回内容高 */
   padding: 2px 7px; font-size: 11px; line-height: 1; border-radius: 0;
   border: 1px solid var(--line); background: #fff; color: var(--muted);
   cursor: pointer;
 }
-.costume-fav.on, .pose-fav.on { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }
+.costume-fav.on, .pose-fav.on, .face-fav.on { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }
 .costume-kw-actions { display: inline-flex; gap: 4px; margin-left: auto; align-items: center; }  /* 不拉伸徽章：同行的 .btn-sm 复制/编辑钮更高 */
 .costume-edit-ta, .pose-edit-ta {
   width: 100%; min-height: 96px; resize: vertical; font-size: 12px; line-height: 1.5;
@@ -732,4 +731,54 @@ td .caption { color: var(--muted); }
   border-radius: var(--radius-ctl); background: #fff; color: var(--text); max-width: 180px;
 }
 .costume-regen-row { display: flex; gap: var(--sp-2); align-items: center; margin-top: var(--sp-1); }
-.costume-detail-fav.on { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }
+.pose-detail-fav.on, .costume-detail-fav.on, .face-detail-fav.on { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }  /* 三库详情收藏钮 on 态同一组（.pose 原先缺这条，已补） */
+
+/* ---------- 人脸库（face-db-01 浏览页，facegallery.js）
+   布局骨架与动作库同一套「页签 + 搜索 + 网格 + 常驻详情」（.face-* 与 .pose-*
+   一一对应，服饰库同款先例）；缩略图 400×500 = 3:4（与动作库同框）。
+   网格行的收缩红线同 .pose-grid 注释——overflow:hidden 卡片 + auto 行高会逐行压叠。 */
+.face-browser { display: flex; width: 100%; height: 66vh; min-height: 420px; }
+.face-master { width: 62%; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-3); border-right: 1px solid var(--line); }
+.face-toolbar { display: flex; flex-direction: column; gap: var(--sp-2); }
+.face-toolbar .segmented { align-self: flex-start; flex-wrap: wrap; }
+.face-toolbar .seg em { font-style: normal; font-weight: 400; font-size: 11px; color: var(--muted); margin-left: 5px; }
+.face-toolbar-row { display: flex; gap: var(--sp-2); align-items: center; }
+.face-toolbar-row select { font: inherit; padding: 6px 9px; min-height: var(--ctl-h); max-width: 230px; border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; color: var(--text); }
+.face-toolbar-row input { flex: 1.5; min-width: 140px; font: inherit; padding: 6px 9px; min-height: var(--ctl-h); border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; color: var(--text); }
+.face-toolbar-row :is(select, input):focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.face-grid { display: grid; flex: 1 1 0; min-height: 0; overflow-y: auto; padding-right: 6px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); grid-auto-rows: max-content; align-items: start; gap: var(--sp-3); }
+.face-card { padding: 8px; overflow: visible; position: relative; }
+.face-thumb { position: relative; background: #f4f6f9; border-radius: var(--radius-ctl); overflow: hidden; aspect-ratio: 3 / 4; }  /* 收藏徽章锚（.pose-thumb 同款） */
+.face-thumb img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.face-card.active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.face-card .image-meta { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 1px; min-height: 0; }
+.face-card .face-zh { font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.face-card .face-jp { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.face-detail { width: 38%; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4); background: #fafbfd; overflow-y: auto; border-radius: 0 0 var(--radius-card) var(--radius-card); }
+.face-detail .face-detail-img { background: #fff; border: 1px solid var(--line); border-radius: var(--radius-panel); padding: var(--sp-3); display: flex; align-items: center; justify-content: center; }
+.face-detail .face-detail-img img { display: block; max-width: 100%; max-height: 420px; object-fit: contain; background: #f4f6f9; border-radius: var(--radius-ctl); cursor: zoom-in; }
+.face-detail-titles h3 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.45; }
+.face-jp { font-size: 12px; color: var(--muted); }
+.face-jp em { font-style: normal; }
+.face-meta { font-size: 12px; color: var(--muted); }
+.face-meta em { font-style: normal; }
+.face-empty { grid-column: 1 / -1; padding: var(--sp-4); text-align: center; font-size: 12px; color: var(--muted); }
+.face-grid::-webkit-scrollbar, .face-detail::-webkit-scrollbar { width: 4px; }
+.face-grid::-webkit-scrollbar-thumb, .face-detail::-webkit-scrollbar-thumb { background: var(--line); border-radius: 10px; }
+/* 徽章：形状对齐动作库 .pose-badge（小方形无圆角），styling 形态换色区隔 */
+.face-badge {
+  display: inline-block; flex: none; padding: 3px 8px; font-size: 11px; line-height: 1;
+  border: 1px solid var(--accent-line); background: var(--accent-soft); color: var(--accent);
+  white-space: nowrap;
+}
+.face-badge-sec { background: #f4f6f9; color: var(--muted); border-color: var(--line); }
+/* 整页版（facepage.js「人脸」页签）：弹层是 66vh 定高，整页跟随视口高度 */
+.face-browser-page { height: min(980px, calc(100vh - 210px)); min-height: 520px; }
+.face-browser-page .face-detail { border-radius: 0 0 var(--radius-panel) var(--radius-panel); }
+@media (max-width: 720px) {
+  .face-browser { flex-direction: column; height: auto; }
+  .face-browser-page { height: auto; min-height: 0; }
+  .face-master { width: 100%; border-right: 0; border-bottom: 1px solid var(--line); }
+  .face-detail { width: 100%; border-radius: 0; }
+  .face-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+}

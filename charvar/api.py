@@ -29,6 +29,7 @@ from charvar import openrouter_image
 from charvar import openrouter_tts
 from charvar import openrouter_video
 from charvar import costumes as costumes_service
+from charvar import faces as faces_service
 from charvar import poses as poses_service
 from charvar import reference_images
 from charvar.assets import ensure_thumb, resolve_run_asset, sheet_path, thumb_path
@@ -78,6 +79,7 @@ _PAGE_ROUTES = {
     "/ui/subjects": "subjects.html",
     "/ui/poses": "poses.html",
     "/ui/costumes": "costumes.html",
+    "/ui/faces": "faces.html",
     "/ui/runs": "runs.html",
     "/ui/settings": "settings.html",
 }
@@ -274,8 +276,9 @@ class AdhocReferenceSpec(ReferenceSpec):
 
 # 参考图在提示词里的分工（role）：与主体档案的图片槽位同名，
 # 决定 LLM 改写的锚定句里这张图管哪一摊；pose = 姿势库人偶线稿（只锚姿势构图）；
-# 其余缺省按 front 处理，pose 来源缺省按 pose 处理。
-REFERENCE_ROLES = ("character_sheet", "headshot", "front", "side", "behind", "pose")
+# face = 人脸库虚构人物参考图（锚脸部身份 / styling 锚整体造型）；
+# 其余缺省按 front 处理，pose/face 来源缺省各按 pose/face 处理。
+REFERENCE_ROLES = ("character_sheet", "headshot", "front", "side", "behind", "pose", "face")
 DEFAULT_REFERENCE_ROLE = "front"
 
 
@@ -285,17 +288,23 @@ def _reference_paths_from_specs(
 ) -> tuple[list[Path], list[str], list[str]]:
     """参考图规格 → (本地文件路径, role 列表, 暂存 id 列表)。
 
-    四种来源与 Playground 同源：上传暂存（staged_id）、主体档案槽位
+    五种来源与 Playground 同源：上传暂存（staged_id）、主体档案槽位
     （subject_id + kind）、最近生成的原图（run_id；adhoc run 取唯一原图，
     charvar run 按 index 取第几张）、姿势库（pose_id + angle —— 灰人偶线稿，
-    role 固定 pose）。role 缺省 front（pose 来源缺省 pose）。
+    role 固定 pose）、人脸库（face_id —— AI 架构人物，role 固定 face）。
+    role 缺省 front（pose/face 来源各按 pose/face）。
     不接受任意路径 —— 那是把文件读权限开给了浏览器。
     """
     paths: list[Path] = []
     roles: list[str] = []
     staged_ids: list[str] = []
     for spec in specs:
-        role = (spec.role or "").strip() or ("pose" if spec.pose_id else DEFAULT_REFERENCE_ROLE)
+        default_role = DEFAULT_REFERENCE_ROLE
+        if spec.pose_id:
+            default_role = "pose"
+        elif spec.face_id:
+            default_role = "face"
+        role = (spec.role or "").strip() or default_role
         if role not in REFERENCE_ROLES:
             raise HTTPException(
                 400, f"参考图分工不合法：{role}（支持 {' / '.join(REFERENCE_ROLES)}）"
@@ -323,13 +332,26 @@ def _reference_paths_from_specs(
             paths.append(_run_reference_file(spec.run_id, spec.index))
         elif spec.pose_id:
             try:
-                paths.append(poses_service.prepared_reference_file(spec.pose_id, spec.angle, db_path))
+                paths.append(
+                    poses_service.prepared_reference_file(
+                        spec.pose_id, spec.angle, db_path, source=spec.pose_source()
+                    )
+                )
             except poses_service.PoseError as exc:
+                raise HTTPException(400, str(exc)) from exc
+        elif spec.face_id:
+            try:
+                paths.append(
+                    faces_service.prepared_reference_file(
+                        spec.face_id, db_path, source=spec.face_source()
+                    )
+                )
+            except faces_service.FaceError as exc:
                 raise HTTPException(400, str(exc)) from exc
         else:
             raise HTTPException(
                 400,
-                "参考图缺少来源：需要 staged_id / subject_id+kind / run_id / pose_id+angle 之一",
+                "参考图缺少来源：需要 staged_id / subject_id+kind / run_id / pose_id+angle / face_id 之一",
             )
         roles.append(role)
     return paths, roles, staged_ids
@@ -815,17 +837,17 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             storage.save_subject_template(conn, subject_id, req.template_md)
         return {"ok": True, "subject_id": subject_id, "bytes": len(req.template_md.encode("utf-8"))}
 
-    # ---- 姿势库（pose-db-01 人偶线稿） ----
+    # ---- 姿势库（多库：线稿 pose-db-01 / 深度图 pose-db-02）；用户层按库分键 ----
     @app.get("/poses")
     def api_poses_list(
         line: str = Query("", description="按系統原文过滤"),
         category: str = Query("", description="按分類原文过滤"),
         q: str = Query("", max_length=60, description="按动作名/编号/id 过滤"),
     ) -> dict[str, Any]:
-        """姿势库浏览：动作清单（按动作分组）+ 系統/分類元数据。
+        """姿势库浏览：动作清单（按动作分组）+ 每库系統/分類元数据。
 
-        视角全量返回（客户端过滤）；图片 URL 经 /poses/image/{source}/… 端点伺服，
-        浏览器不给磁盘路径。
+        全库一次返回（来源页签在客户端过滤）；视角全量返回；图片 URL 经
+        /poses/image/{source}/… 端点伺服，浏览器不给磁盘路径。
         """
         with _db() as conn:
             return poses_service.list_poses(conn, line=line, category=category, q=q)
@@ -833,13 +855,11 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     def _pose_image_response(
         source: str, pose_id: str, angle: str, variant: str
     ) -> FileResponse:
-        if source != poses_service.SOURCE_ID:
-            raise HTTPException(404, f"没有这个姿势库：{source}")
         try:
             path = (
-                poses_service.thumb_image_file(pose_id, angle, db_path)
+                poses_service.thumb_image_file(pose_id, angle, db_path, source=source)
                 if variant == "thumb"
-                else poses_service.full_image_file(pose_id, angle, db_path)
+                else poses_service.full_image_file(pose_id, angle, db_path, source=source)
             )
         except poses_service.PoseError as exc:
             raise HTTPException(404, str(exc)) from exc
@@ -854,6 +874,59 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     @app.get("/poses/image/{source}/{pose_id}/{angle}/full")
     def api_pose_image_full(source: str, pose_id: str, angle: str) -> FileResponse:
         return _pose_image_response(source, pose_id, angle, "full")
+
+    # ---- 人脸库（face_items 索引层；由 face import 重灌） ----
+    @app.get("/faces")
+    def api_faces_list(
+        source: str = Query("", description="按库 id 过滤（face-db-01/…）"),
+        section: str = Query("", description="按形态过滤（face/styling）"),
+        hair: str = Query("", description="按发型类别原文过滤"),
+        q: str = Query("", max_length=60, description="按 style/hair/id 过滤"),
+    ) -> dict[str, Any]:
+        """人脸库浏览：全量清单 + 库/形态/发型元数据（页签过滤在客户端）。
+
+        图片 URL 经 /faces/image/{source}/… 端点伺服，浏览器不给磁盘路径。
+        """
+        with _db() as conn:
+            try:
+                if source:
+                    faces_service._source_or_raise(source)  # 未知库显式 404（不静默当空库）
+                return faces_service.list_faces(conn, source=source, section=section, hair=hair, q=q)
+            except faces_service.FaceError as exc:
+                raise HTTPException(404, str(exc)) from exc
+
+    def _face_image_response(source: str, face_id: str, variant: str) -> FileResponse:
+        try:
+            path = (
+                faces_service.thumb_image_file(face_id, db_path, source=source)
+                if variant == "thumb"
+                else faces_service.full_image_file(face_id, db_path, source=source)
+            )
+        except faces_service.FaceError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        return FileResponse(
+            path, media_type="image/webp" if variant == "thumb" else "image/png"
+        )
+
+    @app.get("/faces/image/{source}/{face_id}/thumb")
+    def api_face_image_thumb(source: str, face_id: str) -> FileResponse:
+        return _face_image_response(source, face_id, "thumb")
+
+    @app.get("/faces/image/{source}/{face_id}/full")
+    def api_face_image_full(source: str, face_id: str) -> FileResponse:
+        return _face_image_response(source, face_id, "full")
+
+    @app.post("/faces/{source}/{face_id}/favorite")
+    def api_face_favorite_post(source: str, face_id: str) -> dict[str, Any]:
+        """收藏 / 取消收藏（切换，按库分键；face_favorites 用户层，重灌不碰）。"""
+        if not faces_service.FACE_ID_RE.fullmatch(face_id):
+            raise HTTPException(400, f"非法人脸条目 id：{face_id[:60]}")
+        with _db() as conn:
+            try:
+                result = faces_service.toggle_favorite(conn, face_id, source=source)
+            except faces_service.FaceError as exc:
+                raise HTTPException(404, str(exc)) from exc
+        return {"favorited": result["favorite"]}
 
     # ---- 服饰库（costume_items/costume_prompts 双表；索引层由 costume import 重灌） ----
     @app.get("/costumes")
@@ -986,20 +1059,20 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         except costumes_service.CostumeError as exc:
             raise HTTPException(400, str(exc)) from exc
 
-    # ---- 动作描述（pose_actions：动作×视角 双键；非法 id/角度拒，库里没有该组合 → 404） ----
-    @app.get("/poses/{pose_id}/action")
-    def api_pose_action_get(pose_id: str, angle: str = Query("")) -> dict[str, Any]:
+    # ---- 动作描述 / 收藏（按库分键；库里没有该组合 → 404） ----
+    @app.get("/poses/{source}/{pose_id}/action")
+    def api_pose_action_get(source: str, pose_id: str, angle: str = Query("")) -> dict[str, Any]:
         """单个动作某视角的动作描述；angle 缺省正面，没写过给空串。"""
         if not poses_service.POSE_ID_RE.fullmatch(pose_id):
             raise HTTPException(400, f"非法动作 id：{pose_id[:60]}")
         with _db() as conn:
             try:
-                return poses_service.pose_action(conn, pose_id, angle)
+                return poses_service.pose_action(conn, pose_id, angle, source)
             except poses_service.PoseError as exc:
                 raise HTTPException(404, str(exc)) from exc
 
-    @app.put("/poses/{pose_id}/action")
-    def api_pose_action_put(pose_id: str, req: PoseActionUpdate) -> dict[str, Any]:
+    @app.put("/poses/{source}/{pose_id}/action")
+    def api_pose_action_put(source: str, pose_id: str, req: PoseActionUpdate) -> dict[str, Any]:
         """写/清（action_text 空串 = 清掉条目）单个动作某视角的动作描述。"""
         if not poses_service.POSE_ID_RE.fullmatch(pose_id):
             raise HTTPException(400, f"非法动作 id：{pose_id[:60]}")
@@ -1007,18 +1080,20 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             raise HTTPException(400, f"未知视角：{req.angle[:30]}")
         with _db() as conn:
             try:
-                return poses_service.set_pose_action(conn, pose_id, req.angle, req.action_text)
+                return poses_service.set_pose_action(
+                    conn, pose_id, req.angle, req.action_text, source_id=source
+                )
             except poses_service.PoseError as exc:
                 raise HTTPException(404, str(exc)) from exc
 
-    @app.post("/poses/{pose_id}/favorite")
-    def api_pose_favorite_post(pose_id: str) -> dict[str, Any]:
-        """收藏 / 取消收藏（切换）。"""
+    @app.post("/poses/{source}/{pose_id}/favorite")
+    def api_pose_favorite_post(source: str, pose_id: str) -> dict[str, Any]:
+        """收藏 / 取消收藏（切换，按库分键）。"""
         if not poses_service.POSE_ID_RE.fullmatch(pose_id):
             raise HTTPException(400, f"非法动作 id：{pose_id[:60]}")
         with _db() as conn:
             try:
-                result = poses_service.toggle_favorite(conn, pose_id)
+                result = poses_service.toggle_favorite(conn, pose_id, source=source)
             except poses_service.PoseError as exc:
                 raise HTTPException(404, str(exc)) from exc
         return {"favorited": result["favorite"]}
@@ -1129,8 +1204,25 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         # 参考图：新流程给 references（Playground 式来源 + role 分工），
         # 提示词阶段只用 role 定锚定句分工；没给就回退旧的 reference_kinds。
         roles: list[str] = []
+        pose_types: dict[int, str] = {}
+        face_types: dict[int, str] = {}
         if req.references:
             _paths, roles, _staged = _reference_paths_from_specs(req.references, db_path=db_path)
+            # 姿势库参考的展示形态（line/depth）：位置索引 → display_type。
+            # LLM 锚定句按它换 depth 版分句（深度图不是线稿，措辞不同）。
+            for i, spec in enumerate(req.references):
+                if spec.pose_id:
+                    reg = poses_service.POSE_SOURCES.get(spec.pose_source()) or {}
+                    pose_types[i] = str(reg.get("display_type") or "line")
+                elif spec.face_id:
+                    # 人脸库参考的展示形态 = 条目 section（face/styling，随条目存）。
+                    try:
+                        with _db() as conn:
+                            face_types[i] = faces_service.item_section(
+                                conn, spec.face_id, source=spec.face_source()
+                            )
+                    except faces_service.FaceError as exc:
+                        raise HTTPException(400, str(exc)) from exc
             if not 1 <= len(roles) <= 4:
                 raise HTTPException(400, "LLM 模式需要 1–4 张参考图")
         else:
@@ -1165,6 +1257,8 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                     template,
                     roles,
                     config=settings_service.llm_overrides(conn),
+                    pose_types=pose_types or None,
+                    face_types=face_types or None,
                 )
             except llm.LLMError as exc:
                 raise HTTPException(502, f"LLM 改写提示词失败：{exc}") from exc
@@ -1792,14 +1886,30 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                     raise HTTPException(400, str(exc)) from exc
                 continue
             if spec.pose_id:
-                # 姿势库的灰人偶线稿：预处理压缩版与两条生图通路共用
+                # 姿势库的无细节灰人偶（线稿/深度图）：预处理压缩版与两条生图通路共用
                 try:
-                    paths_found.append(poses_service.prepared_reference_file(spec.pose_id, spec.angle, db_path))
+                    paths_found.append(
+                        poses_service.prepared_reference_file(
+                            spec.pose_id, spec.angle, db_path, source=spec.pose_source()
+                        )
+                    )
                 except poses_service.PoseError as exc:
                     raise HTTPException(400, str(exc)) from exc
                 continue
+            if spec.face_id:
+                # 人脸库的 AI 架构人物参考图：预处理压缩版与两条生图通路共用
+                try:
+                    paths_found.append(
+                        faces_service.prepared_reference_file(
+                            spec.face_id, db_path, source=spec.face_source()
+                        )
+                    )
+                except faces_service.FaceError as exc:
+                    raise HTTPException(400, str(exc)) from exc
+                continue
             raise HTTPException(
-                400, "参考图缺少来源（staged_id、subject_id + kind、run_id 或 pose_id + angle）"
+                400,
+                "参考图缺少来源（staged_id、subject_id + kind、run_id、pose_id + angle 或 face_id）",
             )
         return paths_found, staged_ids
 

@@ -6,6 +6,10 @@
       "runtimeExecutable": ".venv/bin/python",
       "runtimeArgs": ["-m", "web.app"],
       "port": 8710
+    },
+    {
+      "name": "charvar-attach",
+      "url": "http://127.0.0.1:8710"
     }
   ]
 }

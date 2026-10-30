@@ -441,8 +441,9 @@ $("#btn-adhoc-recent-add").addEventListener("click", () => {
   }, { title: "Playground · 从最近生成选择参考图" });
 });
 
-/* 动作库（pose-db-01 灰人偶线稿）：浏览器是共用的（GenRefs.showPoseBrowser），
-   选完推进本页自己的 references 列表；发送时 role 固定 pose（只锚姿势构图）。 */
+/* 动作库（线稿 pose-db-01 / 深度图 pose-db-02，无细节灰人偶）：浏览器是共用的
+   （GenRefs.showPoseBrowser），选完推进本页自己的 references 列表（带库 id）；
+   发送时 role 固定 pose（只锚姿势构图）。 */
 $("#btn-adhoc-pose-add").addEventListener("click", () => {
   if (adhocState.references.length >= ADHOC_MAX_REFS) {
     return setStatus($("#adhoc-status"), `参考图最多 ${ADHOC_MAX_REFS} 张`, true);
@@ -452,12 +453,33 @@ $("#btn-adhoc-pose-add").addEventListener("click", () => {
       type: "pose",
       pose_id: pick.pose_id,
       angle: pick.angle,
+      pose_source: pick.source,  // 库 id（线稿/深度；缺省回退 pose-db-01）
       name: pick.name,
       url: pick.url,
     });
     renderAdhocRefs();
     setStatus($("#adhoc-status"), "已加入参考图");
-  }, { title: "Playground · 动作库（灰人偶线稿 · 只锚姿势构图）" });
+  }, { title: "Playground · 动作库（线稿/深度 · 只锚姿势构图）" });
+});
+
+/* 人脸库（AI 架构虚构人物，face-db-01…）：浏览器共用（GenRefs.showFaceBrowser），
+   选完推进本页自己的 references 列表（带库 id）；发送时 role 固定 face。
+   形态 face=锚脸 / styling=锚脸+发型+服装 —— 由条目的 section 决定，spec 不带。 */
+$("#btn-adhoc-face-add").addEventListener("click", () => {
+  if (adhocState.references.length >= ADHOC_MAX_REFS) {
+    return setStatus($("#adhoc-status"), `参考图最多 ${ADHOC_MAX_REFS} 张`, true);
+  }
+  GenRefs.showFaceBrowser((pick) => {
+    adhocState.references.push({
+      type: "face",
+      face_id: pick.face_id,
+      face_source: pick.source,  // 库 id（缺省回退 face-db-01）
+      name: pick.name,
+      url: pick.url,
+    });
+    renderAdhocRefs();
+    setStatus($("#adhoc-status"), "已加入参考图");
+  }, { title: "Playground · 人脸库（AI 架构虚构人物 · 锚脸部身份）" });
 });
 
 /* ---------- 出图 ---------- */
@@ -493,7 +515,18 @@ $("#btn-adhoc-generate").addEventListener("click", async () => {
         : ref.type === "recent"
         ? { run_id: ref.run_id }
         : ref.type === "pose"
-        ? { pose_id: ref.pose_id, angle: ref.angle || "", role: "pose" }
+        ? {
+            pose_id: ref.pose_id,
+            angle: ref.angle || "",
+            role: "pose",
+            ...(ref.pose_source ? { source: ref.pose_source } : {}),
+          }
+        : ref.type === "face"
+        ? {
+            face_id: ref.face_id,
+            role: "face",
+            ...(ref.face_source ? { source: ref.face_source } : {}),
+          }
         : { subject_id: ref.subject_id, kind: ref.kind }
     );
   }

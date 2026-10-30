@@ -23,12 +23,15 @@ from tests.test_adhoc import _mock_comfy, _png_bytes, _setup_workflows
 
 # ---------- 造假姿势库 ----------
 
-def _build_fake_pose_data(data_dir: pathlib.Path, *, counts: dict | None = None) -> pathlib.Path:
+def _build_fake_pose_data(
+    data_dir: pathlib.Path, *, counts: dict | None = None, source: str | None = None
+) -> pathlib.Path:
     """按下载布局造一个小姿势库：catalog.json + img/*.png + thumbs/*.jpg。
 
     counts: {pose_id: 张数}；缺省 2 个动作（一个 5 视角、一个 4 视角）。
+    source 缺省线稿库（同 id 多库测试里传 pose-db-02 造深度库版本）。
     """
-    src = data_dir / "poses" / poses_service.SOURCE_ID
+    src = data_dir / "poses" / (source or poses_service.SOURCE_ID)
     (src / "img").mkdir(parents=True, exist_ok=True)
     (src / "thumbs").mkdir(parents=True, exist_ok=True)
     plan = counts or {"full_sexy_P001": 5, "full_sexy_P002": 4, "pair60_P010": 5}
@@ -115,7 +118,8 @@ def test_list_poses_groups_and_orders(data_dir):
     with storage.connect() as conn:
         poses_service.import_catalog(conn)
         data = poses_service.list_poses(conn)
-    assert [l["id"] for l in data["lines"]] == ["全身1人・セクシー系", "2人絡み"]
+    # 系統页签按库嵌套：线稿库次序 = LINE_ORDER（未收录系統按字符串退居其后）
+    assert [l["id"] for l in data["lines"]["pose-db-01"]] == ["全身1人・セクシー系", "2人絡み"]
     poses = data["poses"]
     assert len(poses) == 3
     by_id = {p["pose_id"]: p for p in poses}
@@ -270,32 +274,32 @@ def test_pose_action_double_key_endpoints(data_dir, client):
     _build_fake_pose_data(data_dir)
     with storage.connect(pathlib.Path(data_dir) / "test.db") as conn:
         poses_service.import_catalog(conn)
-    resp = client.put("/poses/full_sexy_P001/action", json={"angle": "正面", "action_text": "S 型站立"})
+    resp = client.put("/poses/pose-db-01/full_sexy_P001/action", json={"angle": "正面", "action_text": "S 型站立"})
     assert resp.status_code == 200, resp.text
     assert resp.json()["angle"] == "正面"
     listing = client.get("/poses").json()
     pose = next(p for p in listing["poses"] if p["pose_id"] == "full_sexy_P001")
     assert pose["images"][0]["action_text"] == "S 型站立"
-    got = client.get("/poses/full_sexy_P001/action")  # 缺省正面
+    got = client.get("/poses/pose-db-01/full_sexy_P001/action")  # 缺省正面
     assert got.status_code == 200 and got.json()["action_text"] == "S 型站立"
     assert client.put(
-        "/poses/full_sexy_P001/action", json={"angle": "上から", "action_text": "俯拍视角"}
+        "/poses/pose-db-01/full_sexy_P001/action", json={"angle": "上から", "action_text": "俯拍视角"}
     ).status_code == 200
-    assert client.get("/poses/full_sexy_P001/action?angle=上から").json()["action_text"] == "俯拍视角"
+    assert client.get("/poses/pose-db-01/full_sexy_P001/action?angle=上から").json()["action_text"] == "俯拍视角"
     # 空串 = 清掉该视角，GET 仍 200 空串
     assert client.put(
-        "/poses/full_sexy_P001/action", json={"angle": "上から", "action_text": ""}
+        "/poses/pose-db-01/full_sexy_P001/action", json={"angle": "上から", "action_text": ""}
     ).status_code == 200
-    assert client.get("/poses/full_sexy_P001/action?angle=上から").json()["action_text"] == ""
+    assert client.get("/poses/pose-db-01/full_sexy_P001/action?angle=上から").json()["action_text"] == ""
     # 非法角度 → 400；库里没有的组合/动作 → 404；非法 id → 400
     assert client.put(
-        "/poses/full_sexy_P001/action", json={"angle": "斜上方", "action_text": "x"}
+        "/poses/pose-db-01/full_sexy_P001/action", json={"angle": "斜上方", "action_text": "x"}
     ).status_code == 400
     assert client.put(
-        "/poses/full_sexy_P002/action", json={"angle": "下から", "action_text": "x"}
+        "/poses/pose-db-01/full_sexy_P002/action", json={"angle": "下から", "action_text": "x"}
     ).status_code == 404  # P002 只有 4 视角
-    assert client.put("/poses/full_sexy_P999/action", json={"action_text": "x"}).status_code == 404
-    assert client.get("/poses/does.not.exist/action").status_code == 400
+    assert client.put("/poses/pose-db-01/full_sexy_P999/action", json={"action_text": "x"}).status_code == 404
+    assert client.get("/poses/pose-db-01/does.not.exist/action").status_code == 400
 
 
 # ---------- 动作描述 → 出图提示词（pose_prompt 分段模板） ----------
@@ -696,9 +700,195 @@ def test_pose_favorite_endpoint(data_dir, client):
     _build_fake_pose_data(data_dir)
     with storage.connect(pathlib.Path(data_dir) / "test.db") as conn:
         poses_service.import_catalog(conn)
-    assert client.post("/poses/full_sexy_P002/favorite").json() == {"favorited": True}
+    assert client.post("/poses/pose-db-01/full_sexy_P002/favorite").json() == {"favorited": True}
     listing = client.get("/poses").json()
     row = next(p for p in listing["poses"] if p["pose_id"] == "full_sexy_P002")
     assert row["favorited"] is True
-    assert client.post("/poses/full_sexy_P002/favorite").json() == {"favorited": False}
-    assert client.post("/poses/full_sexy_NOPE/favorite").status_code == 404
+    assert client.post("/poses/pose-db-01/full_sexy_P002/favorite").json() == {"favorited": False}
+    assert client.post("/poses/pose-db-01/full_sexy_NOPE/favorite").status_code == 404
+
+
+# ---------- 多库（pose-db-02 depth 线稿/深度同 pose 集同 id 共存） ----------
+
+def test_pose_multi_source_same_ids(data_dir):
+    """同 pose 集的 depth 库与线稿库共存：同 id 分键、display_type 各按库、
+    清单双库透出（来源页签/嵌套系統页签数据）。"""
+    _build_fake_pose_data(data_dir)
+    _build_fake_pose_data(data_dir, source="pose-db-02")
+    with storage.connect() as conn:
+        assert poses_service.import_catalog(conn, "pose-db-01")["poses"] == 3
+        assert poses_service.import_catalog(conn, "pose-db-02")["poses"] == 3
+        data = poses_service.list_poses(conn)
+        assert {s["id"]: s["poses"] for s in data["sources"]} == {
+            "pose-db-01": 3,
+            "pose-db-02": 3,
+        }
+        by_pair: dict = {}
+        for p in data["poses"]:
+            by_pair.setdefault(p["pose_id"], {})[p["source"]] = p
+        assert len(by_pair) == 3  # 同 id 两库各一条，互不覆盖
+        seg = by_pair["full_sexy_P001"]
+        assert seg["pose-db-01"]["display_type"] == "line"
+        assert seg["pose-db-02"]["display_type"] == "depth"
+        assert seg["pose-db-02"]["images"][0]["thumb_url"].startswith(
+            "/poses/image/pose-db-02/"
+        )
+        # 系統页签按库嵌套（两库同名，同序同计数）
+        assert {k: [l["id"] for l in v] for k, v in data["lines"].items()}
+        assert data["lines"]["pose-db-02"][0]["id"] == data["lines"]["pose-db-01"][0]["id"]
+        # 未登记库拒绝
+        import pytest as _pytest
+
+        with _pytest.raises(poses_service.PoseError):
+            poses_service.import_catalog(conn, "pose-db-09")
+
+
+def test_pose_actions_and_favorites_are_per_source(data_dir):
+    """用户层（描述/收藏）按库分键：同一 pose_id 两库互不串。"""
+    _build_fake_pose_data(data_dir)
+    _build_fake_pose_data(data_dir, source="pose-db-02")
+    with storage.connect() as conn:
+        poses_service.import_catalog(conn, "pose-db-01")
+        poses_service.import_catalog(conn, "pose-db-02")
+        poses_service.set_pose_action(conn, "full_sexy_P001", "正面", "线稿库描述")
+        poses_service.set_pose_action(
+            conn, "full_sexy_P001", "正面", "深度库描述", source_id="pose-db-02"
+        )
+        assert poses_service.pose_action(conn, "full_sexy_P001", "正面")["action_text"] == "线稿库描述"
+        assert (
+            poses_service.pose_action(conn, "full_sexy_P001", "正面", "pose-db-02")["action_text"]
+            == "深度库描述"
+        )
+        poses_service.toggle_favorite(conn, "full_sexy_P002")  # 缺省线稿库
+        data = poses_service.list_poses(conn)
+        for p in data["poses"]:
+            want = p["pose_id"] == "full_sexy_P002" and p["source"] == "pose-db-01"
+            assert p["favorited"] is want, (p["pose_id"], p["source"], p["favorited"])
+
+
+def test_pose_favorite_endpoint_per_source(data_dir, client):
+    """POST /poses/{source}/{pose_id}/favorite —— 同 id 两库的收藏互不串；未登记库 404。"""
+    _build_fake_pose_data(data_dir)
+    _build_fake_pose_data(data_dir, source="pose-db-02")
+    with storage.connect(pathlib.Path(data_dir) / "test.db") as conn:
+        poses_service.import_catalog(conn, "pose-db-01")
+        poses_service.import_catalog(conn, "pose-db-02")
+    assert client.post("/poses/pose-db-02/full_sexy_P002/favorite").json() == {"favorited": True}
+    listing = client.get("/poses").json()
+    rows = [p for p in listing["poses"] if p["pose_id"] == "full_sexy_P002"]
+    assert {p["source"]: p["favorited"] for p in rows} == {
+        "pose-db-01": False,
+        "pose-db-02": True,
+    }
+    assert client.post("/poses/pose-db-99/full_sexy_P002/favorite").status_code == 404
+
+
+def test_pose_reference_spec_default_source():
+    """ReferenceSpec 无 source（存量 run 重放）→ 回退 pose-db-01。"""
+    from charvar.models import ReferenceSpec
+
+    assert ReferenceSpec(pose_id="full_sexy_P001").pose_source() == "pose-db-01"
+    assert ReferenceSpec(pose_id="x", source="pose-db-02").pose_source() == "pose-db-02"
+
+
+# ---------- 人脸身份锚（face/styling 条目当 <image1>；与主体档案互斥在 CLI 把门） ----------
+
+def _face_prompt(mode="plain", **kw):
+    from charvar import pose_prompt
+
+    args = dict(
+        line="全身1人・標準系",
+        action_text="呈自然的 S 形曲线",
+    )
+    if mode == "plain":
+        args["face_section"] = "face"
+    else:
+        args.update(
+            costume=True,
+            costume_display="ghost",
+            costume_policy={"clothing": mode},
+            face_section="face",
+        )
+    args.update(kw)
+    return pose_prompt.build_prompt(**args)
+
+
+def test_pose_prompt_face_identity_plain():
+    """face 段（胸像、无服装/身材信息）无服饰时：身份句不提服装。"""
+    p = _face_prompt()
+    assert "<image1>为角色脸部参考，保留该角色的面部特征、发型、发色和整体美术风格" in p
+    assert "确保生成的是同一个角色" in p
+    assert "<image2>为姿势参考" in p and "摆出" in p
+    assert "服饰参考" not in p
+    assert "服装" not in p.split("\n\n")[0]  # 身份段不提服装（其余段落与主体版相同）
+
+
+def test_pose_prompt_face_costume_replace():
+    """face + replace：服装按 <image3>，融合句无「原有服装」召唤，身材锚 face 版。"""
+    p = _face_prompt("replace")
+    assert "图中没有服装与身材信息，服装完全按<image3>服饰参考穿着" in p
+    assert "把<image3>图中的服装穿在角色身上" in p
+    assert "替换其原有服装" not in p and "原服装" not in p.split("<image3>为服装参考")[0]
+    assert "不出现两套服装混搭" in p and "原服装残留" not in p
+    # face 版身材锚：无 <image1> 身材可锚，用自洽句 + body_lock 原文
+    assert "与该角色的美术风格一致" in p and "一律以<image1>为准" not in p
+    with_body = _face_prompt("replace", body_lock=["slender hourglass figure"])
+    assert "slender hourglass figure" in with_body
+    # 服装锚/要点注记/展示形态句原样（机制复用）
+    assert "隐形模特（ghost mannequin）展示图" in with_body
+    assert "清单上列出的每件都要出现在画面里" in with_body
+
+
+def test_pose_prompt_face_costume_add():
+    """face + add（叠加袜类）：基础衣着按美术风格自拟，袜类换图中这双。"""
+    p = _face_prompt("add")
+    assert "角色的基础衣着按其美术风格自然搭配" in p
+    assert "腿部袜类与<image3>服装参考不一致时，以服装参考为准" in p
+    assert "腿上只穿图中这一双袜类" in p
+    assert "原有衣着与其它配件保持" in p or "角色原本穿着袜类时" in p
+
+
+def test_pose_prompt_face_styling_reuses_subject_texts():
+    """styling 段（全身带服装）与主体档案身份锚完全同文本 —— 无 face 分叉开销。"""
+    from charvar import pose_prompt
+
+    plain_styling = pose_prompt.build_prompt("全身1人・標準系", "呈自然的 S 形曲线", face_section="styling")
+    plain_subject = pose_prompt.build_prompt("全身1人・標準系", "呈自然的 S 形曲线")
+    assert plain_styling == plain_subject
+    dressed_styling = pose_prompt.build_prompt(
+        "全身1人・標準系", "呈自然的 S 形曲线", costume=True,
+        costume_policy={"clothing": "replace"}, face_section="styling",
+    )
+    dressed_subject = pose_prompt.build_prompt(
+        "全身1人・標準系", "呈自然的 S 形曲线", costume=True,
+        costume_policy={"clothing": "replace"},
+    )
+    assert dressed_styling == dressed_subject
+
+
+def test_pose_prompt_face_guards():
+    """pair 线 + face 拒绝；未知 section 拒绝；双人 + costume 的旧红线不变。"""
+    from charvar import pose_prompt
+
+    with pytest.raises(ValueError, match="人脸身份锚"):
+        pose_prompt.build_prompt("2人絡み", "甲乙互动", face_section="face")
+    with pytest.raises(ValueError, match="人脸身份锚"):
+        pose_prompt.build_prompt("2人絡み", "甲乙互动", face_section="styling")
+    with pytest.raises(ValueError, match="未知人脸条目形态"):
+        pose_prompt.build_prompt("全身1人・標準系", "呈自然的 S 形曲线", face_section="bust")
+
+
+def test_build_costume_prompt_face():
+    """工作流② face 版：穿上引导句/融合句按 mode 分叉（replace 无「替换原有服装」）。"""
+    from charvar import pose_prompt
+
+    plain = pose_prompt.build_costume_prompt(costume_policy={"clothing": "replace"}, face_section="face")
+    assert "<image1>为角色脸部参考" in plain
+    assert "服装完全按<image2>服饰参考穿着" in plain
+    assert "穿上<image2>图中的服装，完整还原图中整套搭配" in plain
+    assert "把<image2>图中的服装穿在角色身上" in plain
+    assert "替换其原有服装" not in plain
+    assert "与该角色的美术风格一致" in plain  # face 版身材锚
+    add = pose_prompt.build_costume_prompt(costume_policy={"clothing": "add"}, face_section="face")
+    assert "基础衣着按其美术风格自然搭配" in add
+    assert "穿上<image2>图中的袜类" in add

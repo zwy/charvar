@@ -49,6 +49,28 @@ function escapeHtml(text) {
   }[c]));
 }
 
+/* 库浏览页共享的搜索命中（posegallery/costumegallery/facegallery 三处同一语义）：
+   q 按空白切 token、全部 AND 子串命中 hay（大小写不敏感）。glossary 可选
+   （日文词 → 英文关键词的映射，costume 库用）：token 未能直中时按词表扩写再试
+   —— 词表键是词/短语都能对上，「黒」对上「黒ドレス」这种连写也走包含判断。 */
+function matchesQuery(hay, q, glossary) {
+  const hayLc = String(hay ?? "").toLowerCase();
+  const toks = String(q ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+  for (const t of toks) {
+    let ok = hayLc.indexOf(t) !== -1;
+    if (!ok && glossary) {
+      for (const ja in glossary) {
+        if (t.indexOf(ja) !== -1 && hayLc.indexOf(glossary[ja].toLowerCase()) !== -1) {
+          ok = true;
+          break;
+        }
+      }
+    }
+    if (!ok) return false;
+  }
+  return true;
+}
+
 /* 主体档案 5 种槽位的文案（gen 页 sticker 提示与主体页槽位共用） */
 const SLOT_LABELS = {
   character_sheet: "人物半身像＋三视图",

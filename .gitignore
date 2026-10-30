@@ -10,6 +10,7 @@ data/generated/
 data/openrouter/
 data/poses/
 data/costumes/
+data/faces/
 out/
 dist/
 *.egg-info/

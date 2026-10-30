@@ -56,6 +56,8 @@ pose_app = typer.Typer(help="姿势库（pose-db-01 人偶线稿参考图）", n
 app.add_typer(pose_app, name="pose")
 costume_app = typer.Typer(help="服饰库（costume-db-01 服饰参考图）", no_args_is_help=True)
 app.add_typer(costume_app, name="costume")
+face_app = typer.Typer(help="人脸库（face-db-01 AI 架构虚构人物参考图）", no_args_is_help=True)
+app.add_typer(face_app, name="face")
 
 
 def _die(message: str) -> None:
@@ -1435,13 +1437,24 @@ def tts_models(
 
 @pose_app.command("import")
 def pose_import_cmd(
-    source: str = typer.Argument("", help="下载目录（缺省 data/poses/pose-db-01/）"),
+    source: str = typer.Argument("", help="下载目录（缺省 data/poses/pose-db-01/；目录名必须是登记的库 id）"),
 ) -> None:
-    """把磁盘下载目录灌进 pose_images 表（幂等；先跑 scripts/download_pose_db.py）。"""
+    """把磁盘下载目录灌进 pose_images 表（幂等；先跑 scripts/download_pose_db.py --source <库id>）。
+
+    库 id 取目录名（data/poses/pose-db-02 → pose-db-02），必须已在
+    poses.POSE_SOURCES 登记过。
+    """
     from charvar import poses as poses_service
 
+    directory = Path(source) if source else None
+    source_id = directory.name if directory else poses_service.SOURCE_ID
+    if source and source_id not in poses_service.POSE_SOURCES:
+        _die(
+            f"没有登记这个姿势库：{source_id}（known={'/'.join(poses_service.POSE_SOURCES)}；"
+            "先在 charvar/poses.py 的 POSE_SOURCES 加一行）"
+        )
     try:
-        info = poses_service.import_catalog(storage.connect(), Path(source) if source else None)
+        info = poses_service.import_catalog(storage.connect(), source_id, directory)
     except poses_service.PoseError as exc:
         _die(str(exc))
     typer.echo(
@@ -1451,27 +1464,31 @@ def pose_import_cmd(
 
 @pose_app.command("list")
 def pose_list_cmd(
+    source: str = typer.Option("", "--source", help="按库 id 过滤（pose-db-01/…）"),
     line: str = typer.Option("", "--line", help="按系統原文过滤"),
     category: str = typer.Option("", "--category", help="按分類原文过滤"),
     query: str = typer.Option("", "--q", "--query", help="按动作名/编号/id 过滤"),
     json_out: bool = typer.Option(False, "--json", help="以 JSON 输出"),
 ) -> None:
-    """浏览姿势库（按动作分组）。"""
+    """浏览姿势库（按动作分组，多库全量）。"""
     from charvar import poses as poses_service
 
     with storage.connect() as conn:
         data = poses_service.list_poses(conn, line=line, category=category, q=query)
+    if source:
+        data["poses"] = [p for p in data["poses"] if p["source"] == source]
     if json_out:
         typer.echo(json.dumps(data, ensure_ascii=False, indent=1))
         return
     poses = data["poses"]
     if not poses:
         _die("姿势库为空 —— 先跑 scripts/download_pose_db.py，再 charvar pose import")
-    typer.echo(f"共 {len(poses)} 个动作（source={data['source']}）")
+    src_list = " / ".join(s["id"] + f"（{s['zh']}）" for s in data["sources"])
+    typer.echo(f"共 {len(poses)} 个动作（sources={src_list}；--source <id> 可单库过滤）")
     for p in poses:
         angles = " / ".join(im["angle"] for im in p["images"])
         typer.echo(
-            f"{p['number']}\t{p['pose_id']}\t[{p['line']} · {p['category'] or '-'}]"
+            f"[{p['source']}]\t{p['number']}\t{p['pose_id']}\t[{p['line']} · {p['category'] or '-'}]"
             f" {p['title']}　视角：{angles}"
         )
 
@@ -1480,20 +1497,23 @@ def pose_list_cmd(
 def pose_action_cmd(
     pose_id: str = typer.Argument(..., help="动作 id，如 full_sexy_P001"),
     angle: str = typer.Option("", "--angle", help="视角（原文，缺省正面）"),
+    source: str = typer.Option("", "--source", help="库 id（缺省 pose-db-01）"),
     set_text: Optional[str] = typer.Option(
         None, "--set", help="写入/更新该动作视角的动作描述（空串 = 清掉）"
     ),
     json_out: bool = typer.Option(False, "--json", help="以 JSON 输出"),
 ) -> None:
-    """读/写单个动作某视角的动作描述（pose_actions 表，动作×视角 双键）。"""
+    """读/写单个动作某视角的动作描述（pose_actions 表，库×动作×视角 键）。"""
     from charvar import poses as poses_service
 
+    if not source:
+        source = poses_service.SOURCE_ID
     with storage.connect() as conn:
         try:
             data = (
-                poses_service.set_pose_action(conn, pose_id, angle, set_text)
+                poses_service.set_pose_action(conn, pose_id, angle, set_text, source_id=source)
                 if set_text is not None
-                else poses_service.pose_action(conn, pose_id, angle)
+                else poses_service.pose_action(conn, pose_id, angle, source)
             )
         except poses_service.PoseError as exc:
             _die(str(exc))
@@ -1509,9 +1529,12 @@ def pose_action_cmd(
 def pose_prompt_cmd(
     pose_id: str = typer.Argument(..., help="动作 id，如 full_sexy_P001"),
     angle: str = typer.Option("", "--angle", help="视角（原文，缺省正面）"),
+    source: str = typer.Option("", "--source", help="库 id（缺省 pose-db-01；depth 库的参考句按深度图措辞）"),
     subject: Optional[str] = typer.Option(None, "--subject", help="主体档案 id（--run 必填；上半身动作用 headshot 槽位，缺则回退 front）"),
     subject2: Optional[str] = typer.Option(None, "--subject2", help="双人动作的第二主体 id（2人絡み 才有效）"),
     costume: Optional[str] = typer.Option(None, "--costume", help="服饰库条目 id（如 SPR-0001；加 <image3> 服饰参考，双人动作暂不支持）"),
+    face: Optional[str] = typer.Option(None, "--face", help="人脸库条目 id（支持唯一前缀与 source/id 前缀；face/styling 条目即身份锚，与 --subject/--subject2 互斥，双人动作暂不支持）"),
+    body_lock_text: list[str] = typer.Option([], "--body-lock", help="体形锚句（英文短句，可多次；仅 --face 生效——有主体档案时走档案 body_lock）"),
     run: bool = typer.Option(False, "--run", help="拼好的提示词直接出图（Playground 通路）"),
     backend: str = typer.Option("comfyui", "--backend", help="comfyui / openrouter / dreamina"),
     aspect: str = typer.Option("3:4", "--aspect", help="画幅：3:4/1:1/16:9/…"),
@@ -1525,22 +1548,35 @@ def pose_prompt_cmd(
     """按动作描述拼 demo 结构的姿势编辑提示词并可选出图。
 
     <image1> = 主体档案槽位图（角色锚定：上半身动作取 headshot，缺则回退 front；
-    全身/双人取 front），<image2> = 人偶线稿（姿势锚定，role=pose 语义）；
-    构图句/背景句/禁令句按库线型（全身/半身/双人）取版本。
+    全身/双人取 front），<image2> = 姿势参考图（--source 选库：线稿/深度图，
+    role=pose 语义）；构图句/背景句/禁令句按库线型（全身/半身/双人）取版本。
+    --face <face_id> 时 <image1> = 人脸库条目（face/styling 条目即身份锚，
+    与 --subject/--subject2 互斥，双人动作不支持；体形锚用 --body-lock 手给）。
     """
     from charvar import adhoc as adhoc_service
     from charvar import costumes as costumes_service
+    from charvar import faces as faces_service
     from charvar import paths
     from charvar import pose_prompt as pose_prompt_module
     from charvar import poses as poses_service
 
+    if face and (subject or subject2):
+        _die(
+            "--face 与 --subject/--subject2 互斥：人脸库条目本身就是身份锚，"
+            "两个身份来源的图会互相揉脸（要体形锚用 --body-lock）"
+        )
+    if body_lock_text and not face:
+        _die("--body-lock 只在 --face 流程生效（有主体档案时体形锚走档案 body_lock）")
+    if not source:
+        source = poses_service.SOURCE_ID
     with storage.connect() as conn:
         try:
-            action = poses_service.pose_action(conn, pose_id, angle)
+            action = poses_service.pose_action(conn, pose_id, angle, source)
             row = conn.execute(
-                "SELECT line, number, title FROM pose_images WHERE pose_id = ? AND angle = ?",
-                (action["pose_id"], action["angle"]),
+                "SELECT line, number, title FROM pose_images WHERE source = ? AND pose_id = ? AND angle = ?",
+                (source, action["pose_id"], action["angle"]),
             ).fetchone()
+            pose_display = (poses_service.POSE_SOURCES.get(source) or {}).get("display_type", "line")
             slot_label = "front"
             slot = None
             if subject:
@@ -1551,6 +1587,15 @@ def pose_prompt_cmd(
             if subject and costume:
                 profile = storage.get_subject(conn, subject)
                 body_lock = list(profile.body_lock) if profile else None
+            elif face:
+                body_lock = [str(x).strip() for x in body_lock_text if str(x).strip()] or None
+            face_section: str | None = None
+            if face:
+                try:
+                    f_source, f_id = faces_service.resolve_face(conn, face)
+                    face_section = faces_service.item_section(conn, f_id, source=f_source)
+                except faces_service.FaceError as exc:
+                    _die(str(exc))
             costume_note = ""
             costume_display = "ghost"
             costume_policy: dict | None = None
@@ -1590,6 +1635,8 @@ def pose_prompt_cmd(
             costume_file = costumes_service.prepared_reference_file(costume)
         except costumes_service.CostumeError as exc:
             _die(str(exc))
+    if face and kind == "pair":
+        _die("--face 暂不支持双人（2人絡み）动作：双人身份走 --subject/--subject2")
     prompt = pose_prompt_module.build_prompt(
         row["line"],
         action["action_text"],
@@ -1599,20 +1646,28 @@ def pose_prompt_cmd(
         costume_keywords=costume_note or None,
         costume_display=costume_display,
         costume_policy=costume_policy,
+        pose_display=pose_display,
+        face_section=face_section,
     )
     if not json_out:
         typer.echo(prompt)
     if not run:
         return
-    if not subject:
-        _die("--run 需要 --subject（主体档案 id）")
-    if slot is None or not slot.get("file_path"):
-        _die(f"主体档案没有 {slot_label} 槽位图：{subject}")
-    subject_file = paths.data_dir() / str(slot["file_path"])
-    if not subject_file.exists():
-        _die(f"主体 {slot_label} 槽位图文件缺失：{slot['file_path']}")
-    pose_file = poses_service.prepared_reference_file(action["pose_id"], action["angle"])
-    refs = [subject_file]
+    pose_file = poses_service.prepared_reference_file(
+        action["pose_id"], action["angle"], source=source
+    )
+    refs = []
+    if face_section:
+        refs.append(faces_service.prepared_reference_file(f_id, source=f_source))
+    else:
+        if not subject:
+            _die("--run 需要 --subject（主体档案 id）或 --face（人脸库身份锚）")
+        if slot is None or not slot.get("file_path"):
+            _die(f"主体档案没有 {slot_label} 槽位图：{subject}")
+        subject_file = paths.data_dir() / str(slot["file_path"])
+        if not subject_file.exists():
+            _die(f"主体 {slot_label} 槽位图文件缺失：{slot['file_path']}")
+        refs.append(subject_file)
     if subject2:
         if slot2 is None or not slot2.get("file_path"):
             _die(f"主体档案没有 front 槽位图：{subject2}")
@@ -1641,6 +1696,8 @@ def pose_prompt_cmd(
 def costume_prompt_cmd(
     item_id: str = typer.Argument(..., help="服饰条目 id，如 SPR-0001"),
     subject: Optional[str] = typer.Option(None, "--subject", help="主体档案 id（--run 必填，取 front 槽位图）"),
+    face: Optional[str] = typer.Option(None, "--face", help="人脸库条目 id（支持唯一前缀与 source/id 前缀；face/styling 条目即身份锚，与 --subject 互斥）"),
+    body_lock_text: list[str] = typer.Option([], "--body-lock", help="体形锚句（英文短句，可多次；仅 --face 生效）"),
     run: bool = typer.Option(False, "--run", help="拼好的提示词直接出图（Playground 通路）"),
     backend: str = typer.Option("comfyui", "--backend", help="comfyui / openrouter / dreamina"),
     aspect: str = typer.Option("3:4", "--aspect", help="画幅：3:4/1:1/16:9/…"),
@@ -1655,15 +1712,29 @@ def costume_prompt_cmd(
 
     <image1> = 主体档案 front 槽位图（角色锚定），<image2> = 服饰参考图（换装
     锚定，role=costume 语义；catalog 英文关键词拼「服装要点」注记进提示词）。
-    要「主体 + 动作 + 服饰」用 `charvar pose prompt --costume`。
+    --face <face_id> 时 <image1> = 人脸库条目（face/styling 条目即身份锚，与
+    --subject 互斥；体形锚用 --body-lock 手给）。要「主体 + 动作 + 服饰」用
+    `charvar pose prompt --costume`。
     """
     from charvar import adhoc as adhoc_service
     from charvar import costumes as costumes_service
+    from charvar import faces as faces_service
     from charvar import paths
     from charvar import pose_prompt as pose_prompt_module
     from charvar import poses as poses_service
 
+    if face and subject:
+        _die(
+            "--face 与 --subject 互斥：人脸库条目本身就是身份锚，"
+            "两个身份来源的图会互相揉脸（要体形锚用 --body-lock）"
+        )
+    if body_lock_text and not face:
+        _die("--body-lock 只在 --face 流程生效（有主体档案时体形锚走档案 body_lock）")
+
     c_has_image = True
+    body_lock: list[str] | None = None
+    face_section: str | None = None
+    slot_label, slot = "front", None
     with storage.connect() as conn:
         try:
             c_row = costumes_service.resolve_ref(conn, item_id)
@@ -1683,23 +1754,28 @@ def costume_prompt_cmd(
             )
         except costumes_service.CostumeError as exc:
             _die(str(exc))
-    body_lock: list[str] | None = None
-    slot_label, slot = "front", None
-    if subject:
-        with storage.connect() as conn:
+        if face:
+            try:
+                f_source, f_id = faces_service.resolve_face(conn, face)
+                face_section = faces_service.item_section(conn, f_id, source=f_source)
+            except faces_service.FaceError as exc:
+                _die(str(exc))
+            body_lock = [str(x).strip() for x in body_lock_text if str(x).strip()] or None
+        elif subject:
             profile = storage.get_subject(conn, subject)
             slot_label, slot = poses_service.subject_slot_for_prompt(conn, subject, "")
-        body_lock = list(profile.body_lock) if profile else None
+            body_lock = list(profile.body_lock) if profile else None
     prompt = pose_prompt_module.build_costume_prompt(
         body_lock=body_lock, costume_keywords=keywords, costume_display=display,
         costume_policy=c_policy,
+        face_section=face_section,
     )
     if not json_out:
         typer.echo(prompt)
     if not run:
         return
-    if not subject:
-        _die("--run 需要 --subject（主体档案 id）")
+    if not face and not subject:
+        _die("--run 需要 --subject（主体档案 id）或 --face（人脸库身份锚）")
     if not c_has_image:
         _die(
             "这条服饰是纯文本条目（无参考图）—— 图锚定换装用不了；"
@@ -1709,16 +1785,22 @@ def costume_prompt_cmd(
         costume_file = costumes_service.prepared_reference_file(item_id)
     except costumes_service.CostumeError as exc:
         _die(str(exc))
-    if slot is None or not slot.get("file_path"):
-        _die(f"主体档案没有 {slot_label} 槽位图：{subject}")
-    subject_file = paths.data_dir() / str(slot["file_path"])
-    if not subject_file.exists():
-        _die(f"主体 {slot_label} 槽位图文件缺失：{slot['file_path']}")
+    refs = []
+    if face:
+        refs.append(faces_service.prepared_reference_file(f_id, source=f_source))
+    else:
+        if slot is None or not slot.get("file_path"):
+            _die(f"主体档案没有 {slot_label} 槽位图：{subject}")
+        subject_file = paths.data_dir() / str(slot["file_path"])
+        if not subject_file.exists():
+            _die(f"主体 {slot_label} 槽位图文件缺失：{slot['file_path']}")
+        refs.append(subject_file)
+    refs.append(costume_file)
     req = adhoc_service.AdhocRequest(
         prompt=prompt,
         backend=backend,
         negative_prompt=negative,
-        reference_paths=[subject_file, costume_file],
+        reference_paths=refs,
         aspect_ratio=aspect,
         resolution=resolution,
         seed=seed,
@@ -1850,6 +1932,7 @@ def pose_describe_cmd(
     model: Optional[str] = typer.Option(None, "--model", help="视觉模型（缺省 = 设置页/env 的 LLM 配置）"),
     dry_run: bool = typer.Option(False, "--dry-run", help="只起稿打印，不落库"),
     overwrite: bool = typer.Option(False, "--overwrite", help="已有描述也重写（source 记 ai_draft）"),
+    source: str = typer.Option("", "--source", help="库 id（缺省 pose-db-01）"),
     json_out: bool = typer.Option(False, "--json", help="汇总以 JSON 输出"),
 ) -> None:
     """调用项目 LLM 看缩略图批量起稿动作描述（写入 source=ai_draft）。
@@ -1864,7 +1947,7 @@ def pose_describe_cmd(
             results = []
             for pid in pose_id:
                 r = pose_describe.describe_one(
-                    conn, pid, angle, model=model, dry_run=dry_run, overwrite=overwrite
+                    conn, pid, angle, model=model, dry_run=dry_run, overwrite=overwrite, source=source
                 )
                 head = (r.get("text") or r.get("error") or "")[:40]
                 typer.echo(f"[{r['status']:>7}] {pid} · {angle} | {head}")
@@ -1880,7 +1963,7 @@ def pose_describe_cmd(
         else:
             try:
                 summary = pose_describe.describe_batch(
-                    conn, angle=angle, limit=limit, model=model, dry_run=dry_run, overwrite=overwrite
+                    conn, angle=angle, limit=limit, model=model, dry_run=dry_run, overwrite=overwrite, source=source
                 )
             except Exception as exc:  # noqa: BLE001 - key/网络统一转友好提示
                 _die(f"{type(exc).__name__}: {exc}")
@@ -1890,6 +1973,65 @@ def pose_describe_cmd(
     )
     if json_out:
         typer.echo(json.dumps({k: v for k, v in summary.items() if k != "results"}, ensure_ascii=False))
+
+
+# ---------- face（人脸库） ----------
+
+@face_app.command("import")
+def face_import_cmd(
+    source: str = typer.Argument("", help="下载目录（缺省 data/faces/face-db-01/；目录名必须是登记的库 id）"),
+) -> None:
+    """把磁盘下载目录灌进 face_items 表（幂等；先跑 scripts/download_face_db.py --source <库id>）。
+
+    库 id 取目录名（data/faces/face-db-01 → face-db-01），必须已在
+    faces.FACE_SOURCES 登记过。
+    """
+    from charvar import faces as faces_service
+
+    directory = Path(source) if source else None
+    source_id = directory.name if directory else faces_service.SOURCE_ID
+    if source and source_id not in faces_service.FACE_SOURCES:
+        _die(
+            f"没有登记这个人脸库：{source_id}（known={'/'.join(faces_service.FACE_SOURCES)}；"
+            "先在 charvar/faces.py 的 FACE_SOURCES 加一行）"
+        )
+    try:
+        info = faces_service.import_catalog(storage.connect(), source_id, directory)
+    except faces_service.FaceError as exc:
+        _die(str(exc))
+    typer.echo(f"人脸库已导入：{info['faces']} 条（source={info['source']}）")
+
+
+@face_app.command("list")
+def face_list_cmd(
+    source: str = typer.Option("", "--source", help="按库 id 过滤（face-db-01/…）"),
+    section: str = typer.Option("", "--section", help="按形态过滤（face/styling）"),
+    hair: str = typer.Option("", "--hair", help="按发型类别原文过滤"),
+    query: str = typer.Option("", "--q", "--query", help="按 style/hair/id 过滤"),
+    json_out: bool = typer.Option(False, "--json", help="以 JSON 输出"),
+) -> None:
+    """浏览人脸库（多库全量清单）。"""
+    from charvar import faces as faces_service
+
+    with storage.connect() as conn:
+        try:
+            if source:
+                faces_service._source_or_raise(source)
+            data = faces_service.list_faces(conn, source=source, section=section, hair=hair, q=query)
+        except faces_service.FaceError as exc:
+            _die(str(exc))
+    if json_out:
+        typer.echo(json.dumps(data, ensure_ascii=False, indent=1))
+        return
+    items = data["items"]
+    if not items:
+        _die("人脸库为空 —— 先跑 scripts/download_face_db.py，再 charvar face import")
+    src_list = " / ".join(s["id"] + f"（{s['zh']}）" for s in data["sources"])
+    typer.echo(f"共 {len(items)} 条（sources={src_list}；--source <id> 可单库过滤）")
+    for it in items:
+        typer.echo(
+            f"[{it['source']}]\t{it['face_id']}\t[{it['section']} · {it['hair'] or '-'}] {it['style']}"
+        )
 
 
 # ---------- 服饰条目编辑（policy / keywords / 收藏 / 制图提示词 / 重生成） ----------

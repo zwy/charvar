@@ -14,6 +14,7 @@ const GenRefs = (() => {
     ["behind", "背面（后脑/背部）"],
     ["character_sheet", "设定图（整套）"],
     ["pose", "姿势构图（人偶线稿参照）"],
+    ["face", "人脸（同脸虚构参照）"],
   ];
   const DEFAULT_ROLE = "front";
 
@@ -272,17 +273,19 @@ const GenRefs = (() => {
     });
   }
 
-  /* ---------- 来源：动作库（pose-db-01，灰人偶线稿只锚姿势构图） ----------
+  /* ---------- 来源：动作库（线稿/深度图，无细节灰人偶只锚姿势构图） ----------
      与其它来源不同：动作库参考图的 role 固定 pose —— 图里没有角色外观可锚，
      身份全部来自主体档案或其它参考图。预设页与 Playground 共用此浏览器，
-     onPick 由发起方（add / Playground 的 push）决定落入哪边。 */
+     onPick 由发起方（add / Playground 的 push）决定落入哪边；
+     pick.source = 库 id（pose-db-01/02），转成 ReferenceSpec.source。 */
   async function onPickPose() {
     showPoseBrowser((pick) => {
       add({
         source: "pose",
         pose_id: pick.pose_id,
         angle: pick.angle,
-        // role 固定 pose；人偶线稿不锚身份，身份交给主体档案或其它参考图
+        pose_source: pick.source,  // 库 id（线稿/深度；缺省回退 pose-db-01）
+        // role 固定 pose；无细节灰人偶不锚身份，身份交给主体档案或其它参考图
         role: "pose",
         name: pick.name,
         url: pick.url,
@@ -292,9 +295,35 @@ const GenRefs = (() => {
 
   /* 动作库弹层：渲染逻辑在 posegallery.js（弹层与顶栏「动作」整页同源共用
      —— 网格红线 / 双语规则 / 视角切换 / 动作描述块只修一处），这里只挂弹层骨架。 */
-  function showPoseBrowser(onPick, { title = "动作库（灰人偶线稿 · 只锚姿势构图）" } = {}) {
+  function showPoseBrowser(onPick, { title = "动作库（线稿/深度 · 只锚姿势构图）" } = {}) {
     Media.showPanelModal(title, (body, close) => {
       PoseGallery.mount({ root: body, onPick, close });
+    });
+  }
+
+  /* ---------- 来源：人脸库（face-db-01 …，AI 架构虚构人物正面向き图） ----------
+     形态 face=只锚脸（默认 role），styling=锚脸+发型+服装 —— role 与 spec 按条目
+     的 section 定。预设页与 Playground 共用 facegallery.js，onPick 由发起方决定
+     落入哪边；pick.source = 库 id，转成 ReferenceSpec.source。 */
+  async function onPickFace() {
+    showFaceBrowser((pick) => {
+      add({
+        source: "face",
+        face_id: pick.face_id,
+        face_source: pick.source,  // 库 id（缺省回退 face-db-01）
+        // role 固定 face；section 只影响 LLM 分句（face/styling），spec 不带
+        role: "face",
+        name: pick.name,
+        url: pick.url,
+      });
+    });
+  }
+
+  /* 人脸库弹层：渲染逻辑在 facegallery.js（弹层与顶栏「人脸」整页同源共用），
+     这里只挂弹层骨架。 */
+  function showFaceBrowser(onPick, { title = "人脸库（AI 架构虚构人物 · 锚脸部身份）" } = {}) {
+    Media.showPanelModal(title, (body, close) => {
+      FaceGallery.mount({ root: body, onPick, close });
     });
   }
 
@@ -309,6 +338,10 @@ const GenRefs = (() => {
       } else if (ref.source === "pose") {
         spec.pose_id = ref.pose_id;
         spec.angle = ref.angle || "";
+        if (ref.pose_source) spec.source = ref.pose_source;
+      } else if (ref.source === "face") {
+        spec.face_id = ref.face_id;
+        if (ref.face_source) spec.source = ref.face_source;
       } else {
         spec.run_id = ref.run_id;
         spec.index = ref.index || 0;
@@ -363,6 +396,8 @@ const GenRefs = (() => {
     if (recentBtn) recentBtn.addEventListener("click", onPickRecent);
     const poseBtn = $("#btn-gen-pose-add");
     if (poseBtn) poseBtn.addEventListener("click", onPickPose);
+    const faceBtn = $("#btn-gen-face-add");
+    if (faceBtn) faceBtn.addEventListener("click", onPickFace);
     const clearBtn = $("#btn-gen-ref-clear");
     if (clearBtn) clearBtn.addEventListener("click", () => clear().catch(() => {}));
     render();
@@ -378,9 +413,10 @@ const GenRefs = (() => {
     roleLabel,
     ROLES,
     MAX_REFS,
-    // 动作库浏览器（共用）：Playground（adhoc.js）也从这里发起，
+    // 动作库/人脸库浏览器（共用）：Playground（adhoc.js）也从这里发起，
     // onPick 由调用方决定加入哪边
     showPoseBrowser,
+    showFaceBrowser,
     // 主体档案换了 → 参考图的槽位下拉要重刷（主体只有一个选择器，在①）
     reloadKinds() {
       return loadKindOptions();

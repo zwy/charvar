@@ -1,6 +1,6 @@
 /* 服饰库共享渲染：顶栏「服饰」整页（costumepage.js）与后续生图流程弹层同用这一套
    —— 网格 CSS 红线、检索规则、关键词复制只修一处，别再两处分叉。容器里搭
-   来源页签 + 收藏筛选 + 目录页签 + 搜索 + 卡片网格 + 常驻详情（大图 / 徽章行 /
+   来源页签 + 目录页签（行尾 ♥ 收藏筛选）+ 搜索 + 卡片网格 + 常驻详情（大图 / 徽章行 /
    换装语义 / 关键词块 / 文本层块 / 制图提示词块 + 重生成）。数据源：GET /costumes
    （items 全量返回，客户端过滤；日文搜索词经站点 JA 词表扩写成英文关键词）。
    站点库条目 = t2i 架空服饰（无人物、2:3、白底）；自建库（studio）= 平铺参考图
@@ -21,7 +21,7 @@ const CostumeGallery = (() => {
       '<div class="costume-src-tabs segmented"></div>' +
       '<div class="costume-cat-tabs segmented"></div>' +
       '<div class="costume-toolbar-row">' +
-      '<input class="costume-q" type="search" placeholder="按关键词 / id / 中文标签搜索（中 / 英 / 日文均可）">' +
+      '<input class="costume-q" type="search" placeholder="按关键词 / id / 中文标签搜索（中/英/日文均可）">' +
       "</div>" +
       "</div>" +
       '<div class="costume-grid image-grid"></div>' +
@@ -66,8 +66,8 @@ const CostumeGallery = (() => {
       return (allData.items || []).filter(function (it) { return it.favorited; }).length;
     }
 
-    /* 来源页签（全部 / 站点库 / 自建库）+ 收藏筛选 chip（行尾，计数现算；
-       收藏为 0 时隐藏 chip——空筛选 chip 没有存在意义）。 */
+    /* 来源页签（全部 / 站点库 / 自建库）。♥ 收藏筛选 chip 不在这行 —— 三库归一後
+       挂在第二行（目录页签）行尾，见 renderTabs。 */
     function renderSourceTabs() {
       const tabs = root.querySelector(".costume-src-tabs");
       const total = (allData.items || []).length;
@@ -80,7 +80,7 @@ const CostumeGallery = (() => {
           return [id, SOURCE_ZH[id] || id, counts[id] || 0];
         })
       );
-      let html = keys
+      tabs.innerHTML = keys
         .map(function (k) {
           return (
             '<button type="button" class="seg' + (filter.source === k[0] ? " active" : "") +
@@ -88,22 +88,7 @@ const CostumeGallery = (() => {
           );
         })
         .join("");
-      const n = favCount();
-      if (n) {
-        html +=
-          '<button type="button" class="seg costume-fav-chip' + (filter.fav ? " active" : "") +
-          '" data-fav="1">♥ 收藏 <em>' + n + "</em></button>";
-      }
-      tabs.innerHTML = html;
       [...tabs.children].forEach(function (btn) {
-        if (btn.dataset.fav) {
-          btn.addEventListener("click", function () {
-            filter.fav = !filter.fav;
-            renderSourceTabs();
-            renderGrid();
-          });
-          return;
-        }
         btn.addEventListener("click", function (ev) {
           filter.source = btn.dataset.v;
           /* 来源切换时目录若被筛空（如站点库下点自建家族），自动回落「全部目录」 */
@@ -118,7 +103,9 @@ const CostumeGallery = (() => {
     }
 
     /* 目录页签：类目与次序来自服务端（站点固定次序 + 自建家族尾部追加），
-       计数现算（随来源筛选联动）；被当前来源筛空的目录页签隐藏。 */
+       计数现算（随来源筛选联动）；被当前来源筛空的目录页签隐藏。行尾挂 ♥ 收藏
+       筛选 chip（计数现算；0 收藏时隐藏——空筛选 chip 没有存在意义；三库归一
+       都放内容维度行尾）。 */
     function renderTabs() {
       const tabs = root.querySelector(".costume-cat-tabs");
       const items = (allData.items || []).filter(function (it) {
@@ -132,7 +119,7 @@ const CostumeGallery = (() => {
           })
           .filter(function (k) { return k[2] > 0; })
       );
-      tabs.innerHTML = keys
+      let html = keys
         .map(function (k) {
           return (
             '<button type="button" class="seg' + (filter.category === k[0] ? " active" : "") +
@@ -140,7 +127,22 @@ const CostumeGallery = (() => {
           );
         })
         .join("");
+      const n = favCount();
+      if (n) {
+        html +=
+          '<button type="button" class="seg costume-fav-chip' + (filter.fav ? " active" : "") +
+          '" data-fav="1">♥ 收藏 <em>' + n + "</em></button>";
+      }
+      tabs.innerHTML = html;
       [...tabs.children].forEach(function (btn) {
+        if (btn.dataset.fav) {
+          btn.addEventListener("click", function () {
+            filter.fav = !filter.fav;
+            renderTabs();
+            renderGrid();
+          });
+          return;
+        }
         btn.addEventListener("click", function () {
           filter.category = btn.dataset.v;
           renderTabs();
@@ -171,21 +173,8 @@ const CostumeGallery = (() => {
       if (filter.q) {
         const hay = (item.item_id + " " + (item.label || "") + " " + item.keywords + " " +
           (item.prompt_text || "") + " " + item.category +
-          " " + (item.category_zh || "")).toLowerCase();
-        const g = glossary();
-        const toks = filter.q.split(/\s+/).filter(Boolean);
-        for (const t of toks) {
-          let ok = hay.indexOf(t) !== -1;
-          if (!ok) {
-            for (const ja in g) {
-              if (t.indexOf(ja) !== -1 && hay.indexOf(g[ja].toLowerCase()) !== -1) {
-                ok = true;
-                break;
-              }
-            }
-          }
-          if (!ok) return false;
-        }
+          " " + (item.category_zh || ""));
+        if (!matchesQuery(hay, filter.q, glossary())) return false;
       }
       return true;
     }
@@ -262,30 +251,28 @@ const CostumeGallery = (() => {
       return it.keywords || it.prompt_text || "";
     }
 
-    /* 收藏：乐观更新（先改内存状态再发请求），失败回滚 + 红角标提示。 */
+    /* 收藏：乐观更新（先改内存状态再发请求），失败回滚 + 红角标提示。收藏态
+       变化的统一出口 = ♥ chip（目录行尾）+ 网格 + 选中项详情；收藏筛选开着且全库
+       归零时自动回「全部」（三库同款护栏，防止 chip 隐藏后困在空筛选里）。 */
     function toggleFav(it, btn) {
       const want = !it.favorited;
-      const rollback = function () {
-        it.favorited = !want;
-        btn.classList.toggle("on", !want);
-        btn.textContent = !want ? "已收藏" : "收藏";
-        renderSourceTabs();
+      const settle = function (val) {
+        it.favorited = val;
+        btn.classList.toggle("on", val);
+        btn.textContent = val ? "已收藏" : "收藏";
+        const wasFiltered = filter.fav;
+        if (wasFiltered && !favCount()) filter.fav = false;
+        renderTabs();
+        renderGrid();  /* 卡片徽章实时；筛选开着时行数变化也要重算 */
         if (selectedItem === it) renderDetail();
       };
-      it.favorited = want;
-      btn.classList.toggle("on", want);
-      btn.textContent = want ? "已收藏" : "收藏";
-      renderSourceTabs();
+      settle(want);
       api("/costumes/" + encodeURIComponent(it.source_id) + "/" + encodeURIComponent(it.item_id) + "/favorite", { method: "POST" })
         .then(function (res) {
-          it.favorited = !!res.favorited;
-          btn.classList.toggle("on", it.favorited);
-          btn.textContent = it.favorited ? "已收藏" : "收藏";
-          renderSourceTabs();
-          if (selectedItem === it) renderDetail();
+          settle(!!res.favorited);
         })
         .catch(function () {
-          rollback();
+          settle(!want);  /* 回滚到收藏前的状态 */
         });
     }
 
@@ -505,17 +492,9 @@ const CostumeGallery = (() => {
         blocks.join("") +
         regenRow;
 
-      /* 事件 */
+      /* 事件：详情收藏钮走同一条 toggleFav（卡片徽章 ♥ chip 与它实时同步，三库同款） */
       detailEl.querySelector(".costume-detail-fav").addEventListener("click", function () {
-        it.favorited = !it.favorited;
-        updateItem(it, { favorited: it.favorited });
-        api("/costumes/" + encodeURIComponent(it.source_id) + "/" + encodeURIComponent(it.item_id) + "/favorite", { method: "POST" })
-          .then(function (res) {
-            updateItem(it, { favorited: !!res.favorited });
-          })
-          .catch(function () {
-            updateItem(it, { favorited: !it.favorited });
-          });
+        toggleFav(it, detailEl.querySelector(".costume-detail-fav"));
       });
       const detailImg = detailEl.querySelector(".costume-detail-img");
       if (it.image_url) {

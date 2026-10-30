@@ -1,17 +1,20 @@
 /* 动作库共享渲染：genrefs.js 的弹层与顶栏「动作」整页（posepage.js）同用这一套
-   —— 网格 CSS 红线、双语规则、筛选交互只修一处，别再两处分叉。容器里搭
-   系統页签 + 收藏筛选 + 分類/搜索 + 卡片网格 + 常驻详情（双语标题 / 系統·分類 /
-   视角切换 / 动作描述块 / 收藏钮）。中日对照：中文为主阅读层级、日文原文 muted 小字。
-   动作描述（pose_actions 表：动作×视角 双键，文本挂 images[] 每视角）详情块跟所选
-   视角「复制 / 编辑」（textarea + PUT /poses/{id}/action，保存写 manual）；
-   收藏（pose_favorites 用户层，重灌不碰）对齐服饰库：卡片右上「收藏 / 已收藏」徽章
-   （点了不选卡）+ 系統页签行尾 ♥ 筛选（0 收藏时隐藏）+ 详情钮，卡片↔详情同步。
-   自建库（后续）= 新 source 值进 DB，本轮只留键位（pose_images 有 source 列）。
-   整页没有参考图上下文，不渲染「加入参考图」。 */
+   —— 网格 CSS 红线、双语规则、筛选交互只修一处，别再两处分叉。多库结构：
+   来源页签（全部 / 线稿 pose-db-01 / 深度 pose-db-02 —— 同作者姊妹站、同一
+   pose 集同 id 共库分键；未来新库/自建库加 source 即可）→ 系統页签 → 分類/
+   搜索 → 卡片网格 + 常驻详情（双语标题 / 系統·分類 / 视角切换 / 动作描述块 /
+   收藏钮）。中日对照：中文为主阅读层级、日文原文 muted 小字。
+   动作描述（pose_actions 表：库×动作×视角 键，文本挂 images[] 每视角）详情块
+   跟所选视角「复制 / 编辑」（textarea + PUT /poses/{source}/{id}/action）；
+   收藏（pose_favorites 用户层，重灌不碰，按库分键）对齐服饰库：卡片右上
+   「收藏 / 已收藏」徽章（点了不选卡）+ ♥ 收藏页签（0 收藏时隐藏）+ 详情钮，
+   卡片↔详情同步。整页没有参考图上下文，不渲染「加入参考图」。 */
 const PoseGallery = (() => {
+  /* 来源中文标签（与后端 POSE_SOURCES 的 zh 同步维护） */
+  const POSE_SOURCE_ZH = { "pose-db-01": "线稿", "pose-db-02": "深度" };
   function mount({ root, onPick, close, onStat, variant = "modal" }) {
     let allData = null;
-    const filter = { line: "", category: "", q: "", fav: false };
+    const filter = { source: "", line: "", category: "", q: "", fav: false };
     let selectedPose = null;
     let selectedAngle = null;
     let editingAction = false;  /* 动作描述编辑态：textarea + 保存/取消，只对当前条目×视角 */
@@ -20,10 +23,11 @@ const PoseGallery = (() => {
       '<div class="pose-browser' + (variant === "page" ? " pose-browser-page" : "") + '">' +
       '<div class="pose-master">' +
       '<div class="pose-toolbar">' +
+      '<div class="pose-src-tabs segmented"></div>' +
       '<div class="pose-line-tabs segmented"></div>' +
       '<div class="pose-toolbar-row">' +
       '<select class="pose-cat"></select>' +
-      '<input class="pose-q" type="text" placeholder="按动作名 / 编号 / id 搜索（中/日/编号均可）"></input>' +
+      '<input class="pose-q" type="search" placeholder="按动作名 / 编号 / 动作描述 搜索（中/日/编号均可）"></input>' +
       "</div>" +
       "</div>" +
       '<div class="pose-grid image-grid"></div>' +
@@ -43,21 +47,101 @@ const PoseGallery = (() => {
       return z === orig ? esc(z) : esc(z) + "<em>（" + esc(orig || "") + "）</em>";
     }
 
+    /* 当前筛选来源下的系統/分類清单：「全部」时合并各库（同名累加 —— 同作者
+       姊妹站词表相同）；「全部」合并时以线稿库的清单次序为准（先插入先排）。 */
+    function linesFor() {
+      const map = (allData && allData.lines) || {};
+      if (filter.source) return map[filter.source] || [];
+      const merged = [];
+      const index = {};
+      Object.keys(map).forEach(function (src) {
+        (map[src] || []).forEach(function (l) {
+          const i = index[l.id];
+          if (i === undefined) {
+            merged.push({ id: l.id, zh: l.zh, poses: l.poses });
+            index[l.id] = merged.length - 1;
+          } else {
+            merged[i].poses += l.poses;
+          }
+        });
+      });
+      return merged;
+    }
+
+    function categoriesFor() {
+      const map = (allData && allData.categories) || {};
+      if (filter.source) return map[filter.source] || [];
+      const merged = [];
+      const index = {};
+      Object.keys(map).forEach(function (src) {
+        (map[src] || []).forEach(function (c) {
+          const i = index[c.id];
+          if (i === undefined) {
+            merged.push({ id: c.id, zh: c.zh, poses: c.poses });
+            index[c.id] = merged.length - 1;
+          } else {
+            merged[i].poses += c.poses;
+          }
+        });
+      });
+      merged.sort(function (a, b) {
+        return (b.poses - a.poses) || String(a.id).localeCompare(String(b.id));
+      });
+      return merged;
+    }
+
     function favCount() {
       return (allData.poses || []).filter(function (p) { return p.favorited; }).length;
     }
 
-    /* 收藏数变化时重画页签行；筛选开着但收藏数归零 → 自动回「全部」（空筛选不悬挂） */
-    function syncFavChip() {
-      if (filter.fav && !favCount()) filter.fav = false;
-      renderTabs();
+    /* 来源页签（全部 / 线稿 / 深度 —— 标签取 POSE_SOURCE_ZH，缺项回显 id；计数
+       来自服务端 sources 计数）。来源切换时被当前来源筛空的系統/分類自动回落
+       「全部」（自建库词表可能不同）。 */
+    function renderSourceTabs() {
+      const tabs = root.querySelector(".pose-src-tabs");
+      const total = (allData.poses || []).length;
+      const counts = {};
+      (allData.sources || []).forEach(function (s) {
+        counts[s.id] = s.poses;
+      });
+      const keys = [["", "全部", total]].concat(
+        (allData.sources || []).map(function (s) {
+          return [s.id, POSE_SOURCE_ZH[s.id] || s.id, counts[s.id] || 0];
+        })
+      );
+      let html = keys
+        .map(function (k) {
+          return (
+            '<button type="button" class="seg' + (filter.source === k[0] ? " active" : "") +
+            '" data-v="' + esc(k[0]) + '">' + esc(k[1]) + "<em>" + k[2] + "</em></button>"
+          );
+        })
+        .join("");
+      tabs.innerHTML = html;
+      [...tabs.children].forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          filter.source = btn.dataset.v;
+          if (filter.line && !linesFor().some(function (l) { return l.id === filter.line; })) {
+            filter.line = "";
+          }
+          if (filter.category && !categoriesFor().some(function (c) { return c.id === filter.category; })) {
+            filter.category = "";
+          }
+          renderSourceTabs();
+          renderTabs();
+          renderCategorySelect();
+          renderGrid();
+        });
+      });
     }
 
     function renderTabs() {
       const tabs = root.querySelector(".pose-line-tabs");
-      const total = (allData.poses || []).length;
-      const keys = [["", "全部", total]].concat(
-        (allData.lines || []).map(function (l) {
+      const inSource = (allData.poses || []).filter(function (p) {
+        return !filter.source || p.source === filter.source;
+      });
+      const keys = [["", "全部", inSource.length]].concat(
+        linesFor().map(function (l) {
           return [l.id, l.zh || l.id, l.poses];
         })
       );
@@ -95,7 +179,7 @@ const PoseGallery = (() => {
 
     function renderCategorySelect() {
       const sel = root.querySelector(".pose-cat");
-      const cats = allData.categories || [];
+      const cats = categoriesFor();
       sel.innerHTML =
         '<option value="">全部分類</option>' +
         cats
@@ -124,17 +208,19 @@ const PoseGallery = (() => {
       });
     }
 
-    /* 搜索命中：中日动作名 + 编号 + id + 动作描述（pose_actions 的文本） */
+    /* 搜索命中：matchesQuery 共享语义（多词 AND）—— 中日动作名 + 编号 + id +
+       动作描述（pose_actions 的文本）；haystack 本身中日双份，无需词表。 */
     function filteredPoses() {
       const poses = (allData && allData.poses) || [];
       return poses.filter(function (p) {
+        if (filter.source && p.source !== filter.source) return false;
         if (filter.line && p.line !== filter.line) return false;
         if (filter.category && p.category !== filter.category) return false;
         if (filter.fav && !p.favorited) return false;
         if (filter.q) {
           const hay = (p.title + " " + (p.title_zh || "") + " " + p.number + " " + p.pose_id +
-            " " + (p.images || []).map(function (im) { return im.action_text || ""; }).join(" ")).toLowerCase();
-          if (hay.indexOf(filter.q) === -1) return false;
+            " " + (p.images || []).map(function (im) { return im.action_text || ""; }).join(" "));
+          if (!matchesQuery(hay, filter.q)) return false;
         }
         return true;
       });
@@ -152,15 +238,16 @@ const PoseGallery = (() => {
       poses.forEach(function (p) {
         const front = (p.images && p.images[0]) || {};
         const card = document.createElement("div");
-        card.className = "image-card pose-card" + (selectedPose && selectedPose.pose_id === p.pose_id ? " active" : "");
+        card.className = "image-card pose-card" + (selectedPose && selectedPose.source === p.source && selectedPose.pose_id === p.pose_id ? " active" : "");
         card.innerHTML =
           '<div class="pose-thumb">' +
-          '<img src="' + esc(front.thumb_url) + '" alt="">' +
+          '<img src="' + esc(front.thumb_url) + '" alt="" loading="lazy">' +
           '<button type="button" class="pose-fav' + (p.favorited ? " on" : "") +
           '" title="收藏">' + (p.favorited ? "已收藏" : "收藏") + "</button>" +
           "</div>" +
           '<div class="image-meta">' +
           "<strong>" + esc(p.number) + "</strong>" +
+          '<span class="pose-badge pose-badge-muted">' + esc(POSE_SOURCE_ZH[p.source] || p.source) + "</span>" +
           '<span class="pose-zh">' + esc(p.title_zh || p.title) + "</span>" +
           '<span class="pose-jp">' + esc(p.title) + "</span>" +
           "</div>";
@@ -174,7 +261,7 @@ const PoseGallery = (() => {
         });
         grid.appendChild(card);
       });
-      if (!selectedPose || !poses.some(function (p) { return p.pose_id === selectedPose.pose_id; })) {
+      if (!selectedPose || !poses.some(function (p) { return p.source === selectedPose.source && p.pose_id === selectedPose.pose_id; })) {
         // 首次打开 / 筛选后选中项不在结果里 → 自动选中第一个（详情栏始终有内容）
         selectPose(poses[0]);
       } else {
@@ -182,35 +269,9 @@ const PoseGallery = (() => {
       }
     }
 
-    /* 收藏：乐观更新（先改内存状态再发请求），失败回滚。 */
-    function toggleFav(p, btn) {
-      const want = !p.favorited;
-      const rollback = function () {
-        p.favorited = !want;
-        btn.classList.toggle("on", !want);
-        btn.textContent = !want ? "已收藏" : "收藏";
-        syncFavChip();
-        if (selectedPose === p) renderDetail();
-      };
-      p.favorited = want;
-      btn.classList.toggle("on", want);
-      btn.textContent = want ? "已收藏" : "收藏";
-      syncFavChip();
-      api("/poses/" + encodeURIComponent(p.pose_id) + "/favorite", { method: "POST" })
-        .then(function (res) {
-          p.favorited = !!res.favorited;
-          btn.classList.toggle("on", p.favorited);
-          btn.textContent = p.favorited ? "已收藏" : "收藏";
-          syncFavChip();
-          if (selectedPose === p) renderDetail();
-        })
-        .catch(function () {
-          rollback();
-        });
-    }
-
-    /* 收藏态变化的统一出口：按钮即时态 + 页签行（0 收藏回全部护栏）+ 筛选开着时
-       重放网格 + 选中条目的详情重画 —— 卡片/详情/页签三处同步。 */
+    /* 收藏态变化的统一出口：按钮即时态 + 页签行（0 收藏回全部护栏）+ 无条件重放
+       网格（卡片徽章实时；筛选开着时行数变化也重画 —— 选中态由 renderGrid 尾部
+       带回详情重画，三处同步只走这一个出口）。 */
     function applyFavState(p, btn) {
       if (btn) {
         btn.classList.toggle("on", p.favorited);
@@ -219,8 +280,7 @@ const PoseGallery = (() => {
       const wasFiltered = filter.fav;
       if (wasFiltered && !favCount()) filter.fav = false;
       renderTabs();
-      if (wasFiltered) renderGrid();
-      if (selectedPose === p) renderDetail();
+      renderGrid();
     }
 
     /* 收藏：乐观更新（先改内存状态再发请求），失败回滚。 */
@@ -230,7 +290,7 @@ const PoseGallery = (() => {
         applyFavState(p, btn);
       };
       settle(!p.favorited);
-      api("/poses/" + encodeURIComponent(p.pose_id) + "/favorite", { method: "POST" })
+      api("/poses/" + encodeURIComponent(p.source) + "/" + encodeURIComponent(p.pose_id) + "/favorite", { method: "POST" })
         .then(function (res) {
           settle(!!res.favorited);
         })
@@ -247,7 +307,7 @@ const PoseGallery = (() => {
       // 选中环按 filteredPoses 的顺序标（与 renderGrid 的卡片顺序一致）
       const poses = filteredPoses();
       [...grid.querySelectorAll(".pose-card")].forEach(function (el, i) {
-        el.classList.toggle("active", !!p && poses[i] && poses[i].pose_id === p.pose_id);
+        el.classList.toggle("active", !!p && poses[i] && poses[i].source === p.source && poses[i].pose_id === p.pose_id);
       });
       renderDetail();
     }
@@ -289,7 +349,8 @@ const PoseGallery = (() => {
         "<h3>" + esc(p.number) + " " + esc(p.title_zh || p.title) + "</h3>" +
         '<div class="pose-jp">' + esc(p.title) + "</div>" +
         "</div>" +
-        '<div class="pose-meta">' + bilingual(p.line_zh, p.line) + " · " +
+        '<div class="pose-meta">' + esc(POSE_SOURCE_ZH[p.source] || p.source) + " · " +
+        bilingual(p.line_zh, p.line) + " · " +
         (p.category ? bilingual(p.category_zh, p.category) : "-") + "</div>" +
         '<div class="pose-tags">' +
         '<button type="button" class="btn-sm pose-detail-fav' + (p.favorited ? " on" : "") +
@@ -374,7 +435,7 @@ const PoseGallery = (() => {
           const angle = selectedAngle.angle;
           saveBtn.disabled = true;
           saveBtn.textContent = "保存中…";
-          api("/poses/" + encodeURIComponent(p.pose_id) + "/action", {
+            api("/poses/" + encodeURIComponent(p.source) + "/" + encodeURIComponent(p.pose_id) + "/action", {
             method: "PUT",
             body: JSON.stringify({ angle: angle, action_text: value }),
           })
@@ -400,6 +461,7 @@ const PoseGallery = (() => {
       if (addBtn) {
         addBtn.addEventListener("click", function () {
           onPick({
+            source: p.source,
             pose_id: p.pose_id,
             angle: selectedAngle.angle,
             name: p.number + " " + (p.title_zh || p.title) + "（" + p.title + "）· " + selectedAngle.angle_zh,
@@ -416,6 +478,7 @@ const PoseGallery = (() => {
     api("/poses")
       .then(function (data) {
         allData = data;
+        renderSourceTabs();
         renderTabs();
         renderCategorySelect();
         wireSearch();

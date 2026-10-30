@@ -145,6 +145,56 @@ _KIND_BRIEFS: dict[str, str] = {
 # <imageN> 按勾选顺序各管一摊：headshot=脸/发型/头饰、front=体型/服装/鞋、
 # side=侧面朝向与贴身细节、behind=后脑/背部、character_sheet=整套设定图。
 # 句子由勾选组合动态生成：选几张生成几条分工，未选的类型不会悬空。
+# depth 分句（四个组合表里语义一致，各表挂一份）：深度图不是线稿 —— 锚
+# 姿势 + 前后遮挡关系（白=近）；选表后按参考图 display_type 二选一。
+POSE_DEPTH_CLAUSE: str = (
+    "{tag} is a grayscale depth map of a faceless mannequin, brighter means nearer to "
+    "the camera, used only as the pose and spatial-depth reference: follow the stance, "
+    "body posture, limb placement, occlusion, foreshortening, and camera angle and "
+    "framing it shows exactly, with the same number of figures it depicts; copy no "
+    "face, hair, clothing, footwear, accessory, color, or art style from it"
+)
+# 人脸库分句（四个组合表按 display_type=section 二选一；AI 架构虚构人物，
+# 「not a real person」句同时挡住把它当真人画像参照的漂移）：face = 正面向き，
+# 锚这个人的脸（含发色/发型）；styling = 整体造型，锚脸 + 发型 + 成套服装。
+FACE_CLAUSE: str = (
+    "{tag} is a front-facing portrait of one fictional person (AI-generated, not a real "
+    "person): adopt that same person as the character, with the same face, feature "
+    "proportions, skin tone, hair color, and hairstyle exactly as shown in {tag}; take "
+    "no clothing, pose, framing, or background from it"
+)
+FACE_STYLING_CLAUSE: str = (
+    "{tag} is a stylized full-look portrait of one fictional person (AI-generated, not a "
+    "real person): adopt that same person as the character, with the same face, feature "
+    "proportions, skin tone, hair color, hairstyle, and the complete outfit exactly as "
+    "shown in {tag}; take no pose, framing, or background from it"
+)
+# 发型组合表里的 face 分句：发型结构归发型预设 —— 锚定句点名不抄图里的发型结构
+# （脸/肤色/发色是身份照抄；cut/length/styling 与发型预设会互相打架）。
+FACE_CLAUSE_HAIRSTYLE: str = (
+    "{tag} is a front-facing portrait of one fictional person (AI-generated, not a real "
+    "person): adopt that same person's face, feature proportions, skin tone, and hair "
+    "color exactly as shown in {tag}; the hair's cut, length, and styling follow the "
+    "prescribed hairstyle instead of {tag}; take no clothing, pose, framing, or "
+    "background from it"
+)
+# 服装组合表（含发型+服装组合）里的 styling 分句：服装归服装预设 —— 锚定句明确
+# 点名不抄 styling 图里的服装（图自带成套造型，不点名必抄，实测会跟着图穿，
+# 服装预设等于没生效）。
+FACE_STYLING_CLAUSE_OUTFIT: str = (
+    "{tag} is a stylized full-look portrait of one fictional person (AI-generated, not a "
+    "real person): adopt that same person's face, feature proportions, skin tone, hair "
+    "color, and hairstyle exactly as shown in {tag}; take no clothing, pose, framing, or "
+    "background from it — the outfit follows the prescribed outfit instead of {tag}"
+)
+# 发型组合表里的 styling 分句：脸/发色/服装照图，发型结构归发型预设。
+FACE_STYLING_CLAUSE_HAIRSTYLE: str = (
+    "{tag} is a stylized full-look portrait of one fictional person (AI-generated, not a "
+    "real person): adopt that same person as the character, with the same face, feature "
+    "proportions, skin tone, hair color, and the complete outfit exactly as shown in "
+    "{tag}; the hair's cut, length, and styling follow the prescribed hairstyle instead "
+    "of {tag}; take no pose, framing, or background from it"
+)
 REFERENCE_ROLE_CLAUSES: dict[str, str] = {
     "character_sheet": (
         "keep the whole identity, outfit version, and art style exactly as shown in {tag}"
@@ -173,6 +223,10 @@ REFERENCE_ROLE_CLAUSES: dict[str, str] = {
         "figures it depicts; copy no face, hair, clothing, footwear, accessory, "
         "color, or art style from it"
     ),
+    "pose_depth": POSE_DEPTH_CLAUSE,
+    # 人脸库（display_type=section）：face=正面向き / styling=整体造型（face_styling）。
+    "face": FACE_CLAUSE,
+    "face_styling": FACE_STYLING_CLAUSE,
 }
 
 # 服装组合（outfit 预设）专用：参考图**不再**提供服装——服装由服装预设给定。
@@ -207,6 +261,10 @@ REFERENCE_ROLE_CLAUSES_OUTFIT: dict[str, str] = {
         "figures it depicts; copy no face, hair, clothing, footwear, accessory, "
         "color, or art style from it"
     ),
+    "pose_depth": POSE_DEPTH_CLAUSE,
+    # 人脸库：styling 图自带成套造型 —— 服装归服装预设，点名不抄图里的服装。
+    "face": FACE_CLAUSE,
+    "face_styling": FACE_STYLING_CLAUSE_OUTFIT,
 }
 
 # 发型组合（hairstyle 预设）专用：参考图**不再**提供头发结构——发型由发型预设给定，
@@ -256,6 +314,10 @@ REFERENCE_ROLE_CLAUSES_HAIRSTYLE: dict[str, str] = {
         "figures it depicts; copy no face, hair, clothing, footwear, accessory, "
         "color, or art style from it"
     ),
+    "pose_depth": POSE_DEPTH_CLAUSE,
+    # 人脸库：脸/发色照图，发型结构归发型预设；styling 图的服装照图（无服装组合）。
+    "face": FACE_CLAUSE_HAIRSTYLE,
+    "face_styling": FACE_STYLING_CLAUSE_HAIRSTYLE,
 }
 
 # 发型 + 服装同时组合：headshot/side 取发型版（头发归发型预设），
@@ -289,6 +351,10 @@ REFERENCE_ROLE_CLAUSES_OUTFIT_HAIRSTYLE: dict[str, str] = {
         "figures it depicts; copy no face, hair, clothing, footwear, accessory, "
         "color, or art style from it"
     ),
+    "pose_depth": POSE_DEPTH_CLAUSE,
+    # 人脸库：发型结构归发型预设、服装归服装预设，锚定句只留脸部身份。
+    "face": FACE_CLAUSE_HAIRSTYLE,
+    "face_styling": FACE_STYLING_CLAUSE_OUTFIT,
 }
 
 
@@ -353,6 +419,27 @@ REFERENCE_TAIL_SENTENCE_POSE: str = (
     "No text."
 )
 
+# depth 姿势库（pose-db-02）专用尾句：深度图锚的是身体动作 + 前后遮挡关系
+# （白=近），禁令里同时点名线稿与深度图样式，防止灰阶底色被照搬进成图。
+REFERENCE_TAIL_SENTENCE_POSE_DEPTH: str = (
+    "Follow the pose, body posture, limb placement, spatial depth, occlusion, and "
+    "camera framing of the mannequin depth-map reference image(s) exactly, with the "
+    "same number of figures as the pose reference shows. Take the character's identity, "
+    "face, hairstyle, and outfit only from the other reference images and the subject "
+    "profile, and create the background and lighting. Never render a gray mannequin, "
+    "its line-drawing style, or its depth-map shading. No text."
+)
+
+# 人脸库专用尾句（无姿势参考时）：旧尾句的「Take only the character's identity
+# from the reference images」对 face 参考依然成立，但要点名「同一个虚构人物 +
+# 禁真人画像」——AI 架构人物图的锚定是身份级的，说轻了模型会自由变脸。
+REFERENCE_TAIL_SENTENCE_FACE: str = (
+    "Render the very same fictional person the face reference image(s) show — the same "
+    "facial identity, and with a styling reference also the same outfit as shown "
+    "there — while the pose, camera angle, background, and lighting are created anew. "
+    "One character only. Never depict a real person. No text."
+)
+
 
 # ---- structured outputs（response_format: json_schema） ----
 # 只用 type/properties/required/additionalProperties 兼容 strict 模式（OpenAI/OpenRouter
@@ -414,21 +501,39 @@ def reference_anchor_sentence(
     clauses = []
     table = reference_clause_table(outfit_mode, hairstyle_mode)
     for ref in refs or []:
-        clause = table.get(str(ref.get("kind") or ""))
+        kind = str(ref.get("kind") or "")
+        clause = table.get(kind)
+        # 姿势库参考按展示形态二选一：depth 库（pose-db-02）用深度图分句（不是线稿）
+        if kind == "pose" and str(ref.get("display_type") or "") == "depth":
+            clause = table.get("pose_depth") or clause
+        # 人脸库参考按展示形态二选一：styling 造型图锚脸+发型+成套服装（face 只锚脸）
+        if kind == "face" and str(ref.get("display_type") or "") == "styling":
+            clause = table.get("face_styling") or clause
         if not clause:
             continue
         clauses.append(clause.format(tag=ref.get("tag") or "<image1>"))
     clauses.extend(body_lock_clauses(body_lock, refs))
     if not clauses:
         return ""
-    # 尾句三选一：sticker（不配姿势库参考）→ sticker 版；引用了姿势库 → pose 版
-    # （旧尾句的 create a new pose / One character only 与姿势参考正相反）；
-    # 其余 → 旧尾句（存量行为逐字不变）。
+    # 尾句五选一：sticker（不配姿势库参考）→ sticker 版；引用了 depth 库 → depth 版：
+    # 深度图锚的是前后关系（越白越近），禁令也要点名深度图样式；引用了姿势库 →
+    # pose 版（旧尾句的 create a new pose / One character only 与姿势参考正相反）；
+    # 引用了人脸库（无姿势参考时）→ face 版（同一个虚构人物 + 禁真人画像）；其余 →
+    # 旧尾句（存量行为逐字不变）。
     has_pose_ref = any(str(r.get("kind") or "") == "pose" for r in refs or [])
+    has_depth_pose = any(
+        str(r.get("kind") or "") == "pose" and str(r.get("display_type") or "") == "depth"
+        for r in refs or []
+    )
+    has_face_ref = any(str(r.get("kind") or "") == "face" for r in refs or [])
     if text_policy == "required_label":
         tail = REFERENCE_TAIL_SENTENCE_REQUIRED_LABEL
+    elif has_depth_pose:
+        tail = REFERENCE_TAIL_SENTENCE_POSE_DEPTH
     elif has_pose_ref:
         tail = REFERENCE_TAIL_SENTENCE_POSE
+    elif has_face_ref:
+        tail = REFERENCE_TAIL_SENTENCE_FACE
     else:
         tail = REFERENCE_TAIL_SENTENCE
     body = "; ".join(clauses)

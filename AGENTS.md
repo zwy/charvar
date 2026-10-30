@@ -14,14 +14,24 @@
 
 ## 姿势库
 
-参考图第四来源 `pose_id`+`angle`（详见 `docs/姿势库.md`）：**图片禁再分发**，只存 `data/poses/` 不进 git；**role=pose 只锚姿势不锚身份**，pose 尾句换 pose 版。动作描述 pose_actions / 收藏 pose_favorites 皆用户层重灌不碰（网页可编辑描述）；整页/弹层共用 posegallery.js。
+参考图第四来源 `pose_id`+`angle`+`source`（详见 `docs/姿势库.md`）：线稿 pose-db-01 / 深度图 pose-db-02 同
+id 分键（新库/自建进 `POSE_SOURCES`）；**role=pose 只锚姿势不锚身份**，尾句按 display_type 分线稿/深度
+版；图片随仓库分发（作者 X 公告二次发布）；描述/收藏用户层重灌不碰；整页/弹层共用 posegallery.js。
 
 ## 服饰库
 
-costume-db-01（姿势库同作者；细则见 `docs/服饰库.md`）：**图片禁再分发**，只存
-`data/costumes/` 不进 git；CLI 换装已接。换装语义（`subject_policy.clothing`）：`replace` 整套替换缺省 / `add` 叠加（保原衣
-换袜）/ `keep`；服饰文本三层 keywords / prompt_text（服饰段）/ ref_prompt（制图
-提示词），**站点 keywords 逐字不可改**；网页可编辑文本/策略/收藏/重生成（自建）。
+costume-db-01（姿势库同作者、同上分发；细则见 `docs/服饰库.md`）：换装语义
+（`subject_policy.clothing`）：`replace`（缺省）/ `add` 叠加 / `keep`；服饰文本
+三层 keywords / prompt_text（服饰段）/ ref_prompt（制图提示词），**站点 keywords
+逐字不可改**；网页可编辑文本/策略/收藏/重生成（自建）。
+
+## 人脸库
+
+face-db-01（AIモデル顔データベース，运营 あぎ；CC0 但站方请求图像数据不再配布 →
+**不随仓库分发**，与 pose/costume 不同；见 `docs/人脸库.md`）：face=锚脸 /
+styling=锚脸+发型+服装（section 随条目存，锚定分句 `face`/`face_styling` 二选一）；
+参考图 role=`face`；浏览 `/faces` 与「人脸」页签；收藏
+`face_favorites` 用户层重灌不碰；新库/自建进 `FACE_SOURCES`。
 
 ## Playground（跨项目调用）
 
@@ -88,11 +98,11 @@ costume-db-01（姿势库同作者；细则见 `docs/服饰库.md`）：**图片
      `<Application Support>/Claude*/local-agent-mode-sessions/skills-plugin/<workspace>/<account>/`，
      技能 = `skills/` 下的**真实目录** + `manifest.json` 里一条 `creatorType: "user"` 记录
      （`ensurePluginStructure` 会清掉 app 没登记过的东西，所以必须同时写 manifest）。
-- 改名/合并后要把旧名写进 `RETIRED_SKILL_NAMES`，否则新旧两个 skill 描述几乎相同，会抢同一个请求。
+- 改名/合并后把旧名写进 `RETIRED_SKILL_NAMES`（新旧描述几乎相同会抢同一个请求）。
 - skill 里调 CLI 一律用绝对路径 `~/.local/bin/charvar` —— Desktop 聊天面的 shell 不保证把 `~/.local/bin` 加进 PATH。
-- `character-forge` 自带静态检查（`python3 skills/character-forge/tests/run_checks.py`，`--record` 回写 manifest），已接进仓库门禁（`tests/test_skills.py` 会调起它），**不用**单独记着跑。
+- `character-forge` 自带静态检查（`run_checks.py`，`--record` 回写 manifest），已接 `tests/test_skills.py` 门禁，不用单独跑。
 - 改了任一 skill 的 SKILL.md / README.md / manifest.json 里的**版本号**要三处同步，否则检查会失败。
-- **character-forge 的交付校验有坑**：交付模板里提示词代码块预设为 `text template`（不计入预算），填完必须改成 `text submit`；`prompt_budget.py` 校验文档里的提示词块**必须加 `--markdown`**，不加会把整份文档当一条提示词而误判失败。
+- **character-forge 交付校验**：提示词代码块预设为 `text template`（不计入预算），填完必须改成 `text submit`；`prompt_budget.py` 校验提示词块**必须加 `--markdown`**（不加会把整份文档误判为失败）。
 
 ## 预设页（生成工作流）
 
@@ -126,7 +136,7 @@ costume-db-01（姿势库同作者；细则见 `docs/服饰库.md`）：**图片
 - **分组容器全站唯一** = `.form-section`（flex column + gap sp-2），组标题 `.form-section-title`（右侧可放状态，如「已选 0 张」）；组间用 `margin-top sp-3 + padding-top sp-3 + 1px 分隔线`，**不要**给 `.card` 的直接子元素手写 margin。
   预设页① 拆三组（主体与种子 / 供应商参数 / 参考图），② 拆两组（预设与外观 / 提示词参数）；Playground = 供应商与参数 / 提示词 / 参考图；视频 = 模式与参数 / 提示词 / 首帧图 / 参考图 / 参考视频；主体档案 = 基本信息 / 锁定项 / 补充；设置页一卡一主题。**别新造 `.gen-group` 这类第二套分组类。**
 - **间距只在 4/8/12/16 阶梯内收紧**：`.card` padding `14px 16px`、`.card > * + *` 用 sp-3、`.form-grid` 行距 sp-2、`.settings-grid`（设置页专用）行距 sp-3（列距均 sp-4）；`.segmented .seg` padding `4px 12px`。500px 断点要同步。
-- **灰字只写「控件里看不到的信息」**：当前生效的 workflow / 模型 / 枚举、当前输出像素、已选参考图数量、不可逆后果（超限硬失败、暂存 24 小时清理、按秒计费、消耗积分）。**删掉**复述控件含义的说明、描述「先做 A 再做 B」的导航文案、重复当前主体的摘要行、以及讲落盘路径 / CLI 用法 / 数据库表这类**实现细节**的长段落（那属于 README）。**每块最多一句灰字**，长说明拆不成一句时宁可删。
+- **灰字只写「控件里看不到的信息」**（枚举/像素/数量/不可逆后果），删掉复述控件、导航说明与实现细节长段落；每块最多一句，宁可删（细则见 design-system.md）。
 - 参考图区统一形态：组标题 + 右侧「已选 N 张」+ `.ref-empty` 虚线空态框（`#gen-ref-count` / `#adhoc-ref-count` / `#video-ref-count`）。
 - 参考图条目宽度限 `max-width: 240px` + 名字换行；「随机背景 / 随机光照」checkbox 在固定背景 / 固定光照之后单独成行（`label.check` 行内排版，与普通 label 同排底边错位）。
 - `.gen-mode-row`（小标题 + 分段控件同一行）、`.form-grid-2`（只有两个字段的组固定 2 列）。

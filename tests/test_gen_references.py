@@ -145,6 +145,8 @@ def test_generate_classic_stores_references(client):
             "role": "front",
             "pose_id": None,
             "angle": None,
+            "source": None,
+            "face_id": None,
         }
     ]
     # 落库后重新取也还在（页面刷新不丢）

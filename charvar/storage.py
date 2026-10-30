@@ -80,7 +80,9 @@ CREATE TABLE IF NOT EXISTS subject_templates (
     updated_at TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS pose_images (
-    -- 站点 id 去视角后缀（如 full_sexy_P001）；(pose_id, angle) 唯一
+    -- 站点 id 去视角后缀（如 full_sexy_P001）；(source, pose_id, angle) 唯一
+    -- —— depth 库（pose-db-02）与线稿库同 pose 集、同 id，主键必须带 source。
+    source TEXT NOT NULL DEFAULT '',
     pose_id TEXT NOT NULL,
     angle TEXT NOT NULL,
     line TEXT NOT NULL DEFAULT '',
@@ -90,29 +92,58 @@ CREATE TABLE IF NOT EXISTS pose_images (
     -- data/ 相对路径（与 subject_images.file_path 同约定）
     file_path TEXT NOT NULL DEFAULT '',
     thumb_path TEXT NOT NULL DEFAULT '',
-    source TEXT NOT NULL DEFAULT '',
-    PRIMARY KEY (pose_id, angle)
+    display_type TEXT NOT NULL DEFAULT 'line',   -- line=人偶线稿 / depth=深度图（新值须配参考图分句）
+    PRIMARY KEY (source, pose_id, angle)
 );
 CREATE INDEX IF NOT EXISTS idx_pose_images_line ON pose_images(line, category);
 CREATE TABLE IF NOT EXISTS pose_actions (
-    -- 用户内容：每「动作×视角」一条的动作描述提示词（动作库页面展示/复制/
-    -- 后续编辑与 AI 起草用；source 区分 manual / ai_draft）。独立于
+    -- 用户内容：每「库×动作×视角」一条的动作描述提示词（动作库页面展示/复制/
+    -- 编辑用；source 区分 manual / ai_draft，与 source_id 是两码事）。独立于
     -- pose_images（可整批重灌的站点索引，用户文案不进它）。
+    source_id TEXT NOT NULL DEFAULT '',
     pose_id TEXT NOT NULL,
     angle TEXT NOT NULL,
     action_text TEXT NOT NULL DEFAULT '',
     source TEXT NOT NULL DEFAULT 'manual',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    PRIMARY KEY (pose_id, angle)
+    PRIMARY KEY (source_id, pose_id, angle)
 );
 CREATE TABLE IF NOT EXISTS pose_favorites (
     -- 收藏态（用户层，同 costume_favorites / pose_actions 哲学）：pose_images 重灌绝不碰。
-    -- source_id 现在只有 pose-db-01；自建库（后续）= 新 source 值，键位预留不用迁表。
+    -- source_id 沿 pose_images.source 取值（pose-db-01/…）；自建库 = 新 source 值，键位直接沿用。
     source_id TEXT NOT NULL,
     pose_id TEXT NOT NULL,
     created_at TEXT NOT NULL,
     PRIMARY KEY (source_id, pose_id)
+);
+CREATE TABLE IF NOT EXISTS face_items (
+    -- 人脸库索引层（可整批重灌，同 pose_images 哲学）：AI 架构虚构人物参考图。
+    -- display_type 语义存条目级 = section：face=正面向き（只锚脸）/ styling=整体
+    -- 造型（脸+发型+服装）；新值须配 LLM 锚定分句（import 按枚举把守）。
+    source TEXT NOT NULL DEFAULT '',
+    face_id TEXT NOT NULL,
+    section TEXT NOT NULL DEFAULT 'face',
+    hair TEXT NOT NULL DEFAULT '',                -- 发型类别（站点日文原文：ショート…）
+    style TEXT NOT NULL DEFAULT '',               -- 日文发型细注（站点原文，多数空）
+    width INTEGER NOT NULL DEFAULT 0,
+    height INTEGER NOT NULL DEFAULT 0,
+    bytes INTEGER NOT NULL DEFAULT 0,             -- 原寸 PNG 体积（来源数据）
+    -- data/faces/<source>/ 相对路径（与 pose_images.file_path 同约定）
+    file_path TEXT NOT NULL DEFAULT '',
+    thumb_path TEXT NOT NULL DEFAULT '',
+    sort_seq INTEGER NOT NULL DEFAULT 0,          -- 站点 catalog 数组次序（保持站点分组展示）
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (source, face_id)
+);
+CREATE INDEX IF NOT EXISTS idx_face_items_section ON face_items(source, section);
+CREATE TABLE IF NOT EXISTS face_favorites (
+    -- 收藏态（用户层，同 pose_favorites / costume_favorites 哲学）：face_items 重灌绝不碰。
+    -- source_id 沿 face_items.source 取值；自建库 = 新 source 值，键位直接沿用。
+    source_id TEXT NOT NULL,
+    face_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (source_id, face_id)
 );
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
@@ -171,28 +202,72 @@ def utcnow() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
-def _rebuild_pose_actions_pk(conn: sqlite3.Connection) -> None:
-    """旧 pose_actions（pose_id 单键）迁到 (pose_id, angle) 双键。
+def _rebuild_pose_images_pk(conn: sqlite3.Connection) -> None:
+    """pose_images 主键 (pose_id, angle) 迁到 (source, pose_id, angle)；补 display_type 列。
 
-    CREATE TABLE IF NOT EXISTS 撑不出主键变更 —— 检测到旧形状时整表重建，
-    存量动作级描述迁到「正面」（不回退：描述里的画面事实按正面理解）。
+    CREATE TABLE IF NOT EXISTS 撑不出主键变更 —— 检测到旧形状时整表重建。
+    索引层可整批重灌，迁移不走丢数据兜：存量行按当时的事实回填
+    （source 都补 pose-db-01，display_type 补 line），文件路径原样带回。
+    """
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(pose_images)")}
+    if not columns or "display_type" in columns:
+        return  # 全新库（建表即新形状）或已迁移
+    conn.executescript(
+        """
+        CREATE TABLE pose_images_new (
+            source TEXT NOT NULL DEFAULT '',
+            pose_id TEXT NOT NULL,
+            angle TEXT NOT NULL,
+            line TEXT NOT NULL DEFAULT '',
+            number TEXT NOT NULL DEFAULT '',
+            title TEXT NOT NULL DEFAULT '',
+            category TEXT NOT NULL DEFAULT '',
+            file_path TEXT NOT NULL DEFAULT '',
+            thumb_path TEXT NOT NULL DEFAULT '',
+            display_type TEXT NOT NULL DEFAULT 'line',
+            PRIMARY KEY (source, pose_id, angle)
+        );
+        INSERT INTO pose_images_new
+            (source, pose_id, angle, line, number, title, category, file_path, thumb_path, display_type)
+            SELECT CASE WHEN source IS NULL OR source = '' THEN 'pose-db-01' ELSE source END,
+                   pose_id, angle, line, number, title, category,
+                   file_path, thumb_path, 'line'
+            FROM pose_images;
+        DROP TABLE pose_images;
+        ALTER TABLE pose_images_new RENAME TO pose_images;
+        CREATE INDEX IF NOT EXISTS idx_pose_images_line ON pose_images(line, category);
+        """
+    )
+    conn.commit()
+
+
+def _rebuild_pose_actions_pk(conn: sqlite3.Connection) -> None:
+    """旧 pose_actions 逐代迁到 (source_id, pose_id, angle)。
+
+    CREATE TABLE IF NOT EXISTS 撑不出主键变更 —— 检测到旧形状时整表重建：
+    v1 表没有 angle → 存量动作级描述迁到「正面」（不回退：描述里的画面事实
+    按正面理解）；v2 表有 angle 没有 source_id → 库 id 统一补 pose-db-01
+    （当时的唯一库）。source（manual/ai_draft）永远原样带回。
     """
     columns = {row[1] for row in conn.execute("PRAGMA table_info(pose_actions)")}
-    if not columns or "angle" in columns:
-        return
+    if not columns or ("angle" in columns and "source_id" in columns):
+        return  # 全新库（建表即新形状）或已迁移
+    angle_expr = "angle" if "angle" in columns else "'正面'"
     conn.executescript(
         """
         CREATE TABLE pose_actions_new (
+            source_id TEXT NOT NULL DEFAULT '',
             pose_id TEXT NOT NULL,
             angle TEXT NOT NULL,
             action_text TEXT NOT NULL DEFAULT '',
             source TEXT NOT NULL DEFAULT 'manual',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
-            PRIMARY KEY (pose_id, angle)
+            PRIMARY KEY (source_id, pose_id, angle)
         );
-        INSERT INTO pose_actions_new (pose_id, angle, action_text, source, created_at, updated_at)
-            SELECT pose_id, '正面', action_text, source, created_at, updated_at
+        INSERT INTO pose_actions_new (source_id, pose_id, angle, action_text, source, created_at, updated_at)
+            SELECT 'pose-db-01', pose_id, """ + angle_expr + """,
+                   action_text, source, created_at, updated_at
             FROM pose_actions;
         DROP TABLE pose_actions;
         ALTER TABLE pose_actions_new RENAME TO pose_actions;
@@ -215,6 +290,7 @@ def connect(db_path: Path | None = None) -> sqlite3.Connection:
             conn.execute(statement)
         except sqlite3.OperationalError:
             pass  # 列已存在等幂等迁移
+    _rebuild_pose_images_pk(conn)
     _rebuild_pose_actions_pk(conn)
     return conn
 

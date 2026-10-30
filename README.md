@@ -364,8 +364,26 @@ python3 -m pytest -q
 
 - [Character Dataset Builder - Q21](https://civitai.red/models/2719177/character-dataset-builder)（作者 [AirbagGuy](https://civitai.com/user/AirbagGuy)，Qwen 2.1 Workflows）——本项目的提示词生成体系抽离并改造自该 ComfyUI 工作流：`q21_default_30`（V1 30 条变体）与 `q21_v2_30`（V2 30 条）的逐条文本、景别/朝向/表情编排与参考图分工结构均逐字保留自其 Text Multiline 设计，并在此之上修复了分隔符缺失、随机不可复现、caption 未接线等已知缺陷（见文档开头）。
 - 原工作流 JSON 文件不随本仓库分发（第三方产物，版权归原作者）；预设文本的回归测试以 sha256 基准锁定逐字一致性，仓库内不保留其文件副本。
+- 姿势/服饰图片库（`data/poses/`、`data/costumes/costume-db-01/`）来自作者 **ギア**（[x.com/giaaibusi](https://x.com/giaaibusi)）的系列站点：
+  - [ポーズ集 POSE-DB-01](https://ai-pose-gallery.pages.dev/)（288 动作 × 5 视角，灰色无脸人偶线稿）
+  - [ポーズ集 depthデータベース POSE-DB-02](https://ai-pose-depth-gallery.pages.dev/)（同一动作集的灰度深度图，白=近）
+  - [衣装集 COSTUME-DB-01](https://ai-costume-gallery.pages.dev/)（1407 条 AI 架空服饰图：ghost 平铺陈列）
+
+  随本仓库分发依据作者在 X 上的公开说明（允许二次发布、商用利用 OK）；其余许可条目
+  （可编辑・参考利用、无需署名、无保证、不得用于描绘实存人物或未成年）以各库目录内
+  README 与站点「注意点」为准。catalog/glossary 站点数据逐字保留，未做改动。
+
+- 人脸图片库（AIモデル顔データベース；本地 `data/faces/face-db-01/`，不随仓库分发）
+  来自运营 **あぎ**（[x.com/agi_aibusi](https://x.com/agi_aibusi)）：
+  [AIモデル顔データベース](https://ai-portrait-gallery.pages.dev/)——1499 条 AI 生成
+  架构虚构人物参考图（正面向き「フェイス」893 + 整体造型「スタイリング」606，发型
+  4 档）。许可 CC0 1.0（商用/编辑/参考 OK、无需署名）；站方请求图片数据不再配布
+  （お願い），故仅本地使用、重建靠 `scripts/download_face_db.py`；「実在人物の
+  なりすましや公序良俗に反する用途は不可」等条目见库内 README 与站点「利用ルール」。
 
 ## 许可证
 
 - 本项目代码与配置按 [MIT License](LICENSE) 发布（`Copyright (c) 2026 zwy`）。
 - q21 系预设中逐字保留的原工作流变体文本不属于本许可证覆盖范围，版权归原工作流作者。
+- 第三方图片库（`data/poses/`、`data/costumes/costume-db-01/`）与其站点数据按作者站内许可与公开说明分发，不属于 MIT 覆盖范围，版权归 ポーズ集/衣装集 作者（ギア）。
+- 人脸库（`data/faces/face-db-01/`）按 CC0 1.0 自由利用；站方请求图片数据不再配布（お願い），不随仓库分发，版权归 AIモデル顔データベース 运营（あぎ）。
