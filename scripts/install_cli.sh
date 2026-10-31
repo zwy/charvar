@@ -27,14 +27,17 @@ RETIRED_CSV="$(IFS=,; echo "${RETIRED_SKILL_NAMES[*]}")"
 
 mkdir -p "$BIN_DIR"
 
-# launcher：固定指向本仓库的 venv + PYTHONPATH，随仓库改动自动生效
+# launcher：固定指向本仓库的解释器 + PYTHONPATH，随仓库改动自动生效
+# 优先仓库 venv；全新克隆还没建 venv 时退回 PATH 里的 python3 —— 别让 CLI 直接不可用。
 LAUNCHER="$BIN_DIR/charvar"
 cat > "$LAUNCHER" <<EOF
 #!/bin/sh
 # charvar CLI launcher（由 scripts/install_cli.sh 生成，勿手改）
 REPO="$ROOT"
 export PYTHONPATH="\$REPO\${PYTHONPATH:+:\$PYTHONPATH}"
-exec "\$REPO/.venv/bin/python" -m charvar.cli "\$@"
+PY="\$REPO/.venv/bin/python"
+[ -x "\$PY" ] || PY="python3"
+exec "\$PY" -m charvar.cli "\$@"
 EOF
 chmod +x "$LAUNCHER"
 

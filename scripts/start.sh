@@ -17,8 +17,14 @@ if lsof -a -nP -iTCP:"${CHARVAR_WEB_PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
   exit 1
 fi
 
+# 优先用仓库内的 .venv（与 install_cli.sh 的 launcher 一致；没有 venv 才退回系统 python3）
+PYTHON_BIN="python3"
+if [ -x "${ROOT}/.venv/bin/python" ]; then
+  PYTHON_BIN="${ROOT}/.venv/bin/python"
+fi
+
 # detached screen：让服务在调用方 shell / 终端包装进程退出后仍然稳定运行
-screen -dmS "$SCREEN_NAME" /bin/zsh -lc "exec python3 -m web.app >'$LOG' 2>&1"
+screen -dmS "$SCREEN_NAME" /bin/zsh -lc "exec ${PYTHON_BIN} -m web.app >'$LOG' 2>&1"
 
 for _ in $(seq 1 20); do
   if curl -s --noproxy '*' "http://127.0.0.1:${CHARVAR_WEB_PORT}/api/version" >/dev/null 2>&1; then

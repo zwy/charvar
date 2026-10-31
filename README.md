@@ -146,9 +146,13 @@ LLM_MODEL=deepseek/deepseek-v4.1-flash
 ## 安装
 
 ```bash
-pip install -r requirements.txt   # 项目根目录执行；或 pip install -e . 安装 CLI（可用 charvar 命令）
-brew install ffmpeg               # 可选：合成视频需要（macOS Homebrew）
+python3 -m venv .venv                          # 建议建 venv：CLI 与 start.sh 都按它找解释器
+.venv/bin/python -m pip install -r requirements.txt   # 项目根目录执行
+brew install ffmpeg                           # 可选：合成视频需要（macOS Homebrew）
+cp .env.example .env                          # 填 LLM_API_KEY 等（.env 不进 git，改完要重启）
 ```
+
+完整部署步骤（前置条件、参考库初始化、首次检查清单、已知问题）见 **[部署指南](docs/部署.md)**。
 
 ## 启动 / 停止
 
@@ -158,6 +162,8 @@ brew install ffmpeg               # 可选：合成视频需要（macOS Homebrew
 CHARVAR_WEB_PORT=8799 ./scripts/start.sh   # 换端口多开；停止时同款环境变量或传端口参数
 ```
 
+- `start.sh` 优先用仓库内的 `.venv/bin/python`，没有 venv 才退回系统 `python3`；
+  `install_cli.sh` 生成的 `~/.local/bin/charvar` 同理。
 - `CHARVAR_WEB_PORT`（默认 8710）：`start.sh` / `stop.sh` 只认 shell 环境变量；`python3 -m web.app` 前台模式也会读 `.env` 里的该键。换端口建议统一用 `CHARVAR_WEB_PORT=8799 ./scripts/start.sh`。
 - stop.sh 优先按 PID 文件停止，再按「端口 + 本仓库 cwd」安全匹配进程，不会误杀无关进程；无论哪种路径命中都会顺带清理同名 screen 会话。
 - 手动前台运行 / 热重载开发：
@@ -334,6 +340,7 @@ LLM 优化模式（`mode=llm`）下服装走的是独立通路：服装段作为
 |---|---|
 | `data/charvar.db` | 主体档案、生成记录、comfy_prompts（JSON 全量存储，可整库备份） |
 | `data/workflows/` | ComfyUI API workflow + mapping 成对文件（README 说明约定） |
+| `data/poses/` `data/costumes/` `data/faces/` | 姿势库 / 服饰库 / 人脸库的**参考图数据**，不随 git 分发，需下载脚本 + CLI 灌库（步骤见 [部署指南](docs/部署.md)） |
 | `out/` | CLI 默认输出目录（`--out` 可改） |
 | `presets/` | YAML 预设（`actions/`）、通配符、主体档案样例、服装/贴字/视频/配方预设（规范见 `presets/README.md`） |
 
@@ -355,7 +362,7 @@ skills/             charvar-skill（出图/出视频）+ character-forge（角�
 ## 测试
 
 ```bash
-python3 -m pytest -q
+.venv/bin/python -m pytest -q
 ```
 
 覆盖：`q21_default_30` 与原 JSON 逐字一致、matrix 30 条 id 唯一且顺序稳定、同种子完全相等、删除变体不影响其他条目背景/光照、无 `.`/`..`/双空格/花括号残留、`subject_noun=man` 不出现 woman、ComfyUI payload 注入与 filename_prefix 唯一、API 冒烟。

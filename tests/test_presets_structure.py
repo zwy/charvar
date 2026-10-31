@@ -238,6 +238,25 @@ def test_wildcard_files_have_items_list():
         assert all(isinstance(v, str) for v in items), f"{path.name} 的 items 必须是字符串列表"
 
 
+def _studio_mirror_families() -> set[str]:
+    """仓库镜像 presets/costumes/studio/ 里的服饰家族名（= 条目的 category）。
+
+    服饰家族名不再由 yaml 预设承载，而是自建条目的 category；真源在运行时 DB
+    （charvar costume import-studio 灌库后 costume_items 里才有）。
+    但结构校验要在**没灌库的全新克隆**上也能跑，故并上仓库镜像里的家族名 ——
+    否则配方引用服饰家族会被误判成「预设不存在」。
+    """
+    names: set[str] = set()
+    base = PRESETS_ROOT / "costumes" / "studio"
+    if not base.is_dir():
+        return names
+    for path in sorted(base.glob("*.yaml")):
+        category = str(_load(path).get("category") or "").strip()
+        if category:
+            names.add(category)
+    return names
+
+
 def test_recipe_preset_refs_resolve():
     """配方里引用的预设名必须真实存在（按名引用，不是按路径）。
 
@@ -248,6 +267,7 @@ def test_recipe_preset_refs_resolve():
 
     known = {_load(p).get("name") for p in _action_presets()}
     outfit_names = {o["name"] for o in outfit.list_outfit_presets()}
+    outfit_names |= _studio_mirror_families()  # 未灌库时 DB 为空，用仓库镜像兜底
     hairstyle_names = {h["name"] for h in hairstyle.list_hairstyle_presets()}
     for path in _yaml_files("recipes"):
         data = _load(path)

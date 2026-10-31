@@ -210,7 +210,10 @@ def list_faces(
     """
     n_rows = conn.execute("SELECT COUNT(*) FROM face_items").fetchone()[0]
     if not n_rows:
-        raise FaceError("人脸库还是空的 —— 先跑 charvar face import")
+        raise FaceError(
+            "人脸库还是空的 —— 先跑 scripts/download_face_db.py 下载，"
+            "再 charvar face import 灌库"
+        )
     where: list[str] = []
     params: list[str] = []
     if source:

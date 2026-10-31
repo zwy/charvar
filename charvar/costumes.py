@@ -318,7 +318,10 @@ def list_items(
     """
     n_rows = conn.execute("SELECT COUNT(*) FROM costume_items").fetchone()[0]
     if not n_rows:
-        raise CostumeError("服饰库还是空的 —— 先跑 charvar costume import")
+        raise CostumeError(
+            "服饰库还是空的 —— 先跑 scripts/download_costume_db.py 下载，"
+            "再 charvar costume import 灌库"
+        )
     glossary = _load_glossary()
     tokens = [t for t in str(q or "").strip().lower().split() if t]
 

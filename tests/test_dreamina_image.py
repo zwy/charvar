@@ -82,6 +82,9 @@ def fake_env(tmp_path, monkeypatch):
         "DREAMINA_CONCURRENCY",
     ):
         monkeypatch.delenv(key, raising=False)
+    # 命令拼装/输出解析与本机是否装了 dreamina 无关：打桩掉解释器解析，
+    # 免得没装 CLI 的机器整组用例红（真实解析另有 test_binary_env_override 覆盖）。
+    monkeypatch.setattr(dreamina_image, "resolve_binary", lambda: "dreamina-fake")
     fake = FakeCli(download_root=tmp_path)
     monkeypatch.setattr(dreamina_image.subprocess, "run", fake)
     monkeypatch.setattr(dreamina_image.time, "sleep", lambda _s: None)

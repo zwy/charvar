@@ -232,7 +232,12 @@ const PoseGallery = (() => {
       const poses = filteredPoses();
       grid.innerHTML = "";
       if (!poses.length) {
-        grid.innerHTML = '<div class="pose-empty">没有符合条件的动作 —— 换个筛选条件</div>';
+        // 空库（还没初始化）与「筛完没结果」是两回事，别都写成「换个筛选条件」——
+        // 前者要给出下载+灌库的命令，否则新克隆的用户不知道去哪儿初始化。
+        grid.innerHTML = (allData && (allData.poses || []).length)
+          ? '<div class="pose-empty">没有符合条件的动作 —— 换个筛选条件</div>'
+          : '<div class="pose-empty">姿势库还没初始化 —— 先跑 <code>scripts/download_pose_db.py</code> 下载，'
+            + '再 <code>charvar pose import</code> 灌库</div>';
         return;
       }
       poses.forEach(function (p) {
