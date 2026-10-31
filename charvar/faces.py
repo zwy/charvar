@@ -35,6 +35,8 @@ SOURCE_ID = "face-db-01"
 # 自建库条目的 section/hair 词表沿用（FACE/SOURCE 都按条目存，不冲突）。
 FACE_SOURCES: dict[str, dict] = {
     "face-db-01": {"zh": "AI 顔データベース"},
+    "face-db-02-cn": {"zh": "自建中国成年女性人脸库（image-engine，虚构人物）"},
+    "face-db-03-cn": {"zh": "华语女艺人姓名测试脸库（image-engine，合成非实存人物）"},
 }
 
 # face_id 是浏览器发来的关键字（拼进查找 URL 与文件定位），只放行安全字符。
