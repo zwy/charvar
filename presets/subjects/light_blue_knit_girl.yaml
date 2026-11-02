@@ -1,5 +1,5 @@
 # 本文件由 `charvar subject derive` 生成（LLM 抽取 + 引用核对 + 审计），可人工修订。
-# 来源模板：light_blue_knit_girl.md（sha256:580c669106ed）
+# 来源模板：light_blue_knit_girl.md（sha256:305a3da03836）
 # 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-11-02 09:31 UTC
 # 起草 1 轮 · 审计 1 轮 · 审计通过 · 引用核对：24/24 条命中，无需修复
 # 人工修订：体形锚点从 identity_lock 移到 body_lock（锁定项只留脸/发/肤色），
