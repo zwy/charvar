@@ -1,0 +1,30 @@
+item_id: embroidered_sheer_robes_robe_black_rose
+source_id: studio
+display_type: flat_lay
+category: embroidered_sheer_robes
+label: 墨黑蔷薇（半透刺绣短罩袍）
+keywords: black sheer embroidered short wrap robe, tonal rose embroidery, wide straight
+  long sleeves, matching narrow tie belt
+prompt_text: 服装：该成年角色身穿黑色半透明细网纱短罩袍，衣长至大腿中段，交叠V领、宽直长袖；同色细腰带在腰前系结并垂下。黑色蔷薇刺绣在袖口和下摆形成清楚的花卉边饰，领缘及前襟有细窄包边。罩袍为唯一衣物，赤脚，无袜、帽子、手套、首饰或手包。
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white
+  background: a black short sheer fine-mesh wrap robe that ends at the upper thigh
+  (halfway between waist and knees), with an open crossover V-neck showing its two
+  separate front edges, wide straight sleeves reaching the wrists without flared cuffs,
+  narrow matching binding along the neckline and front edges, and tonal black rose
+  embroidery forming distinct floral borders at the cuffs and upper-thigh hem. One
+  separate matching narrow black tie belt. Lay the robe and belt flat as two separate
+  pieces with a clear gap and no overlap. The belt lies separately beside the robe,
+  not tied around the flat garment. Necklines toward the top, hems toward the bottom.
+  Preserve realistic relative sizes and show all edges with margins. Sheer mesh remains
+  translucent against the white surface while the embroidery is denser. Soft diffused
+  studio lighting from the upper left, faint contact shadows. No people, no mannequin,
+  no hangers, no shoes, no accessories beyond the listed belt, no text.'
+subject_policy: {}
+caption_tags:
+  robe_black_rose: black rose embroidered sheer short wrap robe
+sort_order: 2
+images:
+  file_path: png/embroidered_sheer_robes_robe_black_rose.png
+  image_path: img/embroidered_sheer_robes_robe_black_rose.webp
+  thumb_path: thumbs/embroidered_sheer_robes_robe_black_rose.webp

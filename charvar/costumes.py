@@ -58,6 +58,8 @@ STUDIO_FAMILY_ZH: dict[str, str] = {
     "chic_swimwear_outfits": "考究泳装",
     "glamorous_gala_dresses": "华丽礼服",
     "mature_milf_outfits": "御姐穿搭",
+    "embroidered_sheer_robes": "刺绣罩袍",
+    "polka_dot_cami_shorts": "波点套装",
     "character_outfit_debug": "调试条款",
 }
 

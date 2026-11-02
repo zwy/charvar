@@ -1,0 +1,29 @@
+item_id: embroidered_sheer_robes_robe_mist_blue_vine
+source_id: studio
+display_type: flat_lay
+category: embroidered_sheer_robes
+label: 雾蓝藤花（半透刺绣长罩袍）
+keywords: mist-blue sheer embroidered midi wrap robe, silver-grey flowering vine embroidery,
+  wide three-quarter sleeves, matching narrow tie belt
+prompt_text: 服装：该成年角色身穿雾蓝色半透明细网纱长罩袍，衣长至小腿中段，交叠V领、宽七分直袖；同色细腰带在腰前系结并垂下。银灰藤花刺绣集中于袖缘和下摆，领缘及前襟有细窄包边。罩袍为唯一衣物，赤脚，无袜、帽子、手套、首饰或手包。
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white
+  background: a mist-blue sheer fine-mesh mid-calf-length wrap robe with a crossover
+  V-neck, wide straight three-quarter-length sleeves, narrow matching binding along
+  the neckline and front edges, and silver-grey flowering vine embroidery concentrated
+  along the cuffs and hem. One separate matching narrow mist-blue tie belt. Lay the
+  robe and belt flat as two separate pieces with a clear gap and no overlap. The robe
+  front is slightly open to show its two front edges. The belt lies separately beside
+  the robe, not tied around the flat garment. Necklines toward the top, hems toward
+  the bottom. Preserve realistic relative sizes and show all edges with margins. Sheer
+  mesh remains translucent against the white surface while the embroidery is denser.
+  Soft diffused studio lighting from the upper left, faint contact shadows. No people,
+  no mannequin, no hangers, no shoes, no accessories beyond the listed belt, no text.'
+subject_policy: {}
+caption_tags:
+  robe_mist_blue_vine: mist-blue flowering vine embroidered sheer midi wrap robe
+sort_order: 3
+images:
+  file_path: png/embroidered_sheer_robes_robe_mist_blue_vine.png
+  image_path: img/embroidered_sheer_robes_robe_mist_blue_vine.webp
+  thumb_path: thumbs/embroidered_sheer_robes_robe_mist_blue_vine.webp

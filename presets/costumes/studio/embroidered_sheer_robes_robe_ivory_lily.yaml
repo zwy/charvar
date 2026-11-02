@@ -1,0 +1,31 @@
+item_id: embroidered_sheer_robes_robe_ivory_lily
+source_id: studio
+display_type: flat_lay
+category: embroidered_sheer_robes
+label: 象牙铃兰（半透刺绣及膝罩袍）
+keywords: ivory sheer embroidered knee-length wrap robe, lily-of-the-valley embroidery,
+  three-quarter subtly flared sleeves, matching narrow tie belt
+prompt_text: 服装：该成年角色身穿象牙白半透明细网纱及膝罩袍，交叠V领、七分微喇叭袖；同色细腰带在腰前系结并垂下。浅米白铃兰枝叶刺绣沿袖口和下摆分布，领缘及前襟有细窄包边。罩袍为唯一衣物，赤脚，无袜、帽子、手套、首饰或手包。
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white
+  background: an ivory sheer fine-mesh short wrap robe that ends at the knee (the
+  hem sits just above the calf, halfway along the thigh), a mid-length garment noticeably
+  shorter than a full-length gown, with an open crossover V-neck showing its two separate
+  front edges, three-quarter-length subtly flared sleeves, narrow matching binding
+  along the neckline and front edges, and pale cream lily-of-the-valley sprig embroidery
+  concentrated along the cuffs and knee hem. One separate matching narrow ivory tie
+  belt. Lay the robe and belt flat as two separate pieces with a clear gap and no
+  overlap. The belt lies separately beside the robe, not tied around the flat garment.
+  Necklines toward the top, hems toward the bottom. Preserve realistic relative sizes
+  and show all edges with margins. Sheer mesh remains translucent against the white
+  surface while the embroidery is denser. Soft diffused studio lighting from the upper
+  left, faint contact shadows. No people, no mannequin, no hangers, no shoes, no accessories
+  beyond the listed belt, no text.'
+subject_policy: {}
+caption_tags:
+  robe_ivory_lily: ivory lily-of-the-valley embroidered sheer knee-length wrap robe
+sort_order: 1
+images:
+  file_path: png/embroidered_sheer_robes_robe_ivory_lily.png
+  image_path: img/embroidered_sheer_robes_robe_ivory_lily.webp
+  thumb_path: thumbs/embroidered_sheer_robes_robe_ivory_lily.webp

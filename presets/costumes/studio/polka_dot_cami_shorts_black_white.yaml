@@ -1,0 +1,36 @@
+item_id: polka_dot_cami_shorts_black_white
+source_id: studio
+display_type: flat_lay
+category: polka_dot_cami_shorts
+label: 黑白经典（波点吊带紧身短裤套装）
+keywords: black and white small polka dots, thin-strap cropped camisole, low scoop
+  neckline, high-waisted very short fitted shorts, opaque matte stretch fabric
+prompt_text: 服装：该成年角色穿着黑色底、白色小波点两件套。上衣为细肩带、低弧形领口的合体短上衣，下摆至腰部；下装为超短高腰紧身短裤，平整宽腰头，裤长仅至大腿中段，裤口平直。上下装均为不透明哑光弹力面料，波点大小与疏密一致，上衣下摆与裤腰间留窄间隙。赤脚，无袜、帽子、手套、首饰或手包。
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white
+  background: exactly two separate garments in matching black opaque matte stretch
+  fabric with evenly spaced small solid white polka dots of consistent size and density
+  across both pieces. One fitted cropped camisole with two thin shoulder straps, a
+  low curved scoop neckline, simple narrow matching edge binding, and a straight hem
+  ending at the waist when worn. One pair of very short high-waisted fitted shorts
+  with a flat wide waistband, close-fitting legs ending at mid-thigh (halfway between
+  the crotch and the knee), a visible crotch seam, and straight horizontal leg openings;
+  full coverage for the short length, not high-cut briefs and not knee-length Bermudas.
+  The top and shorts are separate garments, not a romper or bodysuit. Lay the camisole
+  on the left and the shorts on the right, front sides facing up, fully flat on the
+  same surface, with a clear gap and no overlap. Neckline and waistband toward the
+  top of the frame, hems toward the bottom. Keep realistic relative garment sizes
+  and all straps and edges inside the frame with margins. The shorts are one garment
+  with two connected legs, not two separate pieces. No lace, sheer panels, contrasting
+  sporty stripes, logos, shoes, or additional accessories. Soft diffused studio lighting
+  from the upper left, faint contact shadows. No people, no mannequin, no hangers,
+  no text.'
+subject_policy: {}
+caption_tags:
+  black_white: black cropped camisole and high-waisted fitted shorts with small white
+    polka dots
+sort_order: 0
+images:
+  file_path: png/polka_dot_cami_shorts_black_white.png
+  image_path: img/polka_dot_cami_shorts_black_white.webp
+  thumb_path: thumbs/polka_dot_cami_shorts_black_white.webp

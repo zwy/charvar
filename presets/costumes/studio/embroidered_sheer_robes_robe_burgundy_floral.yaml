@@ -1,0 +1,30 @@
+item_id: embroidered_sheer_robes_robe_burgundy_floral
+source_id: studio
+display_type: flat_lay
+category: embroidered_sheer_robes
+label: 酒红花影（半透刺绣短罩袍）
+keywords: burgundy sheer embroidered short wrap robe, dense dark floral embroidery,
+  long sleeves with subtly flared cuffs, matching narrow tie belt
+prompt_text: 服装：该成年角色身穿浅酒红半透明细网纱短罩袍，衣长至大腿中段，交叠V领、宽长袖、微喇叭袖口；同色细腰带在腰前系结并垂下。深酒红花卉刺绣集中于袖口和下摆，领缘及前襟有细窄包边。罩袍为唯一衣物，赤脚，无袜、帽子、手套、首饰或手包。
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white
+  background: a pale burgundy short sheer fine-mesh wrap robe that ends at the upper
+  thigh (halfway between waist and knees), with an open crossover V-neck showing its
+  two separate front edges, wide sleeves reaching the wrists with subtly flared cuffs,
+  narrow matching binding along the neckline and front edges, and dense dark burgundy
+  floral embroidery concentrated at the cuffs and upper-thigh hem. One separate matching
+  narrow burgundy tie belt. Lay the robe and belt flat as two separate pieces with
+  a clear gap and no overlap. The belt lies separately beside the robe, not tied around
+  the flat garment. Necklines toward the top, hems toward the bottom. Preserve realistic
+  relative sizes and show all edges with margins. Sheer mesh remains translucent against
+  the white surface while the embroidery is denser. Soft diffused studio lighting
+  from the upper left, faint contact shadows. No people, no mannequin, no hangers,
+  no shoes, no accessories beyond the listed belt, no text.'
+subject_policy: {}
+caption_tags:
+  robe_burgundy_floral: burgundy floral embroidered sheer short wrap robe
+sort_order: 0
+images:
+  file_path: png/embroidered_sheer_robes_robe_burgundy_floral.png
+  image_path: img/embroidered_sheer_robes_robe_burgundy_floral.webp
+  thumb_path: thumbs/embroidered_sheer_robes_robe_burgundy_floral.webp
