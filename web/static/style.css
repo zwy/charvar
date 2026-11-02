@@ -783,23 +783,41 @@ td .caption { color: var(--muted); }
   .face-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
 }
 
-/* Playground 参考构成槽位（工作流模式：固定槽位卡；空态虚线占位 + 选择钮，
-   填态复用 .ref-pick 缩略卡 —— 与平铺参考图同一张卡视觉） */
+/* Playground 参考构成槽位（工作流模式）：每种模式一套固定行 ——
+   左列 210px 标签（imageN 徽章垂直对齐），右列 480px 定宽控件列
+   （虚线空态框 / 填态卡 / 正文域全部同宽），不做整卡通栏。 */
 #adhoc-flow-slots { display: flex; flex-direction: column; gap: var(--sp-2); }
-.slot-pick { display: flex; align-items: flex-end; gap: var(--sp-3); }
-.slot-head { display: flex; align-items: center; gap: var(--sp-2); flex: 0 0 150px; padding-bottom: var(--sp-3); }
+.slot-pick, .flow-body-lock, .flow-identity-row {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 480px);
+  align-items: center;
+  column-gap: var(--sp-3);
+}
+.slot-head { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
 .slot-tag { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; color: var(--muted); background: #f4f6f9; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
-.slot-name { font-size: 12px; color: var(--text); text-align: right; }
+.slot-name { font-size: 12px; color: var(--text); white-space: nowrap; }
 .slot-opt { font-size: 11px; color: var(--muted); }
 .slot-body { min-width: 0; }
-.slot-empty { min-width: 132px; min-height: 56px; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--line); border-radius: var(--radius-panel); background: #fafbfd; cursor: pointer; }
+.slot-empty { width: 100%; min-height: 64px; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--line); border-radius: var(--radius-panel); background: #fafbfd; cursor: pointer; }
 .slot-empty:hover { border-color: var(--accent); }
-.slot-pick .ref-pick { cursor: default; }
-.flow-subject-field { display: flex; align-items: flex-end; gap: var(--sp-3); }
-.flow-subject-name { font-size: 12px; color: var(--muted); white-space: nowrap; padding-bottom: 10px; }
-.flow-subject-field select { font: inherit; padding: 6px 9px; min-height: var(--ctl-h); border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; color: var(--text); max-width: 280px; }
-.flow-slot-preview { width: 56px; height: 56px; object-fit: cover; border: 1px solid var(--line); border-radius: 6px; background: #f4f6f9; cursor: zoom-in; margin-bottom: 4px; }
-.flow-body-lock { display: flex; align-items: flex-end; gap: var(--sp-3); }
-.flow-body-ta { flex: 0 1 460px; font: inherit; font-size: 13px; padding: 7px 9px; border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; color: var(--text); }
+/* 填态卡：紧凑横排（48px 方图 + 名称省略 + 徽章 + 移除），行高与空态虚线框一致 */
+.slot-pick .ref-pick { width: 100%; cursor: default; flex-direction: row; align-items: center; gap: var(--sp-2); padding: 7px 10px; }
+.slot-pick .ref-pick img { width: 48px; height: 48px; max-width: none; max-height: none; object-fit: cover; border-radius: 6px; cursor: zoom-in; flex: none; }
+.slot-pick .ref-pick .ref-thumb-empty { width: 48px; height: 48px; flex: none; }
+.slot-pick .ref-pick .ref-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.slot-pick .ref-pick .badge { flex: none; }
+.slot-pick .ref-pick .btn-sm { flex: none; }
+.flow-subject-name { font-size: 12px; color: var(--muted); }
+.flow-body-ta { width: 100%; font: inherit; font-size: 13px; padding: 7px 9px; border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; color: var(--text); }
 .flow-body-ta:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.flow-identity-row { padding-bottom: var(--sp-3); }
+.flow-identity-row .segmented { justify-self: start; }
+/* 主体档案弹窗选择器：档案卡网格（与动作/服饰/人脸弹层卡同构） */
+.subject-pick-grid { margin-top: var(--sp-2); }
+.subject-pick-card { padding: 8px; overflow: visible; position: relative; }
+.subject-pick-card.active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.subject-pick-card .image-meta { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 1px; min-height: 0; }
+.subject-pick-card strong { font-family: var(--mono); font-size: 12px; color: var(--text); word-break: break-all; }
+@media (max-width: 500px) {
+  .slot-pick, .flow-body-lock, .flow-identity-row { grid-template-columns: 1fr; row-gap: 4px; }
+  .slot-head { flex-wrap: wrap; }
+}
