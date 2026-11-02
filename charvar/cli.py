@@ -1811,7 +1811,7 @@ def costume_prompt_cmd(
 
 
 @costume_app.command("import")
-def costume_import_cmd() -> None:
+def costume_import_cmd(source: str = typer.Argument(None, help="库 id（缺省 costume-db-01；动漫库 costume-anime-db-01）")) -> None:
     """磁盘 catalog.json + display_types.json 侧车 → costume_items 索引（幂等重灌）。
 
     costume_prompts（用户文本层）绝不碰 —— pose_actions 同红线。缺图/魔数不符整批拒绝。
@@ -1819,9 +1819,10 @@ def costume_import_cmd() -> None:
     from charvar import costumes as costumes_service
     from charvar import storage
 
+    source_id = str(source or "").strip() or costumes_service.SOURCE_ID
     with storage.connect() as conn:
         try:
-            data = costumes_service.import_catalog(conn, costumes_service.SOURCE_ID)
+            data = costumes_service.import_catalog(conn, source_id)
         except costumes_service.CostumeError as exc:
             _die(str(exc))
     typer.echo(f"导入完成：{data['items']} 条 → costume_items（{data['source_id']}）")
@@ -2007,6 +2008,7 @@ def face_list_cmd(
     source: str = typer.Option("", "--source", help="按库 id 过滤（face-db-01/…）"),
     section: str = typer.Option("", "--section", help="按形态过滤（face/styling）"),
     hair: str = typer.Option("", "--hair", help="按发型类别原文过滤"),
+    media: str = typer.Option("", "--media", help="按 media_type 过滤（real=真人/anime=动漫）"),
     query: str = typer.Option("", "--q", "--query", help="按 style/hair/id 过滤"),
     json_out: bool = typer.Option(False, "--json", help="以 JSON 输出"),
 ) -> None:
@@ -2017,7 +2019,9 @@ def face_list_cmd(
         try:
             if source:
                 faces_service._source_or_raise(source)
-            data = faces_service.list_faces(conn, source=source, section=section, hair=hair, q=query)
+            data = faces_service.list_faces(
+                conn, source=source, section=section, hair=hair, media=media, q=query
+            )
         except faces_service.FaceError as exc:
             _die(str(exc))
     if json_out:

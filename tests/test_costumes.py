@@ -26,11 +26,12 @@ from tests.test_adhoc import _mock_comfy, _setup_workflows
 def _build_fake_costume_data(
     data_dir: pathlib.Path,
     *,
+    source: str | None = None,
     catalog: list[dict] | None = None,
     glossary: dict[str, str] | None = None,
 ) -> pathlib.Path:
     """按下载布局造一个小服装库：catalog.json + thumbs/*.webp + img/*.webp。"""
-    src = data_dir / "costumes" / costumes_service.SOURCE_ID
+    src = data_dir / "costumes" / (source or costumes_service.SOURCE_ID)
     (src / "thumbs").mkdir(parents=True, exist_ok=True)
     (src / "img").mkdir(parents=True, exist_ok=True)
     plan = catalog
@@ -68,11 +69,11 @@ def _build_fake_costume_data(
     return src
 
 
-def _imported(data_dir: pathlib.Path, **kw) -> pathlib.Path:
+def _imported(data_dir: pathlib.Path, *, source: str | None = None, **kw) -> pathlib.Path:
     """造假库 + import_catalog 进隔离 DB（读法测试都用它起步）。"""
-    src = _build_fake_costume_data(data_dir, **kw)
+    src = _build_fake_costume_data(data_dir, source=source, **kw)
     with storage.connect() as conn:
-        costumes_service.import_catalog(conn)
+        costumes_service.import_catalog(conn, source or costumes_service.SOURCE_ID)
     return src
 
 
@@ -127,6 +128,41 @@ def test_list_items_empty_db_hints_import(data_dir):
 
 
 # ---------- 检索（服务端 q 与前端同语义） ----------
+
+def test_multi_source_media_and_bare_ref_ambiguity(data_dir):
+    """多源 + media 标记：登记表缺省填列、?media 过滤、裸 id 跨库歧义显式报错。"""
+    _imported(data_dir)  # costume-db-01（real）
+    anime_catalog = [
+        {"id": "SPR-0001", "カテゴリ": "春", "キーワード": "anime sailor dress"},
+        {"id": "SXY-0099", "カテゴリ": "セクシー", "キーワード": "anime lace"},
+    ]
+    _imported(data_dir, source="costume-anime-db-01", catalog=anime_catalog)
+    with storage.connect() as conn:
+        data = costumes_service.list_items(conn)
+        assert [s["id"] for s in data["sources"]] == ["costume-db-01", "costume-anime-db-01"]
+        assert [s["zh"] for s in data["sources"]][:2] == ["站点库（実写版）", "动漫库（アニメ版）"]
+        by_source = {}
+        for it in data["items"]:
+            by_source.setdefault(it["source_id"], []).append(it["media_type"])
+        assert set(by_source["costume-db-01"]) == {"real"}
+        assert set(by_source["costume-anime-db-01"]) == {"anime"}
+        # media 过滤（服务端）
+        assert {it["source_id"] for it in costumes_service.list_items(conn, media="anime")["items"]} == {
+            "costume-anime-db-01"
+        }
+        assert {it["source_id"] for it in costumes_service.list_items(conn, media="real")["items"]} == {
+            "costume-db-01"
+        }
+        # source 过滤 + 裸 id 跨库歧义
+        assert len(costumes_service.list_items(conn, source_id="costume-anime-db-01")["items"]) == 2
+        with pytest.raises(costumes_service.CostumeError):
+            costumes_service.resolve_ref(conn, "SPR-0001")
+        row = costumes_service.resolve_ref(conn, "costume-anime-db-01/SPR-0001")
+        assert row["media_type"] == "anime"
+        # 未登记库显式报错
+        with pytest.raises(costumes_service.CostumeError):
+            costumes_service.import_catalog(conn, "costume-db-99")
+
 
 def test_query_search_and_glossary_expansion(data_dir):
     _imported(data_dir)
@@ -479,6 +515,9 @@ def test_costumes_endpoints_serve_catalog_and_images(data_dir, client):
     assert len(client.get("/costumes", params={"category": "春"}).json()["items"]) == 1
     assert len(client.get("/costumes", params={"q": "denim"}).json()["items"]) == 1
     assert client.get("/costumes", params={"q": "完全不搭边"}).json()["items"] == []
+    # media 过滤与未登记库 404
+    assert client.get("/costumes", params={"media": "anime"}).json()["items"] == []
+    assert client.get("/costumes", params={"source": "costume-db-99"}).status_code == 404
     # 404：没有这条服装 / 没有这个库 / 空库提示
     assert client.get("/costumes/image/costume-db-01/NOPE-0000/thumb").status_code == 404
     assert client.get("/costumes/image/other-lib/SPR-0001/thumb").status_code == 404

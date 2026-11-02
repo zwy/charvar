@@ -881,6 +881,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         source: str = Query("", description="按库 id 过滤（face-db-01/…）"),
         section: str = Query("", description="按形态过滤（face/styling）"),
         hair: str = Query("", description="按发型类别原文过滤"),
+        media: str = Query("", description="按 media_type 过滤（real=真人/anime=动漫；空=全部）"),
         q: str = Query("", max_length=60, description="按 style/hair/id 过滤"),
     ) -> dict[str, Any]:
         """人脸库浏览：全量清单 + 库/形态/发型元数据（页签过滤在客户端）。
@@ -891,7 +892,9 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             try:
                 if source:
                     faces_service._source_or_raise(source)  # 未知库显式 404（不静默当空库）
-                return faces_service.list_faces(conn, source=source, section=section, hair=hair, q=q)
+                return faces_service.list_faces(
+                    conn, source=source, section=section, hair=hair, media=media, q=q
+                )
             except faces_service.FaceError as exc:
                 raise HTTPException(404, str(exc)) from exc
 
@@ -931,7 +934,9 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     # ---- 服饰库（costume_items/costume_prompts 双表；索引层由 costume import 重灌） ----
     @app.get("/costumes")
     def api_costumes_list(
+        source: str = Query("", description="按库 id 过滤（costume-db-01/costume-anime-db-01/studio）"),
         category: str = Query("", description="按目录原文过滤"),
+        media: str = Query("", description="按 media_type 过滤（real=真人/anime=动漫；空=全部）"),
         q: str = Query("", max_length=60, description="按 id/英文关键词过滤（日文词经站点词表扩写）"),
     ) -> dict[str, Any]:
         """服饰库浏览：全量清单 + 目录元数据 + 检索词表（客户端过滤）。
@@ -940,7 +945,11 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         """
         with storage.connect() as conn:
             try:
-                return costumes_service.list_items(conn, category=category, q=q)
+                if source:
+                    costumes_service._source_or_raise(source)  # 未知库显式 404
+                return costumes_service.list_items(
+                    conn, source_id=source, category=category, media=media, q=q
+                )
             except costumes_service.CostumeError as exc:
                 raise HTTPException(404, str(exc)) from exc
 

@@ -16,19 +16,19 @@
 
 参考图第四来源 `pose_id`+`angle`+`source`（详见 `docs/姿势库.md`）：线稿 pose-db-01 / 深度图 pose-db-02 同
 id 分键（新库/自建进 `POSE_SOURCES`）；**role=pose 只锚姿势不锚身份**，尾句按 display_type 分线稿/深度
-版；图片随仓库分发（作者 X 公告二次发布）；描述/收藏用户层重灌不碰；整页/弹层共用 posegallery.js。
+版；图库为本地素材；描述/收藏用户层重灌不碰；整页/弹层共用
+posegallery.js。
 
 ## 服饰库
 
-costume-db-01（姿势库同作者、同上分发；细则见 `docs/服饰库.md`）：换装语义
-（`subject_policy.clothing`）：`replace`（缺省）/ `add` 叠加 / `keep`；服饰文本
-三层 keywords / prompt_text（服饰段）/ ref_prompt（制图提示词），**站点 keywords
+実写版 costume-db-01/动漫版 costume-anime-db-01 多源（`COSTUME_SOURCES`；
+细则见 `docs/服饰库.md`）；**裸 item 引用写全 `source/item`（id 两站重叠）**。换装语义（`subject_policy.clothing`）：`replace`（缺省）/ `add` 叠加 / `keep`；服饰文本三层 keywords / prompt_text（服饰段）/ ref_prompt（制图提示词），**站点 keywords
 逐字不可改**；网页可编辑文本/策略/收藏/重生成（自建）。
 
 ## 人脸库
 
 face-db-01（AIモデル顔データベース，运营 あぎ；CC0 但站方请求图像数据不再配布 →
-**不随仓库分发**，与 pose/costume 不同；见 `docs/人脸库.md`）：face=锚脸 /
+**不随仓库分发**；见 `docs/人脸库.md`）：face=锚脸 /
 styling=锚脸+发型+服装（section 随条目存，锚定分句 `face`/`face_styling` 二选一）；
 参考图 role=`face`；浏览 `/faces` 与「人脸」页签；收藏
 `face_favorites` 用户层重灌不碰；新库/自建进 `FACE_SOURCES`。

@@ -30,13 +30,15 @@ from charvar import paths
 # 缺省库（CLI 兼容入口与旧调用回退到它）
 SOURCE_ID = "face-db-01"
 
-# 库登记表：source_id → 中文标签。都是同一运营（あぎ，x.com/agi_aibusi）的
-# 站点；新库/自建库 = 加一行 + download 脚本 SITES 表加站点 + 磁盘目录对齐。
+# 库登记表：source_id → 中文标签 + media 缺省（real=真人/实拍感 / anime=动漫；
+# import 按它填 media_type 列，storage 启动回填也读这里）。同一运营（あぎ，
+# x.com/agi_aibusi）的站点与自建库目前都是实拍感真人脸 → 全 real；将来接动漫脸库
+# = 加一行 media: "anime" + download 脚本 SITES 表加站点 + 磁盘目录对齐。
 # 自建库条目的 section/hair 词表沿用（FACE/SOURCE 都按条目存，不冲突）。
 FACE_SOURCES: dict[str, dict] = {
-    "face-db-01": {"zh": "AI 顔データベース"},
-    "face-db-02-cn": {"zh": "自建中国成年女性人脸库（image-engine，虚构人物）"},
-    "face-db-03-cn": {"zh": "华语女艺人姓名测试脸库（image-engine，合成非实存人物）"},
+    "face-db-01": {"zh": "AI 顔データベース", "media": "real"},
+    "face-db-02-cn": {"zh": "自建中国成年女性人脸库（image-engine，虚构人物）", "media": "real"},
+    "face-db-03-cn": {"zh": "华语女艺人姓名测试脸库（image-engine，合成非实存人物）", "media": "real"},
 }
 
 # face_id 是浏览器发来的关键字（拼进查找 URL 与文件定位），只放行安全字符。
@@ -161,17 +163,19 @@ def import_catalog(conn: sqlite3.Connection, source: str = SOURCE_ID, origin: Pa
     from charvar import storage  # 延迟导入（utcnow），poses 同理由
 
     now = storage.utcnow()
+    media = str(FACE_SOURCES[source].get("media") or "")
     conn.executemany(
         """INSERT INTO face_items
            (source, face_id, section, hair, style, width, height, bytes,
-            file_path, thumb_path, sort_seq, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            file_path, thumb_path, sort_seq, media_type, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(source, face_id) DO UPDATE SET
              section=excluded.section, hair=excluded.hair, style=excluded.style,
              width=excluded.width, height=excluded.height, bytes=excluded.bytes,
              file_path=excluded.file_path, thumb_path=excluded.thumb_path,
-             sort_seq=excluded.sort_seq, updated_at=excluded.updated_at""",
-        [(r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9], r[10], now) for r in rows],
+             sort_seq=excluded.sort_seq, media_type=excluded.media_type,
+             updated_at=excluded.updated_at""",
+        [(r[0], r[1], r[2], r[3], r[4], r[5], r[6], r[7], r[8], r[9], r[10], media, now) for r in rows],
     )
     conn.commit()
     return {"source": source, "faces": len(rows), "catalog": str(catalog_file)}
@@ -200,13 +204,15 @@ def list_faces(
     source: str = "",
     section: str = "",
     hair: str = "",
+    media: str = "",
     q: str = "",
 ) -> dict:
     """人脸清单 + 库/形态/发型元数据，人脸库浏览页一次拉全。
 
     q 对 style/hair/face_id 大小写不敏感（LIKE）。items 按 站点 catalog 数组
     次序排（sort_seq）—— 与站点分组展示一致。section/hair 的页签过滤在
-    客户端做（列表一次拉全，1499 条不大）。
+    客户端做（列表一次拉全，1499 条不大）；media=real|anime 服务端过滤
+    （空 = 不筛，未标记条目只见于「全部」）。
     """
     n_rows = conn.execute("SELECT COUNT(*) FROM face_items").fetchone()[0]
     if not n_rows:
@@ -225,13 +231,16 @@ def list_faces(
     if hair:
         where.append("fi.hair = ?")
         params.append(hair)
+    if media:
+        where.append("fi.media_type = ?")
+        params.append(media)
     if q:
         where.append("(fi.style LIKE ? OR fi.hair LIKE ? OR fi.face_id LIKE ?)")
         like = f"%{q.strip()}%"
         params.extend([like, like, like])
     rows = conn.execute(
         "SELECT fi.source, fi.face_id, fi.section, fi.hair, fi.style, fi.width, fi.height,"
-        " fi.bytes, fi.thumb_path, fi.updated_at, fk.face_id AS fav_face"
+        " fi.bytes, fi.thumb_path, fi.updated_at, fi.media_type, fk.face_id AS fav_face"
         " FROM face_items AS fi"
         " LEFT JOIN face_favorites AS fk ON fk.source_id = fi.source AND fk.face_id = fi.face_id"
         + (" WHERE " + " AND ".join(where) if where else "")
@@ -251,6 +260,7 @@ def list_faces(
             "style": r["style"],
             "width": r["width"],
             "height": r["height"],
+            "media_type": r["media_type"] or "",
             # URL 带 updated_at 当版本参 —— 重灌后浏览器缓存自然失效
             "thumb_url": f"/faces/image/{r['source']}/{r['face_id']}/thumb?v={r['updated_at']}",
             "full_url": f"/faces/image/{r['source']}/{r['face_id']}/full?v={r['updated_at']}",

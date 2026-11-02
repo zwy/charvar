@@ -11,7 +11,7 @@
 const CostumeGallery = (() => {
   function mount({ root, onPick, close, onStat, variant = "modal" }) {
     let allData = null;
-    const filter = { source: "", category: "", q: "", fav: false };
+    const filter = { source: "", category: "", q: "", fav: false, media: "" };
     let selectedItem = null;
 
     root.innerHTML =
@@ -31,8 +31,12 @@ const CostumeGallery = (() => {
     const grid = root.querySelector(".costume-grid");
     const detailEl = root.querySelector(".costume-detail");
 
-    /* 来源中文名（自建库与站点库的来源页签/徽章行都读它；未知 id 原样显示） */
-    const SOURCE_ZH = { "costume-db-01": "站点库", "studio": "自建库" };
+    /* 来源中文名（自建库、站点库与动漫库的来源页签/徽章行都读它；未知 id 原样显示。
+       服务端 sources 行自带 zh —— 展示优先用服务端值，这里只是未知 id 的回退） */
+    const SOURCE_ZH = { "costume-db-01": "站点库", "costume-anime-db-01": "动漫库", "studio": "自建库" };
+
+    /* 媒体维度（真人/动漫筛选 chips 用；值 = 条目 media_type） */
+    const MEDIA_ZH = { "real": "真人", "anime": "动漫" };
 
     /* 换装语义显示名（subject_policy.clothing；空策略 = 换装工作流默认整套替换） */
     const POLICY_ZH = {
@@ -55,19 +59,26 @@ const CostumeGallery = (() => {
       return z === orig ? esc(z) : esc(z) + "<em>（" + esc(orig || "") + "）</em>";
     }
 
-    /* 目录计数（随当前来源筛选联动；来源页签点击用它判断目录是否被筛空） */
+    /* 目录计数（随当前来源/媒体筛选联动；来源与媒体页签点击用它判断目录是否被筛空） */
     function catCount(category) {
       return (allData.items || []).filter(function (it) {
-        return (!filter.source || it.source_id === filter.source) && it.category === category;
+        return (!filter.source || it.source_id === filter.source) &&
+          (!filter.media || (it.media_type || "") === filter.media) &&
+          it.category === category;
       }).length;
+    }
+
+    /* 目录被筛选（媒体/来源）筛空时回落「全部目录」；媒体 chip 与来源页签共用 */
+    function ensureCategoryAlive() {
+      if (filter.category && !catCount(filter.category)) filter.category = "";
     }
 
     function favCount() {
       return (allData.items || []).filter(function (it) { return it.favorited; }).length;
     }
 
-    /* 来源页签（全部 / 站点库 / 自建库）。♥ 收藏筛选 chip 不在这行 —— 三库归一後
-       挂在第二行（目录页签）行尾，见 renderTabs。 */
+    /* 来源页签（全部 / 各库，登记表序：站点库 → 动漫库 → 自建库）。♥ 收藏筛选 chip
+       不在这行 —— 归一後挂第二行（目录页签）行尾，见 renderTabs。 */
     function renderSourceTabs() {
       const tabs = root.querySelector(".costume-src-tabs");
       const total = (allData.items || []).length;
@@ -76,8 +87,8 @@ const CostumeGallery = (() => {
         counts[s.id] = s.count;
       });
       const keys = [["", "全部", total]].concat(
-        ["costume-db-01", "studio"].map(function (id) {
-          return [id, SOURCE_ZH[id] || id, counts[id] || 0];
+        (allData.sources || []).map(function (s) {
+          return [s.id, s.zh || SOURCE_ZH[s.id] || s.id, counts[s.id] || 0];
         })
       );
       tabs.innerHTML = keys
@@ -92,9 +103,7 @@ const CostumeGallery = (() => {
         btn.addEventListener("click", function (ev) {
           filter.source = btn.dataset.v;
           /* 来源切换时目录若被筛空（如站点库下点自建家族），自动回落「全部目录」 */
-          if (filter.category && !catCount(filter.category)) {
-            filter.category = "";
-          }
+          ensureCategoryAlive();
           renderSourceTabs();
           renderTabs();
           renderGrid();
@@ -103,13 +112,19 @@ const CostumeGallery = (() => {
     }
 
     /* 目录页签：类目与次序来自服务端（站点固定次序 + 自建家族尾部追加），
-       计数现算（随来源筛选联动）；被当前来源筛空的目录页签隐藏。行尾挂 ♥ 收藏
-       筛选 chip（计数现算；0 收藏时隐藏——空筛选 chip 没有存在意义；三库归一
-       都放内容维度行尾）。 */
+       计数现算（随来源筛选联动）；被当前来源筛空的目录页签隐藏。行尾挂媒体
+       筛选 chips（真人/动漫，点选互斥、再点取消——三态；计数随来源联动）与
+       ♥ 收藏筛选 chip（计数现算；0 收藏时隐藏——空筛选 chip 没有存在意义；
+       三库归一都放内容维度行尾）。 */
     function renderTabs() {
       const tabs = root.querySelector(".costume-cat-tabs");
-      const items = (allData.items || []).filter(function (it) {
+      const base = (allData.items || []).filter(function (it) {
         return !filter.source || it.source_id === filter.source;
+      });
+      /* 目录计数随媒体筛选联动（chip 开着时目录数只数该媒体的）；媒体 chip 自己的
+         计数不吃 media（要能切回去），吃 全部 base。 */
+      const items = base.filter(function (it) {
+        return !filter.media || (it.media_type || "") === filter.media;
       });
       const keys = [["", "全部", items.length]].concat(
         (allData.categories || [])
@@ -127,6 +142,13 @@ const CostumeGallery = (() => {
           );
         })
         .join("");
+      ["real", "anime"].forEach(function (m) {
+        const n = base.filter(function (it) { return (it.media_type || "") === m; }).length;
+        if (!n) return; /* 该媒体没有条目就不给 chip（空筛选 chip 没有存在意义） */
+        html +=
+          '<button type="button" class="seg costume-media-chip' + (filter.media === m ? " active" : "") +
+          '" data-media="' + m + '">' + esc(MEDIA_ZH[m] || m) + " <em>" + n + "</em></button>";
+      });
       const n = favCount();
       if (n) {
         html +=
@@ -138,6 +160,16 @@ const CostumeGallery = (() => {
         if (btn.dataset.fav) {
           btn.addEventListener("click", function () {
             filter.fav = !filter.fav;
+            renderTabs();
+            renderGrid();
+          });
+          return;
+        }
+        if (btn.dataset.media) {
+          btn.addEventListener("click", function () {
+            filter.media = filter.media === btn.dataset.media ? "" : btn.dataset.media;
+            /* 媒体切换时目录若被筛空（如动漫库下点自建家族目录），自动回落「全部目录」 */
+            ensureCategoryAlive();
             renderTabs();
             renderGrid();
           });
@@ -169,6 +201,7 @@ const CostumeGallery = (() => {
     function matches(item) {
       if (filter.source && item.source_id !== filter.source) return false;
       if (filter.category && item.category !== filter.category) return false;
+      if (filter.media && (item.media_type || "") !== filter.media) return false;
       if (filter.fav && !item.favorited) return false;
       if (filter.q) {
         const hay = (item.item_id + " " + (item.label || "") + " " + item.keywords + " " +
@@ -387,6 +420,11 @@ const CostumeGallery = (() => {
         : '<span class="costume-badge costume-badge-muted">隐形模特</span>';
       const sourceChip = '<span class="costume-badge costume-badge-muted">' +
         esc(SOURCE_ZH[it.source_id] || it.source_id) + "</span>";
+      /* 媒体徽章：真人/动漫（未标记条目不出徽章 —— 「全部」里自己辨） */
+      const mediaChip = it.media_type
+        ? '<span class="costume-badge' + (it.media_type === "anime" ? "" : " costume-badge-muted") + '">' +
+          esc(MEDIA_ZH[it.media_type] || it.media_type) + "</span>"
+        : "";
       const pol = it.subject_policy || {};
       const polChip = pol.clothing
         ? '<span class="costume-badge' + (pol.clothing === "add" ? '' : ' costume-badge-muted') + '">' +
@@ -482,7 +520,7 @@ const CostumeGallery = (() => {
         '<div class="costume-detail-titles">' +
         "<h3>" + esc(it.label || it.item_id) + "</h3>" +
         '<div class="costume-jp">' + bilingual(it.category_zh, it.category) + "</div>" +
-        '<div class="costume-tags">' + favBtn + sourceChip + displayChip + polChip +
+        '<div class="costume-tags">' + favBtn + sourceChip + mediaChip + displayChip + polChip +
         (it.image_url
           ? ""
           : '<span class="costume-badge costume-badge-muted">无图 · 纯文本</span>') +

@@ -3,13 +3,8 @@
   "configurations": [
     {
       "name": "charvar-web",
-      "runtimeExecutable": ".venv/bin/python",
-      "runtimeArgs": ["-m", "web.app"],
+      "url": "http://127.0.0.1:8710",
       "port": 8710
-    },
-    {
-      "name": "charvar-attach",
-      "url": "http://127.0.0.1:8710"
     }
   ]
 }

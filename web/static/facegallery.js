@@ -1,18 +1,23 @@
 /* 人脸库共享渲染：genrefs.js 的弹层与顶栏「人脸」整页（facepage.js）同用这一套
    —— 网格 CSS 红线、双语规则、筛选交互只修一处，别再两处分叉。多库结构：
-   来源页签（全部 / AI 顔データベース face-db-01 —— 新库/自建库加 source 即可）
+   来源页签（全部 / 各库，登记表序；新库/自建库加 source 即可）
    → 形态页签（全部 / 人脸 face=只锚脸 / 造型 styling=锚脸+发型+服装 —— 站点
-   section，随条目存）→ 发型下拉（4 档）→ 搜索 → 卡片网格 + 常驻详情。
+   section，随条目存；行尾挂 真人/动漫 媒体 chips 与 ♥ 收藏 chip）→ 发型下拉
+   （4 档）→ 搜索 → 卡片网格 + 常驻详情。媒体维度 = 条目 media_type
+   （real=真人/anime=动漫），真人素材配真人口味、动漫素材配动漫画风。
    中日对照：中文为主阅读层级、日文原文 muted 小字。每条一张图，无视角双键。
    收藏（face_favorites 用户层，重灌不碰）对齐动作库：卡片右上「收藏 / 已收藏」
    徽章（点了不选卡）+ ♥ 收藏页签（形态行尾，0 收藏时隐藏）+ 详情钮，卡片↔详情
    同步；整页没有参考图上下文，不渲染「加入参考图」。 */
 const FaceGallery = (() => {
-  /* 来源中文标签（与后端 FACE_SOURCES 的 zh 同步维护） */
+  /* 来源中文标签（与后端 FACE_SOURCES 的 zh 同步维护；服务端 sources 行自带
+     zh —— 展示优先用服务端值，这里只是未知 id 的回退） */
   const FACE_SOURCE_ZH = { "face-db-01": "AI 顔" };
+  /* 媒体维度（真人/动漫筛选 chips 用；值 = 条目 media_type） */
+  const MEDIA_ZH = { "real": "真人", "anime": "动漫" };
   function mount({ root, onPick, close, onStat, variant = "modal" }) {
     let allData = null;
-    const filter = { source: "", section: "", hair: "", q: "", fav: false };
+    const filter = { source: "", section: "", hair: "", q: "", fav: false, media: "" };
     let selectedFace = null;
 
     root.innerHTML =
@@ -96,6 +101,16 @@ const FaceGallery = (() => {
       return (allData.items || []).filter(function (p) { return p.favorited; }).length;
     }
 
+    /* 形态/发型在「当前来源+媒体」筛选下还有没有条目（来源与媒体切换的回落判断用；
+       列表全量在客户端，直接现算） */
+    function facetAlive(id, key) {
+      return (allData.items || []).some(function (p) {
+        if (filter.source && p.source !== filter.source) return false;
+        if (filter.media && (p.media_type || "") !== filter.media) return false;
+        return p[key] === id;
+      });
+    }
+
     /* 来源页签（全部 / 各库 —— 标签取 FACE_SOURCE_ZH，缺项回显 id；计数来自
        服务端 sources）。来源切换时被当前来源筛空的形态/发型自动回落「全部」
        （自建库词表可能不同）。 */
@@ -108,7 +123,7 @@ const FaceGallery = (() => {
       });
       const keys = [["", "全部", total]].concat(
         (allData.sources || []).map(function (s) {
-          return [s.id, FACE_SOURCE_ZH[s.id] || s.id, counts[s.id] || 0];
+          return [s.id, s.zh || FACE_SOURCE_ZH[s.id] || s.id, counts[s.id] || 0];
         })
       );
       tabs.innerHTML = keys
@@ -122,10 +137,10 @@ const FaceGallery = (() => {
       [...tabs.children].forEach(function (btn) {
         btn.addEventListener("click", function () {
           filter.source = btn.dataset.v;
-          if (filter.section && !sectionsFor().some(function (s) { return s.id === filter.section; })) {
+          if (filter.section && !facetAlive(filter.section, "section")) {
             filter.section = "";
           }
-          if (filter.hair && !hairsFor().some(function (h) { return h.id === filter.hair; })) {
+          if (filter.hair && !facetAlive(filter.hair, "hair")) {
             filter.hair = "";
           }
           renderSourceTabs();
@@ -138,15 +153,24 @@ const FaceGallery = (() => {
 
     function renderSectionTabs() {
       const tabs = root.querySelector(".face-sec-tabs");
-      const inSource = (allData.items || []).filter(function (p) {
+      const base = (allData.items || []).filter(function (p) {
         return !filter.source || p.source === filter.source;
       });
-      const keys = [["", "全部", inSource.length]].concat(
-        sectionsFor().map(function (s) {
-          return [s.id, s.zh || s.id, s.count];
-        })
+      /* 形态计数随媒体筛选联动（chip 开着时形态数只数该媒体的）；媒体 chip 自己的
+         计数吃 base（不吃 media —— 要能切回去）。 */
+      const items = base.filter(function (p) {
+        return !filter.media || (p.media_type || "") === filter.media;
+      });
+      const keys = [["", "全部", items.length]].concat(
+        sectionsFor()
+          .map(function (s) {
+            const n = items.filter(function (p) { return p.section === s.id; }).length;
+            return [s.id, s.zh || s.id, n];
+          })
+          .filter(function (k) { return k[2] > 0; })
       );
-      /* ♥ 收藏筛选 chip（形态行尾，三库归一同一位置；计数全库口径，0 收藏隐藏） */
+      /* 行尾：媒体筛选 chips（真人/动漫，三态互斥取消，计数随来源联动）+
+         ♥ 收藏筛选 chip（形态行尾，三库归一同一位置；计数全库口径，0 收藏隐藏） */
       let html = keys
         .map(function (k) {
           return (
@@ -155,11 +179,21 @@ const FaceGallery = (() => {
           );
         })
         .join("");
-      const n = favCount();
-      if (n) {
+      ["real", "anime"].forEach(function (m) {
+        const n = (allData.items || []).filter(function (p) {
+          return (!filter.source || p.source === filter.source) &&
+            (p.media_type || "") === m;
+        }).length;
+        if (!n) return; /* 该媒体没有条目就不给 chip（空筛选 chip 没有存在意义） */
+        html +=
+          '<button type="button" class="seg face-media-chip' + (filter.media === m ? " active" : "") +
+          '" data-media="' + m + '">' + esc(MEDIA_ZH[m] || m) + " <em>" + n + "</em></button>";
+      });
+      const nf = favCount();
+      if (nf) {
         html +=
           '<button type="button" class="seg face-fav-chip' + (filter.fav ? " active" : "") +
-          '" data-fav="1">♥ 收藏 <em>' + n + "</em></button>";
+          '" data-fav="1">♥ 收藏 <em>' + nf + "</em></button>";
       }
       tabs.innerHTML = html;
       [...tabs.children].forEach(function (btn) {
@@ -167,6 +201,18 @@ const FaceGallery = (() => {
           btn.addEventListener("click", function () {
             filter.fav = !filter.fav;
             renderSectionTabs();
+            renderGrid();
+          });
+          return;
+        }
+        if (btn.dataset.media) {
+          btn.addEventListener("click", function () {
+            filter.media = filter.media === btn.dataset.media ? "" : btn.dataset.media;
+            /* 媒体切换时形态/发型若被筛空，自动回落「全部」 */
+            if (filter.section && !facetAlive(filter.section, "section")) filter.section = "";
+            if (filter.hair && !facetAlive(filter.hair, "hair")) filter.hair = "";
+            renderSectionTabs();
+            renderHairSelect();
             renderGrid();
           });
           return;
@@ -218,6 +264,7 @@ const FaceGallery = (() => {
         if (filter.source && p.source !== filter.source) return false;
         if (filter.section && p.section !== filter.section) return false;
         if (filter.hair && p.hair !== filter.hair) return false;
+        if (filter.media && (p.media_type || "") !== filter.media) return false;
         if (filter.fav && !p.favorited) return false;
         if (filter.q) {
           const hay = (p.face_id + " " + (p.style || "") + " " + p.hair + " " + (p.hair_zh || ""));
@@ -325,6 +372,7 @@ const FaceGallery = (() => {
         '<div class="face-jp">' + esc(p.face_id) + "</div>" +
         "</div>" +
         '<div class="face-meta">' + esc(FACE_SOURCE_ZH[p.source] || p.source) + " · " +
+        (p.media_type && MEDIA_ZH[p.media_type] ? "<em>" + esc(MEDIA_ZH[p.media_type]) + "</em> · " : "") +
         "<strong>" + esc(p.section_zh || p.section) + "</strong>" + " · " +
         bilingual(p.hair_zh, p.hair) + " · " + p.width + "×" + p.height + "</div>" +
         '<div class="face-tags">' +

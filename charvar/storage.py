@@ -133,6 +133,7 @@ CREATE TABLE IF NOT EXISTS face_items (
     file_path TEXT NOT NULL DEFAULT '',
     thumb_path TEXT NOT NULL DEFAULT '',
     sort_seq INTEGER NOT NULL DEFAULT 0,          -- 站点 catalog 数组次序（保持站点分组展示）
+    media_type TEXT NOT NULL DEFAULT '',          -- real=真人/实拍感 / anime=动漫 / 空=未标（import 按登记表填）
     updated_at TEXT NOT NULL,
     PRIMARY KEY (source, face_id)
 );
@@ -165,6 +166,7 @@ CREATE TABLE IF NOT EXISTS costume_items (
     subject_policy TEXT NOT NULL DEFAULT '',      -- json：clothing/accessories 策略（为空 = 无策略）
     caption_tags TEXT NOT NULL DEFAULT '',        -- json：贴字 caption token 映射（为空 = 缺省 id）
     sort_order INTEGER NOT NULL DEFAULT 0,        -- 家族内次序（outfit 组合变体 = reel 播放次序）
+    media_type TEXT NOT NULL DEFAULT '',          -- real=真人/实拍感 / anime=动漫 / 空=未标（import 按登记表填）
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     PRIMARY KEY (source_id, item_id)
@@ -195,6 +197,8 @@ ALTER TABLE comfy_prompts ADD COLUMN output_files TEXT;
 ALTER TABLE subject_images ADD COLUMN provider TEXT;
 ALTER TABLE costume_items ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE costume_prompts ADD COLUMN ref_prompt TEXT NOT NULL DEFAULT '';
+ALTER TABLE costume_items ADD COLUMN media_type TEXT NOT NULL DEFAULT '';
+ALTER TABLE face_items ADD COLUMN media_type TEXT NOT NULL DEFAULT '';
 """
 
 
@@ -276,6 +280,32 @@ def _rebuild_pose_actions_pk(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def _backfill_media_types(conn: sqlite3.Connection) -> None:
+    """把 media_type 引入前列引入为空的存量行按登记表 default 回填（幂等）。
+
+    登记表是各服务的常量（costumes.COSTUME_SOURCES / faces.FACE_SOURCES 的
+    `media` 键），延迟导入防环；import 重灌也会填列，这里只救「不再重灌」的
+    存量库。'' 意为未标，回填只动空值行、不动用户将来手工改过的值。
+    """
+    from charvar.costumes import COSTUME_SOURCES
+    from charvar.faces import FACE_SOURCES
+
+    # 两表 source 列名不同：costume_items=source_id，face_items=source
+    for table, source_col, registry in (
+        ("costume_items", "source_id", COSTUME_SOURCES),
+        ("face_items", "source", FACE_SOURCES),
+    ):
+        for source_id, definition in registry.items():
+            media = str(definition.get("media") or "")
+            if not media:
+                continue
+            conn.execute(
+                f"UPDATE {table} SET media_type = ? WHERE {source_col} = ? AND media_type = ''",
+                (media, source_id),
+            )
+    conn.commit()
+
+
 def connect(db_path: Path | None = None) -> sqlite3.Connection:
     path = Path(db_path) if db_path else paths.db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -292,6 +322,10 @@ def connect(db_path: Path | None = None) -> sqlite3.Connection:
             pass  # 列已存在等幂等迁移
     _rebuild_pose_images_pk(conn)
     _rebuild_pose_actions_pk(conn)
+    try:
+        _backfill_media_types(conn)
+    except sqlite3.OperationalError:
+        pass  # 表还没建齐等极端态不拦启动
     return conn
 
 

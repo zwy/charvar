@@ -80,9 +80,27 @@ def test_import_catalog_loads_and_is_idempotent(data_dir):
         again = faces_service.import_catalog(conn)
         assert again["faces"] == 3  # upsert 不翻倍
         row = conn.execute(
-            "SELECT section, hair, sort_seq FROM face_items WHERE face_id='faceaaa11111'"
+            "SELECT section, hair, sort_seq, media_type FROM face_items WHERE face_id='faceaaa11111'"
         ).fetchone()
         assert row["section"] == "face" and row["hair"] == "ショート" and row["sort_seq"] == 0
+        assert row["media_type"] == "real"  # 登记表缺省填 media_type
+
+
+def test_list_faces_media_filter(data_dir):
+    """media 过滤：real 命中，空值/未标条目只出现在「全部」。"""
+    _build_fake_face_data(data_dir)
+    with storage.connect() as conn:
+        faces_service.import_catalog(conn)
+        data = faces_service.list_faces(conn)
+        assert {it["media_type"] for it in data["items"]} == {"real"}
+        assert len(faces_service.list_faces(conn, media="real")["items"]) == 3
+        assert faces_service.list_faces(conn, media="anime")["items"] == []
+        conn.execute(
+            "UPDATE face_items SET media_type = 'anime' WHERE face_id = 'facebbb22222'"
+        )
+        conn.commit()
+        filtered = faces_service.list_faces(conn, media="anime")["items"]
+        assert [it["face_id"] for it in filtered] == ["facebbb22222"]
 
 
 def test_import_catalog_rejects_missing_image(data_dir):

@@ -1,22 +1,25 @@
-"""服饰库（costume_items + costume_prompts 双表，仿 pose 双表分层）。
+"""服饰库（costume_items + costume_prompts 双表，仿 pose 双表分层；多源仿 faces.py）。
 
-- ``costume_items``：可重灌索引层 —— 站点快照（costume-db-01）与自建条目
-  （studio）通用（display_type / keywords / 图路径 / subject_policy / caption_tags）。
+- ``costume_items``：可重灌索引层 —— 站点快照（costume-db-01 / costume-anime-db-01）
+  与自建条目（studio）通用（display_type / keywords / 图路径 / subject_policy /
+  caption_tags / media_type）；库登记在 ``COSTUME_SOURCES``（zh 标签 + media 缺省），
+  主键 (source_id, item_id)，各库磁盘目录 ``data/costumes/<source>/`` 并行。
 - ``costume_prompts``：用户文本层 —— 每条一条文生图提示词（source=manual/ai_draft）；
   catalog 重灌绝不碰（pose_actions 同红线）。
-- 磁盘 ``data/costumes/costume-db-01/``（catalog.json + glossary.json + 图三档）
-  只剩「导入源」角色（``charvar costume import`` 幂等重灌索引层）；display_types.json
-  侧车降级为 import 期种子。自建条目走 ``charvar costume import-outfits`` 迁入
+- 磁盘 ``data/costumes/<source>/``（catalog.json + glossary.json + 图三档）只剩
+  「导入源」角色（``charvar costume import [SOURCE]`` 幂等重灌索引层）；display_types.json
+  侧车按库分文件（缺条 = ghost）。自建条目走 ``charvar costume import-studio`` 迁入
   与后续 CLI 编辑（DB 是运行时真源，``charvar costume export`` 快照回 presets/）。
+- 条目 id 前缀两站重叠（SPR-0001 两库都有）：裸 item 引用跨库歧义时报错，写全
+  ``source/item``（``costume-anime-db-01/SPR-0001``）。
 
-图片是 t2i 生成的架空服饰（无人物、2:3、白底）。许可同姿势库：作品制作可免费
-商用、**禁止再分发图片数据本身** —— 目录留在 data/（.gitignore 覆盖），绝不进 git。
+图片是 t2i 生成的架空服饰（无人物、2:3、白底/动漫站深底）。现行条款（站内「注意点」，
+2026-10-30 起各站统一）：作品制作用免费（商用・编辑・参考 OK）；**再配布・転載・再販
+与一括ダウンロード（含工具自动取得）禁止**，逐张参考使用照旧可用 —— 目录留在 data/
+（.gitignore 覆盖），绝不进 git；获取与使用边界以仓库根 README 为准。
 
-与姿势库的差异（后续集成时注意）：
-- 每条一张图，无视角双键；
-- 无名称字段，``キーワード`` 英文服饰描述就是提示词原料（站点「説明文をコピー」语义）；
-- catalog 的 ``原寸`` png 与 ``画像`` webp 同像素（1366×2048），网页展示走 webp，
-  png 是无损版，留给后续参考图的细部来源。
+``media_type``：``real``（真人/实拍感）/ ``anime``（动漫）／空 = 未标 —— import 按登记表
+缺省填，浏览页与生图选材用它把真人素材和动漫素材分开（真人对真人、动漫对动漫）。
 """
 from __future__ import annotations
 
@@ -32,6 +35,19 @@ from charvar import paths
 # 库 id（磁盘目录名与 URL source 段）；studio = 自建条目（outfits 迁移 / 手工新增）
 SOURCE_ID = "costume-db-01"
 STUDIO_SOURCE_ID = "studio"
+
+# 库登记表：source_id → 中文标签 + media 缺省（real=真人/实拍感 / anime=动漫；
+# import 按它填 media_type 列，storage 启动回填也读这里）。多源结构仿 faces.py：
+# DB 主键 (source_id, item_id)，各库磁盘目录 data/costumes/<source>/，
+# catalog/glossary/display_types 都是库级文件。新库 = 这里加一行 +
+# scripts/download_costume_db.py 的 SITES 表加站点（站点库）或磁盘画布自建。
+# media 为空 = 未标（浏览「真人/动漫」筛不到）。条目 id 前缀两站重叠（SPR-0001
+# 两库都有）—— 裸 item 引用跨库歧义时报错，写全 source/item。
+COSTUME_SOURCES: dict[str, dict] = {
+    "costume-db-01": {"zh": "站点库（実写版）", "media": "real"},
+    "costume-anime-db-01": {"zh": "动漫库（アニメ版）", "media": "anime"},
+    "studio": {"zh": "自建库", "media": "real"},
+}
 
 # item_id / source 是浏览器发来的关键字（拼进查找 URL 与文件定位），只放行安全字符。
 ITEM_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -68,20 +84,30 @@ def category_zh(category: str) -> str:
     return CATEGORY_ZH.get(category) or STUDIO_FAMILY_ZH.get(category, category)
 
 
-def source_dir() -> Path:
-    return paths.data_dir() / "costumes" / SOURCE_ID
+def source_dir(source_id: str = SOURCE_ID) -> Path:
+    return paths.data_dir() / "costumes" / (source_id or SOURCE_ID)
 
 
-def catalog_path() -> Path:
-    return source_dir() / "catalog.json"
+def catalog_path(source_id: str = SOURCE_ID) -> Path:
+    return source_dir(source_id) / "catalog.json"
 
 
-def glossary_path() -> Path:
-    return source_dir() / "glossary.json"
+def glossary_path(source_id: str = SOURCE_ID) -> Path:
+    return source_dir(source_id) / "glossary.json"
 
 
-def display_types_path() -> Path:
-    return source_dir() / "display_types.json"
+def display_types_path(source_id: str = SOURCE_ID) -> Path:
+    return source_dir(source_id) / "display_types.json"
+
+
+def _source_or_raise(source_id: str) -> dict:
+    """库 id 必须在登记表里（未知库显式报错，不静默当错库）。"""
+    reg = COSTUME_SOURCES.get(str(source_id or "").strip())
+    if reg is None:
+        raise CostumeError(
+            f"没有登记这个服饰库：{str(source_id)[:40]}（known={'/'.join(COSTUME_SOURCES)}）"
+        )
+    return reg
 
 
 # 展示形态（display_type）：ghost = 隐形模特（ghost mannequin）——无头无身、服装保持
@@ -89,29 +115,6 @@ def display_types_path() -> Path:
 # 字段且 1407 条实测全 ghost（缺省缺条 = ghost）；侧车文件只记要覆盖的条目。
 # catalog.json 逐字保留红线不动，类型数据进侧车（display_types.json 同目录）。
 DISPLAY_TYPES: tuple[str, ...] = ("ghost", "flat_lay")
-_display_types_cache: dict = {"mtime_size": None, "map": {}}
-
-
-def _load_display_types() -> dict[str, str]:
-    """读侧车 display_types.json（mtime+size 失效）；坏条目整批拒绝 —— 自家文件要严。"""
-    stamp = _mtime_size(display_types_path())
-    if stamp == _display_types_cache["mtime_size"]:
-        return _display_types_cache["map"]
-    mapping: dict[str, str] = {}
-    if stamp is not None:
-        try:
-            raw = json.loads(display_types_path().read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            raise CostumeError(f"display_types.json 读取失败：{exc}") from exc
-        if not isinstance(raw, dict):
-            raise CostumeError("display_types.json 必须是 {item_id: 类型} 对象")
-        for item_id, value in raw.items():
-            if not ITEM_ID_RE.fullmatch(str(item_id)) or value not in DISPLAY_TYPES:
-                raise CostumeError(f"display_types.json 条目不合法：{item_id}: {value}")
-            mapping[item_id] = value
-    _display_types_cache["mtime_size"] = stamp
-    _display_types_cache["map"] = mapping
-    return mapping
 
 
 class CostumeError(Exception):
@@ -151,8 +154,10 @@ def _now() -> str:
 _REL_PATH_RE = re.compile(r"^(?:thumbs|img|png)/[A-Za-z0-9._-]+\.(?:webp|png|jpg|jpeg)$")
 
 # catalog 每条 → 归一化行：{item_id, category, keywords, thumb_rel, image_rel, hay, display_type}
-_catalog_cache: dict = {"mtime_size": None, "items": []}
-_glossary_cache: dict = {"mtime_size": None, "ja": {}}
+# 缓存按库分键（两库 catalog 并行存，条目 id 前缀重叠）。
+_catalog_cache: dict[str, dict] = {}
+_glossary_cache: dict[str, dict] = {}
+_display_types_cache: dict[str, dict] = {}
 
 
 def _mtime_size(path: Path) -> tuple[int, int] | None:
@@ -163,28 +168,47 @@ def _mtime_size(path: Path) -> tuple[int, int] | None:
     return (st.st_mtime_ns, st.st_size)
 
 
-def _load_catalog() -> list[dict]:
+def _load_display_types(source_id: str = SOURCE_ID) -> dict[str, str]:
+    """读侧车 display_types.json（mtime+size 失效）；坏条目整批拒绝 —— 自家文件要严。"""
+    cached = _display_types_cache.get(source_id)
+    stamp = _mtime_size(display_types_path(source_id))
+    if cached is not None and stamp == cached["mtime_size"]:
+        return cached["map"]
+    mapping: dict[str, str] = {}
+    if stamp is not None:
+        try:
+            raw = json.loads(display_types_path(source_id).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise CostumeError(f"display_types.json 读取失败：{exc}") from exc
+        if not isinstance(raw, dict):
+            raise CostumeError("display_types.json 必须是 {item_id: 类型} 对象")
+        for item_id, value in raw.items():
+            if not ITEM_ID_RE.fullmatch(str(item_id)) or value not in DISPLAY_TYPES:
+                raise CostumeError(f"display_types.json 条目不合法：{item_id}: {value}")
+            mapping[item_id] = value
+    _display_types_cache[source_id] = {"mtime_size": stamp, "map": mapping}
+    return mapping
+
+
+def _load_catalog(source_id: str = SOURCE_ID) -> list[dict]:
     """catalog.json → 归一化行（mtime+size 失效判定含侧车 display_types.json；坏行整批拒绝）。"""
-    stamp = (_mtime_size(catalog_path()), _mtime_size(display_types_path()))
-    if stamp != _catalog_cache["mtime_size"]:
-        _cache_rows(stamp, _parse_catalog())
-    for it in _catalog_cache["items"]:
-        it["display_type"] = _load_display_types().get(it["item_id"], "ghost")
-    return _catalog_cache["items"]
+    stamp = (_mtime_size(catalog_path(source_id)), _mtime_size(display_types_path(source_id)))
+    cached = _catalog_cache.get(source_id)
+    if cached is None or stamp != cached["mtime_size"]:
+        cached = {"mtime_size": stamp, "items": _parse_catalog(source_id)}
+        _catalog_cache[source_id] = cached
+    for it in cached["items"]:
+        it["display_type"] = _load_display_types(source_id).get(it["item_id"], "ghost")
+    return cached["items"]
 
 
-def _cache_rows(stamp, items: list[dict]) -> None:
-    _catalog_cache["mtime_size"] = stamp
-    _catalog_cache["items"] = items
-
-
-def _parse_catalog() -> list[dict]:
+def _parse_catalog(source_id: str = SOURCE_ID) -> list[dict]:
     """解析 + 整批校验（不含 display_type —— 那在 _load_catalog 里并侧车合并）。"""
     try:
-        raw = json.loads(catalog_path().read_text(encoding="utf-8"))
+        raw = json.loads(catalog_path(source_id).read_text(encoding="utf-8"))
     except OSError as exc:
         raise CostumeError(
-            f"找不到 catalog.json：{catalog_path()}（先跑 scripts/download_costume_db.py）"
+            f"找不到 catalog.json：{catalog_path(source_id)}（先跑 scripts/download_costume_db.py）"
         ) from exc
     except json.JSONDecodeError as exc:
         raise CostumeError(f"catalog.json 读取失败：{exc}") from exc
@@ -234,9 +258,12 @@ def import_catalog(conn: "sqlite3.Connection", source_id: str = SOURCE_ID) -> di
     校验从紧（姿势库同款）：解析层管 id/相对路径布局；这里再验图在盘 + 魔数
     （thumbs/img webp 必须在；png 可选、在则验）—— 灌一半的索引比空库难排查，
     缺图整批拒绝（先补跑下载脚本）。costume_prompts（用户文本层）绝不碰。
+    media_type 按登记表缺省重填（用户手改不保留 —— 索引层重灌回站点事实）。
     """
-    rows_raw = _load_catalog()  # 触发整批校验并与侧车合并 display_type
+    _source_or_raise(source_id)
+    rows_raw = _load_catalog(source_id)  # 触发整批校验并与侧车合并 display_type
     src = costume_root(source_id)
+    media = str(COSTUME_SOURCES[source_id].get("media") or "")
     missing: list[str] = []
     rows: list[tuple] = []
     for it in rows_raw:
@@ -249,7 +276,7 @@ def import_catalog(conn: "sqlite3.Connection", source_id: str = SOURCE_ID) -> di
             (
                 source_id, it["item_id"], it["display_type"], it["category"], "",
                 it["keywords"], it["png_rel"], it["image_rel"], it["thumb_rel"],
-                "", "", _now(), _now(),
+                "", "", media, _now(), _now(),
             )
         )
     if missing:
@@ -259,33 +286,35 @@ def import_catalog(conn: "sqlite3.Connection", source_id: str = SOURCE_ID) -> di
     conn.executemany(
         """INSERT INTO costume_items
            (source_id, item_id, display_type, category, label, keywords,
-            file_path, image_path, thumb_path, subject_policy, caption_tags, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            file_path, image_path, thumb_path, subject_policy, caption_tags,
+            media_type, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(source_id, item_id) DO UPDATE SET
              display_type=excluded.display_type, category=excluded.category,
              label=excluded.label, keywords=excluded.keywords,
              file_path=excluded.file_path, image_path=excluded.image_path,
-             thumb_path=excluded.thumb_path, updated_at=excluded.updated_at""",
+             thumb_path=excluded.thumb_path, media_type=excluded.media_type,
+             updated_at=excluded.updated_at""",
         rows,
     )
     conn.commit()
     return {"source_id": source_id, "items": len(rows)}
 
-def _load_glossary() -> dict[str, str]:
+def _load_glossary(source_id: str = SOURCE_ID) -> dict[str, str]:
     """站点 JA 词表（日文检索词 → 英文关键词）；找不到/读不改空，搜索退化为纯英文。"""
-    stamp = _mtime_size(glossary_path())
-    if stamp is not None and stamp == _glossary_cache["mtime_size"]:
-        return _glossary_cache["ja"]
+    cached = _glossary_cache.get(source_id)
+    stamp = _mtime_size(glossary_path(source_id))
+    if cached is not None and stamp == cached["mtime_size"]:
+        return cached["ja"]
     ja: dict[str, str] = {}
     if stamp is not None:
         try:
-            data = json.loads(glossary_path().read_text(encoding="utf-8"))
+            data = json.loads(glossary_path(source_id).read_text(encoding="utf-8"))
             if isinstance(data, dict):
                 ja = {str(k): str(v) for k, v in data.items() if k and v}
         except (OSError, json.JSONDecodeError):
             ja = {}
-    _glossary_cache["mtime_size"] = stamp
-    _glossary_cache["ja"] = ja
+    _glossary_cache[source_id] = {"mtime_size": stamp, "ja": ja}
     return ja
 
 
@@ -310,11 +339,13 @@ def list_items(
     source_id: str = "",
     category: str = "",
     display_type: str = "",
+    media: str = "",
     q: str = "",
 ) -> dict:
     """服饰清单 + 目录元数据 + 检索词表，服饰浏览页一次拉全（读 DB；未导入报错提示 import）。
 
-    category/display_type 按存储原文过滤；q 逐词 AND（与前端 costumegallery.js 的
+    category/display_type/media 按存储原文过滤（media=real|anime，空 = 不筛 ——
+    未标记条目只见于「全部」）；q 逐词 AND（与前端 costumegallery.js 的
     过滤同语义）：对 id/英文关键词/中日目录名大小写不敏感，日文词经 glossary 扩写
     成英文一并命中。prompt_text 由 LEFT JOIN costume_prompts 带出。
     """
@@ -324,13 +355,13 @@ def list_items(
             "服饰库还是空的 —— 先跑 scripts/download_costume_db.py 下载，"
             "再 charvar costume import 灌库"
         )
-    glossary = _load_glossary()
+    glossary = _load_glossary(source_id or SOURCE_ID)
     tokens = [t for t in str(q or "").strip().lower().split() if t]
 
     rows = conn.execute(
         "SELECT ci.source_id, ci.item_id, ci.display_type, ci.category, ci.label,"
         " ci.keywords, ci.thumb_path, ci.image_path, ci.file_path, ci.updated_at,"
-        " ci.subject_policy,"
+        " ci.subject_policy, ci.media_type,"
         " cp.prompt_text, cp.source AS prompt_source, cp.ref_prompt AS ref_prompt,"
         " fav.item_id AS fav_item"
         " FROM costume_items AS ci"
@@ -350,6 +381,8 @@ def list_items(
             continue
         if display_type and r["display_type"] != display_type:
             continue
+        if media and (r["media_type"] or "") != media:
+            continue
         hay = " ".join(
             (r["item_id"], r["keywords"], r["label"], r["category"], category_zh(r["category"]))
         ).lower()
@@ -364,6 +397,7 @@ def list_items(
                 "label": r["label"],
                 "keywords": r["keywords"],
                 "display_type": r["display_type"],
+                "media_type": r["media_type"] or "",
                 "prompt_text": r["prompt_text"] or "",
                 "prompt_source": r["prompt_source"] or "",
                 "ref_prompt": str(r["ref_prompt"] or ""),
@@ -389,12 +423,15 @@ def list_items(
     for cat, n in sorted(category_counts.items()):
         if cat not in CATEGORY_ORDER:
             categories.append({"id": cat, "zh": category_zh(cat), "count": n})
-    # sources 稳定次序：站点库在前、自建库在后（行顺序来自 SELECT，不能依赖其稳定性）
-    source_order = {sid: i for i, sid in enumerate([SOURCE_ID, STUDIO_SOURCE_ID])}
+    # sources 稳定次序 = 登记表序（站点库 → 动漫库 → 自建库；未登记 source 排最后）
+    source_order = {sid: i for i, sid in enumerate(COSTUME_SOURCES)}
     source_rows = sorted(sources.items(), key=lambda kv: (source_order.get(kv[0], 99), kv[0]))
     return {
         "source": SOURCE_ID,
-        "sources": [{"id": sid, "count": n} for sid, n in source_rows],
+        "sources": [
+            {"id": sid, "zh": COSTUME_SOURCES.get(sid, {}).get("zh", sid), "count": n}
+            for sid, n in source_rows
+        ],
         "categories": categories,
         "glossary": glossary,
         "items": out,
@@ -698,8 +735,8 @@ def import_studio_yaml(conn: sqlite3.Connection) -> dict:
             """INSERT INTO costume_items
                (source_id, item_id, display_type, category, label, keywords,
                 file_path, image_path, thumb_path, subject_policy, caption_tags,
-                sort_order, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                sort_order, media_type, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 STUDIO_SOURCE_ID, item_id, doc["display_type"], str(doc.get("category") or ""),
                 str(doc.get("label") or ""), str(doc.get("keywords") or ""),
@@ -709,7 +746,8 @@ def import_studio_yaml(conn: sqlite3.Connection) -> dict:
                 if doc.get("subject_policy") else "",
                 json.dumps(doc.get("caption_tags") or {}, ensure_ascii=False)
                 if doc.get("caption_tags") else "",
-                int(doc.get("sort_order") or 0), now, now,
+                int(doc.get("sort_order") or 0),
+                str(COSTUME_SOURCES[STUDIO_SOURCE_ID].get("media") or ""), now, now,
             ),
         )
         text = str(doc.get("prompt_text") or "").strip()
