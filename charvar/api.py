@@ -22,6 +22,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from charvar import __version__, assets, llm, paths, settings_service, storage, subject_images
 from charvar import adhoc as adhoc_service
+from charvar import adhoc_compose as adhoc_compose_service
 from charvar import adhoc_video as adhoc_video_service
 from charvar import adhoc_tts as adhoc_tts_service
 from charvar import dreamina_image
@@ -277,8 +278,9 @@ class AdhocReferenceSpec(ReferenceSpec):
 # 参考图在提示词里的分工（role）：与主体档案的图片槽位同名，
 # 决定 LLM 改写的锚定句里这张图管哪一摊；pose = 姿势库人偶线稿（只锚姿势构图）；
 # face = 人脸库虚构人物参考图（锚脸部身份 / styling 锚整体造型）；
-# 其余缺省按 front 处理，pose/face 来源缺省各按 pose/face 处理。
-REFERENCE_ROLES = ("character_sheet", "headshot", "front", "side", "behind", "pose", "face")
+# costume = 服饰库服装参考图（只锚服装与整套配件）；
+# 其余缺省按 front 处理，pose/face/costume 来源缺省各按 pose/face/costume 处理。
+REFERENCE_ROLES = ("character_sheet", "headshot", "front", "side", "behind", "pose", "face", "costume")
 DEFAULT_REFERENCE_ROLE = "front"
 
 
@@ -288,11 +290,12 @@ def _reference_paths_from_specs(
 ) -> tuple[list[Path], list[str], list[str]]:
     """参考图规格 → (本地文件路径, role 列表, 暂存 id 列表)。
 
-    五种来源与 Playground 同源：上传暂存（staged_id）、主体档案槽位
+    六种来源与 Playground 同源：上传暂存（staged_id）、主体档案槽位
     （subject_id + kind）、最近生成的原图（run_id；adhoc run 取唯一原图，
     charvar run 按 index 取第几张）、姿势库（pose_id + angle —— 灰人偶线稿，
-    role 固定 pose）、人脸库（face_id —— AI 架构人物，role 固定 face）。
-    role 缺省 front（pose/face 来源各按 pose/face）。
+    role 固定 pose）、人脸库（face_id —— AI 架构人物，role 固定 face）、
+    服饰库（costume_id + source —— 服装参考图，role 固定 costume）。
+    role 缺省 front（pose/face/costume 来源各按 pose/face/costume）。
     不接受任意路径 —— 那是把文件读权限开给了浏览器。
     """
     paths: list[Path] = []
@@ -304,6 +307,8 @@ def _reference_paths_from_specs(
             default_role = "pose"
         elif spec.face_id:
             default_role = "face"
+        elif spec.costume_id:
+            default_role = "costume"
         role = (spec.role or "").strip() or default_role
         if role not in REFERENCE_ROLES:
             raise HTTPException(
@@ -347,6 +352,14 @@ def _reference_paths_from_specs(
                     )
                 )
             except faces_service.FaceError as exc:
+                raise HTTPException(400, str(exc)) from exc
+        elif spec.costume_id:
+            # 服饰库参考图：预处理压缩版与两条生图通路共用；纯文本条目（无图）在
+            # prepared_reference_file 里报 CostumeError —— 图锚定用不了
+            ref = f"{spec.costume_source()}/{spec.costume_id}"
+            try:
+                paths.append(costumes_service.prepared_reference_file(ref, db_path))
+            except costumes_service.CostumeError as exc:
                 raise HTTPException(400, str(exc)) from exc
         else:
             raise HTTPException(
@@ -1853,8 +1866,10 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     ) -> tuple[list[Path], list[str]]:
         """参考图 spec → 本地路径列表（+ 暂存 id 列表，出图成功后清理）。
 
-        只认三种来源：上传暂存的（staged_id）、主体档案里的（subject_id + kind）、
-        Playground「最近生成」的原图（run_id，文件名由服务端从该 run 目录取）。
+        只认六种来源：上传暂存的（staged_id）、主体档案里的（subject_id + kind）、
+        Playground「最近生成」的原图（run_id，文件名由服务端从该 run 目录取）、
+        姿势库（pose_id + angle + source）、人脸库（face_id + source）、
+        服饰库（costume_id + source）。
         不接受任意路径 —— 那是把文件读权限开给了浏览器。
         """
         paths_found: list[Path] = []
@@ -1916,11 +1931,38 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                 except faces_service.FaceError as exc:
                     raise HTTPException(400, str(exc)) from exc
                 continue
+            if spec.costume_id:
+                # 服饰库的服装参考图：纯文本条目（无图）在 prepared_reference_file 里报错
+                try:
+                    paths_found.append(
+                        costumes_service.prepared_reference_file(
+                            f"{spec.costume_source()}/{spec.costume_id}", db_path
+                        )
+                    )
+                except costumes_service.CostumeError as exc:
+                    raise HTTPException(400, str(exc)) from exc
+                continue
             raise HTTPException(
                 400,
-                "参考图缺少来源（staged_id、subject_id + kind、run_id、pose_id + angle 或 face_id）",
+                "参考图缺少来源（staged_id、subject_id + kind、run_id、pose_id + angle、"
+                "face_id 或 costume_id + source）",
             )
         return paths_found, staged_ids
+
+    @app.post("/adhoc/compose")
+    def api_adhoc_compose(req: adhoc_compose_service.ComposeRequest) -> dict[str, Any]:
+        """拼装库组合工作流的提示词（五种构成的四工作流模式；自由生图不经拼装）。
+
+        编排与校验在 ``charvar.adhoc_compose``（文案来自 pose_prompt，与 CLI
+        ``pose prompt`` / ``costume prompt`` 同源）；返回 prompt + 参考图规格
+        （顺序即 ``<image1>``…）+ meta。出图把两者原样发 ``/adhoc/generate``。
+        """
+        with _db() as conn:
+            try:
+                result = adhoc_compose_service.compose(conn, req)
+            except adhoc_compose_service.ComposeError as exc:
+                raise HTTPException(400, str(exc)) from exc
+        return result
 
     @app.post("/adhoc/references")
     def api_adhoc_reference_upload(file: UploadFile) -> dict[str, Any]:

@@ -528,7 +528,12 @@ const CostumeGallery = (() => {
         "</div>" +
         policyBlock +
         blocks.join("") +
-        regenRow;
+        regenRow +
+        (onPick
+          ? '<div class="costume-detail-actions">' +
+            '<button type="button" class="costume-add-btn primary">加入参考图</button>' +
+            "</div>"
+          : "");
 
       /* 事件：详情收藏钮走同一条 toggleFav（卡片徽章 ♥ chip 与它实时同步，三库同款） */
       detailEl.querySelector(".costume-detail-fav").addEventListener("click", function () {
@@ -620,8 +625,13 @@ const CostumeGallery = (() => {
       }
       const addBtn = detailEl.querySelector(".costume-add-btn");
       if (addBtn) {
+        if (!it.image_url) {
+          addBtn.disabled = true;
+          addBtn.title = "纯文本条目（无参考图）—— 图锚定换装用不了";
+        }
         addBtn.addEventListener("click", function () {
           onPick({
+            source_id: it.source_id,
             item_id: it.item_id,
             name: (it.label || it.item_id) + "（" + (it.category_zh || it.category) + "）",
             keywords: it.keywords,

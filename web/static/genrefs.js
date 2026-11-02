@@ -295,9 +295,9 @@ const GenRefs = (() => {
 
   /* 动作库弹层：渲染逻辑在 posegallery.js（弹层与顶栏「动作」整页同源共用
      —— 网格红线 / 双语规则 / 视角切换 / 动作描述块只修一处），这里只挂弹层骨架。 */
-  function showPoseBrowser(onPick, { title = "动作库（线稿/深度 · 只锚姿势构图）" } = {}) {
+  function showPoseBrowser(onPick, { title = "动作库（线稿/深度 · 只锚姿势构图）", lineConstraint = null, requireAction = false } = {}) {
     Media.showPanelModal(title, (body, close) => {
-      PoseGallery.mount({ root: body, onPick, close });
+      PoseGallery.mount({ root: body, onPick, close, lineConstraint, requireAction });
     });
   }
 

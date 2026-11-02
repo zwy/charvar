@@ -12,12 +12,17 @@
 const PoseGallery = (() => {
   /* 来源中文标签（与后端 POSE_SOURCES 的 zh 同步维护） */
   const POSE_SOURCE_ZH = { "pose-db-01": "线稿", "pose-db-02": "深度" };
-  function mount({ root, onPick, close, onStat, variant = "modal" }) {
+  /* 双人线的系統原文（lineConstraint 用） */
+  const PAIR_LINE = "2人絡み";
+  function mount({ root, onPick, close, onStat, variant = "modal", lineConstraint = null, requireAction = false }) {
     let allData = null;
     const filter = { source: "", line: "", category: "", q: "", fav: false };
     let selectedPose = null;
     let selectedAngle = null;
     let editingAction = false;  /* 动作描述编辑态：textarea + 保存/取消，只对当前条目×视角 */
+    /* lineConstraint（Playground 工作流弹层用；null = 不约束，整页/预设页现状）：
+       "single" = 藏双人页签（单人构图的动作出图）；"pair" = 锁双人页签（双主体动作）。 */
+    if (lineConstraint === "pair") filter.line = PAIR_LINE;
 
     root.innerHTML =
       '<div class="pose-browser' + (variant === "page" ? " pose-browser-page" : "") + '">' +
@@ -140,11 +145,24 @@ const PoseGallery = (() => {
       const inSource = (allData.poses || []).filter(function (p) {
         return !filter.source || p.source === filter.source;
       });
-      const keys = [["", "全部", inSource.length]].concat(
-        linesFor().map(function (l) {
-          return [l.id, l.zh || l.id, l.poses];
-        })
-      );
+      /* lineConstraint: pair = 只留双人页签；single = 藏双人页签。
+         「全部」页签的计数按约束后的集合算；约束本身在 filteredPoses 兜底。 */
+      let lineList = linesFor();
+      if (lineConstraint === "single") {
+        lineList = lineList.filter(function (l) { return l.id !== PAIR_LINE; });
+      }
+      let keys;
+      if (lineConstraint === "pair") {
+        const pairEntry = lineList.find(function (l) { return l.id === PAIR_LINE; });
+        keys = pairEntry ? [[pairEntry.id, pairEntry.zh || pairEntry.id, pairEntry.poses]] : [];
+      } else {
+        const inScope = inSource.filter(function (p) {
+          return lineConstraint === "single" ? p.line !== PAIR_LINE : true;
+        });
+        keys = [["", "全部", inScope.length]].concat(
+          lineList.map(function (l) { return [l.id, l.zh || l.id, l.poses]; })
+        );
+      }
       let html = keys
         .map(function (k) {
           return (
@@ -214,6 +232,8 @@ const PoseGallery = (() => {
       const poses = (allData && allData.poses) || [];
       return poses.filter(function (p) {
         if (filter.source && p.source !== filter.source) return false;
+        if (lineConstraint === "single" && p.line === PAIR_LINE) return false;
+        if (lineConstraint === "pair" && p.line !== PAIR_LINE) return false;
         if (filter.line && p.line !== filter.line) return false;
         if (filter.category && p.category !== filter.category) return false;
         if (filter.fav && !p.favorited) return false;
@@ -387,7 +407,9 @@ const PoseGallery = (() => {
         "</div>" +
         (onPick
           ? '<div class="pose-detail-actions">' +
-            '<button type="button" class="pose-add-btn primary">加入参考图</button>' +
+            '<button type="button" class="pose-add-btn primary"' +
+            (onPick && requireAction && !actionText ? ' disabled title="先在该视角写动作描述（就地编辑保存后再入）"' : "") +
+            ">加入参考图</button>" +
             "</div>"
           : "");
       detailEl.querySelector(".pose-detail-img").addEventListener("click", function () {

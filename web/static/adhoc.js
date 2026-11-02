@@ -21,8 +21,9 @@ const ADHOC_MAX_REFS = 4;
 /* DREAMINA_T2I_ONLY_MODELS（仅文生图模型）同样在 tables.js。 */
 
 const adhocState = {
+  flow: "free", // 生图模式：自由生图 / 单主体动作 / 双主体动作 / 人脸动作 / 换装（引擎在 adhocflow.js）
   backend: "comfyui", // 一级：后端
-  mode: "t2i", // 二级：模式（t2i 文生图 / i2i 图片编辑），显式选择
+  mode: "t2i", // 二级：模式（仅自由生图；工作流模式恒带参考图 = 图片编辑）
   references: [], // [{type:"staged", id, name, url} | {type:"subject", ...}]
   caps: null, // 当前 OpenRouter 模式模型的清单能力
   modeModel: "", // 当前模式的默认模型（显示名 + capabilities 来源）
@@ -47,14 +48,17 @@ function applyAdhocPanel() {
   const isComfy = backend === "comfyui";
   const isOpenRouter = backend === "openrouter";
   const isDreamina = backend === "dreamina";
-  const i2i = adhocState.mode === "i2i";
+  const isFlow = adhocState.flow !== "free"; // 工作流模式：参考构成槽位（恒图片编辑语义）
+  const i2i = isFlow || adhocState.mode === "i2i";
 
   /* 通用显隐 */
   $("#adhoc-negative-field").hidden = !isComfy; // 仅 ComfyUI 有负向词
   $("#adhoc-model-field").hidden = isComfy; // 模型说明行：OR / 即梦才显示
   $("#adhoc-model-select-field").hidden = !isDreamina;
   $("#adhoc-seed-field").hidden = isDreamina; // 即梦不暴露 seed
-  $("#adhoc-refs-block").hidden = !i2i; // 参考图区仅图片编辑页签出现
+  $("#adhoc-refs-block").hidden = !i2i || isFlow; // 参考图区：自由生图 × 图片编辑
+  $("#adhoc-flow-block").hidden = !isFlow; // 参考构成：工作流模式
+  $("#adhoc-mode").hidden = isFlow; // t2i/i2i 分段只属于自由生图
   const t2iHint = $("#adhoc-refs-t2i-hint");
   t2iHint.hidden = !(!i2i && adhocState.references.length);
   if (!t2iHint.hidden) {
@@ -89,7 +93,7 @@ async function loadAdhocModelCaps() {
   let model = "";
   try {
     const settings = await api("/settings");
-    const mode = adhocState.mode;
+    const mode = adhocState.flow !== "free" ? "i2i" : adhocState.mode;
     model =
       (settings.openrouter && settings.openrouter[`${mode}_model`]) ||
       (mode === "t2i"
@@ -159,7 +163,7 @@ function renderAdhocModelInfo() {
     el.hidden = true;
     return;
   }
-  const mode = adhocState.mode;
+  const mode = adhocState.flow !== "free" ? "i2i" : adhocState.mode;
   if (adhocState.backend === "openrouter") {
     if (adhocState.capsLoading) {
       el.textContent = "模型能力加载中…";
@@ -170,7 +174,7 @@ function renderAdhocModelInfo() {
     el.innerHTML = model
       ? `当前走${label}：模型 <code>${escapeHtml(model)}</code>（跟随设置页，面板不选模型）`
       : `当前走${label}：设置页 / OP_IMAGE_${mode.toUpperCase()}_MODEL 还没配模型`;
-    if (mode === "i2i" && adhocState.caps && adhocState.caps.supports_references === false) {
+    if ((adhocState.flow !== "free" || mode === "i2i") && adhocState.caps && adhocState.caps.supports_references === false) {
       el.innerHTML += `；⚠ 该模型不支持参考图输入，参考图不会发送`;
     }
     return;
@@ -359,6 +363,9 @@ $("#btn-adhoc-ref-clear").addEventListener("click", async () => {
   }
 });
 
+/* 动作库 / 人脸库参考只在对应工作流模式选（引擎在 adhocflow.js —— 槽位 + 拼装
+   同一条链路）；自由生图的平铺参考图不再提供这两个来源。 */
+
 /* 主体档案里的参考图：下拉选主体 -> 选图片类型 -> 加入 */
 async function loadAdhocSubjectOptions() {
   const sel = $("#adhoc-ref-subject");
@@ -441,54 +448,18 @@ $("#btn-adhoc-recent-add").addEventListener("click", () => {
   }, { title: "Playground · 从最近生成选择参考图" });
 });
 
-/* 动作库（线稿 pose-db-01 / 深度图 pose-db-02，无细节灰人偶）：浏览器是共用的
-   （GenRefs.showPoseBrowser），选完推进本页自己的 references 列表（带库 id）；
-   发送时 role 固定 pose（只锚姿势构图）。 */
-$("#btn-adhoc-pose-add").addEventListener("click", () => {
-  if (adhocState.references.length >= ADHOC_MAX_REFS) {
-    return setStatus($("#adhoc-status"), `参考图最多 ${ADHOC_MAX_REFS} 张`, true);
-  }
-  GenRefs.showPoseBrowser((pick) => {
-    adhocState.references.push({
-      type: "pose",
-      pose_id: pick.pose_id,
-      angle: pick.angle,
-      pose_source: pick.source,  // 库 id（线稿/深度；缺省回退 pose-db-01）
-      name: pick.name,
-      url: pick.url,
-    });
-    renderAdhocRefs();
-    setStatus($("#adhoc-status"), "已加入参考图");
-  }, { title: "Playground · 动作库（线稿/深度 · 只锚姿势构图）" });
-});
-
-/* 人脸库（AI 架构虚构人物，face-db-01…）：浏览器共用（GenRefs.showFaceBrowser），
-   选完推进本页自己的 references 列表（带库 id）；发送时 role 固定 face。
-   形态 face=锚脸 / styling=锚脸+发型+服装 —— 由条目的 section 决定，spec 不带。 */
-$("#btn-adhoc-face-add").addEventListener("click", () => {
-  if (adhocState.references.length >= ADHOC_MAX_REFS) {
-    return setStatus($("#adhoc-status"), `参考图最多 ${ADHOC_MAX_REFS} 张`, true);
-  }
-  GenRefs.showFaceBrowser((pick) => {
-    adhocState.references.push({
-      type: "face",
-      face_id: pick.face_id,
-      face_source: pick.source,  // 库 id（缺省回退 face-db-01）
-      name: pick.name,
-      url: pick.url,
-    });
-    renderAdhocRefs();
-    setStatus($("#adhoc-status"), "已加入参考图");
-  }, { title: "Playground · 人脸库（AI 架构虚构人物 · 锚脸部身份）" });
-});
-
 /* ---------- 出图 ---------- */
 $("#btn-adhoc-generate").addEventListener("click", async () => {
   const prompt = $("#adhoc-prompt").value.trim();
   if (!prompt) return setStatus($("#adhoc-status"), "提示词为空", true);
   const backend = adhocState.backend;
-  const i2i = adhocState.mode === "i2i";
-  if (i2i && !adhocState.references.length) {
+  /* 工作流模式：提示词（可手改）+ compose 返回的参考规格原样发送 */
+  const isFlow = AdhocFlow.isActive();
+  if (isFlow && AdhocFlow.isStale()) {
+    return setStatus($("#adhoc-status"), "构成已变化 —— 点「重新拼装」后再出图", true);
+  }
+  const i2i = isFlow || adhocState.mode === "i2i";
+  if (!isFlow && i2i && !adhocState.references.length) {
     return setStatus(
       $("#adhoc-status"),
       "图片编辑需要至少 1 张参考图：上传、从最近生成选，或从主体档案选就绪的图",
@@ -508,7 +479,14 @@ $("#btn-adhoc-generate").addEventListener("click", async () => {
     // 文生图页签不传 references：后端按「有没有参考图」走 t2i / i2i
     references: [],
   };
-  if (i2i) {
+  if (isFlow) {
+    // 工作流模式：references = compose 返回的规格数组（顺序即 <image1>…），原样发送
+    const refs = AdhocFlow.references();
+    if (!refs || !refs.length) {
+      return setStatus($("#adhoc-status"), "参考构成未选齐 —— 选齐后自动拼装，再出图", true);
+    }
+    body.references = refs;
+  } else if (i2i) {
     body.references = adhocState.references.map((ref) =>
       ref.type === "staged"
         ? { staged_id: ref.id }
@@ -677,6 +655,17 @@ function initAdhoc() {
   applyAdhocPanel();
   loadAdhocSubjectOptions().catch(() => {});
   loadAdhocRecent().catch(() => {});
+  AdhocFlow.init({ onChange: applyAdhocPanel });
+  $$("#adhoc-flow .seg").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      if (adhocState.flow === btn.dataset.flow) return;
+      adhocState.flow = btn.dataset.flow;
+      adhocSegToggle("#adhoc-flow", "flow", adhocState.flow);
+      AdhocFlow.setFlow(adhocState.flow);
+      applyAdhocPanel();
+    })
+  );
+  $("#btn-adhoc-recompose").addEventListener("click", () => AdhocFlow.recomposeNow());
 }
 
 $$("#adhoc-backend .seg").forEach((btn) =>
