@@ -1,0 +1,36 @@
+# 本文件由 `charvar subject derive` 生成（LLM 抽取 + 引用核对 + 审计），可人工修订。
+# 来源模板：light_blue_knit_girl.md（sha256:580c669106ed）
+# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-11-02 09:31 UTC
+# 起草 1 轮 · 审计 1 轮 · 审计通过 · 引用核对：24/24 条命中，无需修复
+# 人工修订：体形锚点从 identity_lock 移到 body_lock（锁定项只留脸/发/肤色），
+# body_lock 拆成 2 条英文短句、每条 ≤400 字符（换装场景用，写长了稀释动作段）。
+id: light_blue_knit_girl
+name: 浅蓝针织女孩
+subject_noun: woman
+trigger_word: light_blue_knit_girl
+reference_tag: <image1>
+style_lock:
+- 自然真实摄影，日系生活写真风格，柔和的自然漫射光，色彩明亮柔和
+- 保留细微皮肤纹理与真实发丝，锐化与磨皮克制，保留毛孔与细小绒毛的细节。
+identity_lock:
+- 族裔与年龄感：东亚，二十多岁，成熟感而非幼态。
+- 脸型是偏窄的鹅蛋脸，额头饱满，颧骨平缓，下颌线柔和收窄，下巴圆润不过尖。
+- 眉毛自然平直，眉峰不明显，保留真实毛流。
+- 眼睛是深棕色的大眼睛，眼型圆润，上眼睑略有弧度，双眼皮的褶皱清晰，睫毛自然上翘，眼球有明确的高光点。
+- 鼻梁自然挺直但不过高，鼻翼小巧。
+- 唇形柔和饱满，保留细微唇纹，唇色是自然淡红。
+- 皮肤白皙偏暖调，面颊有淡粉色腮红，妆容轻薄干净，面部保留自然的成年感。
+- 深棕色直发，长度到肩下，发尾自然微弯并向外翘起，发丝蓬松有自然的层次。
+- 额前是轻薄透肤的空气刘海，刘海边缘细碎，几缕碎发散落在脸侧与耳前。
+outfit_lock:
+- 上身穿一件浅蓝色细肩带针织背心，贴身穿着，领口开在胸线以下，肩带细。
+- 下身是一条浅蓝色高腰牛仔短裤，裤腰贴合腰线，裤长到大腿中段，裤腿宽松不贴腿，牛仔布有清晰的水洗纹理。
+- 脚上是一双白色低帮帆布鞋，鞋面是干净的白色帆布，鞋带系好，鞋底是白色的橡胶底。
+- 仅胸部一段的面料被撑起绷紧，肩部、腰部与衣摆保持自然垂坠。
+- 针织背心背面是完整的同色细针织衣片，只有肩袖接缝与侧缝，下摆是一圈平整的收口，肩胛骨的形状在面料下隐约可见；牛仔短裤背面有后腰育克线与两个简洁无装饰的后贴袋；帆布鞋展示厚实的白色橡胶鞋底。
+- 无随身配饰。默认造型不含帽子、首饰、包袋、手表。
+body_lock:
+- 'her figure is a slender adult hourglass: an extremely large, full, round bust whose outline swells markedly to both sides, its widest span about half again the width across her outer shoulders, forming its own forward volume with a flared lower contour; a very narrow, sharply cinched waist tucking in below the ribs'
+- 'opening smoothly toward the hips; a small, delicate frame with narrow shoulders, a thin ribcage and a slim torso; upper arms clearly narrower than the bust, wrists slim; hips round, full and markedly lifted backward, hip width close to shoulder width with a curved transition under the seat; each thigh under two-thirds the hip width, tapering to the knee, calves narrowing near ankle width'
+extra: Keep the same face, facial features, hairstyle, skin tone, body proportions
+  and figure in every pose and every new scene.
