@@ -115,6 +115,13 @@ def kind_of_line(line: str) -> str:
     return LINE_KIND.get(str(line or ""), "full")
 
 
+def _background_segment(seg: dict, background_text: str | None) -> str:
+    """背景段：调用方给了 scene 文本（如配方 scene_design 步的产物）就用它，
+    否则保持固定句「背景简洁，突出角色。」。空白串回退固定句（LLM 输出被清空不炸）。"""
+    text = str(background_text or "").strip()
+    return text or str(seg["background"])
+
+
 def build_prompt(
     line: str,
     action_text: str,
@@ -127,6 +134,7 @@ def build_prompt(
     costume_policy: dict | None = None,
     pose_display: str = "line",
     face_section: str | None = None,
+    background_text: str | None = None,
 ) -> str:
     """按线型拼 demo 结构；动作描述必须是已写好的视角级文本。
 
@@ -141,6 +149,8 @@ def build_prompt(
     face_section（可选，人脸库身份锚）：face/styling 段条目当 <image1>（与主体档案
     互斥，调用方把门）。styling 段与主体档案完全同文本；face 段（正面胸像）换
     face 版身份句/身材锚/融合句 —— 见 face 分段家族注释。双人线显式报错。
+    background_text（可选）：配方 scene_design 步设计的场景/光照段 —— 给了就替换
+    固定的「背景简洁，突出角色。」句（_background_segment，空白回退固定句）。
     """
     kind = LINE_KIND.get(str(line or ""), "full")
     seg = _SEGMENTS[kind]
@@ -174,7 +184,7 @@ def build_prompt(
             _LEAD[kind] + text,
             fusion.format(slot=3) if mode == "add" else fusion,
             seg["framing"],
-            seg["background"],
+            _background_segment(seg, background_text),
             _guard_with_costume(seg["guard"], guard),
         ]
         return "\n\n".join(part for part in parts if part)
@@ -184,7 +194,7 @@ def build_prompt(
             mannequin,
             _LEAD[kind] + text,
             seg["framing"],
-            seg["background"],
+            _background_segment(seg, background_text),
             seg["guard"],
         ]
         return "\n\n".join(part for part in parts if part)
@@ -207,7 +217,7 @@ def build_prompt(
             "让<image1>图中的角色担任描述里的「甲」、<image2>图中的角色担任「乙」，"
             "摆出<image3>图中的双人姿势："
         )
-        parts = [identity, mannequin, lead + text, seg["framing"], seg["background"], seg["guard"]]
+        parts = [identity, mannequin, lead + text, seg["framing"], _background_segment(seg, background_text), seg["guard"]]
         return "\n\n".join(parts)
     if costume:
         mode = costume_mode(costume_policy)
@@ -222,7 +232,7 @@ def build_prompt(
             _LEAD[kind] + text,
             m["fusion_pose"].format(slot=3),
             seg["framing"],
-            seg["background"],
+            _background_segment(seg, background_text),
             _guard_with_costume(seg["guard"], m["guard"]),
         ]
         return "\n\n".join(part for part in parts if part)
@@ -231,7 +241,7 @@ def build_prompt(
         mannequin,
         _LEAD[kind] + text,
         seg["framing"],
-        seg["background"],
+        _background_segment(seg, background_text),
         seg["guard"],
     ]
     return "\n\n".join(part for part in parts if part)
@@ -455,6 +465,7 @@ def build_costume_prompt(
     costume_display: str = "ghost",
     costume_policy: dict | None = None,
     face_section: str | None = None,
+    background_text: str | None = None,
 ) -> str:
     """单主体 + 服装（无动作参考）→ 全身换装图提示词。
 
@@ -486,7 +497,7 @@ def build_costume_prompt(
                 wear_lead,
                 fusion,
                 seg["framing"],
-                seg["background"],
+                _background_segment(seg, background_text),
                 _guard_with_costume(seg["guard"], guard),
             ]
         )
@@ -501,7 +512,7 @@ def build_costume_prompt(
             m["wear_lead"].format(slot=2),
             fusion.format(slot=2),
             seg["framing"],
-            seg["background"],
+            _background_segment(seg, background_text),
             _guard_with_costume(seg["guard"], m["guard"]),
         ]
     )

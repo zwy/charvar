@@ -79,10 +79,27 @@ def thumb_data_url(pose_id: str, angle: str, source: str = "") -> str:
     return f"data:image/jpeg;base64,{b64}"
 
 
-def _instructions(title_zh: str, title: str, angle: str, line: str) -> str:
+def _instructions(
+    title_zh: str, title: str, angle: str, line: str, display: str = "line"
+) -> str:
     shot = "\n".join(
         f"【{pid} · {ang}】\n{text}" for pid, ang, text in FEWSHOT
     )
+    if display == "depth":
+        image_note = (
+            f"给你一张灰度深度图（越白越靠前；这是动作「{title_zh}（{title}）」的"
+            f"{angle}视角，{_ANGLE_HINT.get(angle, angle)}）"
+        )
+        depth_rule = (
+            "1b. 深度图里白=近：把近端遮挡关系写清楚（身体哪一段在最前、"
+            "和谁重叠、按前后怎么叠）。\n"
+        )
+    else:
+        image_note = (
+            f"给你一张灰色无脸人偶线稿图（动作「{title_zh}（{title}）」的"
+            f"{angle}视角，{_ANGLE_HINT.get(angle, angle)}）"
+        )
+        depth_rule = ""
     pair_rule = (
         "若图里是两个人物：全文用「甲（位置/角色说明）」「乙（位置/角色说明）」指称，"
         "绝不写 imageN；\n4a. 若是单人动作：直接以「她/人物」描述，不区分甲乙。\n"
@@ -90,12 +107,12 @@ def _instructions(title_zh: str, title: str, angle: str, line: str) -> str:
         else "4. 全文只有一个人物，直接以「她/人物」描述，不出现甲乙。\n"
     )
     return (
-        "你是姿势参考库的动作描述起草员。给你一张灰色无脸人偶线稿图"
-        f"（动作「{title_zh}（{title}）」的{angle}视角，{_ANGLE_HINT.get(angle, angle)}），"
+        "你是姿势参考库的动作描述起草员。" + image_note + "，"
         "写出这段动作在出图提示词里可直接使用的中文动作描述。\n\n"
         "写作规则：\n"
         "1. 只写「身体在做什么 + 这个机位看到什么」：四肢/躯干/头怎么摆、重心与承重腿、"
         "朝向（面朝画面左方…）、机位事实（俯视角：机位在人物上前方…）、近端遮挡与透视大小。\n"
+        + depth_rule +
         "2. 不写角色身份：不发色发型、不写服装配饰、不写表情五官、不写画风 —— 人偶没有这些。\n"
         "3. 中文 80–160 字，一段成文，句子可直接拼在「摆出姿势：」之后。\n"
         + pair_rule +
@@ -120,9 +137,13 @@ def _validate(text: str, line: str) -> str:
     return text
 
 
-def _call_llm(messages: list[dict], model: str | None) -> str:
-    """单次视觉调用（集中在此便于测试替换）；text 输出，不走 JSON。"""
-    return llm.chat(messages, model=model, json_mode=False)
+def _call_llm(messages: list[dict], model: str | None, config: dict | None = None) -> str:
+    """单次视觉调用（集中在此便于测试替换）；text 输出，不走 JSON。
+
+    config（可选）= DB 设置链的 {base_url, api_key, model}（settings_service.
+    llm_overrides）—— 测试打桩本函数时只有 (messages, model) 两参也兼容。
+    """
+    return llm.chat(messages, model=model, json_mode=False, config=config)
 
 
 def describe_one(
@@ -134,8 +155,13 @@ def describe_one(
     dry_run: bool = False,
     overwrite: bool = False,
     source: str = "",
+    config: dict | None = None,
 ) -> dict:
-    """给一个动作视角起稿；已写且不 overwrite → skipped。缺省给线稿库。"""
+    """给一个动作视角起稿；已写且不 overwrite → skipped。缺省给线稿库。
+
+    起稿措辞按库展示形态分叉（depth 库说深度图 白=近，线稿库说人偶线稿）；
+    缩略图也随库取（深度条的图是深度渲染，不是线稿）。
+    """
     source = str(source or "").strip() or poses_service.SOURCE_ID
     row = conn.execute(
         "SELECT line, number, title FROM pose_images WHERE source = ? AND pose_id = ? AND angle = ?",
@@ -149,16 +175,17 @@ def describe_one(
     from charvar.pose_translations import POSE_TITLE_ZH
 
     title_zh = POSE_TITLE_ZH.get(pose_id, "").strip() or row["title"]
+    display = str((poses_service.POSE_SOURCES.get(source) or {}).get("display_type") or "line")
     messages = [
         {
             "role": "user",
             "content": [
-                {"type": "text", "text": _instructions(title_zh, row["title"], angle, row["line"])},
-                {"type": "image_url", "image_url": {"url": thumb_data_url(pose_id, angle)}},
+                {"type": "text", "text": _instructions(title_zh, row["title"], angle, row["line"], display)},
+                {"type": "image_url", "image_url": {"url": thumb_data_url(pose_id, angle, source=source)}},
             ],
         }
     ]
-    draft = _call_llm(messages, model)
+    draft = _call_llm(messages, model, **({"config": config} if config else {}))
     try:
         draft = _validate(draft, row["line"])
     except ValueError as exc:

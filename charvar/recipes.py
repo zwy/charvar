@@ -11,6 +11,13 @@
                   来自前面出图/贴字/单图步或配方 refs，参考视频/图片来自配方 refs，
                   OpenRouter 异步作业（提交 → 轮询，wait_s 超时转 waiting 可续查）。
 
+随机三库配方（2026-11-03）：``pick`` → ``scene_design`` → ``combo_image`` →
+``video_script``；pick = 从人脸/动作/服饰库随机选条（casting.py，子种子掷骰）并按
+A（另一库复制）→ B（LLM 起稿）补齐动作描述；scene_design = LLM 设计场景段；
+combo_image = 三库组合流出首帧（build_prompt + Playground 通路，scene 段替换固定
+背景句）；video_script = LLM 写直出视频脚本；video_model 步新增 ``prompt_from``
+（脚本步的产出当 prompt）与 combo_image 可当帧来源。
+
 大类由末步推导：末步 video_model → 生成配方；其余 → 合成配方。
 人工检查点：step.manual（缺省 images=False、其余 True）——执行到 pending 的
 manual 步就停在 waiting；人工过目后 advance 继续。
@@ -58,6 +65,12 @@ _STEP_ROOT_KEYS = frozenset(
         "negative_prompt", "reference_labels", "video_ref_labels",
         "frame_from", "frame_index", "frame_ref", "frame_slot",
         "last_frame_from", "last_frame_index", "video_from", "wait_s",
+        # ---- ⑥ 随机三库配方步 ----
+        "face", "pose", "costume",  # pick 步：三库过滤器（dict）
+        "scene_from",               # 消费 scene_design 步的 label（combo_image / video_script）
+        "types",                    # video_script：片段类型池覆盖
+        "hint",                     # scene_design：场景方向提示
+        "prompt_from",              # video_model：prompt 取自 video_script 步
     }
 )
 
@@ -84,7 +97,10 @@ class RecipeStep(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["images", "adhoc_image", "overlay", "video_synth", "video_model"]
+    kind: Literal[
+        "images", "adhoc_image", "overlay", "video_synth", "video_model",
+        "pick", "scene_design", "combo_image", "video_script",
+    ]
     label: str | None = None
     # None = 按 kind 缺省：images False（自动推进），其余 True（人工过目/消费前确认）
     manual: bool | None = None
@@ -128,8 +144,8 @@ class RecipeStep(BaseModel):
     reference_labels: list[str] = Field(default_factory=list)  # recipe.refs 的 label
 
     # ---- video_model 步（OpenRouter 异步作业） ----
-    duration: int | None = None        # 秒；None = 不发
-    frame_from: str | None = None      # 前面 images/adhoc_image/overlay 步的 label
+    duration: int | None = None        # 秒；None = 不发；video_script 步 = 脚本时长
+    frame_from: str | None = None      # 前面 images/adhoc_image/combo_image/overlay 步的 label
     frame_index: int = Field(default=0, ge=0)
     frame_ref: str | None = None       # 或直接用 recipe.refs 的静态图当帧
     frame_slot: Literal["first_frame", "last_frame"] = "first_frame"
@@ -138,6 +154,17 @@ class RecipeStep(BaseModel):
     video_ref_labels: list[str] = Field(default_factory=list)  # recipe.video_refs 的 label
     video_from: str | None = None      # 前面 video_synth/video_model 步的成片 → 参考视频
     wait_s: float = Field(default=300.0, gt=0)  # 提交后轮询等待；超时转 waiting 可续查
+    prompt_from: str | None = None     # LLM 脚本步 label：prompt 用它的产出（与 prompt 二选一）
+
+    # ---- pick 步（随机选库，casting.py）----
+    face: dict[str, Any] | None = None          # 人脸库过滤器 {sources, section, hair}
+    pose: dict[str, Any] | None = None          # 动作库过滤器 {sources, lines, categories, angle, single}
+    costume: dict[str, Any] | None = None       # 服饰库过滤器 {sources, categories, media}
+
+    # ---- 跨库消费步 ----
+    scene_from: str | None = None      # 前面 scene_design 步的 label
+    types: list[str] = Field(default_factory=list)   # video_script：片段类型池覆盖
+    hint: str | None = None            # scene_design：场景方向提示（可选）
 
 
 class Recipe(BaseModel):
@@ -269,8 +296,12 @@ def _validate_recipe(recipe: Recipe, path: Path) -> None:
                 if lab not in ref_labels:
                     raise PresetError(f"配方 {path.name} 的 {label}：reference_labels 里没有 {lab!r}（refs 里未声明）")
         if step.kind == "video_model":
-            if not (step.prompt or "").strip():
-                raise PresetError(f"配方 {path.name} 的 {label}：prompt 必填（描述要生成什么动态）")
+            if step.prompt_from:
+                # LLM 脚本步的产出当 prompt；与 prompt 二选一
+                if (step.prompt or "").strip():
+                    raise PresetError(f"配方 {path.name} 的 {label}：prompt 与 prompt_from 不能同给（prompt 只有一个来源）")
+            elif not (step.prompt or "").strip():
+                raise PresetError(f"配方 {path.name} 的 {label}：prompt 必填（或 prompt_from=<视频脚本步 label>）")
             if step.frame_from and step.frame_ref:
                 raise PresetError(f"配方 {path.name} 的 {label}：frame_from 与 frame_ref 不能同给（首帧只有一个来源）")
             for lab in step.reference_labels:
@@ -281,11 +312,11 @@ def _validate_recipe(recipe: Recipe, path: Path) -> None:
                     raise PresetError(f"配方 {path.name} 的 {label}：video_ref_labels 里没有 {lab!r}（video_refs 里未声明）")
             if step.frame_ref and step.frame_ref not in ref_labels:
                 raise PresetError(f"配方 {path.name} 的 {label}：frame_ref {step.frame_ref!r}（refs 里未声明）")
-            # 帧来源：必须是本步之前、能产图的步骤（images/adhoc_image/overlay）
+            # 帧来源：必须是本步之前、能产图的步骤（images/adhoc_image/combo_image/overlay）
             # 影片来源：必须是本步之前、能产视频的步骤（video_synth/video_model）
             for source_label, allowed, field_name in (
-                (step.frame_from, ("images", "adhoc_image", "overlay"), "frame_from"),
-                (step.last_frame_from, ("images", "adhoc_image", "overlay"), "last_frame_from"),
+                (step.frame_from, ("images", "adhoc_image", "combo_image", "overlay"), "frame_from"),
+                (step.last_frame_from, ("images", "adhoc_image", "combo_image", "overlay"), "last_frame_from"),
                 (step.video_from, ("video_synth", "video_model"), "video_from"),
             ):
                 if source_label is None:
@@ -299,6 +330,46 @@ def _validate_recipe(recipe: Recipe, path: Path) -> None:
                     raise PresetError(
                         f"配方 {path.name} 的 {label}：{field_name} 不能指向 {target.kind} 步（{source_label}）"
                     )
+            if step.prompt_from:
+                target = by_label.get(step.prompt_from)
+                if target is None or target.kind != "video_script":
+                    raise PresetError(
+                        f"配方 {path.name} 的 {label}：prompt_from 不能指向 {step.prompt_from!r}"
+                        "（必须指向本步之前的 video_script 步）"
+                    )
+        if step.kind == "pick":
+            from charvar import casting
+
+            targets = {"face": step.face, "pose": step.pose, "costume": step.costume}
+            if not any(targets.values()):
+                raise PresetError(f"配方 {path.name} 的 {label}：至少声明 face/pose/costume 之一")
+            for name, value in targets.items():
+                if value is None:
+                    continue
+                if not isinstance(value, dict):
+                    raise PresetError(f"配方 {path.name} 的 {label}：{name} 要是过滤器映射，收到 {value!r}")
+                try:
+                    casting.normalize_filters(name, value)
+                except casting.CastingError as exc:
+                    raise PresetError(f"配方 {path.name} 的 {label}：{exc}") from exc
+        if step.kind in ("scene_design", "combo_image", "video_script"):
+            # 消费随机选库：input 必填且必须指向本步之前的 pick 步
+            target = by_label.get(str(step.input or ""))
+            if target is None:
+                raise PresetError(
+                    f"配方 {path.name} 的 {label}：input 引用的步骤不存在或不在本步之前：{step.input!r}"
+                )
+            if target.kind != "pick":
+                raise PresetError(
+                    f"配方 {path.name} 的 {label}：input 必须指向 pick（随机选库）步，当前 {target.kind}"
+                )
+        if step.scene_from:
+            target = by_label.get(step.scene_from)
+            if target is None or target.kind != "scene_design":
+                raise PresetError(
+                    f"配方 {path.name} 的 {label}：scene_from 不能指向 {step.scene_from!r}"
+                    "（必须指向本步之前的 scene_design 步）"
+                )
         images_seen = images_seen or step.kind == "images"
         labels.append(label)
         by_label[label] = step
@@ -853,7 +924,7 @@ def _produce_frame(conn, state: RecipeRunState, source_label: str, item_index: i
     target = next((s for s in state.steps if s.label == source_label), None)
     if target is None or target.status != "done":
         raise _GateStop(f"首帧来源步骤 {source_label or '?'} 未完成")
-    if target.kind == "adhoc_image":
+    if target.kind in ("adhoc_image", "combo_image"):
         from charvar import adhoc as adhoc_service
 
         run_id = str(target.outputs.get("image_run_id") or "")
@@ -966,8 +1037,18 @@ def _submit_video_job(conn, recipe: Recipe, state: RecipeRunState, step: RecipeS
     if step.video_from:
         reference_video_paths.append(_produce_video(state, step.video_from))
 
+    prompt_text = str(step.prompt or "")
+    if step.prompt_from:
+        # video_script 步产出的脚本当 prompt（静态校验已锁：二选一、指向 video_script 步）
+        script_step = next((s for s in state.steps if s.label == step.prompt_from), None)
+        if script_step is None or script_step.status != "done":
+            raise _GateStop(f"视频脚本步 {step.prompt_from} 未完成")
+        prompt_text = str((script_step.outputs or {}).get("script") or "").strip()
+        if not prompt_text:
+            raise PresetError(f"{step.label}：视频脚本步 {step.prompt_from} 没有产出 prompt")
+
     req = adhoc_video.VideoRequest(
-        prompt=str(step.prompt or ""),
+        prompt=prompt_text,
         backend="openrouter",
         model=step.model,
         duration=step.duration,
@@ -1064,12 +1145,261 @@ def _video_model_outputs(run_id: str, summary: dict[str, Any]) -> dict[str, Any]
     }
 
 
+# ---------- 随机三库配方步（pick / scene_design / combo_image / video_script） ----------
+
+def _prior_step_state(
+    state: RecipeRunState, label: str, expected_kinds: tuple[str, ...], field_name: str
+) -> StepState:
+    """运行期跨步引用：label → 前置且已 done 的步状态；引用错/未完成显式报。"""
+    target = next((s for s in state.steps if s.label == label), None)
+    if target is None:
+        raise PresetError(f"{field_name} 引用的步骤不存在：{label!r}")
+    if target.status != "done":
+        raise _GateStop(f"前置步骤 {label} 未完成")
+    if target.kind not in expected_kinds:
+        raise PresetError(f"{field_name} 不能指向 {target.kind} 步（{label}）")
+    return target
+
+
+def _scene_text_from(state: RecipeRunState, step: RecipeStep) -> str:
+    """scene_from 步产出的场景文本；没声明 scene_from = 不换背景句。"""
+    if not step.scene_from:
+        return ""
+    target = _prior_step_state(state, step.scene_from, ("scene_design",), "scene_from")
+    return str(target.outputs.get("scene_text") or "").strip()
+
+
+def _run_pick_step(conn, recipe: Recipe, state: RecipeRunState, step: RecipeStep, st: StepState) -> dict[str, Any]:
+    """随机选库步：face/pose/costume 各库随机选一 + 动作描述补齐（A 复制 → B LLM 起稿）。
+
+    掷骰 key 含 recipe_run_id —— 每次运行换一批；同一运行内重试（同 seed 同 key）
+    仍是同一批。
+    """
+    from charvar import casting, settings_service, wildcard
+
+    if any(key in st.outputs for key in ("face", "pose", "costume")):
+        return {key: st.outputs[key] for key in ("face", "pose", "costume") if key in st.outputs}
+    outputs: dict[str, Any] = {}
+    for target in ("face", "pose", "costume"):
+        filters = getattr(step, target)
+        if filters is None:
+            continue
+        rng = wildcard.rng_for(int(state.seed), f"{state.recipe_run_id}:pick:{step.label}:{target}")
+        try:
+            outputs[target] = getattr(casting, f"pick_{target}")(
+                conn, casting.normalize_filters(target, filters), rng
+            )
+        except casting.CastingError as exc:
+            raise PresetError(f"{step.label}：{exc}") from exc
+    if "pose" in outputs:
+        picked = outputs["pose"]
+        try:
+            info = casting.ensure_pose_description(
+                conn,
+                source=picked["source"],
+                pose_id=picked["pose_id"],
+                angle=picked["angle"],
+                model=step.model,
+                config=settings_service.llm_overrides(conn),
+            )
+        except casting.CastingError as exc:
+            raise PresetError(f"{step.label}：{exc}", status=502) from exc
+        picked["action_text"] = info["action_text"]
+        picked["action_origin"] = info["origin"]
+    return outputs
+
+
+def _run_scene_design_step(conn, recipe: Recipe, state: RecipeRunState, step: RecipeStep, st: StepState) -> dict[str, Any]:
+    """场景设计步：LLM 按 动作描述+服饰 出一段场景/光照文本。"""
+    from charvar import llm, scene_design as scene_service, settings_service
+
+    if st.outputs.get("scene_text"):
+        return {"scene_text": st.outputs["scene_text"]}
+    picks = _prior_step_state(state, str(step.input or ""), ("pick",), "input").outputs
+    pose = picks.get("pose")
+    if not pose:
+        raise PresetError(f"{step.label}：随机选库里没有动作（pose）——先在 pick 步声明 pose 过滤器")
+    costume = picks.get("costume") or {}
+    try:
+        data = scene_service.design_scene(
+            pose_text=str(pose.get("action_text") or ""),
+            pose_title=str(pose.get("title_zh") or pose.get("title") or ""),
+            category=str(pose.get("category_zh") or ""),
+            costume_text=str(costume.get("keywords") or ""),
+            hint=str(step.hint or ""),
+            model=step.model,
+            config=settings_service.llm_overrides(conn),
+        )
+    except (llm.LLMError, ValueError) as exc:
+        raise PresetError(f"{step.label}：{exc}", status=502) from exc
+    return {"scene_text": data["scene"]}
+
+
+def _run_combo_image_step(conn, recipe: Recipe, state: RecipeRunState, step: RecipeStep, st: StepState) -> dict[str, Any]:
+    """三库组合出图步：pick 的条目 → build_prompt（scene 段替换固定背景句）→ Playground 通路。
+
+    与 CLI ``charvar pose prompt --face --costume --run`` 同语义（pose_prompt 同源
+    文案、reference_images 同一压缩线）；描述/服饰要点从 DB 现读（可能已被手改）。
+    """
+    from charvar import adhoc as adhoc_service
+    from charvar import costumes as costumes_service
+    from charvar import faces as faces_service
+    from charvar import llm
+    from charvar import pose_prompt as pose_prompt_service
+    from charvar import poses as poses_service
+
+    run_id = str(st.outputs.get("image_run_id") or "")
+    if run_id:
+        try:
+            adhoc_service.original_file(run_id)
+            return {"image_run_id": run_id, "image_url": f"/adhoc/{run_id}/image",
+                    "note": "复用已有单图（要重出请删配方运行重建）"}
+        except (FileNotFoundError, adhoc_service.AdhocError):
+            pass  # 产物被清了（或 run_id 脏）：走重新生成
+
+    picks = _prior_step_state(state, str(step.input or ""), ("pick",), "input").outputs
+    face = picks.get("face")
+    pose = picks.get("pose")
+    if not face or not pose:
+        lacking = "/".join(name for name, value in (("face", face), ("pose", pose)) if not value)
+        raise PresetError(f"{step.label}：随机选库里缺 {lacking}（本步以人脸为身份锚 + 动作为姿势锚）")
+    db_path = _conn_db_path(conn)
+    # 描述与服饰要点按 DB 现值取（pick 之后可能已被手改；DB 是运行时真源）
+    try:
+        face_section = faces_service.item_section(conn, face["face_id"], source=face["source"])
+        action = poses_service.pose_action(conn, pose["pose_id"], pose["angle"], source=pose["source"])
+        action_text = str(action["action_text"] or "").strip()
+        if not action_text:
+            raise PresetError(
+                f"{step.label}：该动作视角的动作描述是空的（{pose['source']}/{pose['pose_id']}）"
+                "——先到动作库写描述或重跑 pick 步"
+            )
+        row = conn.execute(
+            "SELECT line FROM pose_images WHERE source = ? AND pose_id = ? AND angle = ?",
+            (pose["source"], pose["pose_id"], pose["angle"]),
+        ).fetchone()
+        if row is None:
+            raise PresetError(f"{step.label}：姿势库没有这个动作视角：{pose['source']}/{pose['pose_id']}/{pose['angle']}")
+        line = str(row["line"] or "")
+    except (faces_service.FaceError, poses_service.PoseError) as exc:
+        raise PresetError(f"{step.label}：{exc}") from exc
+    pose_display = str((poses_service.POSE_SOURCES.get(pose["source"]) or {}).get("display_type") or "line")
+
+    costume_file = None
+    costume_note = ""
+    costume_display = "ghost"
+    costume_policy: dict | None = None
+    if picks.get("costume"):
+        costume = picks["costume"]
+        ref = f"{costume['source']}/{costume['item_id']}"
+        try:
+            c_row = costumes_service.resolve_ref(conn, ref)
+            costume_note = costumes_service.note_text(conn, ref)
+            costume_display = str(c_row["display_type"] or "ghost")
+            costume_policy = (
+                json.loads(c_row["subject_policy"])
+                if str(c_row["subject_policy"] or "").strip()
+                else None
+            )
+            costume_file = costumes_service.prepared_reference_file(ref, db_path)
+        except costumes_service.CostumeError as exc:
+            raise PresetError(f"{step.label}：{exc}") from exc
+
+    try:
+        prompt = pose_prompt_service.build_prompt(
+            line,
+            action_text,
+            costume=costume_file is not None,
+            costume_keywords=costume_note or None,
+            costume_display=costume_display,
+            costume_policy=costume_policy,
+            pose_display=pose_display,
+            face_section=face_section,
+            background_text=_scene_text_from(state, step) or None,
+        )
+    except ValueError as exc:
+        raise PresetError(f"{step.label}：{exc}") from exc
+
+    reference_paths = [
+        faces_service.prepared_reference_file(face["face_id"], db_path, source=face["source"]),
+        poses_service.prepared_reference_file(pose["pose_id"], pose["angle"], db_path, source=pose["source"]),
+    ]
+    if costume_file is not None:
+        reference_paths.append(costume_file)
+    req = adhoc_service.AdhocRequest(
+        prompt=prompt,
+        backend=step.backend,
+        model=step.model,
+        negative_prompt=step.negative_prompt,
+        quality=step.quality,
+        reference_paths=reference_paths,
+        aspect_ratio=str(step.aspect or "3:4"),
+        resolution=step.resolution or "",
+        seed=int(step.seed) if step.seed is not None else int(recipe.seed),
+        workflow=step.workflow,
+        wait=True,
+    )
+    try:
+        result = adhoc_service.generate(req, db_path)
+    except adhoc_service.AdhocError as exc:
+        raise PresetError(f"{step.label}：{exc}") from exc
+    except Exception as exc:  # noqa: BLE001 - 后端出图失败统一 502（与网页 /adhoc/generate 同策略）
+        raise PresetError(f"{step.label}：出图失败：{exc}", status=502) from exc
+    new_run_id = Path(result.manifest_path).parent.name
+    return {
+        "image_run_id": new_run_id,
+        "image_url": f"/adhoc/{new_run_id}/image",
+        "thumb_url": f"/adhoc/{new_run_id}/thumb",
+        "width": result.width,
+        "height": result.height,
+        "model": result.model,
+        "cost": result.cost,
+        "prompt": prompt,
+    }
+
+
+def _run_video_script_step(conn, recipe: Recipe, state: RecipeRunState, step: RecipeStep, st: StepState) -> dict[str, Any]:
+    """视频脚本步：LLM 按动作描述+服饰+场景写直出视频提示词（类型池子种子抽取）。"""
+    from charvar import llm, settings_service
+    from charvar import video_script as script_service
+
+    if st.outputs.get("script"):
+        return {"script": st.outputs["script"], "clip_type": str(st.outputs.get("clip_type") or "")}
+    picks = _prior_step_state(state, str(step.input or ""), ("pick",), "input").outputs
+    pose = picks.get("pose")
+    if not pose:
+        raise PresetError(f"{step.label}：随机选库里没有动作（pose）——先在 pick 步声明 pose 过滤器")
+    costume = picks.get("costume") or {}
+    clip_type = script_service.pick_clip_type(
+        int(state.seed), f"{state.recipe_run_id}:script:{step.label}", list(step.types) or None
+    )
+    try:
+        data = script_service.write_script(
+            pose_text=str(pose.get("action_text") or ""),
+            pose_title=str(pose.get("title_zh") or pose.get("title") or ""),
+            category=str(pose.get("category_zh") or ""),
+            costume_text=str(costume.get("keywords") or ""),
+            scene_text=_scene_text_from(state, step),
+            duration=int(step.duration) if step.duration else 5,
+            clip_type=clip_type,
+            model=step.model,
+            config=settings_service.llm_overrides(conn),
+        )
+    except (llm.LLMError, ValueError) as exc:
+        raise PresetError(f"{step.label}：{exc}", status=502) from exc
+    return {"script": data["script"], "clip_type": clip_type}
+
+
 _HANDLERS = {
     "images": _run_images_step,
     "adhoc_image": _run_adhoc_image_step,
+    "combo_image": _run_combo_image_step,
     "overlay": _run_overlay_step,
     "video_synth": _run_video_synth_step,
     "video_model": _run_video_model_step,
+    "pick": _run_pick_step,
+    "scene_design": _run_scene_design_step,
+    "video_script": _run_video_script_step,
 }
 
 
@@ -1096,7 +1426,8 @@ def advance(conn, state: RecipeRunState, recipe: Recipe | None = None, *, approv
             write_state(state)
             return state
         approved_first = True
-        if st.status == "pending":
+        if st.status in ("pending", "failed"):
+            # failed 步也直接重试（修好之后 continue 重跑）；重试再炸 → 又标 failed
             st.note = ""
             try:
                 handler = _HANDLERS.get(step.kind)

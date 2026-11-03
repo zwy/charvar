@@ -1,0 +1,49 @@
+---
+name: random_cast_video
+type: recipe
+version: 1
+title: 随机三库组合：人脸×单人动作×服饰 → 首帧 → 5 秒视频
+doc: random_cast_video.md
+seed: 0
+steps:
+- kind: pick
+  label: 随机选库
+  manual: false
+  face:
+    sources: [face-db-01]
+    section: face
+  pose:
+    sources: [pose-db-01, pose-db-02]
+    angle: 正面
+  costume:
+    sources: [costume-db-01, studio]
+
+- kind: scene_design
+  label: 场景设计
+  manual: false
+  input: 随机选库
+
+- kind: combo_image
+  label: 首帧图
+  input: 随机选库
+  scene_from: 场景设计
+  backend: comfyui
+  resolution: 2k
+  aspect: "9:16"
+
+- kind: video_script
+  label: 视频脚本
+  manual: false
+  input: 随机选库
+  scene_from: 场景设计
+  duration: 5
+
+- kind: video_model
+  label: 成片
+  prompt_from: 视频脚本
+  frame_from: 首帧图
+  frame_slot: first_frame
+  duration: 5
+  resolution: 480p
+  aspect: "9:16"
+  wait_s: 420

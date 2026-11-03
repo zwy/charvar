@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -824,3 +825,301 @@ steps:
     state = recipes_service.advance_state(model_env, state.recipe_run_id)
     assert state.steps[0].status == "done"
     assert len(adhoc_reqs) == before
+
+
+# ---------- ⑥ 随机三库配方（pick / scene_design / combo_image / video_script） ----------
+
+_CAST_YAML = """
+name: demo_cast
+type: recipe
+version: 1
+title: 随机三库（测试）
+seed: 7
+steps:
+- kind: pick
+  label: 选库
+  manual: false
+  face: {sources: [face-db-01], section: face}
+  pose: {sources: [pose-db-01, pose-db-02], angle: 正面}
+  costume: {sources: [costume-db-01]}
+- kind: scene_design
+  label: 场景
+  manual: false
+  input: 选库
+- kind: combo_image
+  label: 首帧图
+  input: 选库
+  scene_from: 场景
+  backend: comfyui
+  aspect: "9:16"
+- kind: video_script
+  label: 脚本
+  manual: false
+  input: 选库
+  scene_from: 场景
+  duration: 5
+- kind: video_model
+  label: 成片
+  prompt_from: 脚本
+  frame_from: 首帧图
+  duration: 5
+  aspect: "9:16"
+"""
+
+_POSE_DESC = "她正面朝向镜头站立，双臂自然下垂，双腿并拢收立，重心居中。整体是安静的待机站姿。"
+
+_SCENE_TEXT = "黄昏的海边栈道，夕阳侧逆光给人物勾出暖色轮廓光，海面泛着细碎的金光。"
+
+
+def _script_stub_text() -> str:
+    return (
+        "以输入首帧为唯一视觉依据，生成一段约5秒的单人视频。"
+        + "画面连续性：全程同一名人物，发型服装背景光线与首帧保持一致，不切镜头不换场景。" * 14
+    )
+
+
+def _write_cast_fixtures(tmp_path, *, face_ids=None):
+    (tmp_path / "presets" / "recipes").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "presets" / "recipes" / "demo_cast.yaml").write_text(
+        _CAST_YAML, encoding="utf-8"
+    )
+    from tests.test_costumes import _build_fake_costume_data
+    from tests.test_faces import _build_fake_face_data
+    from tests.test_poses import _build_fake_pose_data
+
+    _build_fake_face_data(tmp_path)  # face 池 3 条（2 face + 1 styling）
+    if face_ids:
+        # reroll 测试用大池：再造 30 条 face 形态条目（ids 不与缺省冲突）
+        plan = {fid: "face" for fid in face_ids}
+        _build_fake_face_data(tmp_path, counts=plan, source="face-db-01")
+    _build_fake_costume_data(tmp_path)
+    # 动作池：线稿 + 深度各一条单人动作（P001），pair 不入库
+    _build_fake_pose_data(tmp_path, counts={"full_sexy_P001": 5})
+    _build_fake_pose_data(tmp_path, source="pose-db-02", counts={"full_sexy_P001": 5})
+
+
+def _import_cast_libs(conn, *, seed_line_desc: bool = True):
+    from charvar import costumes as costumes_service
+    from charvar import faces as faces_service
+    from charvar import poses as poses_service
+
+    faces_service.import_catalog(conn)
+    costumes_service.import_catalog(conn, "costume-db-01")
+    poses_service.import_catalog(conn)  # pose-db-01
+    poses_service.import_catalog(conn, "pose-db-02")
+    if seed_line_desc:
+        poses_service.set_pose_action(
+            conn, "full_sexy_P001", "正面", _POSE_DESC,
+            source="manual", source_id="pose-db-01",
+        )
+
+
+@pytest.fixture()
+def cast_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CHARVAR_PRESETS_DIR", str(tmp_path / "presets"))
+    _write_cast_fixtures(tmp_path)
+    # 库文件放默认名（charvar.db）：describe 起稿的缩略图查找走默认库路径，必须同库
+    with storage.connect(tmp_path / "charvar.db") as conn:
+        _import_cast_libs(conn, seed_line_desc=True)
+        yield conn
+
+
+def _stub_llms(monkeypatch, *, scene_text=_SCENE_TEXT, script_text=None):
+    """stub 三个 LLM 环节：场景（chat_json 形态）/ 脚本 /（动作描述起稿由各测试自定）。"""
+    from charvar import scene_design as scene_service
+    from charvar import video_script as script_service
+
+    monkeypatch.setattr(
+        scene_service, "_call_llm",
+        lambda messages, model=None, config=None: {"scene": scene_text},
+    )
+    monkeypatch.setattr(
+        script_service, "call_llm",
+        lambda messages, model=None, config=None: script_text or _script_stub_text(),
+    )
+
+
+def test_repo_random_cast_recipe_parses():
+    """仓库自带随机三库配方解析合法；检查点布局 = 选库/场景自动 + 首帧/成片停。"""
+    recipe = recipes_service.load_recipe("random_cast_video")
+    assert [s.kind for s in recipe.steps] == [
+        "pick", "scene_design", "combo_image", "video_script", "video_model",
+    ]
+    assert [recipes_service.manual_default(s) for s in recipe.steps] == [
+        False, False, True, False, True,
+    ]
+    assert recipe.steps[3].duration == 5 and recipe.steps[4].duration == 5
+
+
+def test_cast_static_validation_errors(model_env):
+    base = recipes_service.recipes_dir()
+    cases = {
+        "unknown_key": _CAST_YAML.replace("section: face}", "sourse: [x]}"),
+        "unregistered_source": _CAST_YAML.replace("[pose-db-01, pose-db-02]", "[pose-db-99]"),
+        "no_target": _CAST_YAML.replace(
+            "  face: {sources: [face-db-01], section: face}\n  pose: {sources: [pose-db-01, pose-db-02], angle: 正面}\n  costume: {sources: [costume-db-01]}\n", ""
+        ),
+        "scene_missing_input": _CAST_YAML.replace("  input: 选库\n- kind: combo_image\n", "- kind: combo_image\n"),
+        "prompt_from_not_script": _CAST_YAML.replace("prompt_from: 脚本\n  frame_from: 首帧图", "prompt_from: 场景\n  frame_from: 首帧图\n  prompt: x"),
+    }
+    for stem, text in cases.items():
+        (base / f"badc_{stem}.yaml").write_text(text, encoding="utf-8")
+        with pytest.raises(PresetError):
+            recipes_service.load_recipe(f"badc_{stem}")
+    with pytest.raises(PresetError, match="face/pose/costume"):
+        recipes_service.load_recipe("badc_no_target")
+    with pytest.raises(PresetError, match="prompt"):
+        recipes_service.load_recipe("badc_prompt_from_not_script")
+
+
+def test_cast_full_flow_through_two_checkpoints(cast_env, monkeypatch):
+    import re
+
+    from charvar import pose_describe as describe_service
+
+    describe_calls: list = []
+
+    def fake_describe_llm(messages, model=None, config=None):
+        describe_calls.append(messages)
+        return _POSE_DESC
+
+    monkeypatch.setattr(describe_service, "_call_llm", fake_describe_llm)
+    _stub_llms(monkeypatch)
+    monkeypatch.setattr(recipes_service, "_VIDEO_POLL_INTERVAL_S", 0.01)
+    adhoc_reqs = _stub_adhoc_generate(monkeypatch)
+    _stubbed = _stub_adhoc_video(
+        monkeypatch,
+        [{"status": "ready", "job_id": "j1", "model": "heygen/heygen-video-1"}],
+    )
+
+    # run 1：pick（自动）+ 场景（自动）→ 停在「首帧图」
+    state = recipes_service.start_run(cast_env, "demo_cast")
+    assert state.status == "waiting"  # combo_image 缺省 manual
+    pick_out = state.steps[0].outputs
+    assert set(pick_out) == {"face", "pose", "costume"}
+    assert pick_out["face"]["section"] == "face"  # styling 条目被过滤器排除
+    assert pick_out["face"]["thumb_url"].startswith("/faces/image/face-db-01/")
+    assert pick_out["costume"]["ref"] in ("costume-db-01/SPR-0001", "costume-db-01/SXY-0099")
+    pose_out = pick_out["pose"]
+    assert pose_out["action_text"] == _POSE_DESC
+    assert re.match(r"^(existing|twin_copy\(pose-db-0[12]→pose-db-0[12]\))$", pose_out["action_origin"])
+    assert pose_out["line"] == "全身1人・セクシー系"
+    assert state.steps[1].outputs["scene_text"] == _SCENE_TEXT
+    assert not describe_calls  # 池内该动作在双库之一有描述 → A 复制/已有，没烧 LLM
+
+    # continue 1：组合出图（stub）+ 视频脚本（stub）→ 停在「成片」
+    state = recipes_service.advance_state(cast_env, state.recipe_run_id)
+    assert state.status == "waiting"
+    combo_out = state.steps[2].outputs
+    assert combo_out["image_run_id"] == "adhoc_fake"
+    assert combo_out["image_url"] == "/adhoc/adhoc_fake/image"
+    req = adhoc_reqs[0]
+    assert len(req.reference_paths) == 3  # 人脸 → 动作 → 服饰
+    assert all(p.exists() for p in req.reference_paths)
+    # 场景段替换了固定背景句；动作描述与服饰要点在 prompt 里
+    assert _SCENE_TEXT in req.prompt
+    assert "背景简洁，突出角色" not in req.prompt
+    assert _POSE_DESC in req.prompt
+    assert "服装要点" in req.prompt
+    # 脚本步：脚本 = stub 文本，类型出自池子
+    script_out = state.steps[3].outputs
+    from charvar import video_script as script_service
+
+    assert script_out["script"].startswith("以输入首帧为唯一视觉依据")
+    assert script_out["clip_type"] in script_service.DEFAULT_TYPES
+
+    # continue 2：视频提交（脚本当 prompt、首帧当 frame）→ ready → done
+    state = recipes_service.advance_state(cast_env, state.recipe_run_id)
+    assert state.status == "done"
+    video_req = _stubbed[0]
+    assert video_req.prompt == _script_stub_text()
+    assert video_req.first_frame is not None
+    assert str(video_req.first_frame).endswith("adhoc_fake/original/000000.png")
+
+
+def test_cast_pick_b_llm_then_failed_retry(cast_env, monkeypatch):
+    """两库都缺描述 → B LLM 起稿落库；LLM 没配 → 步 failed，修好后 continue 重试（同批不重掷）。"""
+    from charvar import pose_describe as describe_service
+
+    conn = cast_env
+    # 清掉线稿库预置描述：两库都空 → 只能走 B
+    conn.execute("DELETE FROM pose_actions")
+    conn.commit()
+
+    monkeypatch.setattr(
+        describe_service, "_call_llm",
+        lambda *a, **kw: (_ for _ in ()).throw(__import__("charvar").llm.LLMError("no api key set")),
+    )
+    _stub_llms(monkeypatch)
+    monkeypatch.setattr(recipes_service, "_VIDEO_POLL_INTERVAL_S", 0.01)
+    _stub_adhoc_generate(monkeypatch)
+
+    state = recipes_service.start_run(cast_env, "demo_cast")
+    assert state.status == "failed"
+    assert state.steps[0].status == "failed"
+    assert "LLM" in state.steps[0].note
+
+    # 修好（换可用 stub 的方式模拟配置修复）→ continue：failed 步直接重试；重试同批
+    monkeypatch.setattr(
+        describe_service, "_call_llm", lambda messages, model=None, config=None: _POSE_DESC
+    )
+    state = recipes_service.advance_state(cast_env, state.recipe_run_id)
+    assert state.steps[0].status == "done"
+    assert state.steps[0].outputs["pose"]["action_origin"] == "ai_draft"
+    row = conn.execute(
+        "SELECT source FROM pose_actions WHERE pose_id='full_sexy_P001' AND angle='正面'"
+    ).fetchone()
+    assert row["source"] == "ai_draft"  # 起稿落库（复用给后续运行与网页）
+    assert state.status == "waiting"  # 接着推进到「首帧图」检查点
+
+    # 同一运行再重掷也不会换批：outputs 已在，重跑 handler 复用（pick 幂等）
+    again = recipes_service._run_pick_step(conn, recipes_service.load_recipe("demo_cast"),
+                                           state, recipes_service.load_recipe("demo_cast").steps[0], state.steps[0])
+    assert again["face"] == state.steps[0].outputs["face"]
+
+
+def test_cast_pick_rerolls_across_runs(cast_env, monkeypatch):
+    """掷骰 key 含 run_id：同一 seed 的各次运行各掷各的（6 连抽要出现 ≥2 种选取）。
+
+    概率注：池 33 条，全同概率 ≈ (1/33)^5 —— 依赖 rng key 含 run_id 的语义本身。
+    """
+    from charvar import faces as faces_service
+    from charvar import pose_describe
+    from tests.test_faces import _build_fake_face_data
+
+    plan = {f"rollface{i:05d}": "face" for i in range(30)}
+    _build_fake_face_data(Path(os.environ["CHARVAR_DATA_DIR"]), counts=plan)
+    faces_service.import_catalog(cast_env)
+    monkeypatch.setattr(pose_describe, "_call_llm",
+                        lambda messages, model=None, config=None: _POSE_DESC)
+    _stub_llms(monkeypatch)
+    monkeypatch.setattr(recipes_service, "_VIDEO_POLL_INTERVAL_S", 0.01)
+    _stub_adhoc_generate(monkeypatch)
+
+    picks = []
+    for _ in range(6):
+        state = recipes_service.start_run(cast_env, "demo_cast")
+        picks.append(state.steps[0].outputs["face"]["face_id"])
+    assert len(set(picks)) >= 2
+
+
+def test_scene_fallback_keeps_fixed_background(model_env):
+    """不接 scene_from（或场景文本为空）→ build_prompt 保持固定背景句（CLI/网页零改动）。"""
+    from charvar import pose_prompt
+    from charvar.scene_design import validate_scene
+
+    prompt = pose_prompt.build_prompt("全身1人・セクシー系", "她正面朝向镜头站立。")
+    assert "背景简洁，突出角色。" in prompt
+    prompt2 = pose_prompt.build_prompt("全身1人・セクシー系", "她正面朝向镜头站立。", background_text=_SCENE_TEXT)
+    assert _SCENE_TEXT in prompt2 and "背景简洁，突出角色。" not in prompt2
+    prompt3 = pose_prompt.build_prompt("全身1人・セクシー系", "她正面朝向镜头站立。", background_text="   ")
+    assert "背景简洁，突出角色。" in prompt3
+    # 场景文本校验边界：实测 LLM 偶发 150+ 字 —— 220 内放行，221 拦下
+    fine_long = "一间" + "浅" * 150 + "室内。"
+    assert len(fine_long) == 155
+    assert validate_scene(fine_long) == fine_long
+    with pytest.raises(ValueError):
+        validate_scene("短")
+    with pytest.raises(ValueError):
+        validate_scene("长" * 221)
