@@ -892,3 +892,82 @@ def test_build_costume_prompt_face():
     add = pose_prompt.build_costume_prompt(costume_policy={"clothing": "add"}, face_section="face")
     assert "基础衣着按其美术风格自然搭配" in add
     assert "穿上<image2>图中的袜类" in add
+
+
+# ---------- 自建文本动作库（display_type=text，无图） ----------
+
+def test_import_catalog_text_library_allows_imageless_rows(data_dir):
+    """text 库：原寸/サムネ留空的条目合法（动作描述即锚）；有图库缺文件仍整批拒绝。"""
+    src = _build_fake_pose_data(data_dir)
+    catalog = json.loads((src / "catalog.json").read_text(encoding="utf-8"))
+    # text 库目录只放 catalog，不画图 —— item 全走无图行
+    text_src = data_dir / "poses" / "studio"
+    text_src.mkdir(parents=True, exist_ok=True)
+    plain = []
+    for it in catalog:
+        if it["アングル"] != "正面":
+            continue
+        plain.append({**it, "サムネ": "", "原寸": ""})
+    (text_src / "catalog.json").write_text(json.dumps(plain, ensure_ascii=False), encoding="utf-8")
+    # 有图库缺文件仍旧拒绝（text 放宽不外溢）：先删掉一张图再灌 pose-db-01
+    (src / "img" / "full_sexy_P001_front.png").unlink()
+    with storage.connect() as conn:
+        with pytest.raises(poses_service.PoseError, match="产物缺失"):
+            poses_service.import_catalog(conn)
+        assert conn.execute("SELECT COUNT(*) FROM pose_images").fetchone()[0] == 0  # 空库
+        info = poses_service.import_catalog(conn, "studio")
+        assert info["poses"] == 3 and info["images"] == 3
+        rows = conn.execute(
+            "SELECT pose_id, file_path, thumb_path, display_type FROM pose_images WHERE source='studio'"
+        ).fetchall()
+        assert all(r["file_path"] == "" and r["thumb_path"] == "" and r["display_type"] == "text" for r in rows)
+    # list_poses：无图行 thumb/full URL 置空 + text_only 标记
+    with storage.connect() as conn:
+        data = poses_service.list_poses(conn, q="wss")
+        poses_list = [p for p in data["poses"] if p["source"] == "studio"]
+        for p in poses_list:
+            im = p["images"][0]
+            assert im["thumb_url"] == "" and im["full_url"] == "" and im["text_only"] is True
+
+
+def test_import_studio_seeds_mirror_and_respects_user_edits(data_dir, monkeypatch):
+    """import-studio：镜像 → 无图行 + 描述；已有描述跳过不覆盖（镜像重灌不碰用户层）。"""
+    import shutil
+
+    mirror = pathlib.Path(__file__).resolve().parent.parent / "presets" / "poses" / "studio"
+    assert mirror.exists(), "仓库镜像缺位 —— presets/poses/studio/*.yaml 应随 git 走"
+    monkeypatch.setattr(
+        "charvar.paths.presets_dir", lambda: pathlib.Path(__file__).resolve().parent.parent / "presets"
+    )
+    _build_fake_pose_data(data_dir)
+    with storage.connect() as conn:
+        info = poses_service.import_studio(conn)
+        assert info["poses"] == 3 and info["added"] == 3
+        rows = conn.execute(
+            "SELECT pose_id, action_text, angle FROM pose_actions WHERE source_id='studio'"
+        ).fetchall()
+        assert {r["pose_id"] for r in rows} == {
+            "wss_skirt_hold_stand", "wss_skirt_hold_knee_up", "wss_skirt_hold_leg_side",
+        }
+        assert all(r["angle"] == "正面" for r in rows)
+        lines = {
+            r["line"] for r in conn.execute(
+                "SELECT line FROM pose_images WHERE source='studio'"
+            ).fetchall()
+        }
+        assert lines == {"自建动作"}
+        assert all(r["action_text"].strip() for r in rows)
+        # DB 里有描述 + 用户改过的行 → 重灌跳过（不覆盖）
+        conn.execute(
+            "UPDATE pose_actions SET action_text='用户改过的描述' WHERE pose_id='wss_skirt_hold_stand'"
+        )
+        conn.commit()
+        again = poses_service.import_studio(conn)
+        assert again["added"] == 0 and again["skipped"] == 3
+        text = conn.execute(
+            "SELECT action_text FROM pose_actions WHERE pose_id='wss_skirt_hold_stand'"
+        ).fetchone()[0]
+        assert text == "用户改过的描述"
+        # 无图行的参考图解析显式报错（不给半死路径）
+        with pytest.raises(poses_service.PoseError):
+            poses_service._locate("wss_skirt_hold_stand", "正面")

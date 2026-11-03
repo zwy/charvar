@@ -11,10 +11,10 @@
    卡片↔详情同步。整页没有参考图上下文，不渲染「加入参考图」。 */
 const PoseGallery = (() => {
   /* 来源中文标签（与后端 POSE_SOURCES 的 zh 同步维护） */
-  const POSE_SOURCE_ZH = { "pose-db-01": "线稿", "pose-db-02": "深度" };
+  const POSE_SOURCE_ZH = { "pose-db-01": "线稿", "pose-db-02": "深度", "studio": "自建库" };
   /* 双人线的系統原文（lineConstraint 用） */
   const PAIR_LINE = "2人絡み";
-  function mount({ root, onPick, close, onStat, variant = "modal", lineConstraint = null, requireAction = false }) {
+  function mount({ root, onPick, close, onStat, variant = "modal", lineConstraint = null, requireAction = false, allowTextOnly = false }) {
     let allData = null;
     const filter = { source: "", line: "", category: "", q: "", fav: false };
     let selectedPose = null;
@@ -266,7 +266,9 @@ const PoseGallery = (() => {
         card.className = "image-card pose-card" + (selectedPose && selectedPose.source === p.source && selectedPose.pose_id === p.pose_id ? " active" : "");
         card.innerHTML =
           '<div class="pose-thumb">' +
-          '<img src="' + esc(front.thumb_url) + '" alt="" loading="lazy">' +
+          (front.thumb_url
+            ? '<img src="' + esc(front.thumb_url) + '" alt="" loading="lazy">'
+            : '<div class="pose-thumb-empty">无图 · 纯文本</div>') +
           '<button type="button" class="pose-fav' + (p.favorited ? " on" : "") +
           '" title="收藏">' + (p.favorited ? "已收藏" : "收藏") + "</button>" +
           "</div>" +
@@ -368,8 +370,11 @@ const PoseGallery = (() => {
       }
       const actionText = selectedAngle ? String(selectedAngle.action_text || "").trim() : "";
       detailEl.innerHTML =
-        '<div class="pose-detail-img" title="点看大图">' +
-        '<img src="' + esc(selectedAngle.thumb_url) + '" alt="' + esc(p.number) + '"></div>' +
+        '<div class="pose-detail-img"' + (selectedAngle.thumb_url ? ' title="点看大图"' : "") + ">" +
+        (selectedAngle.thumb_url
+          ? '<img src="' + esc(selectedAngle.thumb_url) + '" alt="' + esc(p.number) + '">'
+          : '<div class="pose-thumb-empty">无图 · 纯文本动作</div>') +
+        "</div>" +
         '<div class="pose-detail-titles">' +
         "<h3>" + esc(p.number) + " " + esc(p.title_zh || p.title) + "</h3>" +
         '<div class="pose-jp">' + esc(p.title) + "</div>" +
@@ -408,13 +413,19 @@ const PoseGallery = (() => {
         (onPick
           ? '<div class="pose-detail-actions">' +
             '<button type="button" class="pose-add-btn primary"' +
-            (onPick && requireAction && !actionText ? ' disabled title="先在该视角写动作描述（就地编辑保存后再入）"' : "") +
+            (requireAction && !actionText
+              ? ' disabled title="先在该视角写动作描述（就地编辑保存后再入）"'
+              : selectedAngle.text_only && !allowTextOnly
+              ? ' disabled title="无图动作（纯文本）—— 文本锚只接 Playground 工作流 / CLI，预设页走参考图锚定"'
+              : "") +
             ">加入参考图</button>" +
             "</div>"
           : "");
-      detailEl.querySelector(".pose-detail-img").addEventListener("click", function () {
-        Media.showImageModal(selectedAngle.full_url, p.number + " " + (p.title_zh || p.title) + "（" + p.title + "）");
-      });
+      if (selectedAngle.thumb_url) {
+        detailEl.querySelector(".pose-detail-img").addEventListener("click", function () {
+          Media.showImageModal(selectedAngle.full_url, p.number + " " + (p.title_zh || p.title) + "（" + p.title + "）");
+        });
+      }
       const angleBox = detailEl.querySelector(".pose-angle-grid");
       images.forEach(function (im) {
         const btn = document.createElement("button");

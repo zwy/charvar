@@ -92,6 +92,10 @@ _LEAD = {
     "pair": "让<image1>图中的角色摆出<image2>图中的双人姿势（描述中的甲、乙两位都由该角色担任）：",
 }
 
+# 无图纯文本动作（自建库 studio）的引导句：没有姿势参考图槽位，动作描述即全部
+# 动作锚（视角级文本自描述机位/朝向/入镜；双人动作需要两人线稿，显式报错）。
+_POSE_TEXT_LEAD = "让<image1>图中的角色做出下面的动作：\n"
+
 # depth 姿势库（pose-db-02）的 mannequin 段版本：深度图锚前后遮挡（白=近），
 # 不是线稿 —— 禁令点名「别画成人偶/深度图」。slot 位随双人双主体换位（缺省 2）。
 _MANNEQUIN_DEPTH: dict[str, str] = {
@@ -129,6 +133,7 @@ def build_prompt(
     pair_two_subjects: bool = False,
     costume: bool = False,
     costume_has_image: bool = True,
+    pose_has_image: bool = True,
     body_lock: list[str] | None = None,
     costume_keywords: str | None = None,
     costume_display: str = "ghost",
@@ -147,8 +152,10 @@ def build_prompt(
     costume_keywords（可选）：catalog 英文关键词拼「服装要点」注记行，插在服装锚后。
     costume_has_image（缺省 True）：False = 纯文本条目（无参考图）—— 服饰文本整段
     进提示词、提示词里无服装图槽位（只支持 replace，见「服饰文本锚」段说明）。
+    pose_has_image（缺省 True）：False = 无图纯文本动作（自建库 studio）—— mannequin
+    段整个去掉、lead 换「做出下面的动作」版，动作描述即锚（双人显式报错）。
     pose_display（可选）：姿势参考库的展示形态（line=人偶线稿 缺省 / depth=深度图，
-    白=近）—— mannequin 段换深度图版锚前后遮挡；未知形态显式报错。
+    白=近 / text=无图文本库）—— mannequin 段换深度图版锚前后遮挡；未知形态显式报错。
     face_section（可选，人脸库身份锚）：face/styling 段条目当 <image1>（与主体档案
     互斥，调用方把门）。styling 段与主体档案完全同文本；face 段（正面胸像）换
     face 版身份句/身材锚/融合句 —— 见 face 分段家族注释。双人线显式报错。
@@ -157,15 +164,27 @@ def build_prompt(
     """
     kind = LINE_KIND.get(str(line or ""), "full")
     seg = _SEGMENTS[kind]
-    if pose_display not in ("line", "depth"):
-        raise ValueError(f"未知姿势参考展示形态：{pose_display}（可选 line/depth）")
+    pose_text = not pose_has_image
+    if pose_display not in ("line", "depth", "text"):
+        raise ValueError(f"未知姿势参考展示形态：{pose_display}（可选 line/depth/text）")
+    if pose_display == "text" and pose_has_image:
+        raise ValueError("display_type=text 的姿势库是无图文本库，没有姿势参考图可锚")
     if face_section is not None and face_section not in ("face", "styling"):
         raise ValueError(f"未知人脸条目形态：{face_section}（可选 face/styling）")
+    # 无图文本动作：mannequin 段整个去掉（join 过滤空段），lead 换文本版 ——
+    # 动作描述（视角级文本）承担全部动作锚（见 _POSE_TEXT_LEAD 段说明）。
+    if pose_text and kind == "pair":
+        raise ValueError("双人动作需要姿势参考图（线稿/深度）—— 文本锚只接单人动作")
     mannequin = (
-        _MANNEQUIN_DEPTH[kind].format(slot=3 if (kind == "pair" and pair_two_subjects) else 2)
-        if pose_display == "depth"
-        else seg["mannequin"]
+        ""
+        if pose_text
+        else (
+            _MANNEQUIN_DEPTH[kind].format(slot=3 if (kind == "pair" and pair_two_subjects) else 2)
+            if pose_display == "depth"
+            else seg["mannequin"]
+        )
     )
+    _lead = _POSE_TEXT_LEAD if pose_text else _LEAD[kind]
     text = str(action_text or "").strip()
     if costume and kind == "pair":
         raise ValueError("双人动作暂不支持服装参考（仅单人两类工作流接入服装）")
@@ -184,7 +203,7 @@ def build_prompt(
             m["anchor"].format(slot=3),
             _costume_keywords(costume_keywords, 3),
             _figure_anchor_face(3, body_lock),
-            _LEAD[kind] + text,
+            _lead + text,
             fusion.format(slot=3) if mode == "add" else fusion,
             seg["framing"],
             _background_segment(seg, background_text),
@@ -195,7 +214,7 @@ def build_prompt(
         parts = [
             _FACE_IDENTITY_PLAIN,
             mannequin,
-            _LEAD[kind] + text,
+            _lead + text,
             seg["framing"],
             _background_segment(seg, background_text),
             seg["guard"],
@@ -239,7 +258,7 @@ def build_prompt(
                 mannequin,
                 _costume_text_segment(costume_keywords),
                 figure,
-                _LEAD[kind] + text,
+                _lead + text,
                 _COSTUME_TEXT_FUSION,
                 seg["framing"],
                 _background_segment(seg, background_text),
@@ -253,7 +272,7 @@ def build_prompt(
             m["anchor"].format(slot=3),
             _costume_keywords(costume_keywords, 3),
             _figure_anchor(3, body_lock),
-            _LEAD[kind] + text,
+            _lead + text,
             m["fusion_pose"].format(slot=3),
             seg["framing"],
             _background_segment(seg, background_text),
@@ -263,7 +282,7 @@ def build_prompt(
     parts = [
         seg["identity"],
         mannequin,
-        _LEAD[kind] + text,
+        _lead + text,
         seg["framing"],
         _background_segment(seg, background_text),
         seg["guard"],

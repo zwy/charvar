@@ -33,6 +33,9 @@ SOURCE_ID = "pose-db-01"  # 缺省库（CLI 兼容入口与旧调用回退到它
 POSE_SOURCES: dict[str, dict] = {
     "pose-db-01": {"display_type": "line", "zh": "线稿库"},
     "pose-db-02": {"display_type": "depth", "zh": "深度库"},
+    # 自建库：无图纯文本动作（display_type=text = 动作描述即锚，无姿势参考图槽位；
+    # 文本锚通路见 pose_prompt / adhoc_compose 与 docs/姿势库.md）
+    "studio": {"display_type": "text", "zh": "自建库"},
 }
 
 # pose_id / 视角是浏览器发来的关键字（拼进查找与缓存文件名），只放行安全字符。
@@ -175,10 +178,15 @@ def import_catalog(conn: sqlite3.Connection, source: str = SOURCE_ID, origin: Pa
             continue
         rel_full = str(item.get("原寸") or "").strip()
         rel_thumb = str(item.get("サムネ") or "").strip()
-        full_file = src / rel_full
-        thumb_file = src / rel_thumb
-        if not _is_png(full_file) or not _is_jpeg(thumb_file):
-            raise PoseError(f"产物缺失或魔数不符：{rel_full} / {rel_thumb}（先补跑下载脚本）")
+        if reg["display_type"] == "text" and not rel_full and not rel_thumb:
+            # 自建文本库：无图行为合法状态（动作描述即锚，无姿势参考图槽位）
+            full_rel, thumb_rel = "", ""
+        else:
+            full_rel, thumb_rel = rel_full, rel_thumb
+            full_file = src / rel_full
+            thumb_file = src / rel_thumb
+            if not _is_png(full_file) or not _is_jpeg(thumb_file):
+                raise PoseError(f"产物缺失或魔数不符：{rel_full} / {rel_thumb}（先补跑下载脚本）")
         pose_id = pose_id_from_item_id(item_id)
         rows.append(
             (
@@ -189,8 +197,8 @@ def import_catalog(conn: sqlite3.Connection, source: str = SOURCE_ID, origin: Pa
                 str(item.get("ポーズ番号")or ""),
                 str(item.get("ポーズ名") or ""),
                 str(item.get("分類") or ""),
-                rel_full,
-                rel_thumb,
+                full_rel,
+                thumb_rel,
                 str(reg["display_type"]),
             )
         )
@@ -218,6 +226,72 @@ def import_catalog(conn: sqlite3.Connection, source: str = SOURCE_ID, origin: Pa
         "images": len(rows),
         "catalog": str(catalog_file),
     }
+
+
+STUDIO_SOURCE_ID = "studio"  # 自建文本动作库（同服饰库 STUDIO_SOURCE_ID 命名）
+STUDIO_MIRROR_DIR = "poses"  # 镜像目录 = presets/<dir>/<STUDIO_SOURCE_ID>/
+
+
+def import_studio(conn: sqlite3.Connection) -> dict:
+    """presets/poses/studio/*.yaml（自建文本动作镜像）→ pose_images + pose_actions。
+
+    无图动作库（display_type=text）：动作描述即锚，无姿势参考图 —— 每条 yaml
+    一个 pose_images 行（file_path/thumb_path 空串）+ action_text 灌 pose_actions。
+    DB 是运行时真源，镜像只是重建快照：pose_images 幂等 upsert；pose_actions
+    已有描述整条跳过（不覆盖用户编辑 —— 用户层，同 costume import-studio 语义）。
+    """
+    import yaml
+
+    base = paths.presets_dir() / STUDIO_MIRROR_DIR / STUDIO_SOURCE_ID
+    files = sorted(base.glob("*.yaml"))
+    if not files:
+        raise PoseError(f"自建文本动作镜像是空的：{base}")
+    from charvar import storage
+
+    added = skipped = 0
+    for path in files:
+        try:
+            doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError) as exc:
+            raise PoseError(f"镜像读取失败：{path.name}：{exc}") from exc
+        if not isinstance(doc, dict) or doc.get("source_id") != STUDIO_SOURCE_ID:
+            raise PoseError(f"镜像文件不是自建文本动作条目：{path.name}")
+        pose_id = str(doc.get("pose_id") or "").strip()
+        if not POSE_ID_RE.fullmatch(pose_id) or path.stem != pose_id:
+            raise PoseError(f"镜像条目 id 非法或与文件名不一致：{path.name} → {pose_id[:60]}")
+        angle = str(doc.get("angle") or "").strip() or ANGLE_ORDER[0]
+        if angle not in ANGLE_ORDER:
+            raise PoseError(f"镜像条目视角非法：{path.name} → {angle[:30]}")
+        line = str(doc.get("line") or "").strip() or "自建动作"
+        if not str(doc.get("action_text") or "").strip():
+            raise PoseError(f"镜像条目没有动作描述（文本动作全部锚在描述上）：{path.name}")
+        now = storage.utcnow()
+        conn.execute(
+            """INSERT INTO pose_images
+               (source, pose_id, angle, line, number, title, category, file_path, thumb_path, display_type)
+               VALUES (?, ?, ?, ?, ?, ?, ?, '', '', 'text')
+               ON CONFLICT(source, pose_id, angle) DO UPDATE SET
+                 line=excluded.line, number=excluded.number, title=excluded.title,
+                 category=excluded.category, file_path='', thumb_path='', display_type='text'""",
+            (STUDIO_SOURCE_ID, pose_id, angle, line,
+             str(doc.get("number") or ""), str(doc.get("title") or "") or pose_id,
+             str(doc.get("category") or "")),
+        )
+        existing = conn.execute(
+            "SELECT 1 FROM pose_actions WHERE source_id = ? AND pose_id = ? AND angle = ?",
+            (STUDIO_SOURCE_ID, pose_id, angle),
+        ).fetchone()
+        if existing:
+            skipped += 1
+            continue
+        conn.execute(
+            """INSERT INTO pose_actions (source_id, pose_id, angle, action_text, source, created_at, updated_at)
+               VALUES (?, ?, ?, ?, 'manual', ?, ?)""",
+            (STUDIO_SOURCE_ID, pose_id, angle, str(doc["action_text"]).strip(), now, now),
+        )
+        added += 1
+    conn.commit()
+    return {"added": added, "skipped": skipped, "poses": len(files), "dir": str(base)}
 
 
 def _is_png(path: Path) -> bool:
@@ -300,12 +374,17 @@ def list_poses(
             },
         )
         pose["display_type"] = row["display_type"] or pose["display_type"]
+        # 无图行（自建文本库）：取图端点会 404 —— 空串 = 前端渲染「无图 · 纯文本」占位
+        has_file = bool(
+            str(row["file_path"] or "").strip() and str(row["thumb_path"] or "").strip()
+        )
         pose["images"].append(
             {
                 "angle": row["angle"],
                 "angle_zh": angle_zh(row["angle"]),
-                "thumb_url": f"/poses/image/{row['source']}/{row['pose_id']}/{row['angle']}/thumb",
-                "full_url": f"/poses/image/{row['source']}/{row['pose_id']}/{row['angle']}/full",
+                "thumb_url": f"/poses/image/{row['source']}/{row['pose_id']}/{row['angle']}/thumb" if has_file else "",
+                "full_url": f"/poses/image/{row['source']}/{row['pose_id']}/{row['angle']}/full" if has_file else "",
+                "text_only": not has_file,
                 "action_text": row["action_text"] or "",
             }
         )

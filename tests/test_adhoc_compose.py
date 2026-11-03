@@ -78,6 +78,17 @@ def _seed_all(data_dir: pathlib.Path, db_path: pathlib.Path | None = None) -> No
             "INSERT INTO costume_items (source_id, item_id, created_at, updated_at)"
             " VALUES ('studio', 'text_empty_entry', '2026', '2026')"
         )
+        # 自建文本动作（无图动作文本锚用例）：pose_images 无图行 + 描述
+        conn.execute(
+            "INSERT INTO pose_images (source, pose_id, angle, line, number, title, category,"
+            " file_path, thumb_path, display_type) VALUES ('studio', 'wss_test_text', '正面',"
+            " '自建动作', 'S-99', '测试无图动作', '立ち', '', '', 'text')"
+        )
+        conn.execute(
+            "INSERT INTO pose_actions (source_id, pose_id, angle, action_text, source,"
+            " created_at, updated_at) VALUES ('studio', 'wss_test_text', '正面',"
+            " '人物正面朝向镜头站立的测试动作。', 'manual', '2026', '2026')"
+        )
         conn.commit()
         profile = SubjectProfile(
             id="demo_witch", name="演示", subject_noun="woman",
@@ -348,3 +359,47 @@ def test_composed_references_generate_end_to_end(tmp_path, monkeypatch, gclient)
     # 主体槽位图 + 服饰图两张参考都上传了（mock edit workflow 恰好两个槽位）
     refs_sent = [f for f in uploads if f.endswith(".jpg")]
     assert len(refs_sent) == 2
+
+
+# ---------- 无图纯文本动作（自建库 studio，文本锚） ----------
+
+def test_pose_text_anchor_workflow(client):
+    """无图动作（studio 库）：动作描述即锚 —— prompt 无 image2 姿势段、refs 只剩身份锚。"""
+    data = _compose(client, subject_id="demo_witch", pose_id="wss_test_text",
+                    pose_source="studio").json()
+    expect = pose_prompt.build_prompt(
+        "自建动作", "人物正面朝向镜头站立的测试动作。", pose_has_image=False,
+        body_lock=["keep soft full figure"],
+    )
+    assert data["prompt"] == expect
+    assert "做出下面的动作" in data["prompt"]
+    assert "人物正面朝向镜头站立的测试动作。" in data["prompt"]
+    assert "<image2>" not in data["prompt"]
+    assert [r["role"] for r in data["references"]] == ["front"]  # 姿势参考图不占槽位
+    assert data["meta"]["pose_text_only"] is True
+
+
+def test_pose_text_anchor_uses_front_slot(client):
+    """自建动作系統未知 → 全身构图 + front 槽位（headshot 分叉只对上半身线）。"""
+    data = _compose(client, subject_id="demo_witch", pose_id="wss_test_text",
+                    pose_source="studio").json()
+    assert data["references"][0]["kind"] == "front"
+    assert data["meta"]["line_kind"] == "full"
+
+
+def test_pose_text_anchor_with_costume_image(client):
+    """文本动作 × 有图服饰（组合件）：动作文本锚 + 服饰图锚同批成立。"""
+    data = _compose(client, subject_id="demo_witch", pose_id="wss_test_text",
+                    pose_source="studio", **COSTUME_ITEM).json()
+    assert "<image2>" not in data["prompt"]  # 无姿势参考段
+    assert "<image3>" in data["prompt"]  # 服饰图锚照常
+    assert [r["role"] for r in data["references"]] == ["front", "costume"]
+    assert data["meta"]["pose_text_only"] is True
+
+
+def test_pose_text_anchor_pair_rejected(client):
+    """双人构图需要两人线稿：文本动作 × 2人絡み 组合不存在（text 库单 line）。"""
+    # studio 库没有双人条目 —— 校验在库里就拦（组合不存在）
+    res = _compose(client, subject_id="demo_witch", subject2_id="demo_witch",
+                   pose_id="wss_test_text", pose_source="studio")
+    assert res.status_code == 400 and "双人" in res.json()["detail"]

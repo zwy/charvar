@@ -187,7 +187,7 @@ const AdhocFlow = (() => {
         else if (flow.current === "single") states.single.pose = pick;
         else if (flow.current === "face") states.face.pose = pick;
         poseSaved();
-      }, { title: "动作库 · 选择动作与视角", lineConstraint: lc, requireAction: true });
+      }, { title: "动作库 · 选择动作与视角", lineConstraint: lc, requireAction: true, allowTextOnly: true });
     } else if (type === "face") {
       GenRefs.showFaceBrowser(function (pick) {
         if (flow.current === "face") states.face.face = pick;
@@ -261,15 +261,14 @@ const AdhocFlow = (() => {
     return wrap;
   }
   /* 换装-主体身份锚的选主体同走 subject 槽位卡（image1）；人脸身份走 face 槽位卡 */
-  /* 服饰槽：无图纯文本条目 = 文本锚 —— 提示词里没有这个图槽位，槽位标签别标 imageN */
-  function costumeCardOpts(st, key, imageArg, optional) {
+  /* 动作/服饰槽：无图纯文本条目 = 文本锚 —— 提示词里没有这个图槽位，槽位标签别标 imageN */
+  function textAnchorCardOpts(st, key, plainOpts, textBadge) {
     const textOnly = !!st[key] && !st[key].url;
+    if (!textOnly) return plainOpts;
     return {
-      image: textOnly ? "文本" : imageArg,
-      label: "服饰",
-      badge: textOnly ? "文本服饰" : "服饰",
-      pick: "costume",
-      optional: optional,
+      ...plainOpts,
+      image: "文本",
+      badge: textBadge,
     };
   }
   function renderSlots() {
@@ -281,8 +280,10 @@ const AdhocFlow = (() => {
     if (flow.current === "single") {
       box.appendChild(slotCard(st, "subject", { image: "image1", label: "主体档案", badge: "主体", pick: "subject",
         valueMap: function () { return subjectSlotValue(st.subject); } }));
-      box.appendChild(slotCard(st, "pose", { image: "image2", label: "动作", badge: "动作", pick: "pose" }));
-      box.appendChild(slotCard(st, "costume", costumeCardOpts(st, "costume", "image3", true)));
+      box.appendChild(slotCard(st, "pose", textAnchorCardOpts(st, "pose",
+        { image: "image2", label: "动作", badge: "动作", pick: "pose" }, "文本动作")));
+      box.appendChild(slotCard(st, "costume", textAnchorCardOpts(st, "costume",
+        { image: "image3", label: "服饰", badge: "服饰", pick: "costume", optional: true }, "文本服饰")));
     } else if (flow.current === "pair") {
       box.appendChild(slotCard(st, "subject1", { image: "image1", label: "主体甲（描述里的「甲」）", badge: "主体甲", pick: "subject1",
         valueMap: function () { return subjectSlotValue(st.subject1); } }));
@@ -292,8 +293,10 @@ const AdhocFlow = (() => {
     } else if (flow.current === "face") {
       box.appendChild(slotCard(st, "face", { image: "image1", label: "人脸", badge: "人脸", pick: "face" }));
       box.appendChild(bodyLockField());
-      box.appendChild(slotCard(st, "pose", { image: "image2", label: "动作", badge: "动作", pick: "pose" }));
-      box.appendChild(slotCard(st, "costume", costumeCardOpts(st, "costume", "image3", true)));
+      box.appendChild(slotCard(st, "pose", textAnchorCardOpts(st, "pose",
+        { image: "image2", label: "动作", badge: "动作", pick: "pose" }, "文本动作")));
+      box.appendChild(slotCard(st, "costume", textAnchorCardOpts(st, "costume",
+        { image: "image3", label: "服饰", badge: "服饰", pick: "costume", optional: true }, "文本服饰")));
     } else if (flow.current === "costume") {
       box.appendChild(identitySeg());
       if (st.identity === "subject") {
@@ -302,7 +305,8 @@ const AdhocFlow = (() => {
       } else {
         box.appendChild(slotCard(st, "face", { image: "image1", label: "人脸", badge: "人脸", pick: "face" }));
       }
-      box.appendChild(slotCard(st, "costume", costumeCardOpts(st, "costume", "image2", false)));
+      box.appendChild(slotCard(st, "costume", textAnchorCardOpts(st, "costume",
+        { image: "image2", label: "服饰", badge: "服饰", pick: "costume" }, "文本服饰")));
     }
     updateAnchors();
   }
@@ -316,12 +320,15 @@ const AdhocFlow = (() => {
       face: "image1 人脸 · image2 动作 · 可选 image3 服饰",
       costume: "image1 主体/人脸 · image2 服饰",
     };
-    /* 服饰槽选到无图条目时它不占图槽位 */
+    /* 动作/服饰槽选到无图条目时它不占图槽位 */
     if (flow.current === "single" || flow.current === "face") {
       const st = states[flow.current];
-      if (st.costume && !st.costume.url) {
-        hint[flow.current] = "image1 " + (flow.current === "face" ? "人脸" : "主体") +
-          " · image2 动作 · 服饰=文本锚";
+      const poseT = st.pose && !st.pose.url;
+      const costumeT = st.costume && !st.costume.url;
+      if (poseT || costumeT) {
+        hint[flow.current] = (poseT ? "image1 " + (flow.current === "face" ? "人脸" : "主体") +
+          " · 动作=文本锚" : "image1 " + (flow.current === "face" ? "人脸" : "主体") +
+          " · image2 动作") + (costumeT ? " · 服饰=文本锚" : " · 可选 image3 服饰");
       }
     }
     if (flow.current === "costume" && states.costume.costume && !states.costume.costume.url) {
@@ -452,6 +459,7 @@ const AdhocFlow = (() => {
     if (m.costume_text_only) parts.push("服饰 = 文本锚（无参考图）");
     else if (m.costume_mode === "add") parts.push("服饰 = 叠加语义（原衣物保留）");
     else if (m.costume_mode === "replace") parts.push("服饰 = 整套替换");
+    if (m.pose_text_only) parts.push("动作 = 文本锚（无参考图）");
     return parts.join(" · ");
   }
 

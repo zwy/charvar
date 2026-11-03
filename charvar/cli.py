@@ -1462,6 +1462,27 @@ def pose_import_cmd(
     )
 
 
+@pose_app.command("import-studio")
+def pose_import_studio_cmd() -> None:
+    """presets/poses/studio/ 镜像逐条 → 自建文本动作行（source_id=studio，无图）。
+
+    文本动作库（display_type=text）：动作描述即锚，无姿势参考图。DB 是运行时
+    真源，镜像只是重建快照：pose_images 幂等 upsert；pose_actions 已有描述整条
+    跳过（不覆盖用户编辑 —— 用户层，同 costume import-studio 语义）。
+    """
+    from charvar import poses as poses_service
+
+    with storage.connect() as conn:
+        try:
+            data = poses_service.import_studio(conn)
+        except poses_service.PoseError as exc:
+            _die(str(exc))
+    typer.echo(
+        f"自建文本动作：镜像 {data['poses']} 条 · 描述新增 {data['added']}，"
+        f"跳过（已有描述）{data['skipped']}"
+    )
+
+
 @pose_app.command("list")
 def pose_list_cmd(
     source: str = typer.Option("", "--source", help="按库 id 过滤（pose-db-01/…）"),
@@ -1550,6 +1571,7 @@ def pose_prompt_cmd(
     <image1> = 主体档案槽位图（角色锚定：上半身动作取 headshot，缺则回退 front；
     全身/双人取 front），<image2> = 姿势参考图（--source 选库：线稿/深度图，
     role=pose 语义）；构图句/背景句/禁令句按库线型（全身/半身/双人）取版本。
+    无图纯文本动作（自建库 studio）走文本锚：动作描述即全部动作锚，refs 里不占槽位。
     --face <face_id> 时 <image1> = 人脸库条目（face/styling 条目即身份锚，
     与 --subject/--subject2 互斥，双人动作不支持；体形锚用 --body-lock 手给）。
     """
@@ -1573,10 +1595,12 @@ def pose_prompt_cmd(
         try:
             action = poses_service.pose_action(conn, pose_id, angle, source)
             row = conn.execute(
-                "SELECT line, number, title FROM pose_images WHERE source = ? AND pose_id = ? AND angle = ?",
+                "SELECT line, number, title, file_path FROM pose_images WHERE source = ? AND pose_id = ? AND angle = ?",
                 (source, action["pose_id"], action["angle"]),
             ).fetchone()
             pose_display = (poses_service.POSE_SOURCES.get(source) or {}).get("display_type", "line")
+            # 自建文本库（display_type=text）的无图动作走文本锚：描述即锚，无姿势参考图
+            pose_text = row is not None and not str(row["file_path"] or "").strip()
             slot_label = "front"
             slot = None
             if subject:
@@ -1633,6 +1657,8 @@ def pose_prompt_cmd(
     kind = pose_prompt_module.kind_of_line(row["line"])
     if subject2 and kind != "pair":
         _die("--subject2 只对双人（2人絡み）动作有效")
+    if pose_text and (subject2 or kind == "pair"):
+        _die("双人动作需要姿势参考图（线稿/深度）—— 文本锚只接单人动作")
     costume_file = None
     c_text_only = False
     if costume:
@@ -1663,6 +1689,7 @@ def pose_prompt_cmd(
         pair_two_subjects=bool(subject2),
         costume=bool(costume),
         costume_has_image=not c_text_only,
+        pose_has_image=not pose_text,
         body_lock=body_lock,
         costume_keywords=costume_note or None,
         costume_display=costume_display,
@@ -1674,9 +1701,11 @@ def pose_prompt_cmd(
         typer.echo(prompt)
     if not run:
         return
-    pose_file = poses_service.prepared_reference_file(
-        action["pose_id"], action["angle"], source=source
-    )
+    pose_file = None
+    if not pose_text:
+        pose_file = poses_service.prepared_reference_file(
+            action["pose_id"], action["angle"], source=source
+        )
     refs = []
     if face_section:
         refs.append(faces_service.prepared_reference_file(f_id, source=f_source))
@@ -1696,7 +1725,8 @@ def pose_prompt_cmd(
         if not subject_file2.exists():
             _die(f"主体 front 槽位图文件缺失：{slot2['file_path']}")
         refs.append(subject_file2)
-    refs.append(pose_file)
+    if pose_file is not None:
+        refs.append(pose_file)
     if costume_file is not None:
         refs.append(costume_file)
     req = adhoc_service.AdhocRequest(

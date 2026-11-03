@@ -608,6 +608,8 @@ td .caption { color: var(--muted); }
    img 填满盒（人偶线稿白背景，contain/cover 视觉一致） */
 .pose-thumb { background: #f4f6f9; border-radius: var(--radius-ctl); overflow: hidden; aspect-ratio: 3 / 4; position: relative; }  /* 收藏徽章锚 */
 .pose-thumb img { display: block; width: 100%; height: 100%; object-fit: contain; }
+/* 无图动作（自建文本库）占位：与 costume-thumb-empty 同款居中灰字 */
+.pose-thumb-empty { display: flex; align-items: center; justify-content: center; height: 100%; min-height: 120px; padding: 0 var(--sp-2); font-size: 11px; color: var(--muted); text-align: center; }
 .pose-card.active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 /* 元信息三段：mono 编号 / 中文（主阅读）/ 日文原文（muted）——覆盖基类的 space-between 单行 */
 .pose-card .image-meta { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 1px; min-height: 0; }

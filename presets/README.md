@@ -27,6 +27,7 @@
 | `actions/` | **动作/表情预设**（主预设下拉的全部来源） | `preset_loader.list_presets()` |
 | `wildcards/` | 背景 / 光照通配符池（`items:` 列表） | 预设的 `backgrounds_ref:` / `lighting_ref:` |
 | `subjects/` | 主体档案样例（`<id>.yaml`）+ 模板导出（`<id>.md`） | `charvar subject add/export` |
+| `poses/` | 动作库 DB 镜像（`<source>/<pose_id>.yaml`，自建文本动作库） | `charvar pose import-studio` |
 | `costumes/` | 服饰库 DB 镜像（`<source>/<item>.yaml`，DB 是运行时真源） | `charvar costume export/import-studio` |
 | `hairstyles/` | 发型预设（独立家族，**不进主预设下拉**） | `charvar/hairstyle.py` |
 | `overlays/` | 贴字样式预设（PIL 后处理，不改原图） | `charvar/overlay.py` |

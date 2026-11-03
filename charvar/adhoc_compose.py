@@ -130,6 +130,7 @@ def compose(conn, req: ComposeRequest) -> dict:
             raise ComposeError(f"主体档案不存在：{subject_id}")
 
     # ---- 姿势（pose 工作流） ----
+    pose_text_only = False
     if workflow == "pose":
         try:
             action = poses_service.pose_action(conn, pose_id, req.pose_angle or "", pose_source)
@@ -143,7 +144,7 @@ def compose(conn, req: ComposeRequest) -> dict:
             )
         try:
             row = conn.execute(
-                "SELECT line FROM pose_images WHERE source = ? AND pose_id = ? AND angle = ?",
+                "SELECT line, file_path FROM pose_images WHERE source = ? AND pose_id = ? AND angle = ?",
                 (pose_source, action["pose_id"], action["angle"]),
             ).fetchone()
         except Exception as exc:  # pragma: no cover - pose_action 已校验过组合存在
@@ -153,6 +154,8 @@ def compose(conn, req: ComposeRequest) -> dict:
         line = str(row["line"] or "")
         kind = pose_prompt.kind_of_line(line)
         pose_display = str((poses_service.POSE_SOURCES.get(pose_source) or {}).get("display_type") or "line")
+        # 自建文本库（display_type=text）的无图动作走文本锚：动作描述即锚，无姿势参考图槽位
+        pose_text_only = not str(row["file_path"] or "").strip()
 
     if subject_id:
         # 槽位选择对齐 CLI：上半身动作取 headshot（缺则回退 front），全身/双人 front
@@ -208,6 +211,7 @@ def compose(conn, req: ComposeRequest) -> dict:
             pair_two_subjects=bool(subject2_id),
             costume=costume_id is not None,
             costume_has_image=not costume_text_only,
+            pose_has_image=not pose_text_only,
             body_lock=body_lock,
             costume_keywords=costume_note or None,
             costume_display=costume_display,
@@ -224,7 +228,7 @@ def compose(conn, req: ComposeRequest) -> dict:
         refs.append(ReferenceSpec(subject_id=subject_id, kind=slot_label, role=slot_label))
         if subject2_id:
             refs.append(ReferenceSpec(subject_id=subject2_id, kind="front", role="front"))
-    if workflow == "pose":
+    if workflow == "pose" and not pose_text_only:
         refs.append(
             ReferenceSpec(pose_id=action["pose_id"], angle=action["angle"], source=pose_source, role="pose")
         )
@@ -241,6 +245,7 @@ def compose(conn, req: ComposeRequest) -> dict:
         "costume_display": costume_display if costume_id else "",
         "costume_mode": pose_prompt.costume_mode(costume_policy) if costume_id else "",
         "costume_text_only": costume_text_only,
+        "pose_text_only": pose_text_only,
     }
     return {
         "prompt": prompt,

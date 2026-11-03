@@ -173,6 +173,8 @@ def pick_pose(conn: sqlite3.Connection, filters: dict, rng: Any) -> dict:
     if filters["single"]:
         where.append("line <> ?")
         params.append("2人絡み")
+    # 无图纯文本动作（自建文本库）天然排除 —— 组合首帧要姿势参考图，LLM 起稿也要看图
+    where.append("(TRIM(COALESCE(file_path, '')) <> '')")
     if filters["sources"]:
         _in_clause("source", filters["sources"], where, params)
     if filters["lines"]:
@@ -277,7 +279,11 @@ def ensure_pose_description(
     for twin in poses_service.POSE_SOURCES:
         if twin == source:
             continue
-        twin_row = poses_service.pose_action(conn, pose_id, angle, source=twin)
+        try:
+            twin_row = poses_service.pose_action(conn, pose_id, angle, source=twin)
+        except poses_service.PoseError:
+            # 登记了但本机没灌库的库（如自建文本库与站点库 action 集不重叠）—— 跳过不炸
+            continue
         twin_text = str(twin_row["action_text"] or "").strip()
         if not twin_text:
             continue
