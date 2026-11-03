@@ -1,0 +1,10 @@
+pose_id: tp_smoke_break
+source_id: studio
+number: S-05
+title: 倚门吸烟
+category: 立ち
+angle: 正面
+line: 自建动作
+action_text: 人物侧倚竖直门框，肩部贴住门框，髋部向远离门框的方向偏。靠门框一侧的手屈肘抬至脸旁，食指与中指夹一支香烟，远离嘴部；另一只手扶腰，手肘向外。远离门框一侧的腿支撑，靠门框一侧的腿斜跨在支撑腿前方，两条小腿交叉，两脚接地。头略低，视线向下。正面全身入镜，双手与双脚完整可见。
+origin: presets/actions/three_pose_pack.yaml#smoke_break
+aspect: '2:3'

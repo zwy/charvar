@@ -1,0 +1,20 @@
+pose_id: yoga_tree
+source_id: studio
+number: S-10
+title: 树式
+category: 立ち
+angle: 正面
+line: 自建动作
+action_text: Perform Tree Pose in a clear full-body front view. Left and right refer to the character's
+  own body. The left leg supports the body, with the whole left sole firmly contacting the ground. The
+  standing leg extends naturally without locking the knee backward. Bend the right knee and open it toward
+  the character's right side. Place the right sole against the inner left calf below the knee, with the
+  right toes pointing downward; do not place the foot against the knee joint. Keep the right foot-to-calf
+  contact clear and the right knee, lower leg, and foot naturally connected. Keep the pelvis approximately
+  level, the torso upright, and the body weight balanced above the standing left foot. Bring both palms
+  together in front of the chest with fingertips pointing upward and elbows opening comfortably outward.
+  Keep the shoulders relaxed, the head upright, and the gaze level ahead. Observe from directly in front
+  at eye level, keeping the head, hands, open right knee, raised right foot, and standing left foot fully
+  inside the frame with a small margin.
+origin: presets/actions/yoga_complete.yaml#yoga_tree
+aspect: '2:3'

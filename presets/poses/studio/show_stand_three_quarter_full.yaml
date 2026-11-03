@@ -1,0 +1,10 @@
+pose_id: show_stand_three_quarter_full
+source_id: studio
+number: S-27
+title: 展示站姿·侧前45
+category: 立ち
+angle: 左前45
+line: 自建动作
+action_text: 人物站立时身体向画面左侧转过 45 度，呈四分之三侧身，面部朝向画面左前方，目光看向镜头方向。双脚分开与肩同宽，脚掌平踩地面，脚尖朝前，两腿伸直，重心均匀分布在双脚上。躯干直立，双肩水平。双臂自然垂落在身体两侧，臂干离开躯干留出可见空隙，两手放松垂在大腿外侧，手与腰线之间有可见距离。全身入镜，从头顶到脚底完整可见，头发与双脚都不接触画面边缘。
+origin: presets/actions/outfit_three_quarter_full.yaml#stand_three_quarter_full
+aspect: '2:3'

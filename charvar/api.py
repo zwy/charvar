@@ -97,6 +97,12 @@ class PoseActionUpdate(BaseModel):
     action_text: str = ""
 
 
+class PoseAspectUpdate(BaseModel):
+    """默认画幅写入（PUT /poses/{source}/{pose_id}/aspect）：空串 = 清掉；仅自建库。"""
+
+    aspect: str = ""
+
+
 class CostumePromptTextUpdate(BaseModel):
     """服饰文本层写入（PUT /costumes/{source}/{item}/prompt-text）：text 空串 = 清掉。"""
 
@@ -1107,6 +1113,17 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                 )
             except poses_service.PoseError as exc:
                 raise HTTPException(404, str(exc)) from exc
+
+    @app.put("/poses/{source}/{pose_id}/aspect")
+    def api_pose_aspect_put(source: str, pose_id: str, req: PoseAspectUpdate) -> dict[str, Any]:
+        """写/清（aspect 空串 = 清掉）一个自建动作的默认画幅（生成时自动带出）。"""
+        if not poses_service.POSE_ID_RE.fullmatch(pose_id):
+            raise HTTPException(400, f"非法动作 id：{pose_id[:60]}")
+        with _db() as conn:
+            try:
+                return poses_service.set_aspect(conn, pose_id, req.aspect, source=source)
+            except poses_service.PoseError as exc:
+                raise HTTPException(404 if "没有这个动作" in str(exc) else 400, str(exc)) from exc
 
     @app.post("/poses/{source}/{pose_id}/favorite")
     def api_pose_favorite_post(source: str, pose_id: str) -> dict[str, Any]:

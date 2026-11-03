@@ -1,0 +1,25 @@
+pose_id: yoga_bow
+source_id: studio
+number: S-18
+title: 弓式
+category: 寝そべり
+angle: 左侧90
+line: 自建动作
+action_text: 'Perform a deep Bow Pose starting from a prone position with the abdomen facing the ground.
+  Left and right refer to the character''s own body. Bend both knees and reach both hands backward: the
+  left hand grips the left ankle and the right hand grips the right ankle. Keep these two same-side grips
+  separate without crossing the arms or swapping the feet. Pull the ankles firmly upward and back toward
+  the head while lifting the chest and both thighs high off the ground, so the whole front of the body
+  arches up into a strong bow shape. Only the abdomen and the lower belly stay in contact with the ground;
+  the chest, the hips, the thighs, and the knees all rise clear of the floor, and the body forms a tall
+  dramatic curve balanced on the abdomen. The bent lower legs rise steeply behind and above the hips,
+  the feet close together and pointing toward the ceiling, well clear of the head. The arms pull back
+  taut along the bow-shaped silhouette, and the head is drawn back with the chest so the face lifts and
+  the gaze angles forward and slightly upward. The arch is deep and unmistakable rather than a shallow
+  lift. Orient the head toward the left edge of the image and the raised feet toward the right edge. Observe
+  from a low camera position at the character''s left side, near floor level and looking slightly upward,
+  so the near-side grip is clear, the far-side grip is visible as far as natural occlusion allows, and
+  the arch reads as a clear side silhouette rather than a top-down view. Do not twist the body or artificially
+  separate the limbs to expose hidden parts. Keep the head, hands, knees, and raised feet inside the frame.'
+origin: presets/actions/yoga_complete.yaml#yoga_bow
+aspect: '2:3'

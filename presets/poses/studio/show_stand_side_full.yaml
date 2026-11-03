@@ -1,0 +1,10 @@
+pose_id: show_stand_side_full
+source_id: studio
+number: S-26
+title: 展示站姿·侧面
+category: 立ち
+angle: 左侧90
+line: 自建动作
+action_text: 人物侧对镜头站立，身体与镜头成 90 度角，面部朝画面左侧。双脚分开与肩同宽，脚掌平踩地面，脚尖朝前，两腿伸直，重心均匀分布在双脚上。躯干直立，双肩水平。双臂自然垂落在身体两侧，臂干贴住大腿外侧，两手放松垂在大腿外侧，手与腰线之间有可见距离。全身入镜，从头顶到脚底完整可见，头发与双脚都不接触画面边缘。
+origin: presets/actions/outfit_side_full.yaml#stand_side_full
+aspect: '2:3'

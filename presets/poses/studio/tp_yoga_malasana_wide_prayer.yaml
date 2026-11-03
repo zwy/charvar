@@ -1,0 +1,10 @@
+pose_id: tp_yoga_malasana_wide_prayer
+source_id: studio
+number: S-04
+title: 花环式·宽距祈祷
+category: しゃがみ
+angle: 正面
+line: 自建动作
+action_text: 人物做花环式，正面全身入镜。双脚略宽于肩，脚尖外转，脚底接地。双膝向两侧打开，蹲到底，臀部接近地面但不落地，明显低于双膝。上身略前倾，胸腹降到两条大腿之间。双上臂沿躯干两侧向下，双肘低于手腕，分别抵住同侧膝内侧；两侧前臂从低处的肘部斜向上汇合，双手在胸前合掌，指尖朝上。头顶与双脚完整入镜。
+origin: presets/actions/three_pose_pack.yaml#yoga_malasana_wide_prayer
+aspect: '2:3'

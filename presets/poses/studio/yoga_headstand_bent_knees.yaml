@@ -1,0 +1,30 @@
+pose_id: yoga_headstand_bent_knees
+source_id: studio
+number: S-23
+title: 头倒立·屈膝
+category: 特殊
+angle: 背面
+line: 自建动作
+action_text: 'Perform a Supported Headstand with both knees bent and opened wide apart, shown as one static
+  inverted pose viewed from directly behind the character. Both elbows and forearms contact the ground
+  in a clear supporting base. Interlace the fingers near the back of the head, with the crown positioned
+  on the ground between the forearms and the hands cradling the back of the head. Do not replace this
+  base with two flat palms beside the head, and do not lift the head into a forearm balance. The torso
+  rises upward in an inverted position, with the pelvis above the shoulders. From the pelvis, both thighs
+  spread outward and upward into a wide open V, and both knees bend sharply and point out to the sides,
+  away from each other and away from the chest, so the knees become the widest points of the figure. From
+  the bent knees, both lower legs angle upward and back inward, and both feet rise high above the hips,
+  clearly separated from one another with the soles turned toward the ceiling and the toes relaxed and
+  spread. The two bent legs form an open diamond shape above the body, not a closed ball, not legs held
+  together, and not a lotus; the ankles never cross and the feet never touch. Keep the hips wide and level
+  so the whole open V reads clearly from behind. Use a long torso without a pronounced backbend. The camera
+  looks at the character''s back: the back of the head and the nape rest on the ground between the forearms,
+  while the back, the shoulders, and the backs of the legs all turn toward the camera. The face points
+  away from the camera toward the far side of the frame and stays completely hidden, with no part of the
+  face, chin, or cheek visible. Keep the neck aligned with the inverted torso. Observe from directly behind
+  the character at a level camera height, so the two forearms, the rising back, the wide apart knees,
+  and the two separated raised feet read as a balanced symmetrical back view. Allow natural occlusion
+  without twisting limbs merely to show them. Keep the complete figure from the ground-contact base to
+  the highest feet inside the frame with a small margin.'
+origin: presets/actions/yoga_complete.yaml#yoga_headstand_bent_knees
+aspect: '2:3'

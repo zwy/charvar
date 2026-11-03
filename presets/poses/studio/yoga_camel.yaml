@@ -1,0 +1,24 @@
+pose_id: yoga_camel
+source_id: studio
+number: S-17
+title: 骆驼式
+category: 膝立ち
+angle: 左侧90
+line: 自建动作
+action_text: 'Perform a deep Camel Pose with both hands on the back of the pelvis, not a hands-to-heels
+  variation. Left and right refer to the character''s own body. Kneel with both knees about hip-width
+  apart, both shins and the tops of both feet resting on the ground, and the thighs rising vertically
+  above the knees. Place the palms against the back of the pelvis with the fingers pointing downward and
+  the elbows drawing toward one another. Then arc the torso strongly backward: the chest lifts up and
+  then leans well behind the vertical line of the hips, the spine forming a deep continuous curve, the
+  shoulders drawn back and down, and the collarbone opened wide. The upper back forms a tall pronounced
+  arch rather than a straight upright torso. Keep the thighs vertical and the knees planted so the curve
+  comes from the spine, not from sitting back onto the heels. Keep the head in line with the curving spine,
+  dropped back with the chest, the face turned upward toward the ceiling, and the throat lengthened; the
+  backbend is the dominant, unmistakable feature of the pose. Keep the pelvis above the kneeling base
+  without collapsing the lower back. The hands stay on the pelvis and neither hand reaches for a foot
+  or heel. Orient the knees and the front of the body toward the left side of the image. Observe from
+  the character''s left side at kneeling torso height so the deep curve of the spine and the back of the
+  head are both clearly readable, and keep the complete figure inside the frame.'
+origin: presets/actions/yoga_complete.yaml#yoga_camel
+aspect: '2:3'

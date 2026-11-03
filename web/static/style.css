@@ -631,6 +631,18 @@ td .caption { color: var(--muted); }
 .pose-empty { grid-column: 1 / -1; padding: var(--sp-4); text-align: center; font-size: 12px; color: var(--muted); }
 .pose-grid::-webkit-scrollbar, .pose-detail::-webkit-scrollbar { width: 4px; }
 .pose-grid::-webkit-scrollbar-thumb, .pose-detail::-webkit-scrollbar-thumb { background: var(--line); border-radius: 10px; }
+/* 详情栏默认画幅（自建库条目）：select 不在 label 里，单开一条（对齐 costume-policy-row） */
+.pose-aspect-block {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.pose-aspect-select {
+  width: auto; flex: none; font-size: 12px; padding: 4px 8px; max-width: 180px;
+  border: 1px solid var(--line); border-radius: var(--radius-ctl);
+  background: #fff; color: var(--text);
+}
+.pose-aspect-select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 /* 详情栏动作描述块：pose_actions 文本 + 复制/编辑按钮 + 收藏；没写过给灰字空态 */
 .pose-action-block {
   display: flex;

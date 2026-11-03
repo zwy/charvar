@@ -22,7 +22,7 @@ PRESETS_ROOT = Path(__file__).resolve().parent.parent / "presets"
 
 # 条目数后缀（_9 / _30 之类）只允许出现在**冻结**预设上：
 # 它们的条数不会再变，留在文件名里是准确信息；会演进的预设一律不写条目数。
-FROZEN_COUNT_SUFFIX_PRESETS = {"q21_default_30", "q21_legacy_30", "q21_v2_30"}
+FROZEN_COUNT_SUFFIX_PRESETS = {"q21_default_30", "q21_v2_30"}
 
 FILENAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 VERSION_SUFFIX_RE = re.compile(r"^(?P<stem>.+)_v(?P<version>\d+)$")

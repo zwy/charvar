@@ -1,0 +1,20 @@
+pose_id: yoga_warrior_iii
+source_id: studio
+number: S-14
+title: 战士三式
+category: 立ち
+angle: 左侧90
+line: 自建动作
+action_text: Perform Warrior III Pose with the character's left leg supporting the body. Left and right
+  refer to the character's own body. Place the entire left sole firmly on the ground, with the standing
+  knee naturally extended and not locked backward. Hinge forward from the hips while extending the right
+  leg straight behind. Bring the torso and lifted right leg approximately into one long horizontal line,
+  with the lifted right foot staying off the ground. Keep the pelvis facing downward rather than opening
+  sideways. Extend both arms forward beyond the head at shoulder width, palms facing inward. Keep the
+  arms, torso, and lifted leg reaching in opposing directions without arching the lower back. Keep the
+  neck in line with the spine and the gaze down toward the ground rather than looking into the camera.
+  Orient the hands and head toward the left edge of the image and the lifted right foot toward the right
+  edge. Observe from the character's left side so the two reaching arms can be distinguished naturally.
+  Keep the fingertips, supporting left foot, and raised right foot fully inside a sufficiently wide frame.
+origin: presets/actions/yoga_complete.yaml#yoga_warrior_iii
+aspect: '2:3'

@@ -1,0 +1,22 @@
+pose_id: yoga_boat
+source_id: studio
+number: S-22
+title: 船式
+category: 座り
+angle: 左侧90
+line: 自建动作
+action_text: Perform a straight-leg Boat Pose in a clear seated V-shaped balance. The buttocks and sitting
+  area contact the ground while the torso inclines backward as a long lifted shape; the back, shoulders,
+  and head stay off the ground. Lift both legs forward and upward with the knees naturally extended and
+  the feet close together. Keep the legs approximately parallel to each other, with both feet visibly
+  off the ground, forming a clear V with the raised torso. Extend both arms forward at about shoulder
+  width and approximately parallel to the ground, palms facing inward. Keep the arms beside the legs rather
+  than wrapped around them, and leave a small visible separation between the hands and legs. Neither hand
+  supports the body on the ground or grasps the thighs, ankles, or feet. Keep the chest lifted, the neck
+  in line with the torso, and the gaze forward toward the feet rather than forcing a turn toward the lens.
+  This is an upright seated balance, not a lying leg raise, a forward fold, or a bent-knee variation.
+  Orient the face and feet generally toward the left side of the image. Observe from the character's left
+  side, so the V silhouette and both forward-reaching arms are readable. Keep the head, hands, sitting
+  contact, and both raised feet fully inside the frame.
+origin: presets/actions/yoga_complete.yaml#yoga_boat
+aspect: '2:3'

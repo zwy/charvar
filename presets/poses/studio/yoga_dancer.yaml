@@ -1,0 +1,22 @@
+pose_id: yoga_dancer
+source_id: studio
+number: S-15
+title: 舞王式
+category: 立ち
+angle: 正面
+line: 自建动作
+action_text: Perform the basic one-handed Dancer Pose, not an overhead-grip king-dancer variation. Left
+  and right refer to the character's own body. Stand on the left leg with the whole left sole firmly grounded
+  and the knee naturally extended. Bend the right knee so the right lower leg rises behind the body. Reach
+  the right hand backward and grip the right ankle, keeping this same-side hand-to-ankle connection clear
+  and anatomically continuous. Lift the right thigh backward and moderately upward, with the bent right
+  knee pointing down and back rather than opening sideways. Incline the torso slightly forward while lifting
+  through the chest. Extend the left arm forward at approximately shoulder height, with relaxed fingers.
+  Keep the pelvis approximately facing forward, the head aligned with the torso, and the gaze ahead along
+  the forward-reaching arm. Keep the face and the reaching left hand toward the camera and the bent lifted
+  right leg opening to the character's right side, so the whole bow-shaped silhouette reads in one plane.
+  Observe from directly in front, so the right hand's grip on the right ankle and the lifted right leg
+  both stay clearly visible. Keep the full body, reaching hand, lifted foot, and standing foot in frame.
+  Use a recognizable moderate bow-shaped silhouette rather than an extreme backbend.
+origin: presets/actions/yoga_complete.yaml#yoga_dancer
+aspect: '2:3'

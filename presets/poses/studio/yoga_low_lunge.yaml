@@ -1,0 +1,20 @@
+pose_id: yoga_low_lunge
+source_id: studio
+number: S-13
+title: 低弓步
+category: 立ち
+angle: 左侧90
+line: 自建动作
+action_text: Perform a kneeling Low Crescent Lunge with the character's right leg forward. Left and right
+  refer to the character's own body. Direct the body toward the left edge of the image, with the character
+  in a true side profile. Plant the right foot flat in front and bend the right knee approximately above
+  the right ankle. Extend the left leg behind toward the right side of the image, with the left knee and
+  the top of the left foot resting on the ground. Keep the pelvis facing the same direction as the front
+  leg, and maintain clear contact at the front foot and rear knee. Lift the torso upright above the pelvis.
+  Raise both arms overhead at about shoulder width, with open hands facing inward, and keep the shoulders
+  away from the ears. Use a long lifted torso with only a mild natural upper-chest opening, not an extreme
+  backbend. Keep the head aligned with the torso and look ahead. Observe from the character's left side
+  at torso height, showing the front-foot contact, the rear knee on the ground, and the overhead arms
+  clearly. Keep the complete figure from fingertips to both feet inside the frame.
+origin: presets/actions/yoga_complete.yaml#yoga_low_lunge
+aspect: '2:3'

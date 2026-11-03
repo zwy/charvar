@@ -57,7 +57,7 @@
    `version:` 一致**（有测试钉住）。文件名带版本号 = 这套预设会演进；不带 = 冻结。
 
 条目数后缀（`_30`）只保留在**冻结**预设上——它们的条数不会变，留在文件名里是准确信息
-（`q21_default_30` / `q21_legacy_30` / `q21_v2_30`）。
+（`q21_default_30` / `q21_v2_30`；`q21_legacy_30` 已退役删除，别加回来）。
 
 ## 各目录 schema
 
@@ -154,6 +154,7 @@ export <ref>` 快照镜像、`import-studio` 重建；组合顺序由 `outfit_or
 - 配方 `doc:` 指向存在的同名 `.md`。
 - `backgrounds_ref:` / `lighting_ref:` 指向存在的池文件。
 - `presets/` 顶层没有动作预设、没有 `.bak` / `~` 之类的垃圾文件。
-- **`q21_default_30` / `q21_legacy_30` / `q21_v2_30` 的 30 条 variants 文本逐字冻结**
+- **`q21_default_30` / `q21_v2_30` 的 30 条 variants 文本逐字冻结**
   ——`tests/test_presets.py` 用 sha256 基准锁定，改文本会让测试红。
+  （legacy 30 已退役删除；`test_q21_legacy_30_retired` 反向钉住——别加回来。）
   （`expressions` / `yoga_basic` / `yoga_complete` / `chat_replies` 也有 sha256 基准，同理。）

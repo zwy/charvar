@@ -942,14 +942,16 @@ def test_import_studio_seeds_mirror_and_respects_user_edits(data_dir, monkeypatc
     _build_fake_pose_data(data_dir)
     with storage.connect() as conn:
         info = poses_service.import_studio(conn)
-        assert info["poses"] == 3 and info["added"] == 3
+        assert info["added"] == info["poses"], "全新 DB：镜像条数 = 描述新增条数"
         rows = conn.execute(
             "SELECT pose_id, action_text, angle FROM pose_actions WHERE source_id='studio'"
         ).fetchall()
-        assert {r["pose_id"] for r in rows} == {
-            "wss_skirt_hold_stand", "wss_skirt_hold_knee_up", "wss_skirt_hold_leg_side",
-        }
-        assert all(r["angle"] == "正面" for r in rows)
+        assert rows and all(r["action_text"].strip() for r in rows)
+        assert {"wss_skirt_hold_stand", "wss_skirt_hold_knee_up", "wss_skirt_hold_leg_side",
+                "yoga_tree", "tp_smoke_break", "q21d_full_back"} <= {r["pose_id"] for r in rows}
+        # 视角枚举扩展生效：自建库既有正面也有背面/斜机位等扩展视角
+        assert all(r["angle"] in poses_service.ANGLE_ORDER for r in rows)
+        assert {r["angle"] for r in rows} != {"正面"}  # 机位扩展词表在实际使用
         lines = {
             r["line"] for r in conn.execute(
                 "SELECT line FROM pose_images WHERE source='studio'"
@@ -963,7 +965,7 @@ def test_import_studio_seeds_mirror_and_respects_user_edits(data_dir, monkeypatc
         )
         conn.commit()
         again = poses_service.import_studio(conn)
-        assert again["added"] == 0 and again["skipped"] == 3
+        assert again["added"] == 0 and again["skipped"] == again["poses"]
         text = conn.execute(
             "SELECT action_text FROM pose_actions WHERE pose_id='wss_skirt_hold_stand'"
         ).fetchone()[0]
@@ -971,3 +973,33 @@ def test_import_studio_seeds_mirror_and_respects_user_edits(data_dir, monkeypatc
         # 无图行的参考图解析显式报错（不给半死路径）
         with pytest.raises(poses_service.PoseError):
             poses_service._locate("wss_skirt_hold_stand", "正面")
+
+
+def test_studio_aspect_field(data_dir, monkeypatch):
+    """自建库默认画幅：镜像 aspect 种子 → 列；set_aspect 改/清（仅自建库）；非法值拦截。"""
+    monkeypatch.setattr(
+        "charvar.paths.presets_dir", lambda: pathlib.Path(__file__).resolve().parent.parent / "presets"
+    )
+    monkeypatch.setenv("CHARRVAR_DATA_DIR", str(data_dir)) if False else monkeypatch.setenv("CHARVAR_DATA_DIR", str(data_dir))
+    _build_fake_pose_data(data_dir)
+    with storage.connect() as conn:
+        info = poses_service.import_studio(conn)
+        assert info["added"] == info["poses"]
+        rows = conn.execute("SELECT pose_id, aspect_ratio FROM pose_images WHERE source='studio'").fetchall()
+        assert rows and all(r["aspect_ratio"] == "2:3" for r in rows)
+        # 网页改画幅：改值 + 清空，全部视角行一起生效
+        data = poses_service.list_poses(conn, q="yoga_tree")
+        assert [p["aspect_ratio"] for p in data["poses"] if p["source"] == "studio"] == ["2:3"]
+        poses_service.set_aspect(conn, "yoga_tree", "16:9")
+        assert conn.execute(
+            "SELECT aspect_ratio FROM pose_images WHERE source='studio' AND pose_id='yoga_tree'"
+        ).fetchone()[0] == "16:9"
+        poses_service.set_aspect(conn, "yoga_tree", "")
+        assert conn.execute(
+            "SELECT aspect_ratio FROM pose_images WHERE source='studio' AND pose_id='yoga_tree'"
+        ).fetchone()[0] == ""
+        # 非法画幅 / 站点库动作 拦截
+        with pytest.raises(poses_service.PoseError, match="非法画幅"):
+            poses_service.set_aspect(conn, "yoga_tree", "auto")
+        with pytest.raises(poses_service.PoseError, match="只能改自建库"):
+            poses_service.set_aspect(conn, "full_sexy_P001", "2:3", source="pose-db-01")

@@ -81,8 +81,8 @@ def _seed_all(data_dir: pathlib.Path, db_path: pathlib.Path | None = None) -> No
         # 自建文本动作（无图动作文本锚用例）：pose_images 无图行 + 描述
         conn.execute(
             "INSERT INTO pose_images (source, pose_id, angle, line, number, title, category,"
-            " file_path, thumb_path, display_type) VALUES ('studio', 'wss_test_text', '正面',"
-            " '自建动作', 'S-99', '测试无图动作', '立ち', '', '', 'text')"
+            " file_path, thumb_path, display_type, aspect_ratio) VALUES ('studio', 'wss_test_text', '正面',"
+            " '自建动作', 'S-99', '测试无图动作', '立ち', '', '', 'text', '2:3')"
         )
         conn.execute(
             "INSERT INTO pose_actions (source_id, pose_id, angle, action_text, source,"
@@ -403,3 +403,12 @@ def test_pose_text_anchor_pair_rejected(client):
     res = _compose(client, subject_id="demo_witch", subject2_id="demo_witch",
                    pose_id="wss_test_text", pose_source="studio")
     assert res.status_code == 400 and "双人" in res.json()["detail"]
+
+
+def test_pose_aspect_surfaced_in_meta(client):
+    """动作声明的默认画幅进 compose meta（生成时自动带出用）；站点动作无画幅 = 空。"""
+    data = _compose(client, subject_id="demo_witch", pose_id="wss_test_text",
+                    pose_source="studio").json()
+    assert data["meta"]["aspect"] == "2:3"
+    plain = _compose(client, subject_id="demo_witch", pose_id="full_sexy_P001").json()
+    assert plain["meta"]["aspect"] == ""

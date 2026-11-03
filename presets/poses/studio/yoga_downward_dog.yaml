@@ -1,0 +1,21 @@
+pose_id: yoga_downward_dog
+source_id: studio
+number: S-20
+title: 下犬式
+category: 前かがみ
+angle: 左侧90
+line: 自建动作
+action_text: Perform Downward-Facing Dog as a clear inverted-V silhouette. Place both palms flat on the
+  ground in front of the body approximately shoulder-width apart, with the fingers naturally spread. Place
+  both feet on the ground behind the body approximately hip-width apart. Lift the pelvis upward and backward
+  to form the highest point of the pose. Extend both arms and lengthen the back so the hands, arms, and
+  torso form one continuous sloping side of the inverted V. Keep both legs naturally extended with only
+  a slight knee bend if needed; do not turn this into a deeply crouched pose. Both front feet remain grounded,
+  while the heels may lift slightly rather than being forced flat. Keep the head between the upper arms
+  with the neck following the spine, and direct the gaze naturally toward the legs or ground rather than
+  toward the camera. Neither the head, elbows, knees, nor abdomen touches the ground. Observe from the
+  character's left side with a small frontward offset, allowing the near and far hands and feet to remain
+  naturally distinguishable without artificially spreading the limbs. Keep the whole figure, both hands,
+  and both feet inside the frame.
+origin: presets/actions/yoga_complete.yaml#yoga_downward_dog
+aspect: '2:3'

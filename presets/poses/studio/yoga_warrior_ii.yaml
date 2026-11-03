@@ -1,0 +1,21 @@
+pose_id: yoga_warrior_ii
+source_id: studio
+number: S-11
+title: 战士二式
+category: 立ち
+angle: 正面
+line: 自建动作
+action_text: Perform Warrior II Pose with the character's right leg forward. Left and right refer to the
+  character's own body. Place the right foot toward the left edge of the image and the left foot farther
+  toward the right edge in a wide stance. Turn the right toes toward the left edge and angle the rear
+  left foot slightly inward, keeping both feet firmly grounded. Bend the right knee over the right ankle,
+  tracking in the same direction as the right toes. Keep the rear left leg extended without bending it
+  into a second lunge. Keep the torso upright rather than leaning over the front thigh, with the chest
+  open toward the camera. Extend the right arm toward the left edge above the right leg and the left arm
+  toward the right edge above the rear leg, forming one long horizontal line at shoulder height, palms
+  down. Turn the head toward the right fingertips without twisting the torso to follow it. Observe from
+  directly in front at natural torso height, with both arms and the full wide-legged stance clearly readable.
+  Keep the entire figure from fingertips and head to both feet inside the frame with generous lateral
+  margins.
+origin: presets/actions/yoga_complete.yaml#yoga_warrior_ii
+aspect: '2:3'

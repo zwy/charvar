@@ -1558,7 +1558,7 @@ def pose_prompt_cmd(
     body_lock_text: list[str] = typer.Option([], "--body-lock", help="体形锚句（英文短句，可多次；仅 --face 生效——有主体档案时走档案 body_lock）"),
     run: bool = typer.Option(False, "--run", help="拼好的提示词直接出图（Playground 通路）"),
     backend: str = typer.Option("comfyui", "--backend", help="comfyui / openrouter / dreamina"),
-    aspect: str = typer.Option("3:4", "--aspect", help="画幅：3:4/1:1/16:9/…"),
+    aspect: str = typer.Option("", "--aspect", help="画幅：3:4/1:1/16:9/…（缺省 = 动作声明的默认画幅，没有则 3:4）"),
     resolution: str = typer.Option("1k", "--resolution", help="分辨率档：1k/2k（或 OpenRouter 模型枚举）"),
     seed: int = typer.Option(0, "--seed", help="0 = 固定复现；换种子出不同图"),
     negative: Optional[str] = typer.Option(None, "--negative", help="负向提示词（空串 = 明确不用）"),
@@ -1595,7 +1595,7 @@ def pose_prompt_cmd(
         try:
             action = poses_service.pose_action(conn, pose_id, angle, source)
             row = conn.execute(
-                "SELECT line, number, title, file_path FROM pose_images WHERE source = ? AND pose_id = ? AND angle = ?",
+                "SELECT line, number, title, file_path, aspect_ratio FROM pose_images WHERE source = ? AND pose_id = ? AND angle = ?",
                 (source, action["pose_id"], action["angle"]),
             ).fetchone()
             pose_display = (poses_service.POSE_SOURCES.get(source) or {}).get("display_type", "line")
@@ -1729,6 +1729,9 @@ def pose_prompt_cmd(
         refs.append(pose_file)
     if costume_file is not None:
         refs.append(costume_file)
+    # 画幅：请求显式 > 该动作声明的默认（自建库 aspect 字段） > 3:4
+    if not aspect:
+        aspect = str(row["aspect_ratio"] if row is not None else "") or "3:4"
     req = adhoc_service.AdhocRequest(
         prompt=prompt,
         backend=backend,

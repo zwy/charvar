@@ -1,0 +1,12 @@
+pose_id: q21d_full_r45
+source_id: studio
+number: S-30
+title: 拍照站姿·右前45
+category: 立ち
+angle: 右前45
+line: 自建动作
+action_text: Full-body shot of one person, entire figure visible from head to shoes, standing upright
+  with arms relaxed at the sides, body rotated 45 degrees toward the right side of the frame, three-quarter
+  view.
+origin: presets/actions/q21_default_30.yaml#full_r45
+aspect: '2:3'

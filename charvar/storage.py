@@ -93,6 +93,8 @@ CREATE TABLE IF NOT EXISTS pose_images (
     file_path TEXT NOT NULL DEFAULT '',
     thumb_path TEXT NOT NULL DEFAULT '',
     display_type TEXT NOT NULL DEFAULT 'line',   -- line=人偶线稿 / depth=深度图（新值须配参考图分句）
+    -- 该动作默认画幅（空 = 不指定；自建文本库用——生成时自动带出）
+    aspect_ratio TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (source, pose_id, angle)
 );
 CREATE INDEX IF NOT EXISTS idx_pose_images_line ON pose_images(line, category);
@@ -199,6 +201,7 @@ ALTER TABLE costume_items ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE costume_prompts ADD COLUMN ref_prompt TEXT NOT NULL DEFAULT '';
 ALTER TABLE costume_items ADD COLUMN media_type TEXT NOT NULL DEFAULT '';
 ALTER TABLE face_items ADD COLUMN media_type TEXT NOT NULL DEFAULT '';
+ALTER TABLE pose_images ADD COLUMN aspect_ratio TEXT NOT NULL DEFAULT '';
 """
 
 
@@ -229,6 +232,7 @@ def _rebuild_pose_images_pk(conn: sqlite3.Connection) -> None:
             file_path TEXT NOT NULL DEFAULT '',
             thumb_path TEXT NOT NULL DEFAULT '',
             display_type TEXT NOT NULL DEFAULT 'line',
+            aspect_ratio TEXT NOT NULL DEFAULT '',
             PRIMARY KEY (source, pose_id, angle)
         );
         INSERT INTO pose_images_new

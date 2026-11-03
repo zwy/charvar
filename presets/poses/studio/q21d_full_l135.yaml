@@ -1,0 +1,12 @@
+pose_id: q21d_full_l135
+source_id: studio
+number: S-33
+title: 拍照站姿·左后45
+category: 立ち
+angle: 左后45
+line: 自建动作
+action_text: Full-body shot of one person, entire figure visible from head to shoes, standing upright
+  with arms relaxed at the sides, body rotated 135 degrees away from the camera toward the left side of
+  the frame, three-quarter rear view, face only partly visible.
+origin: presets/actions/q21_default_30.yaml#full_l135
+aspect: '2:3'

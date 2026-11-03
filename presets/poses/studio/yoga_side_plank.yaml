@@ -1,0 +1,23 @@
+pose_id: yoga_side_plank
+source_id: studio
+number: S-21
+title: 侧板式
+category: 特殊
+angle: 右侧90
+line: 自建动作
+action_text: 'Perform a basic Side Plank with the character''s own left side closer to the ground. Left
+  and right always refer to the character''s body. Plant the left palm flat on the ground, with the left
+  arm extended and the left shoulder approximately above the wrist. Extend both legs and stack the right
+  foot directly over the left foot, with the outer edge of the left foot contacting the ground. Lift the
+  pelvis so the head, torso, hips, and legs form one long diagonal line between the supporting left hand
+  and the feet; do not let the hips sag or fold into a seated position. Rotate the chest open to the side.
+  Extend the right arm vertically upward above the right shoulder, with the hand open and relaxed, so
+  the two arms form a readable near-vertical line through the shoulders. Keep the neck aligned with the
+  torso and the gaze forward from the face, without turning sharply to look at the raised hand or the
+  camera. Keep both legs together: neither knee folds inward, the upper leg does not lift, and neither
+  hand grasps a foot. Observe from the character''s right side at a natural torso-level camera height,
+  so the open chest and the raised right arm read clearly. Orient the head toward the right edge of the
+  image and the feet toward the left edge. Keep the supporting hand, raised hand, full torso, and both
+  feet within the frame.'
+origin: presets/actions/yoga_complete.yaml#yoga_side_plank
+aspect: '2:3'

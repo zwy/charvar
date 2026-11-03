@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import hashlib
+import pathlib
 import re
 
 import pytest
@@ -17,7 +18,6 @@ from charvar.preset_loader import ListPreset, MatrixPreset, PresetError, load, l
 
 # 文本基准 sha256（= 与原工作流 JSON 逐字比对通过版本的 preset 文本）
 Q21_DEFAULT_30_DIGEST = "847afccf764b43e55af82d8c80d2e5fc816aa82eaf3500f6852d18a8b599ae13"
-Q21_LEGACY_30_DIGEST = "aada7b57aee5e27438db8bbb45e87749ac09000415af506a6249a6ae0b83ad9a"
 
 
 def _texts_digest(preset_name: str) -> str:
@@ -33,12 +33,9 @@ def test_q21_default_30_digest_locked():
     )
 
 
-def test_q21_legacy_30_digest_locked():
-    """legacy 30 条（原工作流子图残留旧版）同样锁定。"""
-    preset = load("q21_legacy_30")
-    assert len(preset.variants) == 30
-    assert _texts_digest("q21_legacy_30") == Q21_LEGACY_30_DIGEST
-    assert any("smooth youthful skin" in v.text for v in preset.variants)
+def test_q21_legacy_30_retired():
+    """legacy 30 条（原工作流残留旧版）已退役删除；别把它加回来。"""
+    assert not (pathlib.Path("presets/actions/q21_legacy_30.yaml")).exists()
 
 
 def test_q21_default_structured_fields():

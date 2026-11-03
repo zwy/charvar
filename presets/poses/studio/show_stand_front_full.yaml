@@ -1,0 +1,10 @@
+pose_id: show_stand_front_full
+source_id: studio
+number: S-25
+title: 展示站姿·正面
+category: 立ち
+angle: 正面
+line: 自建动作
+action_text: 人物正面朝向镜头直立站立，双脚分开与肩同宽，脚掌平踩地面，脚尖朝前，两腿伸直，重心均匀分布在双脚上。躯干直立，骨盆正对镜头，双肩水平。双臂自然垂落在身体两侧，臂干离开躯干留出可见空隙，两手放松垂在大腿外侧，手与腰线之间有可见距离。头正对镜头，目光看向镜头，表情自然放松。正面全身入镜，从头顶到脚底完整可见，头发与双脚都不接触画面边缘。
+origin: presets/actions/outfit_front_full.yaml#stand_front_full
+aspect: '2:3'

@@ -1,0 +1,12 @@
+pose_id: q21d_full_l90
+source_id: studio
+number: S-31
+title: 拍照站姿·左侧90
+category: 立ち
+angle: 左侧90
+line: 自建动作
+action_text: Full-body shot of one person, entire figure visible from head to shoes, standing upright
+  with arms relaxed at the sides, body rotated 90 degrees to face the left side of the frame, full side
+  profile view.
+origin: presets/actions/q21_default_30.yaml#full_l90
+aspect: '2:3'

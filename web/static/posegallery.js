@@ -12,6 +12,8 @@
 const PoseGallery = (() => {
   /* 来源中文标签（与后端 POSE_SOURCES 的 zh 同步维护） */
   const POSE_SOURCE_ZH = { "pose-db-01": "线稿", "pose-db-02": "深度", "studio": "自建库" };
+  /* 默认画幅可选值（自建库动作的 aspect 字段；与后端 STUDIO_ASPECTS 同单） */
+  const ASPECTS = ["1:1", "3:4", "16:9", "4:3", "9:16", "2:3", "3:2", "21:9"];
   /* 双人线的系統原文（lineConstraint 用） */
   const PAIR_LINE = "2人絡み";
   function mount({ root, onPick, close, onStat, variant = "modal", lineConstraint = null, requireAction = false, allowTextOnly = false }) {
@@ -386,6 +388,17 @@ const PoseGallery = (() => {
         '<button type="button" class="btn-sm pose-detail-fav' + (p.favorited ? " on" : "") +
         '">' + (p.favorited ? "已收藏" : "收藏") + "</button>" +
         "</div>" +
+        (p.source === "studio"
+          ? '<div class="pose-aspect-block">' +
+            '<div class="pose-angle-label">默认画幅（生成时自动带出）</div>' +
+            '<select class="pose-aspect-select">' +
+            '<option value="">不指定</option>' +
+            ASPECTS.map(function (a) {
+              return '<option value="' + a + '"' + (p.aspect_ratio === a ? " selected" : "") + ">" + a + "</option>";
+            }).join("") +
+            "</select>" +
+            "</div>"
+          : "") +
         '<div class="pose-angle-block">' +
         '<div class="pose-angle-label">选择视角</div>' +
         '<div class="pose-angle-grid"></div>' +
@@ -493,6 +506,24 @@ const PoseGallery = (() => {
         cancelBtn.addEventListener("click", function () {
           editingAction = false;
           renderDetail();
+        });
+      }
+      const aspectSel = detailEl.querySelector(".pose-aspect-select");
+      if (aspectSel) {
+        aspectSel.addEventListener("change", function () {
+          aspectSel.disabled = true;
+          api("/poses/" + encodeURIComponent(p.source) + "/" + encodeURIComponent(p.pose_id) + "/aspect", {
+            method: "PUT",
+            body: JSON.stringify({ aspect: aspectSel.value }),
+          })
+            .then(function (res) {
+              p.aspect_ratio = res.aspect || "";
+              renderDetail();
+            })
+            .catch(function () {
+              aspectSel.value = p.aspect_ratio || "";  // 失败回滚
+              aspectSel.disabled = false;
+            });
         });
       }
       const addBtn = detailEl.querySelector(".pose-add-btn");

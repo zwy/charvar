@@ -1,0 +1,21 @@
+pose_id: yoga_triangle
+source_id: studio
+number: S-12
+title: 三角式
+category: 立ち
+angle: 正面
+line: 自建动作
+action_text: Perform Extended Triangle Pose toward the character's right leg. Left and right refer to
+  the character's own body. Spread the feet widely, placing the right foot toward the left edge of the
+  image and the left foot toward the right edge. Turn the right toes toward the left edge and the left
+  toes slightly inward. Keep both legs extended without locking the knees backward. Lengthen the torso
+  over the right leg and then incline it sideways toward that leg, rather than rounding the back into
+  a forward fold. Rest the right hand lightly on the right shin below the knee, not on the knee joint;
+  do not force the hand to the floor. Extend the left arm upward from the shoulder, with the shoulders
+  approximately stacked and the chest open toward the viewer. Keep the neck aligned comfortably and the
+  gaze directed forward from the face rather than forcing a look into the lens or up at the hand. Observe
+  from directly in front so the hand-to-shin contact is visible. Keep the head, both hands, both straight
+  legs, and both feet fully inside the frame. The straight front knee distinguishes this pose from Extended
+  Side Angle.
+origin: presets/actions/yoga_complete.yaml#yoga_triangle
+aspect: '2:3'

@@ -41,8 +41,13 @@ POSE_SOURCES: dict[str, dict] = {
 # pose_id / 视角是浏览器发来的关键字（拼进查找与缓存文件名），只放行安全字符。
 POSE_ID_RE = re.compile(r"^[A-Za-z0-9_]+$")
 
-# 站点视角枚举（存储原文；一个动作最多 5 视角，个别动作缺 1 张）
-ANGLE_ORDER = ["正面", "上から", "横", "斜め", "下から"]
+# 站点视角枚举（存储原文；一个动作最多 5 视角，个别动作缺 1 张）。
+# 尾部扩展 = 自建文本动作库的机位词表（gen 预设的 front/l45/r45/l90/r90/l135/r135/back
+# 映射过来；站点 catalog 不会出现 → import 校验不受影响；ANGLE_ZH 缺项回退原文）。
+ANGLE_ORDER = [
+    "正面", "上から", "横", "斜め", "下から",
+    "背面", "左前45", "右前45", "左侧90", "右侧90", "左后45", "右后45",
+]
 
 # 站点系統次序（浏览页页签次序与站点一致；未收录的原文排在收录项之后按字符串排）
 LINE_ORDER = ["全身1人・セクシー系", "全身1人・標準系", "上半身1人", "2人絡み"]
@@ -231,14 +236,20 @@ def import_catalog(conn: sqlite3.Connection, source: str = SOURCE_ID, origin: Pa
 STUDIO_SOURCE_ID = "studio"  # 自建文本动作库（同服饰库 STUDIO_SOURCE_ID 命名）
 STUDIO_MIRROR_DIR = "poses"  # 镜像目录 = presets/<dir>/<STUDIO_SOURCE_ID>/
 
+# 自建库默认画幅的白名单（生成端认的 8 个具体比例；"auto" 是 gen 通路的概念，
+# 文本动作要具体值，不发 auto）。
+STUDIO_ASPECTS = ("1:1", "3:4", "16:9", "4:3", "9:16", "2:3", "3:2", "21:9")
+
 
 def import_studio(conn: sqlite3.Connection) -> dict:
     """presets/poses/studio/*.yaml（自建文本动作镜像）→ pose_images + pose_actions。
 
     无图动作库（display_type=text）：动作描述即锚，无姿势参考图 —— 每条 yaml
     一个 pose_images 行（file_path/thumb_path 空串）+ action_text 灌 pose_actions。
-    DB 是运行时真源，镜像只是重建快照：pose_images 幂等 upsert；pose_actions
-    已有描述整条跳过（不覆盖用户编辑 —— 用户层，同 costume import-studio 语义）。
+    默认画幅（`aspect:`）随行落 aspect_ratio 列（索引字段 —— 镜像重灌会盖回，
+    网页里改的画幅在重灌后回到镜像值）。DB 是运行时真源，镜像只是重建快照：
+    pose_images 幂等 upsert；pose_actions 已有描述整条跳过（不覆盖用户编辑
+    —— 用户层，同 costume import-studio 语义）。
     """
     import yaml
 
@@ -265,17 +276,24 @@ def import_studio(conn: sqlite3.Connection) -> dict:
         line = str(doc.get("line") or "").strip() or "自建动作"
         if not str(doc.get("action_text") or "").strip():
             raise PoseError(f"镜像条目没有动作描述（文本动作全部锚在描述上）：{path.name}")
+        aspect = str(doc.get("aspect") or "").strip()
+        if aspect and aspect not in STUDIO_ASPECTS:
+            raise PoseError(
+                f"镜像条目默认画幅非法：{path.name} → {aspect[:20]}"
+                f"（可选 {'/'.join(STUDIO_ASPECTS)}；空串 = 不指定）"
+            )
         now = storage.utcnow()
         conn.execute(
             """INSERT INTO pose_images
-               (source, pose_id, angle, line, number, title, category, file_path, thumb_path, display_type)
-               VALUES (?, ?, ?, ?, ?, ?, ?, '', '', 'text')
+               (source, pose_id, angle, line, number, title, category, file_path, thumb_path, display_type, aspect_ratio)
+               VALUES (?, ?, ?, ?, ?, ?, ?, '', '', 'text', ?)
                ON CONFLICT(source, pose_id, angle) DO UPDATE SET
                  line=excluded.line, number=excluded.number, title=excluded.title,
-                 category=excluded.category, file_path='', thumb_path='', display_type='text'""",
+                 category=excluded.category, file_path='', thumb_path='', display_type='text',
+                 aspect_ratio=excluded.aspect_ratio""",
             (STUDIO_SOURCE_ID, pose_id, angle, line,
              str(doc.get("number") or ""), str(doc.get("title") or "") or pose_id,
-             str(doc.get("category") or "")),
+             str(doc.get("category") or ""), aspect),
         )
         existing = conn.execute(
             "SELECT 1 FROM pose_actions WHERE source_id = ? AND pose_id = ? AND angle = ?",
@@ -342,7 +360,7 @@ def list_poses(
     # 视角排序在 Python 端按 ANGLE_ORDER 固定次序做（SQL 排视角用索引更绕）。
     rows = conn.execute(
         "SELECT pi.source, pi.pose_id, pi.angle, pi.line, pi.number, pi.title, pi.category,"
-        " pi.thumb_path, pi.file_path, pi.display_type, pa.action_text,"
+        " pi.thumb_path, pi.file_path, pi.display_type, pi.aspect_ratio, pa.action_text,"
         " pf.pose_id AS fav_pose"
         " FROM pose_images AS pi"
         " LEFT JOIN pose_actions AS pa ON pa.source_id = pi.source AND pa.pose_id = pi.pose_id AND pa.angle = pi.angle"
@@ -368,13 +386,15 @@ def list_poses(
                 "title_zh": title_zh(row["title"], row["pose_id"]),
                 "category": row["category"],
                 "category_zh": category_zh(row["category"]),
+                "aspect_ratio": "",
                 "image_count": 0,
                 "images": [],
                 "favorited": row["fav_pose"] is not None,
             },
         )
         pose["display_type"] = row["display_type"] or pose["display_type"]
-        # 无图行（自建文本库）：取图端点会 404 —— 空串 = 前端渲染「无图 · 纯文本」占位
+        if not pose["aspect_ratio"]:
+            pose["aspect_ratio"] = str(row["aspect_ratio"] or "")
         has_file = bool(
             str(row["file_path"] or "").strip() and str(row["thumb_path"] or "").strip()
         )
@@ -521,6 +541,36 @@ def set_pose_action(
         )
     conn.commit()
     return pose_action(conn, pose_id, angle_key, source_id)
+
+
+def set_aspect(
+    conn: sqlite3.Connection, pose_id: str, aspect: str, *, source: str = STUDIO_SOURCE_ID
+) -> dict:
+    """写一个动作所有视角行的默认画幅（空串 = 清掉）。
+
+    仅自建库：站点数据不碰（站点图的画幅由其落盘比例决定，不走这个字段）。
+    返回 {"pose_id", "aspect"}
+    """
+    pose_id = str(pose_id or "").strip()
+    if not POSE_ID_RE.fullmatch(pose_id):
+        raise PoseError(f"非法动作 id：{pose_id[:60]}")
+    _source_or_raise(source)
+    aspect = str(aspect or "").strip()
+    if aspect and aspect not in STUDIO_ASPECTS:
+        raise PoseError(f"非法画幅：{aspect[:20]}（可选 {'/'.join(STUDIO_ASPECTS)}；空串 = 不指定）")
+    if source != STUDIO_SOURCE_ID:
+        raise PoseError(f"默认画幅只能改自建库的动作（{source} 是站点/第三方库）")
+    cur = conn.execute(
+        "SELECT DISTINCT angle FROM pose_images WHERE source = ? AND pose_id = ?", (source, pose_id)
+    ).fetchall()
+    if not cur:
+        raise PoseError(f"姿势库没有这个动作：{source} / {pose_id[:60]}")
+    conn.execute(
+        "UPDATE pose_images SET aspect_ratio = ? WHERE source = ? AND pose_id = ?",
+        (aspect, source, pose_id),
+    )
+    conn.commit()
+    return {"pose_id": pose_id, "aspect": aspect}
 
 
 # ---------- 收藏（pose_favorites：用户态；pose_images 重灌绝不碰） ----------

@@ -1,0 +1,23 @@
+pose_id: yoga_handstand
+source_id: studio
+number: S-19
+title: 手倒立
+category: 特殊
+angle: 背面
+line: 自建动作
+action_text: 'Perform a straight-leg Handstand held as one static pose. Both palms are planted flat on
+  the ground approximately shoulder-width apart, fingers naturally spread. Both elbows are extended and
+  the shoulders support the inverted torso above the hands. The head and both forearms remain clear of
+  the ground; the hands are the only ground contacts. Keep the torso long, the pelvis approximately above
+  the shoulders, and both legs extended upward together, with the feet close together. The overall silhouette
+  is a long inverted line without split legs, bent knees, or a pronounced backbend. Keep the neck aligned
+  naturally and the gaze toward the ground between or slightly ahead of the hands, never toward the camera.
+  Observe from directly behind the character with a level camera and no wide-angle exaggeration, so the
+  back of the head, the nape, the back, and the backs of the legs all turn toward the camera. The head
+  hangs upside down between the arms with the crown toward the camera, the face turned down toward the
+  ground and completely hidden, with no part of the face, chin, or cheek visible. Fit the entire inverted
+  figure from the grounded palms to the highest toes inside the frame, with clear ground contact and sufficient
+  space above the feet. Do not rotate an upright portrait upside down: the hands contact the ground below
+  the head and the feet point upward.'
+origin: presets/actions/yoga_complete.yaml#yoga_handstand
+aspect: '2:3'

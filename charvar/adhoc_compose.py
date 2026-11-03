@@ -144,7 +144,7 @@ def compose(conn, req: ComposeRequest) -> dict:
             )
         try:
             row = conn.execute(
-                "SELECT line, file_path FROM pose_images WHERE source = ? AND pose_id = ? AND angle = ?",
+                "SELECT line, file_path, aspect_ratio FROM pose_images WHERE source = ? AND pose_id = ? AND angle = ?",
                 (pose_source, action["pose_id"], action["angle"]),
             ).fetchone()
         except Exception as exc:  # pragma: no cover - pose_action 已校验过组合存在
@@ -156,6 +156,8 @@ def compose(conn, req: ComposeRequest) -> dict:
         pose_display = str((poses_service.POSE_SOURCES.get(pose_source) or {}).get("display_type") or "line")
         # 自建文本库（display_type=text）的无图动作走文本锚：动作描述即锚，无姿势参考图槽位
         pose_text_only = not str(row["file_path"] or "").strip()
+        # 该动作声明的默认画幅（空 = 不指定）—— 生成时自动带出（用户手选优先）
+        pose_aspect = str(row["aspect_ratio"] or "").strip()
 
     if subject_id:
         # 槽位选择对齐 CLI：上半身动作取 headshot（缺则回退 front），全身/双人 front
@@ -246,6 +248,7 @@ def compose(conn, req: ComposeRequest) -> dict:
         "costume_mode": pose_prompt.costume_mode(costume_policy) if costume_id else "",
         "costume_text_only": costume_text_only,
         "pose_text_only": pose_text_only,
+        "aspect": pose_aspect if workflow == "pose" else "",
     }
     return {
         "prompt": prompt,

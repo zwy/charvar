@@ -1,0 +1,10 @@
+pose_id: rb_hair_touch_one_hand
+source_id: studio
+number: S-09
+title: 单手触耳后发
+category: 立ち
+angle: 正面
+line: 自建动作
+action_text: 人物正面朝向镜头站立，双脚分开与肩同宽，脚掌平踩地面，脚尖朝前，两腿伸直，重心均匀分布在双脚上。躯干直立，骨盆正对镜头，双肩水平。画面左侧的手臂抬起：上臂从肩部向斜外上方伸出约六十度，肘部明显高于肩部，前臂从肘部向内上方弯曲，手掌抬到耳朵与颞侧之间的高度，手指轻触耳后的头发。画面右侧的手臂自然垂落在身侧，臂干贴住大腿外侧，手掌落在大腿外侧，手指放松，手与腰线之间有可见距离。头正对镜头，目光看向镜头。人物从头顶到脚底完整入画，头发与双脚都不接触画面边缘。
+origin: presets/actions/red_bob_glasses_poses.yaml#hair_touch_one_hand
+aspect: '2:3'

@@ -1,0 +1,10 @@
+pose_id: show_stand_back_full
+source_id: studio
+number: S-24
+title: 展示站姿·背面
+category: 立ち
+angle: 背面
+line: 自建动作
+action_text: 人物背对镜头站立，肩线与镜头平行，后背正对画面，面部不可见。躯干直立，双肩水平。双脚分开与肩同宽，脚掌平踩地面，脚尖朝前，两腿伸直，重心均匀分布在双脚上。双臂自然垂落在身体两侧，臂干贴住大腿外侧，两手放松垂在大腿外侧，手与腰线之间有可见距离。全身入镜，从头顶到脚底完整可见，头发与双脚都不接触画面边缘。
+origin: presets/actions/outfit_back_full.yaml#stand_back_full
+aspect: '2:3'

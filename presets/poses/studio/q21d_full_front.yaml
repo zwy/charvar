@@ -1,0 +1,11 @@
+pose_id: q21d_full_front
+source_id: studio
+number: S-28
+title: 拍照站姿·正面
+category: 立ち
+angle: 正面
+line: 自建动作
+action_text: Full-body shot of one person, entire figure visible from head to shoes, standing upright
+  with arms relaxed at the sides, facing directly toward the camera.
+origin: presets/actions/q21_default_30.yaml#full_front
+aspect: '2:3'

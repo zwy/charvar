@@ -431,6 +431,13 @@ const AdhocFlow = (() => {
       if (token !== composeToken) return;
       flow.references = out.references || [];
       flow.meta = out.meta || null;
+      /* 该动作声明的默认画幅：没手选过画幅就跟动作走（手选过以用户为准；切流程重置） */
+      if (!flow.aspectTouched && out.meta && out.meta.aspect) {
+        const sel = document.getElementById("adhoc-aspect");
+        if (sel && [...sel.options].some(function (o) { return o.value === out.meta.aspect; })) {
+          sel.value = out.meta.aspect;
+        }
+      }
       flow.promptEdited = false;
       flow.pending = false;
       const ta = document.getElementById("adhoc-prompt");
@@ -508,6 +515,12 @@ const AdhocFlow = (() => {
   /* ---------- 初始化与对外接口 ---------- */
   function init(o) {
     onChange = (o && o.onChange) || null;
+    const asp = document.getElementById("adhoc-aspect");
+    if (asp) {
+      asp.addEventListener("change", function () {
+        flow.aspectTouched = true;  /* 用户手选画幅 → 不再被动作默认覆盖 */
+      });
+    }
     const ta = document.getElementById("adhoc-prompt");
     if (ta) {
       ta.addEventListener("input", function () {
@@ -534,6 +547,7 @@ const AdhocFlow = (() => {
     flow.meta = null;
     flow.pending = false;
     flow.promptEdited = false;
+    flow.aspectTouched = false;
     renderSlots();
     renderComposeState();
     updateAnchors();

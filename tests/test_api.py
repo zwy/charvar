@@ -22,7 +22,8 @@ def client(tmp_path, monkeypatch):
 def test_presets_and_detail(client):
     data = client.get("/presets").json()
     names = {p["name"] for p in data}
-    assert {"q21_default_30", "q21_legacy_30", "matrix_basic"} <= names
+    assert {"q21_default_30", "matrix_basic"} <= names
+    assert "q21_legacy_30" not in names  # legacy 30 已退役删除
     detail = client.get("/presets/q21_default_30").json()
     assert detail["count"] == 30
     assert len(detail["variants"]) == 30
