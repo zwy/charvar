@@ -1,0 +1,34 @@
+item_id: retro_sheer_nightgowns_cream_white
+source_id: studio
+display_type: flat_lay
+category: retro_sheer_nightgowns
+label: 奶油柔纱（复古内衬薄纱睡裙）
+keywords: cream white vintage-inspired nightgown, thin shoulder straps, shallow scoop
+  neckline, raised waist seam, sheer outer layer, attached opaque matching lining
+prompt_text: 服装：该成年角色穿着奶油白色复古薄纱睡裙，细肩带、浅弧形领口，高腰拼接，上身自然合体，裙摆微展至膝上。轻透细纱外层覆盖同色不透明内衬，内衬从领口延伸至裙摆上方，肩带与领缘采用同色细窄包边。无刺绣、蕾丝、蝴蝶结或开衩。赤脚，无袜、首饰及其他配饰。
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white
+  background: one cream white vintage-inspired nightgown with a restrained 1960s mood.
+  Two thin shoulder straps, a shallow curved scoop neckline, a raised waist seam below
+  the bust, a gently fitted upper section, and a softly flared skirt ending just above
+  the knees when worn. The outer layer is fine translucent cream white mesh with a
+  soft drape, over an attached opaque lining in the same color. The lining starts
+  at the neckline and extends throughout the bodice and skirt to just above the outer
+  hem, providing opaque coverage of the entire torso and pelvis. Only the narrow bottom
+  edge beyond the lining remains sheer. Matching narrow binding finishes the straps
+  and neckline. The lining is sewn into the nightgown: exactly one garment, not a
+  separate slip or two-piece outfit. No lace, embroidery, bows, slits, prints, earrings,
+  shoes, or other accessories. Lay the garment front side up, fully flat with minimal
+  natural folds, neckline and straps toward the top, hem toward the bottom. Show all
+  edges and straps inside the frame with clear margins. Soft diffused studio lighting
+  from the upper left, faint contact shadows. No people, no mannequin, no hangers,
+  no text.'
+subject_policy: {}
+caption_tags:
+  cream_white: cream white vintage-inspired sheer-overlay nightgown with attached
+    opaque lining
+sort_order: 3
+images:
+  file_path: png/retro_sheer_nightgowns_cream_white.png
+  image_path: img/retro_sheer_nightgowns_cream_white.webp
+  thumb_path: thumbs/retro_sheer_nightgowns_cream_white.webp
