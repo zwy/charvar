@@ -261,6 +261,17 @@ const AdhocFlow = (() => {
     return wrap;
   }
   /* 换装-主体身份锚的选主体同走 subject 槽位卡（image1）；人脸身份走 face 槽位卡 */
+  /* 服饰槽：无图纯文本条目 = 文本锚 —— 提示词里没有这个图槽位，槽位标签别标 imageN */
+  function costumeCardOpts(st, key, imageArg, optional) {
+    const textOnly = !!st[key] && !st[key].url;
+    return {
+      image: textOnly ? "文本" : imageArg,
+      label: "服饰",
+      badge: textOnly ? "文本服饰" : "服饰",
+      pick: "costume",
+      optional: optional,
+    };
+  }
   function renderSlots() {
     const box = document.getElementById("adhoc-flow-slots");
     if (!box) return;
@@ -271,7 +282,7 @@ const AdhocFlow = (() => {
       box.appendChild(slotCard(st, "subject", { image: "image1", label: "主体档案", badge: "主体", pick: "subject",
         valueMap: function () { return subjectSlotValue(st.subject); } }));
       box.appendChild(slotCard(st, "pose", { image: "image2", label: "动作", badge: "动作", pick: "pose" }));
-      box.appendChild(slotCard(st, "costume", { image: "image3", label: "服饰", badge: "服饰", pick: "costume", optional: true }));
+      box.appendChild(slotCard(st, "costume", costumeCardOpts(st, "costume", "image3", true)));
     } else if (flow.current === "pair") {
       box.appendChild(slotCard(st, "subject1", { image: "image1", label: "主体甲（描述里的「甲」）", badge: "主体甲", pick: "subject1",
         valueMap: function () { return subjectSlotValue(st.subject1); } }));
@@ -282,7 +293,7 @@ const AdhocFlow = (() => {
       box.appendChild(slotCard(st, "face", { image: "image1", label: "人脸", badge: "人脸", pick: "face" }));
       box.appendChild(bodyLockField());
       box.appendChild(slotCard(st, "pose", { image: "image2", label: "动作", badge: "动作", pick: "pose" }));
-      box.appendChild(slotCard(st, "costume", { image: "image3", label: "服饰", badge: "服饰", pick: "costume", optional: true }));
+      box.appendChild(slotCard(st, "costume", costumeCardOpts(st, "costume", "image3", true)));
     } else if (flow.current === "costume") {
       box.appendChild(identitySeg());
       if (st.identity === "subject") {
@@ -291,7 +302,7 @@ const AdhocFlow = (() => {
       } else {
         box.appendChild(slotCard(st, "face", { image: "image1", label: "人脸", badge: "人脸", pick: "face" }));
       }
-      box.appendChild(slotCard(st, "costume", { image: "image2", label: "服饰", badge: "服饰", pick: "costume" }));
+      box.appendChild(slotCard(st, "costume", costumeCardOpts(st, "costume", "image2", false)));
     }
     updateAnchors();
   }
@@ -305,6 +316,17 @@ const AdhocFlow = (() => {
       face: "image1 人脸 · image2 动作 · 可选 image3 服饰",
       costume: "image1 主体/人脸 · image2 服饰",
     };
+    /* 服饰槽选到无图条目时它不占图槽位 */
+    if (flow.current === "single" || flow.current === "face") {
+      const st = states[flow.current];
+      if (st.costume && !st.costume.url) {
+        hint[flow.current] = "image1 " + (flow.current === "face" ? "人脸" : "主体") +
+          " · image2 动作 · 服饰=文本锚";
+      }
+    }
+    if (flow.current === "costume" && states.costume.costume && !states.costume.costume.url) {
+      hint.costume = "image1 主体/人脸 · 服饰=文本锚";
+    }
     el.textContent = hint[flow.current] || "";
   }
   /* ---------- compose 请求构造 ---------- */
@@ -427,7 +449,8 @@ const AdhocFlow = (() => {
     else if (m.workflow === "pose") parts.push("全身构图");
     if (m.face_section === "face") parts.push("身份锚 = 锚脸正面胸像");
     else if (m.face_section === "styling") parts.push("身份锚 = 整体造型（含发型服装）");
-    if (m.costume_mode === "add") parts.push("服饰 = 叠加语义（原衣物保留）");
+    if (m.costume_text_only) parts.push("服饰 = 文本锚（无参考图）");
+    else if (m.costume_mode === "add") parts.push("服饰 = 叠加语义（原衣物保留）");
     else if (m.costume_mode === "replace") parts.push("服饰 = 整套替换");
     return parts.join(" · ");
   }

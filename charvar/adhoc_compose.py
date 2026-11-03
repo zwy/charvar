@@ -179,6 +179,19 @@ def compose(conn, req: ComposeRequest) -> dict:
         raise ComposeError(f"主体档案没有 front 槽位图：{subject2_id}")
 
     # ---- 提示词拼装（同一份 pose_prompt 文案） ----
+    # 纯文本条目（无参考图）走文本锚：服饰文本整段进提示词、无服装图槽位。
+    # 只支持 replace —— add 类没有实测过的文本锚措辞，显式 400 不发明分叉。
+    costume_text_only = bool(costume_id) and not c_has_image
+    if costume_text_only:
+        try:
+            pose_prompt.costume_text_mode_ok(c_has_image, costume_policy)
+        except ValueError as exc:
+            raise ComposeError(str(exc)) from exc
+        if not str(costume_note or "").strip():
+            raise ComposeError(
+                f"这条服饰条目没有文本层（prompt_text / keywords 都为空）"
+                f"—— 文本锚定没有可锚的内容：{costume_ref}"
+            )
     if workflow == "costume":
         prompt = pose_prompt.build_costume_prompt(
             body_lock=body_lock,
@@ -186,6 +199,7 @@ def compose(conn, req: ComposeRequest) -> dict:
             costume_display=costume_display,
             costume_policy=costume_policy,
             face_section=face_section,
+            costume_has_image=not costume_text_only,
         )
     else:
         prompt = pose_prompt.build_prompt(
@@ -193,6 +207,7 @@ def compose(conn, req: ComposeRequest) -> dict:
             action["action_text"],
             pair_two_subjects=bool(subject2_id),
             costume=costume_id is not None,
+            costume_has_image=not costume_text_only,
             body_lock=body_lock,
             costume_keywords=costume_note or None,
             costume_display=costume_display,
@@ -213,12 +228,7 @@ def compose(conn, req: ComposeRequest) -> dict:
         refs.append(
             ReferenceSpec(pose_id=action["pose_id"], angle=action["angle"], source=pose_source, role="pose")
         )
-    if costume_id:
-        if not c_has_image:
-            raise ComposeError(
-                f"这条服饰是纯文本条目（无参考图）—— 图锚定换装用不了：{costume_ref}"
-                "（纯文本换装走预设通路 charvar gen --outfit）"
-            )
+    if costume_id and not costume_text_only:
         refs.append(ReferenceSpec(costume_id=_clean(costume_id), source=costume_source, role="costume"))
 
     meta = {
@@ -230,6 +240,7 @@ def compose(conn, req: ComposeRequest) -> dict:
         "face_section": face_section or "",
         "costume_display": costume_display if costume_id else "",
         "costume_mode": pose_prompt.costume_mode(costume_policy) if costume_id else "",
+        "costume_text_only": costume_text_only,
     }
     return {
         "prompt": prompt,

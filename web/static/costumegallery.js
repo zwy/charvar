@@ -625,9 +625,9 @@ const CostumeGallery = (() => {
       }
       const addBtn = detailEl.querySelector(".costume-add-btn");
       if (addBtn) {
+        /* 无图纯文本条目也能加 —— 走文本锚定换装（服饰文本进提示词，refs 不占槽位） */
         if (!it.image_url) {
-          addBtn.disabled = true;
-          addBtn.title = "纯文本条目（无参考图）—— 图锚定换装用不了";
+          addBtn.title = "纯文本条目 —— 走文本锚定换装（提示词里没有这张参考图）";
         }
         addBtn.addEventListener("click", function () {
           onPick({

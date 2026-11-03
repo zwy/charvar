@@ -1532,7 +1532,7 @@ def pose_prompt_cmd(
     source: str = typer.Option("", "--source", help="库 id（缺省 pose-db-01；depth 库的参考句按深度图措辞）"),
     subject: Optional[str] = typer.Option(None, "--subject", help="主体档案 id（--run 必填；上半身动作用 headshot 槽位，缺则回退 front）"),
     subject2: Optional[str] = typer.Option(None, "--subject2", help="双人动作的第二主体 id（2人絡み 才有效）"),
-    costume: Optional[str] = typer.Option(None, "--costume", help="服饰库条目 id（如 SPR-0001；加 <image3> 服饰参考，双人动作暂不支持）"),
+    costume: Optional[str] = typer.Option(None, "--costume", help="服饰库条目 id（如 SPR-0001；加 <image3> 服饰参考，双人动作暂不支持；无图条目走文本锚）"),
     face: Optional[str] = typer.Option(None, "--face", help="人脸库条目 id（支持唯一前缀与 source/id 前缀；face/styling 条目即身份锚，与 --subject/--subject2 互斥，双人动作暂不支持）"),
     body_lock_text: list[str] = typer.Option([], "--body-lock", help="体形锚句（英文短句，可多次；仅 --face 生效——有主体档案时走档案 body_lock）"),
     run: bool = typer.Option(False, "--run", help="拼好的提示词直接出图（Playground 通路）"),
@@ -1599,6 +1599,7 @@ def pose_prompt_cmd(
             costume_note = ""
             costume_display = "ghost"
             costume_policy: dict | None = None
+            c_has_image = True
             if costume:
                 try:
                     c_row = costumes_service.resolve_ref(conn, costume)
@@ -1612,6 +1613,11 @@ def pose_prompt_cmd(
                         _json.loads(c_row["subject_policy"])
                         if str(c_row["subject_policy"] or "").strip()
                         else None
+                    )
+                    # 纯文本条目（无图）走文本锚（与网页 compose 同判）
+                    c_has_image = bool(
+                        str(c_row["file_path"] or "").strip()
+                        or str(c_row["image_path"] or "").strip()
                     )
                 except costumes_service.CostumeError as exc:
                     _die(str(exc))
@@ -1628,20 +1634,35 @@ def pose_prompt_cmd(
     if subject2 and kind != "pair":
         _die("--subject2 只对双人（2人絡み）动作有效")
     costume_file = None
+    c_text_only = False
     if costume:
         if kind == "pair":
             _die("--costume 暂不支持双人（2人絡み）动作")
-        try:
-            costume_file = costumes_service.prepared_reference_file(costume)
-        except costumes_service.CostumeError as exc:
-            _die(str(exc))
+        if not c_has_image:
+            # 纯文本条目走文本锚：无服装参考图（refs 里不占槽位）
+            c_text_only = True
+            try:
+                pose_prompt_module.costume_text_mode_ok(c_has_image, costume_policy)
+                if not str(costume_note or "").strip():
+                    _die(
+                        "这条服饰条目没有文本层（prompt_text / keywords 都为空）"
+                        "—— 文本锚定没有可锚的内容"
+                    )
+            except ValueError as exc:
+                _die(str(exc))
+        else:
+            try:
+                costume_file = costumes_service.prepared_reference_file(costume)
+            except costumes_service.CostumeError as exc:
+                _die(str(exc))
     if face and kind == "pair":
         _die("--face 暂不支持双人（2人絡み）动作：双人身份走 --subject/--subject2")
     prompt = pose_prompt_module.build_prompt(
         row["line"],
         action["action_text"],
         pair_two_subjects=bool(subject2),
-        costume=costume_file is not None,
+        costume=bool(costume),
+        costume_has_image=not c_text_only,
         body_lock=body_lock,
         costume_keywords=costume_note or None,
         costume_display=costume_display,
@@ -1712,6 +1733,7 @@ def costume_prompt_cmd(
 
     <image1> = 主体档案 front 槽位图（角色锚定），<image2> = 服饰参考图（换装
     锚定，role=costume 语义；catalog 英文关键词拼「服装要点」注记进提示词）。
+    纯文本条目（无参考图）走文本锚定 —— 服饰文本整段进提示词，refs 里不占槽位。
     --face <face_id> 时 <image1> = 人脸库条目（face/styling 条目即身份锚，与
     --subject 互斥；体形锚用 --body-lock 手给）。要「主体 + 动作 + 服饰」用
     `charvar pose prompt --costume`。
@@ -1765,10 +1787,24 @@ def costume_prompt_cmd(
             profile = storage.get_subject(conn, subject)
             slot_label, slot = poses_service.subject_slot_for_prompt(conn, subject, "")
             body_lock = list(profile.body_lock) if profile else None
+    c_text_only = False
+    if not c_has_image:
+        # 纯文本条目走文本锚：无服装参考图（refs 里不占槽位）
+        c_text_only = True
+        try:
+            pose_prompt_module.costume_text_mode_ok(c_has_image, c_policy)
+            if not str(keywords or "").strip():
+                _die(
+                    "这条服饰条目没有文本层（prompt_text / keywords 都为空）"
+                    "—— 文本锚定没有可锚的内容"
+                )
+        except ValueError as exc:
+            _die(str(exc))
     prompt = pose_prompt_module.build_costume_prompt(
         body_lock=body_lock, costume_keywords=keywords, costume_display=display,
         costume_policy=c_policy,
         face_section=face_section,
+        costume_has_image=not c_text_only,
     )
     if not json_out:
         typer.echo(prompt)
@@ -1776,15 +1812,11 @@ def costume_prompt_cmd(
         return
     if not face and not subject:
         _die("--run 需要 --subject（主体档案 id）或 --face（人脸库身份锚）")
-    if not c_has_image:
-        _die(
-            "这条服饰是纯文本条目（无参考图）—— 图锚定换装用不了；"
-            "纯文本换装走预设通路（charvar gen --outfit）"
-        )
-    try:
-        costume_file = costumes_service.prepared_reference_file(item_id)
-    except costumes_service.CostumeError as exc:
-        _die(str(exc))
+    if c_has_image:
+        try:
+            costume_file = costumes_service.prepared_reference_file(item_id)
+        except costumes_service.CostumeError as exc:
+            _die(str(exc))
     refs = []
     if face:
         refs.append(faces_service.prepared_reference_file(f_id, source=f_source))

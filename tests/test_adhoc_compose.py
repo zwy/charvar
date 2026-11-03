@@ -5,7 +5,8 @@
   逐字一致（网页不另造拼装 —— B3 红线）；
 - references 顺序 = 身份 → （乙）→ 动作 → 服饰，与 CLI refs.append 次序一致；
 - 校验矩阵 400：face×subject、face×双人、costume×双人、subject2×非双人、
-  换装缺服饰、缺身份锚、空动作描述、纯文本服饰条目、未知工作流；
+  换装缺服饰、缺身份锚、空动作描述、未知工作流；纯文本服饰条目走文本锚（400 只剩
+  add 策略 / 空文本两类）；
 - costume 参考图在 /adhoc/generate 里解析成真实文件（mock ComfyUI 全链路）。
 """
 from __future__ import annotations
@@ -61,10 +62,21 @@ def _seed_all(data_dir: pathlib.Path, db_path: pathlib.Path | None = None) -> No
             poses_service.set_pose_action(conn, pose_id, "", desc, source_id=poses_service.SOURCE_ID)
         faces_service.import_catalog(conn)
         costumes_service.import_catalog(conn)
-        # 纯文本服饰条目（无参考图）：图锚定用不了（400 案例）
+        # 纯文本服饰条目（无参考图）：图锚定用不了，走文本锚定分支（200 案例）
         conn.execute(
             "INSERT INTO costume_items (source_id, item_id, keywords, created_at, updated_at)"
             " VALUES ('studio', 'text_only_entry', 'plain text keywords', '2026', '2026')"
+        )
+        # 无图 × add 策略：文本锚只支持 replace（ComposeError 案例）
+        conn.execute(
+            "INSERT INTO costume_items (source_id, item_id, keywords, subject_policy, created_at, updated_at)"
+            " VALUES ('studio', 'text_add_entry', 'plain text keywords',"
+            " '{\"clothing\": \"add\"}', '2026', '2026')"
+        )
+        # 无图且无文本：文本锚没有可锚的内容（ComposeError 案例）
+        conn.execute(
+            "INSERT INTO costume_items (source_id, item_id, created_at, updated_at)"
+            " VALUES ('studio', 'text_empty_entry', '2026', '2026')"
         )
         conn.commit()
         profile = SubjectProfile(
@@ -217,10 +229,79 @@ def test_validation_matrix(client):
                     pose_id="full_sexy_P001").status_code == 400  # 未知工作流
 
 
-def test_text_only_costume_rejected(client):
+def test_text_only_costume_text_anchor_compose(client):
+    """纯文本服饰条目：文本锚定分支 —— 服饰文本进 prompt、无服装图槽位、meta 声明。"""
+    data = _compose(client, workflow="costume", subject_id="demo_witch",
+                    costume_id="text_only_entry", costume_source="studio").json()
+    expect = pose_prompt.build_costume_prompt(
+        body_lock=["keep soft full figure"],
+        costume_keywords="plain text keywords",
+        costume_has_image=False,
+    )
+    assert data["prompt"] == expect
+    assert "plain text keywords" in data["prompt"]
+    assert "<image2>" not in data["prompt"]
+    assert [r["role"] for r in data["references"]] == ["front"]  # 无图条目不占图槽位
+    assert data["meta"]["costume_text_only"] is True
+    assert data["meta"]["costume_display"] == "ghost"  # 随行（文本锚不再用于图形态句）
+
+
+def test_text_only_costume_pose_workflow(client):
+    """动作工作流 + 无图服饰：动作与身份槽位图保留，服饰走文本锚。"""
+    data = _compose(client, subject_id="demo_witch", pose_id="full_sexy_P001",
+                    costume_id="text_only_entry", costume_source="studio").json()
+    expect = pose_prompt.build_prompt(
+        "全身1人・セクシー系", POSE_PLAN["full_sexy_P001"][1], costume=True,
+        costume_has_image=False, body_lock=["keep soft full figure"],
+        costume_keywords="plain text keywords",
+    )
+    assert data["prompt"] == expect
+    assert "<image3>" not in data["prompt"] and "image2>图为服装参考" not in data["prompt"]
+    assert [r["role"] for r in data["references"]] == ["front", "pose"]
+
+
+def test_text_only_costume_face_identity(client):
+    """无图服饰 × 人脸身份锚：face 版文本锚分段。"""
+    data = _compose(client, workflow="costume", face_id="faceaaa11111",
+                    body_lock=["slim figure"],
+                    costume_id="text_only_entry", costume_source="studio").json()
+    expect = pose_prompt.build_costume_prompt(
+        body_lock=["slim figure"], costume_keywords="plain text keywords",
+        face_section="face", costume_has_image=False,
+    )
+    assert data["prompt"] == expect
+    assert [r["role"] for r in data["references"]] == ["face"]
+
+
+def test_text_only_costume_add_policy_rejected(client):
     res = _compose(client, workflow="costume", subject_id="demo_witch",
-                   costume_id="text_only_entry", costume_source="studio")
-    assert res.status_code == 400 and "纯文本" in res.json()["detail"]
+                   costume_id="text_add_entry", costume_source="studio")
+    assert res.status_code == 400 and "replace" in res.json()["detail"]
+
+
+def test_text_only_costume_empty_text_rejected(client):
+    res = _compose(client, workflow="costume", subject_id="demo_witch",
+                   costume_id="text_empty_entry", costume_source="studio")
+    assert res.status_code == 400 and "文本层" in res.json()["detail"]
+
+
+def test_pose_prompt_text_anchor_units():
+    """pose_prompt 文本锚分支：replace 正常段序；add 显式 ValueError。"""
+    prompt = pose_prompt.build_costume_prompt(
+        costume_keywords="grey sports set, barefoot", costume_has_image=False,
+    )
+    for frag in ("<image1>", "服饰描述", "grey sports set, barefoot"):
+        assert frag in prompt
+    assert "<image2>" not in prompt
+    with pytest.raises(ValueError, match="replace"):
+        pose_prompt.build_costume_prompt(
+            costume_keywords="…", costume_policy={"clothing": "add"}, costume_has_image=False,
+        )
+    with pytest.raises(ValueError, match="可锚的内容"):
+        pose_prompt.build_costume_prompt(costume_keywords="", costume_has_image=False)
+    with pytest.raises(ValueError, match="暂只支持"):
+        pose_prompt.build_prompt("全身1人・標準系", "text", costume=True, costume_has_image=False,
+                                 costume_keywords="…", costume_policy={"clothing": "add"})
 
 
 

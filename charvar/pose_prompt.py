@@ -128,6 +128,7 @@ def build_prompt(
     *,
     pair_two_subjects: bool = False,
     costume: bool = False,
+    costume_has_image: bool = True,
     body_lock: list[str] | None = None,
     costume_keywords: str | None = None,
     costume_display: str = "ghost",
@@ -144,6 +145,8 @@ def build_prompt(
     换服装版（锚身份不锚衣着），动作描述之后插「服装融合」段，禁令句追加换装禁令。 costume_display 按条目的
     展示形态选「这张图是什么」说明句（ghost = 隐形模特，flat_lay = 平铺展示）。
     costume_keywords（可选）：catalog 英文关键词拼「服装要点」注记行，插在服装锚后。
+    costume_has_image（缺省 True）：False = 纯文本条目（无参考图）—— 服饰文本整段
+    进提示词、提示词里无服装图槽位（只支持 replace，见「服饰文本锚」段说明）。
     pose_display（可选）：姿势参考库的展示形态（line=人偶线稿 缺省 / depth=深度图，
     白=近）—— mannequin 段换深度图版锚前后遮挡；未知形态显式报错。
     face_section（可选，人脸库身份锚）：face/styling 段条目当 <image1>（与主体档案
@@ -222,6 +225,27 @@ def build_prompt(
     if costume:
         mode = costume_mode(costume_policy)
         m = _COSTUME_MODE_SEGMENTS[mode]
+        if not costume_has_image:
+            # 纯文本条目：服饰文本整段进提示词，无服装图槽位（见服饰文本锚说明）。
+            costume_text_mode_ok(costume_has_image, costume_policy)
+            if face_section == "face":
+                identity = _COSTUME_TEXT_IDENTITY_FACE
+                figure = _figure_anchor_text_face(body_lock)
+            else:
+                identity = _COSTUME_TEXT_IDENTITY
+                figure = _figure_anchor_text(body_lock)
+            parts = [
+                identity,
+                mannequin,
+                _costume_text_segment(costume_keywords),
+                figure,
+                _LEAD[kind] + text,
+                _COSTUME_TEXT_FUSION,
+                seg["framing"],
+                _background_segment(seg, background_text),
+                _guard_with_costume(seg["guard"]),
+            ]
+            return "\n\n".join(part for part in parts if part)
         parts = [
             m["identity"].format(slot=3),
             mannequin,
@@ -395,6 +419,88 @@ def costume_mode(costume_policy: dict | None) -> str:
     return clothing
 
 
+# ---------- 服饰文本锚（无图纯文本条目，如 character_outfit_debug 系列） ----------
+#
+# 「仅内裤 / 无衣物 / 保留原衣物」这类策略测试条款没有实体可画 —— 无图纯文本是
+# 合法状态，图锚定用不了（提示词里没有服装参考图槽位）。文本锚定分支：服饰文本
+# （prompt_text 优先、回退 keywords，语言不限不译写 —— 与 gen 通路「text 层优先」
+# 同一约定）整段逐字进提示词，提示词里**不再出现服装图槽位号**；身材锚保留
+# <image1>（/face 版自洽句）+ body_lock。措辞只落 replace（整套替换）—— add 类
+# 无图条目没有实测过的措辞，显式报错不发明。全部正向语句（无「图中」字样）。
+
+
+def _costume_text_segment(costume_text: str | None) -> str:
+    """服饰文本段：引出句 + 条目文本整段逐字（不译写；缺文本显式报错不空锚）。"""
+    text = str(costume_text or "").strip()
+    if not text:
+        raise ValueError(
+            "服饰条目既没有文本层也没有关键词 —— 文本锚定没有可锚的内容"
+        )
+    return (
+        "服饰描述（这条服饰没有参考图，按此描述逐项执行，"
+        "每件衣物都要体现在角色身上）：\n" + text
+    )
+
+
+_COSTUME_TEXT_IDENTITY = (
+    "<image1>为角色设定参考，保留该角色的面部特征、发型、发色、肤色和整体"
+    "美术风格，确保生成的是同一个角色，不要擅自更换造型；其原有服装不保留，"
+    "整套替换为服饰描述中的服装。"
+)
+
+_COSTUME_TEXT_IDENTITY_FACE = (
+    "<image1>为角色脸部参考，保留该角色的面部特征、发型、发色和整体美术风格，"
+    "确保生成的是同一个角色，不要擅自更换造型；图中没有服装与身材信息，"
+    "服装完全按服饰描述穿着。"
+)
+
+_COSTUME_TEXT_FUSION = (
+    "角色身上穿的就是服饰描述中的服装，替换其原有服装（不是叠穿在原服装外面），"
+    "描述列出的每件衣物完整呈现；服装自然适配角色体型与动作，"
+    "在抬臂、弯肘、叉腰与屈膝处产生合理的褶皱、拉伸和遮挡，叉腰或贴身的手位于衣物外侧；"
+    "保留描述中的服装关键识别细节，不要为了展示服装而改变姿势。"
+)
+
+_COSTUME_TEXT_FUSION_NOPOSE = (
+    "角色身上穿的就是服饰描述中的服装，替换其原有服装（不是叠穿在原服装外面），"
+    "描述列出的每件衣物完整呈现；服装自然适配角色体型，"
+    "自然站立时产生合理的褶皱与遮挡；保留描述中的服装关键识别细节。"
+)
+
+# 文本锚版身材锚：服装没有图（没有隐含身体模板），去掉服装图那半句。
+_FIGURE_ANCHOR_TEXT_SUBJECT = "角色身材、身高与四肢比例一律以<image1>为准。"
+
+_FIGURE_ANCHOR_TEXT_FACE = (
+    "角色身材、身高与四肢比例保持自然协调、整体匀称，与该角色的美术风格一致。"
+)
+
+
+def _figure_anchor_text(body_lock: list[str] | None) -> str:
+    """文本锚版身材锚段：身材归 <image1>，无服装图身体模板可锚。"""
+    parts = [_FIGURE_ANCHOR_TEXT_SUBJECT]
+    parts.extend(str(x).strip() for x in (body_lock or []) if str(x).strip())
+    return "\n".join(parts)
+
+
+def _figure_anchor_text_face(body_lock: list[str] | None) -> str:
+    """face 版文本锚身材段：没有 <image1> 身材可锚 → 正向自洽句 + body_lock 原文。"""
+    parts = [_FIGURE_ANCHOR_TEXT_FACE]
+    parts.extend(str(x).strip() for x in (body_lock or []) if str(x).strip())
+    return "\n".join(parts)
+
+
+def costume_text_mode_ok(costume_has_image: bool, costume_policy: dict | None) -> None:
+    """纯文本条目只支持 replace（add 的文本锚措辞未实测，不发明分叉）。"""
+    if costume_has_image:
+        return
+    mode = costume_mode(costume_policy)
+    if mode != "replace":
+        raise ValueError(
+            f"纯文本服饰条目（无参考图）暂只支持整套替换（replace）策略，"
+            f"现有条目策略是 {mode} —— add 类要画得出实体，请先补参考图"
+        )
+
+
 # ---------- 人脸身份锚（face-db-01 条目当 <image1>；与 --subject 互斥，见 CLI） ----------
 #
 # face 段条目（正面向き，胸像）只有脸/发型/发色 —— 没有服装与身材信息，所以：
@@ -466,6 +572,7 @@ def build_costume_prompt(
     costume_policy: dict | None = None,
     face_section: str | None = None,
     background_text: str | None = None,
+    costume_has_image: bool = True,
 ) -> str:
     """单主体 + 服装（无动作参考）→ 全身换装图提示词。
 
@@ -475,10 +582,38 @@ def build_costume_prompt(
     face_section（可选，人脸库身份锚）：face/styling 条目当 <image1>（与主体档案
     互斥），同 build_prompt 的 face 分段家族 —— face 段换 face 版身份句/身材锚/
     穿上引导句/融合句。
+    costume_has_image（缺省 True）：False = 纯文本条目（无参考图）—— 服饰文本整段
+    进提示词、提示词里无服装图槽位（只支持 replace，见「服饰文本锚」段说明）。
     """
     mode = costume_mode(costume_policy)
     m = _COSTUME_MODE_SEGMENTS[mode]
     seg = _SEGMENTS["full"]
+    if not costume_has_image:
+        # 纯文本条目：服饰文本整段进提示词，无服装图槽位（见服饰文本锚说明）。
+        costume_text_mode_ok(costume_has_image, costume_policy)
+        if face_section == "face":
+            return "\n\n".join(
+                [
+                    _COSTUME_TEXT_IDENTITY_FACE,
+                    _costume_text_segment(costume_keywords),
+                    _figure_anchor_text_face(body_lock),
+                    _COSTUME_TEXT_FUSION_NOPOSE,
+                    seg["framing"],
+                    _background_segment(seg, background_text),
+                    _guard_with_costume(seg["guard"]),
+                ]
+            )
+        return "\n\n".join(
+            [
+                _COSTUME_TEXT_IDENTITY,
+                _costume_text_segment(costume_keywords),
+                _figure_anchor_text(body_lock),
+                _COSTUME_TEXT_FUSION_NOPOSE,
+                seg["framing"],
+                _background_segment(seg, background_text),
+                _guard_with_costume(seg["guard"]),
+            ]
+        )
     if face_section == "face":
         identity = _FACE_IDENTITY_REPLACE if mode == "replace" else _FACE_IDENTITY_ADD
         figure = _figure_anchor_face(2, body_lock)
