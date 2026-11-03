@@ -169,16 +169,19 @@ tbody tr:hover { background: var(--accent-soft); }
 td .prompt, td .caption { font-family: var(--mono); font-size: 12px; }
 td .prompt { display: block; }
 td .caption { color: var(--muted); }
-/* 历史记录表：run_id 太长会把「操作」顶出可视区 → run_id 压缩省略（悬停 title 看全名），
-   操作列钉在滚动区右缘，不管横滚到哪都看得见 */
-#runs-table td.prompt {
+/* 历史记录表 / 配方运行表：run_id 太长会把「操作」顶出可视区 → run_id 压缩省略（悬停
+   title 看全名），操作列钉在滚动区右缘，不管横滚到哪都看得见 */
+#runs-table td.prompt,
+#recipe-runs-table td.prompt {
   max-width: 18em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 #runs-table th:last-child,
-#runs-table td:last-child {
+#runs-table td:last-child,
+#recipe-runs-table th:last-child,
+#recipe-runs-table td:last-child {
   position: sticky;
   right: 0;
   background: #fff;
@@ -186,7 +189,17 @@ td .caption { color: var(--muted); }
 }
 /* 历史表很长，但表头不做成 sticky：th 的 sticky 要吃 .table-wrap 的滚动口，
    而它是横向滚动容器（overflow-x 把 visible 折算成 auto），窗口滚动对它无效 */
-#runs-table td:last-child .row-actions { flex-wrap: nowrap; }
+#runs-table td:last-child .row-actions,
+#recipe-runs-table td:last-child .row-actions { flex-wrap: nowrap; }
+/* 配方列表的步骤链同样过长：单行省略（悬停 title 看全链） */
+#recipes-table td.recipe-chain {
+  max-width: 26em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 运行时间戳不折行（与历史页一致的单行样式，窄窗口交给横向滚动） */
+#recipe-runs-table td.created-at { white-space: nowrap; }
 .copy-cell { cursor: pointer; }
 .copy-cell.cell-copied { background: var(--accent-soft); }
 .comfy-panel {
@@ -460,7 +473,7 @@ td .caption { color: var(--muted); }
 .slot-row input { width: 90px !important; }
 .slot-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .slot-status { font-size: 12px; min-height: 16px; }
-.badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; border: 1px solid var(--line); color: var(--muted); background: #fff; }
+.badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; border: 1px solid var(--line); color: var(--muted); background: #fff; white-space: nowrap; }
 .badge-ready { background: #e7f6ec; border-color: #bfe8cd; color: #15803d; }
 .badge-queued { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent); }
 .badge-error { background: #fdecec; border-color: #f3c7c7; color: var(--danger); }

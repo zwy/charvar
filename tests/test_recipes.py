@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -395,6 +396,49 @@ def test_recipe_runs_listing(env):
     assert any(r["recipe_run_id"] == state.recipe_run_id for r in runs)
 
 
+def test_recipe_runs_newest_first_and_time_format(env):
+    """列表按时间倒序（与历史页同语义）；时间格式与 runs 表一致（空格分隔）。
+
+    顺带锁老 manifest 的兼容：ISO T 分隔的旧条目归一化成空格串参与排序与展示。
+    """
+    state = recipes_service.start_run(env, "demo_blend")
+    assert "T" not in state.created_at
+    assert re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$", state.created_at)
+    recipe = recipes_service.load_recipe("demo_blend")
+
+    fake = [
+        ("recipe_future_run", "2099-01-01 00:00:00"),
+        ("recipe_old_iso_run", "2020-01-01T00:00:00"),
+    ]
+    for run_id, created in fake:
+        recipes_service.write_state(recipes_service.RecipeRunState(
+            recipe=recipe.name, title=recipe.title, recipe_run_id=run_id,
+            created_at=created, seed=0,
+            steps=[recipes_service.StepState(index=0, kind="overlay", label="s", manual=False)],
+        ))
+    listed = recipes_service.list_recipe_runs()
+    ids = [r["recipe_run_id"] for r in listed]
+    assert ids[:3] == ["recipe_future_run", state.recipe_run_id, "recipe_old_iso_run"]
+    old = next(r for r in listed if r["recipe_run_id"] == "recipe_old_iso_run")
+    assert old["created_at"] == "2020-01-01 00:00:00"  # T → 空格归一化
+
+
+def test_delete_recipe_run(env):
+    """删除：run 目录整个清掉；再读/再删 404；非法 id 形态启动即拒。"""
+    state = recipes_service.start_run(env, "demo_blend")
+    rid = state.recipe_run_id
+    assert recipes_service.manifest_path(rid).exists()
+    recipes_service.delete_run(rid)
+    assert not recipes_service.manifest_path(rid).exists()
+    assert not any(r["recipe_run_id"] == rid for r in recipes_service.list_recipe_runs())
+    with pytest.raises(PresetError):
+        recipes_service.read_state(rid)          # 404
+    with pytest.raises(PresetError):
+        recipes_service.delete_run(rid)          # 再删 = 不存在
+    with pytest.raises(PresetError):
+        recipes_service.delete_run("../escape")  # 非法 id 形态
+
+
 def test_input_defaults_to_latest_images_step(env):
     """input 缺省 = 最近的 images 步；引用不存在 label 运行期报错。"""
     recipe = recipes_service.load_recipe("demo_blend")
@@ -471,6 +515,11 @@ def test_api_recipe_endpoints(tmp_path, monkeypatch):
     final = client.post(f"/recipe-runs/{rid}/continue").json()
     video_name = final["steps"][2]["outputs"]["video"]["name"]
     assert (run_assets_dir("demo_bound_run") / "videos" / video_name).exists()
+
+    # 删除：记录清掉（产物目录是另一码事，不在此端点管）；不存在 404
+    assert client.delete(f"/recipe-runs/{rid}").json()["ok"] is True
+    assert client.get(f"/recipe-runs/{rid}").status_code == 404
+    assert client.delete(f"/recipe-runs/{rid}").status_code == 404
 
 
 

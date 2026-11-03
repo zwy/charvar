@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import time
 from datetime import datetime
 from pathlib import Path
@@ -482,18 +483,34 @@ def write_state(state: RecipeRunState) -> Path:
     return path
 
 
+def delete_run(run_id: str) -> None:
+    """清理一次配方运行：整个 run 目录（manifest.json 及运行期可能落的其他文件）删掉。
+
+    与生成产物解耦——adhoc 出图/视频步的成品落各自目录（Playground/视频页可见），
+    不随本删除消失；配方运行只是编排状态。
+    """
+    run_dir = recipe_run_dir(run_id)
+    if not manifest_path(run_id).exists():
+        raise PresetError(f"配方运行不存在：{run_id}", status=404)
+    shutil.rmtree(run_dir)
+
+
 def list_recipe_runs() -> list[dict[str, Any]]:
     root = recipe_runs_root()
     if not root.exists():
         return []
     out: list[dict[str, Any]] = []
-    for path in sorted(root.glob("*/manifest.json"), reverse=True):
+    for path in root.glob("*/manifest.json"):
         try:
             state = RecipeRunState.model_validate(json.loads(path.read_text(encoding="utf-8")))
         except Exception:
             continue
         out.append({"recipe_run_id": state.recipe_run_id, "recipe": state.recipe, "title": state.title,
-                    "seed": state.seed, "status": state.status, "created_at": state.created_at})
+                    "seed": state.seed, "status": state.status,
+                    "created_at": str(state.created_at or "").replace("T", " ")})
+    # 时间倒序（历史页同语义）：旧版 manifest 的 created_at 是 ISO 的 T 分隔，
+    # 已在上面归一化成空格串 —— 新旧两类格式排序/展示都是同一式样；同秒 tie 用 run_id。
+    out.sort(key=lambda r: (str(r["created_at"] or ""), r["recipe_run_id"]), reverse=True)
     return out
 
 
@@ -512,7 +529,8 @@ def start_run(conn, recipe_name: str, *, seed: int | None = None) -> RecipeRunSt
         recipe=recipe.name,
         title=recipe.title,
         recipe_run_id=run_id,
-        created_at=datetime.now().isoformat(timespec="seconds"),
+        # 时间格式与 runs 表一致（空格分隔），页面两边展示同一式样
+        created_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         seed=seed,
         steps=[
             StepState(index=i, kind=s.kind, label=s.label, manual=manual_default(s))

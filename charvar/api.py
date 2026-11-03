@@ -2826,6 +2826,15 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             except Exception as exc:  # noqa: BLE001
                 raise HTTPException(500, f"配方继续失败：{exc}") from exc
 
+    @app.delete("/recipe-runs/{run_id}")
+    def api_recipe_run_delete(run_id: str) -> dict[str, Any]:
+        # 与 /runs DELETE 同语义：清编排状态记录，不碰已生成的图/视频产物
+        try:
+            recipes_service.delete_run(run_id)
+        except recipes_service.PresetError as exc:
+            raise HTTPException(getattr(exc, "status", 404), str(exc)) from exc
+        return {"ok": True, "deleted": run_id}
+
     @app.get("/api/version")
     def api_version() -> dict[str, str]:
         return {"app": "charvar", "version": __version__}

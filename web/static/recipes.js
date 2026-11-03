@@ -23,9 +23,21 @@ function recipeStatusText(status) {
   return map[status] || status;
 }
 
+/* 状态徽章：全站 badge 同式（done=绿 / waiting=蓝 / failed=红）；title 带完整语义 */
+function recipeStatusBadge(status) {
+  const map = {
+    waiting: ["badge-queued", "待继续"],
+    running: ["badge", "执行中"],
+    done: ["badge-ready", "完成"],
+    failed: ["badge-error", "失败"],
+  };
+  const [cls, label] = map[status] || ["", status];
+  return `<span class="badge ${cls}" title="${escapeHtml(recipeStatusText(status))}">${escapeHtml(label)}</span>`;
+}
+
 function recipeStepMark(status) {
-  const marks = { done: "✓", failed: "✗", pending: "·" };
-  return `${marks[status] || "?"} ${status}`;
+  const text = { done: "✓ 已完成", failed: "✗ 失败（继续重试）", pending: "· 未执行" };
+  return text[status] || status;
 }
 
 /* ---------- 配方列表 ---------- */
@@ -43,12 +55,12 @@ async function loadRecipes() {
       continue;
     }
     const chain = (r.steps || []).map((s) =>
-      `${s.label ? escapeHtml(s.label) : s.index}（${s.kind}）` + (s.manual ? "［manual］" : "")
+      `${s.label ? s.label : s.index}（${s.kind}）` + (s.manual ? "［manual］" : "")
     ).join(" → ");
     tr.innerHTML = `<td class="prompt" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}</td>` +
       `<td>${escapeHtml(r.title || "-")}</td>` +
       `<td>${recipeCategoryText(r.category)}</td>` +
-      `<td class="prompt">${chain}</td>` +
+      `<td class="prompt recipe-chain" title="${escapeHtml(chain)}">${escapeHtml(chain)}</td>` +
       `<td><div class="row-actions"><button data-detail="${escapeHtml(r.name)}">详情</button></div></td>`;
     tbody.appendChild(tr);
   }
@@ -90,16 +102,23 @@ async function loadRecipeRuns() {
   const rows = await api("/recipe-runs");
   const tbody = $("#recipe-runs-table tbody");
   tbody.innerHTML = "";
+  if (!rows.length) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td colspan="6"><span class="hint">还没有配方运行——在上方选配方点「开始运行」</span></td>`;
+    tbody.appendChild(tr);
+    return;
+  }
   for (const r of rows) {
     const tr = document.createElement("tr");
     const controllable = r.status === "waiting" || r.status === "failed";
     tr.innerHTML = `<td class="prompt" title="${escapeHtml(r.recipe_run_id)}">${escapeHtml(r.recipe_run_id)}</td>` +
       `<td>${escapeHtml(r.recipe)}</td>` +
-      `<td>${recipeStatusText(r.status)}</td>` +
-      `<td>${r.seed}</td><td>${escapeHtml(r.created_at || "")}</td>` +
+      `<td>${recipeStatusBadge(r.status)}</td>` +
+      `<td>${r.seed}</td><td class="created-at">${escapeHtml(r.created_at || "")}</td>` +
       `<td><div class="row-actions">` +
       `<button data-view="${escapeHtml(r.recipe_run_id)}">查看</button>` +
       (controllable ? `<button data-cont="${escapeHtml(r.recipe_run_id)}">继续</button>` : "") +
+      `<button class="danger" data-del="${escapeHtml(r.recipe_run_id)}">删除</button>` +
       `</div></td>`;
     tbody.appendChild(tr);
   }
@@ -119,6 +138,16 @@ async function loadRecipeRuns() {
         btn.textContent = "继续";
       }
     }));
+  tbody.querySelectorAll("button[data-del]").forEach((btn) =>
+    btn.addEventListener("click", async () => {
+      if (!confirm(`删除配方运行 ${btn.dataset.del}？`)) return;
+      try {
+        await api(`/recipe-runs/${encodeURIComponent(btn.dataset.del)}`, { method: "DELETE" });
+        loadRecipeRuns();
+      } catch (err) {
+        alert("删除失败：" + err.message);
+      }
+    }));
 }
 
 /* ---------- 运行详情弹层（步骤状态 + 继续 + 成片预览） ---------- */
@@ -126,6 +155,11 @@ function showRecipeRun(runId) {
   Media.showPanelModal(`配方运行 ${runId}`, (body, close) => {
     api(`/recipe-runs/${encodeURIComponent(runId)}`).then((state) => {
       body.innerHTML = "";
+      const meta = document.createElement("div");
+      meta.className = "hint";
+      meta.textContent = `${state.recipe} · 种子 ${state.seed} · ${String(state.created_at || "").replace("T", " ")}`;
+      body.appendChild(meta);
+      let videoProbe = null;
       for (const st of state.steps) {
         const row = document.createElement("div");
         row.className = "recipe-step-row";
@@ -136,6 +170,27 @@ function showRecipeRun(runId) {
           (st.note ? `<div class="hint">${escapeHtml(st.note)}</div>` : "");
         body.appendChild(row);
         renderStepOutputs(st, body);
+        if (st.kind === "video_model" && st.status !== "done" && (st.outputs || {}).video_run_id && !videoProbe) {
+          // 视频作业在 OpenRouter 继续跑（wait_s 超时转 waiting 后 manifest 不自更新）：
+          // 开弹层时探一次作业状态，检查点过目就知道是「在跑」还是「已出片」
+          const live = document.createElement("div");
+          live.className = "hint";
+          live.textContent = "视频作业：查询中…";
+          body.appendChild(live);
+          videoProbe = { el: live, runId: String(st.outputs.video_run_id) };
+        }
+      }
+      if (videoProbe) {
+        api(`/videos/${encodeURIComponent(videoProbe.runId)}/status`)
+          .then((v) => {
+            videoProbe.el.textContent = (
+              { ready: "视频作业已出片——点「继续」收片",
+                in_progress: "视频作业执行中（一般几分钟）——可待收片后「继续」",
+                pending: "视频作业刚提交" }[v.status]
+              || (v.status === "failed" ? "视频作业失败——「继续」清掉死作业重新提交" : `视频作业状态：${v.status}`)
+            );
+          })
+          .catch(() => { videoProbe.el.textContent = "视频作业状态查不到（作业可能还在跑）"; });
       }
       const modalActions = document.createElement("div");
       modalActions.className = "actions";
@@ -170,6 +225,8 @@ function showRecipeRun(runId) {
           player.controls = true;
           player.muted = true;
           player.preload = "metadata";
+          // video_model 步 outputs 自带 poster_url（海报帧）；本地合成的 runs 资产没有 poster 通路
+          if (vidModel && vidModel.outputs.poster_url) player.poster = vidModel.outputs.poster_url;
           player.src = url;
           body.appendChild(player);
           const dl = document.createElement("a");
@@ -180,6 +237,22 @@ function showRecipeRun(runId) {
           body.appendChild(dl);
         }
       }
+      const delBtn = document.createElement("button");
+      delBtn.className = "danger";
+      delBtn.textContent = "删除此运行";
+      delBtn.addEventListener("click", async () => {
+        if (!confirm(`删除配方运行 ${runId}？`)) return;
+        delBtn.disabled = true;
+        try {
+          await api(`/recipe-runs/${encodeURIComponent(runId)}`, { method: "DELETE" });
+          close();
+          loadRecipeRuns();
+        } catch (error) {
+          delBtn.disabled = false;
+          alert("删除失败：" + error.message);
+        }
+      });
+      if (state.status !== "running") modalActions.appendChild(delBtn);
       body.appendChild(modalActions);
     });
   });
@@ -280,7 +353,12 @@ function renderStepOutputs(st, body) {
     img.src = out.thumb_url || out.image_url;
     img.alt = "首帧";
     img.loading = "lazy";
-    img.style.cssText = "display:block;max-height:180px;border-radius:6px;margin-top:6px;";
+    // .modal-body img 的 width:100% 会把 9:16 缩略图横向拉宽 —— 覆盖成含框小图
+    img.style.cssText = "display:block;width:auto;max-width:180px;height:auto;max-height:240px;" +
+      "object-fit:contain;background:#f4f6f9;border:1px solid var(--line);border-radius:var(--radius-panel);" +
+      "margin-top:6px;cursor:zoom-in;";
+    img.addEventListener("click", () =>
+      Media.showImageModal(out.image_url, "首帧图（点缩略看原图）"));
     body.appendChild(img);
   }
 }
