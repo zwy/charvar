@@ -238,20 +238,25 @@ $("#btn-settings-save").addEventListener("click", async () => {
   }
 });
 
-/* 拉取 OpenRouter 可用生图模型：填两模式下拉 + datalist（Playground 页的模型输入框）。
-   refresh=1 强制重新拉取并覆盖本地缓存。 */
-$("#btn-or-models-refresh").addEventListener("click", async () => {
-  const statusEl = $("#or-models-status");
+/* 拉取 OpenRouter 模型目录（生图 / 视频 / 语音三个端点共用）：refresh=1 强制重新拉取
+   并覆盖本地缓存，然后 loadSettings() 让下拉按新目录重算（生图还要按新清单重算档位）。
+   三个端点返回形状不同（models / data），计数取法由调用方给。 */
+async function refreshModelCatalog(path, countOf, statusEl) {
   setStatus(statusEl, "拉取中…");
   try {
-    const data = await api("/openrouter/models?refresh=1");
-    const models = data.models || [];
-    setStatus(statusEl, `已刷新 ${models.length} 个模型`);
-    // 清单变了 → 设置页两模式的档位都要按新清单重算
+    const data = await api(path);
+    setStatus(statusEl, `已刷新 ${countOf(data)} 个模型`);
     await loadSettings();
   } catch (err) {
     setStatus(statusEl, `拉取失败：${err.message}`, true);
   }
-});
+}
+
+$("#btn-or-models-refresh").addEventListener("click", () =>
+  refreshModelCatalog("/openrouter/models?refresh=1", (d) => (d.models || []).length, $("#or-models-status")));
+$("#btn-or-video-models-refresh").addEventListener("click", () =>
+  refreshModelCatalog("/videos/models?refresh=1", (d) => (d.data || []).length, $("#or-video-models-status")));
+$("#btn-or-tts-models-refresh").addEventListener("click", () =>
+  refreshModelCatalog("/tts/models?refresh=1", (d) => (d.data || []).length, $("#or-tts-models-status")));
 
 loadSettings();

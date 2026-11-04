@@ -51,10 +51,12 @@
 <div class="card"><h2>OpenRouter 视频</h2><div class="settings-grid">
 <label>默认模型<select id="set-or-video-model"></select></label>
 <p class="hint">生效链：请求显式 &gt; 这里 &gt; <code>OP_VIDEO_MODEL</code>；时长 / 分辨率 / 画幅在「视频」页逐条选。</p>
+<div class="actions"><button id="btn-or-video-models-refresh">拉取模型清单</button><span id="or-video-models-status" class="status"></span></div>
 </div></div>
 <div class="card"><h2>OpenRouter 语音</h2><div class="settings-grid">
 <label>默认模型<select id="set-or-tts-model"></select></label>
 <p class="hint">生效链：请求显式 &gt; 这里 &gt; <code>OP_TTS_MODEL</code>；voice 在「语音」页逐条选（缺省走枚举第一项）。</p>
+<div class="actions"><button id="btn-or-tts-models-refresh">拉取模型清单</button><span id="or-tts-models-status" class="status"></span></div>
 </div></div>
 <div class="card settings-save"><div class="actions">
 <button id="btn-settings-save" class="primary">保存设置</button><span id="settings-status" class="status"></span>

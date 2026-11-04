@@ -120,6 +120,8 @@ label.span2 { grid-column: span 2; }
   align-items: start;
 }
 .settings-grid > .hint { align-self: end; }
+/* 设置页的动作行（拉取模型清单等）占满整行，不挤在半列里 */
+.settings-grid > .actions { grid-column: 1 / -1; }
 .actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 button, .btn {
   font: inherit;
