@@ -4,15 +4,19 @@
      脚本清单见文件尾；加新页 = 本文件 + nav.js NAV_PAGES + charvar/api.py 路由表三处同步 -->
 <header class="topbar"></header>
 <main>
-<section id="page-video"><div class="card"><div class="row-head"><h2>视频</h2><span class="hint">给一段提示词出一段视频 · 按秒计费，提交前看一眼费用预估</span></div>
+<section id="page-video"><div class="card"><div class="row-head"><h2>视频</h2><span class="hint">给一段提示词出一段视频 · OpenRouter 按秒计费 / 即梦按积分计费</span></div>
 <div class="form-section">
 <div class="form-section-title">模式与参数</div>
+<div class="adhoc-switch">
+<div class="segmented" id="video-backend"><button type="button" class="seg active" data-backend="openrouter">OpenRouter</button><button type="button" class="seg" data-backend="dreamina">即梦</button></div>
+</div>
 <div class="adhoc-switch">
 <div class="segmented" id="video-mode"><button type="button" class="seg active" data-mode="t2v">文生视频</button><button type="button" class="seg" data-mode="i2v">图生视频（首帧）</button></div>
 <span id="video-model-field" class="hint"></span>
 </div>
 <div class="form-grid">
-<label>模型<select id="video-model"></select></label>
+<label id="video-openrouter-model-field">模型<select id="video-model"></select></label>
+<label id="video-dreamina-model-field" hidden>模型版本<select id="video-dreamina-model"></select></label>
 <label>画幅比例<select id="video-aspect"></select></label>
 <label>分辨率档<select id="video-resolution"></select></label>
 <label>时长<select id="video-duration"></select></label>
@@ -50,7 +54,7 @@
 </div>
 <div class="form-section" id="video-vrefs-block">
 <div class="form-section-title">参考视频</div>
-<span class="hint">≤2 条 · mp4/mov/webm ≤48MB · 仅 Seedance gen2+ 接 video_url，其它 provider 忽略</span>
+<span class="hint">≤2 条 · mp4/mov/webm ≤48MB · OpenRouter 仅 Seedance gen2+ 接 video_url；即梦走全能参考</span>
 <div id="video-vref-list" class="ref-grid"></div>
 <div class="actions">
 <label class="btn file-btn">上传参考视频<input type="file" id="video-vref-file" accept="video/mp4,video/webm,video/quicktime,video/mpeg" hidden></label>

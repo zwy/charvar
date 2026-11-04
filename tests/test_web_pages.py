@@ -75,3 +75,11 @@ def test_page_scripts_exist():
         # 每页脚本清单第一位恒为 core.js（$/api/escapeHtml 全站骨架）
         scripts = re.findall(r'<script src="/static/([^"]+)"></script>', page.read_text())
         assert scripts[0] == "core.js", f"{page.name} 的脚本首位不是 core.js"
+
+def test_pages_load_shared_tables_when_referenced():
+    """settings.js 引用了 DREAMINA_VIDEO_MODELS（tables.js）——页面 script 清单必须在
+    settings.js 之前带上 tables.js（漏了就是页面加载 ReferenceError + 保存抹库，踩过）。"""
+    assert "DREAMINA_VIDEO_MODELS" in (STATIC / "settings.js").read_text()
+    html = (STATIC / "settings.html").read_text()
+    scripts = re.findall(r'<script src="/static/([^"]+)"></script>', html)
+    assert "tables.js" in scripts and scripts.index("tables.js") < scripts.index("settings.js")

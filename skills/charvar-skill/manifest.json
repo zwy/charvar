@@ -1,7 +1,7 @@
 {
   "name": "charvar-skill",
-  "version": "1.6.0",
-  "updated": "2026-10-28",
+  "version": "1.7.0",
+  "updated": "2026-11-04",
   "description": "按提示词实际出图/出视频的 Claude Code skill：ComfyUI、OpenRouter、即梦三条通路 + OpenRouter 语音（TTS）+ 主体档案 CLI。",
   "entrypoint": "SKILL.md",
   "files": {
@@ -11,11 +11,16 @@
   },
   "checks": {
     "command": "python3 -m pytest tests/test_skills.py",
-    "last_run": "2026-10-28",
+    "last_run": "2026-11-04",
     "result": "passed",
     "note": "本 skill 无自带脚本；由仓库级 tests/test_skills.py 校验 frontmatter、版本同步与文件清单。"
   },
   "history": [
+    {
+      "version": "1.7.0",
+      "updated": "2026-11-04",
+      "note": "视频接入即梦（Dreamina CLI）：charvar video dreamina 子命令 + video models --provider dreamina；网页「视频」页加供应商切换；设置页加「即梦视频」组（DREAMINA_VIDEO_MODEL）。"
+    },
     {
       "version": "1.6.0",
       "date": "2026-10-28",

@@ -112,7 +112,7 @@ https://jimeng.jianying.com/cli | bash`）并完成 `dreamina login`（登录态
   别用 character_sheet（四视图拼图会出多人）。
 - `--ref` = `input_references`（≤4 张），只做风格／内容参考。
 - 两者同给时官方语义**首帧优先**。
-- `--video-ref` 只有 Seedance gen2+ 系认，其它 provider 忽略。
+- `--video-ref` 只有 OpenRouter 侧的 Seedance gen2+ 系认，其它 provider 忽略；即梦侧走全能参考（`charvar video dreamina`，见下）。
 
 时长／分辨率／画幅**超枚举会在提交前被拒**（不扣费），所以提交前先列一次目录：
 
@@ -125,6 +125,55 @@ https://jimeng.jianying.com/cli | bash`）并完成 `dreamina login`（登录态
 输出里每个模型带**时长／分辨率／画幅枚举**和**按秒价目**（`480p $0.0200/s` 这类）。
 价目来自 `pricing_skus`，各 provider 键名不同（heygen 美元/秒、grok 美分/秒），
 charvar 已统一换算成美元/秒。
+
+## charvar video dreamina
+
+用即梦（Dreamina）官方 CLI 出一段视频。前置同 `charvar image dreamina`：
+官方 CLI 已装 + `dreamina login` 已登录（`dreamina user_credit` 能返回积分即就绪）。
+**没有 `--seed`（即梦视频不暴露 seed）；按即梦积分/会员权益计费，没有逐条预估。**
+
+子命令按输入自动分派（charvar 内部处理，调的人不用选）：
+
+| charvar 输入 | 即梦子命令 |
+|---|---|
+| 只给提示词 | `text2video` |
+| `--first-frame`（1 张） | `image2video` |
+| `--ref`（≤4）/ `--video-ref`（≤2） | `multimodal2video`（全能参考） |
+
+| 参数 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `--prompt` | str | — | 视频提示词 |
+| `--prompt-file` | str | — | 提示词文件路径；`-` 表示读 stdin |
+| `--first-frame` | path | — | 首帧图（1 张；与 `--ref`/`--video-ref` 不可同给） |
+| `--ref` | list | — | 参考图路径，可重复，≤4 张（全能参考 image≤9，charvar 收 4） |
+| `--video-ref` | list | — | 参考视频路径，可重复，≤2 条 mp4/mov/mpeg/webm（单条时长须 2–15s） |
+| `--aspect` | str | `9:16` | 即梦视频仅 6 档：1:1/3:4/16:9/4:3/9:16/21:9（**没有 2:3/3:2**）；传空 = image2video 按首帧推断 / 其它子命令走即梦默认 16:9 |
+| `--duration` | int | `5` | 时长秒数（2.0 系 4–15s；1.0fast 5–10、1.5pro 5–12） |
+| `--resolution` | str | `720p` | **必填档**：恒 720p；1080p/4k 仅 seedance2.0_vip；480p 仅 seedance2.5 |
+| `--model` | str | 设置页/`DREAMINA_VIDEO_MODEL`/兜底 `seedance2.0fast_vip` | seedance 枚举照 `dreamina <子命令> -h`（1.4.21） |
+| `--timeout` | float | `900` | 轮询超时秒数；超时作业仍在跑（网页「视频」页可续查，manifest 记 submit_id） |
+| `--poll-interval` | float | `5` | 轮询间隔秒数 |
+| `--out` / `-o` | path | — | 另外落一份到这个路径 |
+| `--json` | flag | — | 结果以 JSON 输出到终端 |
+
+```bash
+~/.local/bin/charvar video dreamina --prompt "the woman performs a smooth dance" --aspect 9:16 --duration 5
+~/.local/bin/charvar video models --provider dreamina   # 即梦静态枚举表
+```
+
+- 每模型的画幅配对：**2.5 图生视频拒收显式 `--ratio`**（跟首帧走，网页把画幅锁「自动」）；**老模型（1.0fast/1.5pro）显式 ratio 须与首帧一致**（charvar 按 ±2% 预检）；2.0 系可独立设。
+- 默认模型 `seedance2.0fast_vip`（720p / 4–15s，最低价档）。**CLI 各子命令默认模型
+  互不相同**，charvar 每次都显式传 `--model_version`，别依赖 CLI 默认。
+- 枚举表两处同源（`charvar/dreamina_video.py` `_VIDEO_MODELS` 与
+  `web/static/tables.js` `DREAMINA_VIDEO_MODELS`），CLI 升级后要同步。
+- 首帧+参考图同给会被提交前拦下（即梦图生视频只收 1 张首帧）；带尾帧
+  （`frames2video`）与多图故事（`multiframe2video`）未接入。
+- 部分模型首次使用需先在即梦 Web 端用该模型完成一次生成（提交报
+  `AigcComplianceConfirmationRequired`），charvar 报错里带网页端指引，重试救不回来。
+- 提示词长度上限视频侧无 CLI 文档，charvar 不做提交前长度拦截；上游报超长会
+  连 fail_reason 一起透传。
+- 成片落 `data/generated/adhoc_video/{id}/`（与 openrouter 同布局）；
+  `job_id` 字段存即梦 submit_id，manifest 可追溯。
 
 ## charvar tts openrouter
 

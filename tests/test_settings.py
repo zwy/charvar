@@ -163,3 +163,18 @@ def test_dreamina_config_chain(tmp_path, monkeypatch):
     storage.set_setting(conn, "dreamina", {"model": "4.7", "resolution": "2K"})
     cfg = dreamina_config(conn)
     assert cfg == {"model": "4.7", "resolution": "2k"}
+
+
+def test_dreamina_video_group(client, tmp_path):
+    """即梦视频组：默认链占位（seedance2.0fast_vip）+ 保存白名单 + 落库回读。"""
+    data = client.get("/settings").json()
+    assert data["dreamina_video_default_model"] == "seedance2.0fast_vip"
+    put = client.put("/settings", json={"dreamina_video": {"model": "seedance2.0_vip"}}).json()
+    assert put["dreamina_video"]["model"] == "seedance2.0_vip"
+    assert put["dreamina_video_default_model"] == "seedance2.0_vip"
+    got = client.get("/settings").json()
+    assert got["dreamina_video"]["model"] == "seedance2.0_vip"
+    # 空串落库 = 回默认链
+    client.put("/settings", json={"dreamina_video": {"model": ""}})
+    got = client.get("/settings").json()
+    assert got["dreamina_video_default_model"] == "seedance2.0fast_vip"

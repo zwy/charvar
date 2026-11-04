@@ -42,21 +42,17 @@ styling=锚脸+发型+服装（section 随条目存，锚定分句 `face`/`face_
 - 网页的参考图只认三种来源：上传暂存（`/adhoc/references`）、主体档案里已就绪的档案图、Playground「最近生成」的原图（spec 带 `run_id`；run_id 过该模块自己的严格正则，文件名由服务端从该 run 的 `original/` 目录按落盘布局定 —— 浏览器永远不给路径）。**不接受任意路径** —— 那是把文件读权限开给了浏览器。
 - 它给本项目外的项目/其他 agent 用；外部调用方依赖它的参数名与输出格式，改动要兼容。
 
-### Playground 视频（OpenRouter 通路）
+### Playground 视频
 
-`charvar/adhoc_video.py` 是「给一段提示词出一段视频」的同构通路，只接 OpenRouter
-（`charvar/openrouter_video.py` 客户端）；`charvar/video.py` 是另一回事（静态图轮播合成）。
+`charvar/adhoc_video.py` 是「给一段提示词出一段视频」的同构通路，双供应商：OpenRouter
+（`charvar/openrouter_video.py`）与即梦（`charvar/dreamina_video.py`，细则见 `docs/即梦视频.md`）。
 
-- CLI：`charvar video openrouter`（`--prompt`/`--first-frame`/`--ref`/`--video-ref`/`--aspect`/`--duration`/`--resolution`/`--seed`/`--model`/`--out`/`--json`）与 `charvar video models`（列模型 + 时长/分辨率/画幅枚举 + 按秒价目）。
-  产物落 `data/generated/adhoc_video/{id}/`（original/ 成片 + thumbs/ 海报帧 + manifest.json）。
-  参考视频（`--video-ref`，≤2）与首帧/参考图同给时官方语义 frame_images 优先；参考视频只有 Seedance gen2+ 系认（其它 provider 忽略）。
+- CLI：`charvar video openrouter|dreamina`（`--prompt`/`--first-frame`/`--ref`/`--video-ref`/`--aspect`/`--duration`/`--resolution`/`--model`/`--out`/`--json`；`--seed` 仅 openrouter）与 `charvar video models --provider openrouter|dreamina`（列枚举/价目）；产物落 `data/generated/adhoc_video/{id}/`，不落 runs 表。即梦子命令按输入分派：文生 `text2video` / 首帧 `image2video` / 参考图·视频 = `multimodal2video`（全能参考）；默认 `seedance2.0fast_vip`（720p 恒定、4–15s、6 档 ratio 无 2:3/3:2）。
 - **网页入口**：顶栏「视频」页签（`web/static/video.js`），后端 `/videos/*`（`charvar/api.py`），同一套 `charvar/adhoc_video.py`；改参数名/输出格式时 CLI、网页、skill 三处同步。
-- 视频是**异步作业**（`POST /api/v1/videos` → 202 + job id → 轮询 → `…/content` 下载）：web 提交即返回 pending，前端每 8s 打 `GET /videos/{run_id}/status`（引擎是 `adhoc_video.refresh`，幂等，终态后不打 OpenRouter）；CLI `--timeout`（默认 900s）内阻塞轮询，超时作业仍在跑（manifest 保持 in_progress，网页可续查）。
-- 参数枚举按 `GET /api/v1/videos/models` 目录**提交前校验**（超枚举 400 白扣一次提交费），目录缓存在 `data/openrouter/video-models.json`（与生图 api-response.json 是两份缓存）；提交时 provider 拒参自动降级重试（复用 openrouter_image 的报错话式识别）。
-- 首帧图 = `frame_images`（图生视频，主体一致性靠它；**别用 character_sheet，那是四视图拼图会出多人**——用单人全身正面/front 槽位）；参考图 = `input_references`（≤4）；两者同给时官方语义首帧优先（API 层原样放行，网页 UI 图生视频页签不并送参考图）。
-- 模型默认链：请求显式 > 设置页「OpenRouter 视频」组（DB） > `OP_VIDEO_MODEL` env > heygen/heygen-video-1；API key 与生图同链路（`OP_IMAGE_API_KEY`/`LLM_API_KEY`）。
-- seed：目录标 `seed: false` 的模型不发；时长的 bool 会过 pydantic int 校验，`validate` 里明确拦。
-- 
+- 视频是**异步作业**：web 提交即返回 pending，前端每 8s 打 `GET /videos/{run_id}/status`（引擎 `adhoc_video.refresh`，幂等，终态后不打上游）；CLI `--timeout`（默认 900s）阻塞轮询，超时作业仍在跑（manifest 保持 in_progress，网页可续查）；作业 id/收片按供应商（docs 详情）。
+- 参数枚举**提交前校验**（超档 400 白扣提交费）：OpenRouter 按 `GET /api/v1/videos/models` 目录（缓存 `data/openrouter/video-models.json`；目录标 `seed: false` 不发；拒参自动降级重试）；即梦按 `_VIDEO_MODELS` 静态表拦（`--video_resolution` 必填、上游严格校验硬拒；与 tables.js 两处同源，CLI 升级同步）。
+- 首帧图 = 图生视频（主体一致性靠它；**别用 character_sheet，四视图拼图会出多人**——用单人全身正面/front 槽位）；参考图 = `input_references`（≤4）；首帧与参考图同给首帧优先（i2v 页签不并送参考图；即梦该组合提交前拦）。
+- 默认链两边 = 请求显式 > 设置页（DB） > env > 兜底：OpenRouter `OP_VIDEO_MODEL`/heygen-video-1（key 与生图同链路）；即梦 `DREAMINA_VIDEO_MODEL`/seedance2.0fast_vip（无 key=本机登录态；无 seed 不发送；按积分计费；首用合规需网页端先过一次；详见 docs/即梦视频.md）。
 
 ### Playground 语音（OpenRouter TTS 通路）
 

@@ -3,13 +3,16 @@
 与出图（``charvar.adhoc``）同构：网页与 CLI ``charvar video`` 是同一套参数语义、
 同一套落盘、同一份 manifest；不进主体档案 5 槽位、不跑预设批量、不落 runs 表。
 
-这一轮只接 OpenRouter（``charvar.openrouter_video``），后续可能补 ComfyUI / 即梦。
+供应商两路，按 ``backend`` 分派（manifest 层已经供应商无关）：
+- ``openrouter``：在线 API 异步作业（``charvar.openrouter_video``）；
+- ``dreamina``：即梦官方 CLI 子进程（``charvar.dreamina_video``），同一套
+  submit → 轮询 → 下载语义，作业 id 是即梦 ``submit_id``。
 
 与出图的关键差异（视频 API 是**异步作业**）：
-- 提交 ``POST /api/v1/videos`` 只拿 job id，要轮询到 completed 再下载成片 ——
-  所以 :func:`generate` 分两步：提交即落 manifest（status=in_progress）并返回 pending；
-  成片由 :func:`refresh` 补齐（web 的 /videos/{id}/status 每次轮询调它，
-  CLI 的 wait=True 在这里循环）。
+- 提交只拿作业 id（OpenRouter job id / 即梦 submit_id），要轮询到终态再下载
+  成片 —— 所以 :func:`generate` 分两步：提交即落 manifest（status=in_progress）
+  并返回 pending；成片由 :func:`refresh` 补齐（web 的 /videos/{id}/status 每次
+  轮询调它，CLI 的 wait=True 在这里循环）。
 - 画幅不讲像素讲档位（480p/768p/2K…），枚举按所选模型的目录条目校验，
   提交前拦截（超枚举是 400，白扣一次提交费）。
 - 首帧图 = ``frame_images``（图生视频，主体一致性靠它），参考图 = ``input_references``；
@@ -23,16 +26,19 @@ manifest.json）。manifest 记完整请求与作业 id，便于复现与续查�
 
 红线（同 AGENTS.md / adhoc）：
 - OpenRouter 请求一律走 ``charvar.openrouter_video`` 的客户端（``trust_env=False``，绕 shell 代理）；
-- API key 与生图同链路（``OP_IMAGE_API_KEY`` / ``LLM_API_KEY``）；
+- OpenRouter 的 API key 与生图同链路（``OP_IMAGE_API_KEY`` / ``LLM_API_KEY``）；
+- 即梦通路无鉴权配置（本机 ``dreamina login`` 登录态），**无 seed 参数**：请求
+  里的 seed 只记 manifest，绝不发送（``dreamina_video`` 负责枚举与组合校验）；
 - 参考图/首帧统一走 ``charvar.reference_images`` 预处理（长边 1536 / JPEG q88），
   data URL 编码复用 ``openrouter_image.encode_reference``；
-- seed 收敛 2^53-1；目录标 ``seed: false`` 的模型不发；
+- OpenRouter 侧 seed 收敛 2^53-1；目录标 ``seed: false`` 的模型不发；
 - 不引入随机源：seed 一律由调用方显式给定。
 """
 from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
 import time
 import uuid
@@ -41,10 +47,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from charvar import openrouter_video, paths, reference_images, settings_service
+from charvar import dreamina_video, openrouter_video, paths, reference_images, settings_service
 from charvar.openrouter_video import OpenRouterVideoError as _ORError
 
-Backend = Literal["openrouter"]
+Backend = Literal["openrouter", "dreamina"]
 
 # 参考图上限与生图 / openrouter_video 一致
 _MAX_REFERENCES = openrouter_video._MAX_REFERENCES
@@ -328,9 +334,11 @@ def list_recent(limit: int = 20) -> list[dict[str, Any]]:
                 "created_at": manifest.get("created_at") or "",
                 "backend": request.get("backend") or "openrouter",
                 "prompt": request.get("prompt") or "",
-                "model": request.get("model") or "",
-                "duration": request.get("duration"),
-                "resolution": request.get("resolution"),
+                # 即梦的解析结果（model/resolution/duration 缺省值）落在 job 上：列表显示生效值
+                "model": request.get("model") or (manifest.get("job") or {}).get("model") or "",
+                "duration": request.get("duration") if request.get("duration") is not None
+                else (manifest.get("job") or {}).get("duration"),
+                "resolution": request.get("resolution") or (manifest.get("job") or {}).get("resolution") or None,
                 "aspect_ratio": request.get("aspect_ratio") or "",
                 "seed": request.get("seed"),
                 "status": status or "failed",
@@ -393,6 +401,7 @@ def _summary(manifest: dict[str, Any]) -> dict[str, Any]:
         "status": manifest.get("status") or "failed",
         "error": manifest.get("error") or "",
         "job_id": job.get("id") or "",
+        "job_status": job.get("status") or "",
         "model": job.get("model") or request.get("model") or "",
         "prompt": request.get("prompt") or "",
         "duration": result.get("duration") if result else request.get("duration"),
@@ -528,11 +537,29 @@ def _mark(run_dir: Path, manifest: dict[str, Any], **patch: Any) -> dict[str, An
     return manifest
 
 
+def _mark_if_open(run_dir: Path, manifest: dict[str, Any], **patch: Any) -> dict[str, Any]:
+    """终态写入保护：写前重读盘上 manifest，已是终态（ready/failed）就不覆写。
+
+    CLI 与 web（或两个页签）会同时盯同一个作业、各自轮询各自收片：本路失败时
+    另一路可能刚把 run 收成 ready —— 用本进程的旧 dict 全量覆写会把 ready 抹成
+    failed 且永久卡死（实测冒烟踩过）。返回值以盘上为准（已终态返回盘上版本）。
+    """
+    try:
+        disk = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        disk = None
+    if isinstance(disk, dict) and disk.get("status") in ("ready", "failed"):
+        return disk
+    return _mark(run_dir, manifest, **patch)
+
+
 # ---------- 提交与收尾 ----------
 
 
 def _submit(req: VideoRequest, run_id: str, db_path: Path | None) -> dict[str, Any]:
     """提交作业；返回带 job 信息的 manifest（status=in_progress）。"""
+    if req.backend == "dreamina":
+        return _submit_dreamina(req, run_id, db_path)
     run_dir = _run_dir(run_id)
     model = _resolve_model(req, db_path)
     api_key = openrouter_video.resolve_api_key()
@@ -572,10 +599,67 @@ def _submit(req: VideoRequest, run_id: str, db_path: Path | None) -> dict[str, A
     return manifest
 
 
+def _submit_dreamina(req: VideoRequest, run_id: str, db_path: Path | None) -> dict[str, Any]:
+    """即梦分支的提交：本地路径直接交给 dreamina CLI 子进程（submit_id 落 job.id）。
+
+    与 OpenRouter 分支的差异：
+    - 没有 API key 与目录校验 —— 枚举校验在 ``dreamina_video.submit`` 的静态表里
+      （``--video_resolution`` 是必填参数，没有「不发」这个路径）；
+    - 模型默认链：请求显式 > 设置页「即梦视频」组（DB） > env
+      ``DREAMINA_VIDEO_MODEL`` > ``seedance2.0fast_vip``；
+    - 时长/分辨率缺省：5s / 720p（即梦必填，没有「跟随 provider 不发」）；
+    - 画幅：请求显式发；image2video 的空值 = 从首帧图推断（即梦原生行为）；
+    - ``--poll=0``：子进程只提交不等待，web 提交即返回，CLI 的等待在本模块循环；
+    - 提交被拒（含首用合规确认）当场抛，generate 的失败留痕逻辑收尾。
+    """
+    run_dir = _run_dir(run_id)
+    with _conn(db_path) as conn:
+        cfg = settings_service.dreamina_video_config(conn)
+    model = (req.request_model() or "").strip() or str(cfg["model"]).strip()
+    resolution = dreamina_video.resolve_resolution(req.resolution)
+    duration = dreamina_video.resolve_duration(req.duration)
+    # 首帧/参考图统一走预处理（与 OpenRouter 同一份缓存）；参考视频原样本地路径直传
+    first_frame, last_frame, refs = _prepare_images(req, run_dir)
+    has_images = first_frame is not None or bool(refs) or last_frame is not None
+    prompt = _rewrite_prompt(req.prompt, has_images)
+    try:
+        task = dreamina_video.submit(
+            prompt=prompt,
+            model=model,
+            resolution=resolution,
+            duration=duration,
+            ratio=req.aspect_ratio or None,
+            first_frame=first_frame,
+            last_frame=last_frame,
+            reference_paths=refs,
+            reference_video_paths=list(req.reference_video_paths),
+            poll_s=0,
+        )
+    except dreamina_video.DreaminaVideoError as exc:
+        raise AdhocVideoError(f"即梦视频提交失败：{exc}") from exc
+    submit_id = dreamina_video.submit_id_of(task)
+    manifest = _new_manifest(req, run_id, job_id=submit_id, model=model)
+    manifest["status"] = "in_progress"
+    manifest["job"]["status"] = str(task.get("gen_status") or "")
+    # 即梦必填参数的解析结果（result 展示层用：请求可能给的是 None = 缺省）
+    manifest["job"]["resolution"] = resolution
+    manifest["job"]["duration"] = duration
+    _write_manifest(run_dir, manifest)
+    return manifest
+
+
 def _finalize(
     run_id: str, manifest: dict[str, Any], payload: dict[str, Any], submitted_at: float
 ) -> dict[str, Any]:
-    """拿终态 payload 收尾：completed 下载成片 + 海报 + 清暂存；failed 记错误。"""
+    """拿终态 payload 收尾：completed 下载成片 + 海报 + 清暂存；failed 记错误。
+
+    按供应商分流：OpenRouter 的终态 payload 就是 poll 的响应（带 unsigned_urls /
+    usage.cost）；即梦的 payload 只带 gen_status，成片要再用 ``query_result
+    --download_dir`` 单独下。
+    """
+    backend = str((manifest.get("request") or {}).get("backend") or "openrouter")
+    if backend == "dreamina":
+        return _finalize_dreamina(run_id, manifest, submitted_at)
     run_dir = _run_dir(run_id)
     status = str(payload.get("status") or "")
     if status == "completed":
@@ -625,11 +709,111 @@ def _finalize(
     return manifest
 
 
+def _finalize_dreamina(
+    run_id: str, manifest: dict[str, Any], submitted_at: float
+) -> dict[str, Any]:
+    """即梦分支收尾：query_result --download_dir 落盘成片 → 转存 original/ + 海报。
+
+    下载是终态后的**另一次** ``query_result``（产物 URL 会过期，成功后立刻要）。
+    并发兜底：CLI 与 web 可能同时盯同一个作业、各自轮询各自收片 ——
+    ``original/`` 里已有成片就直接复用，不再重复收（实测冒烟踩过：
+    一路刚 rmtree 掉 download 目录，另一路的产物校验就报「文件不存在」）。
+    失败/超时按现有策略转 failed 留痕（重试 = 重新生成）；失败路径不清暂存。
+    """
+    run_dir = _run_dir(run_id)
+    job = manifest.get("job") or {}
+    request = manifest.get("request") or {}
+    submit_id = str(job.get("id") or "")
+    if not submit_id:
+        return _mark(run_dir, manifest, status="failed", error="即梦作业缺 submit_id，无法收片")
+
+    original_dir = run_dir / "original"
+
+    def existing_video():
+        if not original_dir.is_dir():
+            return None
+        for path in sorted(original_dir.iterdir()):
+            if path.is_file():
+                return path
+        return None
+
+    source = existing_video()
+    if source is not None:
+        # 并发兜底：另一路已收好片，直接复用
+        pass
+    else:
+        # 每路收片用独立 download 目录：CLI 按确定性文件名下载，共享目录会让
+        # 并发两次下载互相截断半成品（实测踩过）
+        download_dir = run_dir / f"download_{uuid.uuid4().hex[:8]}"
+        try:
+            task = dreamina_video.query(submit_id, download_dir=download_dir, timeout_s=180.0)
+        except dreamina_video.DreaminaVideoError as exc:
+            source = existing_video()  # 另一路可能刚好收好片
+            if source is None:
+                message = f"即梦视频下载失败：{exc}"
+                manifest = _mark_if_open(run_dir, manifest, status="failed", error=message)
+                raise AdhocVideoError(message) from exc
+        else:
+            gen_status, reason = dreamina_video.task_status(task)
+            if gen_status != "success":
+                error = dreamina_video.explain_fail(reason) or "即梦视频作业失败"
+                source = existing_video()  # 另一路可能刚好收好片
+                if source is None:
+                    return _mark_if_open(run_dir, manifest, status="failed", error=error)
+            else:
+                try:
+                    sources = dreamina_video.extract_video_paths(task)
+                except dreamina_video.DreaminaVideoError as exc:
+                    source = existing_video()  # 另一路可能刚好收好片
+                    if source is None:
+                        return _mark_if_open(run_dir, manifest, status="failed", error=str(exc))
+                else:
+                    first = sources[0]
+                    ext = dreamina_video.video_file_ext(first)
+                    if ext == "bin":
+                        return _mark_if_open(
+                            run_dir, manifest, status="failed",
+                            error="即梦产物不是可识别的视频格式（按魔数嗅探失败）",
+                        )
+                    destination = original_dir / f"000000.{ext}"
+                    destination.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(first, destination)
+                    shutil.rmtree(download_dir, ignore_errors=True)
+                    source = destination
+
+    poster = _make_poster(source, run_dir)
+    result = VideoResult(
+        run_id=run_id,
+        video_path=str(source),
+        poster_path=str(poster) if poster else "",
+        provider="dreamina",
+        manifest_path="",
+        job_id=submit_id,
+        status="ready",
+        seed=request.get("seed") or 0,
+        model=str(job.get("model") or "") or None,
+        duration=job.get("duration") if job.get("duration") is not None else request.get("duration"),
+        resolution=str(job.get("resolution") or request.get("resolution") or "720p"),
+        aspect_ratio=str(request.get("aspect_ratio") or ""),
+        cost=None,  # 即梦没有逐条费用：按会员权益/积分计（user_credit 查余额）
+        duration_ms=int((time.time() - submitted_at) * 1000),
+    )
+    out = str(request.get("out") or "")
+    _write_out(result, Path(out) if out else None)
+    result.manifest_path = str(run_dir / "manifest.json")
+    manifest["result"] = result.model_dump()
+    manifest = _mark(run_dir, manifest, status="ready", error="")
+    # 暂存参考图/视频用完了清掉（失败路径保留以便重试 —— 与 OpenRouter 同策略）
+    clear_staged_references(list(request.get("staged_ref_ids") or []))
+    clear_staged_video_references(list(request.get("staged_video_ref_ids") or []))
+    return manifest
+
 def refresh(run_id: str, db_path: Path | None = None) -> dict[str, Any]:
     """查一次作业并把成片收下来（web /videos/{id}/status 的引擎，幂等）。
 
-    - 终态（ready/failed）或没有 job 的记录：直接读 manifest 返回摘要，不再打 OpenRouter；
-    - 其余：轮询一次；completed → 下载成片，failed → 记错误；still running → 更新状态。
+    - 终态（ready/failed）或没有 job 的记录：直接读 manifest 返回摘要，不再打上游；
+    - 其余：轮询一次；OpenRouter completed → 下载成片，即梦 success → 单独下成片
+      （query_result --download_dir），终态失败 → 记错误；still running → 更新状态。
     """
     manifest = read_manifest(run_id)
     status = str(manifest.get("status") or "")
@@ -639,6 +823,43 @@ def refresh(run_id: str, db_path: Path | None = None) -> dict[str, Any]:
         if not status:  # 脏数据兜底：有 job 没 status
             manifest = _mark(_run_dir(run_id), manifest, status="failed",
                              error=manifest.get("error") or "提交失败")
+        return _summary(manifest)
+    backend = str((manifest.get("request") or {}).get("backend") or "openrouter")
+    if backend == "dreamina":
+        # 即梦分支：job.id 是 submit_id，每次轮询是一发 query_result 子进程 ——
+        # 保持「每次轻查询」，子进程里不再 --poll 等待（别把 web 轮询线程挂住）
+        try:
+            task = dreamina_video.poll(job_id)
+        except dreamina_video.DreaminaVideoError as exc:
+            # 网络抖动/CLI 偶发失败不该打断轮询节奏：状态不变，摘要带 poll_error
+            summary = _summary(manifest)
+            summary["poll_error"] = str(exc)
+            return summary
+        gen_status, _reason = dreamina_video.task_status(task)
+        if not gen_status:
+            # 响应缺 gen_status（上游改字段名 / 本地任务记录被清）——
+            # 别静默当中间态：以 poll_error 暴露（前端照常重试，但错误可见），
+            # 否则 web 会每 8s 一发 query_result 永远不停、还零提示
+            summary = _summary(manifest)
+            summary["poll_error"] = (
+                f"即梦任务响应缺 gen_status（submit_id={job_id}）："
+                f"{json.dumps(task, ensure_ascii=False)[:200]}"
+            )
+            return summary
+        job["status"] = gen_status or job.get("status") or ""
+        if gen_status in ("success", "fail"):
+            submitted = float(manifest.get("submitted_at") or time.time())
+            try:
+                manifest = _finalize(run_id, manifest, task, submitted)
+            except (AdhocVideoError, dreamina_video.DreaminaVideoError) as exc:
+                message = str(exc)
+                if isinstance(exc, dreamina_video.DreaminaVideoError):
+                    message = f"即梦视频下载失败：{message}"
+                manifest = _mark_if_open(_run_dir(run_id), manifest, status="failed", error=message)
+        else:
+            # 中间态统一映射成内部枚举（即梦只有 querying，web 侧叫 in_progress）
+            manifest["status"] = "in_progress"
+            _write_manifest(_run_dir(run_id), manifest)
         return _summary(manifest)
     try:
         payload = openrouter_video.poll(job_id)
@@ -671,8 +892,8 @@ def generate(
     req: VideoRequest,
     db_path: Path | None = None,
     *,
-    poll_interval: float = 5.0,
-    timeout_s: float = 900.0,
+    poll_interval: float | None = None,
+    timeout_s: float | None = None,
 ) -> VideoResult:
     """跑一次 Playground 视频生成，返回结果（含落盘路径与 manifest 路径）。
 
@@ -681,6 +902,12 @@ def generate(
     失败也留痕：manifest 记下失败原因方便回头查；超时不改状态（作业还在跑，
     refresh 可续）。
     """
+    poll_interval = 5.0 if poll_interval is None else float(poll_interval)
+    if req.backend == "dreamina":
+        # --timeout 不给时走即梦链（env DREAMINA_VIDEO_TIMEOUT > 900s）
+        timeout_s = dreamina_video.resolve_timeout(timeout_s)
+    else:
+        timeout_s = 900.0 if timeout_s is None else float(timeout_s)
     validate(req)
     run_id = _new_run_id()
     run_dir = _run_dir(run_id)
@@ -700,7 +927,7 @@ def generate(
     def pending() -> VideoResult:
         return VideoResult(
             run_id=run_id,
-            provider="openrouter",
+            provider=req.backend,
             manifest_path=str(run_dir / "manifest.json"),
             job_id=job_id,
             status="pending",
@@ -715,23 +942,36 @@ def generate(
         return pending()
 
     try:
-        payload = openrouter_video.wait_for_job(
-            job_id,
-            poll_interval=poll_interval,
-            timeout_s=timeout_s,
-            timeout_error=AdhocVideoTimeout,
-        )
+        if req.backend == "dreamina":
+            payload = dreamina_video.wait_for_video(
+                job_id,
+                poll_interval=poll_interval,
+                timeout_s=timeout_s,
+                timeout_error=AdhocVideoTimeout,
+            )
+        else:
+            payload = openrouter_video.wait_for_job(
+                job_id,
+                poll_interval=poll_interval,
+                timeout_s=timeout_s,
+                timeout_error=AdhocVideoTimeout,
+            )
         _finalize(run_id, manifest, payload, submitted_at)
     except AdhocVideoTimeout:
         # 作业还在跑：状态保持 in_progress，refresh/CLI 再查可以续
         manifest["submitted_at"] = submitted_at
         _write_manifest(run_dir, manifest)
         raise
-    except (AdhocVideoError, _ORError) as exc:
+    except (AdhocVideoError, _ORError, dreamina_video.DreaminaVideoError) as exc:
         message = str(exc)
         if isinstance(exc, _ORError):
             message = f"OpenRouter 视频下载失败：{message}"
-        _mark(run_dir, manifest, status="failed", error=message)
+        elif isinstance(exc, dreamina_video.DreaminaVideoError):
+            message = f"即梦视频失败：{message}"
+        if req.backend == "dreamina":
+            _mark_if_open(run_dir, manifest, status="failed", error=message)
+        else:
+            _mark(run_dir, manifest, status="failed", error=message)
         raise AdhocVideoError(message) from exc
 
     final = read_manifest(run_id)

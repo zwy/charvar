@@ -26,6 +26,7 @@ from charvar import adhoc_compose as adhoc_compose_service
 from charvar import adhoc_video as adhoc_video_service
 from charvar import adhoc_tts as adhoc_tts_service
 from charvar import dreamina_image
+from charvar import dreamina_video
 from charvar import openrouter_image
 from charvar import openrouter_tts
 from charvar import openrouter_video
@@ -428,19 +429,23 @@ class StagedVideoRefSpec(BaseModel):
 
 
 class VideoGenerateRequest(BaseModel):
-    """网页「视频」页的请求（与 CLI ``charvar video`` 同一套参数；OpenRouter 作业通路）。
+    """网页「视频」页的请求（与 CLI ``charvar video`` 同一套参数；OpenRouter / 即梦两路）。
 
-    视频是异步作业：本端点只提交（202 + job id），前端按 /videos/{run_id}/status 轮询。
-    首帧图 = 图生视频（frame_images）；参考图 = 参考生成（input_references）；
-    两者同给时首帧优先（官方语义）。都只认「上传暂存 / 主体档案就绪图 /
-    Playground 最近生成原图」三种来源。参考视频 = input_references 的 video_url
-    （Seedance gen2+ 才接，≤2 条，只认上传暂存）。
+    视频是异步作业：本端点只提交，前端按 /videos/{run_id}/status 轮询。
+    首帧图 = 图生视频（OpenRouter frame_images / 即梦 image2video）；参考图 =
+    参考生成（OpenRouter input_references / 即梦 multimodal2video 全能参考）。
+    都只认「上传暂存 / 主体档案就绪图 / Playground 最近生成原图」三种来源。
+    参考视频 = OpenRouter input_references 的 video_url（Seedance gen2+ 才接）/
+    即梦 multimodal2video 的 --video（≤2 条，只认上传暂存）。
+    OpenRouter 侧首帧与参考图同给时首帧优先（官方语义）；即梦侧该组合**提交前
+    直接拦**（图生视频只收 1 张首帧）。
     """
 
     prompt: str
-    model: str | None = None  # 空 = 设置页/env 默认（heygen/heygen-video-1）
-    duration: int | None = None  # 秒；None = 不发（跟随 provider 默认）
-    resolution: str | None = None  # 480p/768p/2K…；None = 不发
+    backend: Literal["openrouter", "dreamina"] = "openrouter"
+    model: str | None = None  # 空 = 设置页/env 默认（OpenRouter heygen 系 / 即梦 seedance2.0fast_vip）
+    duration: int | None = None  # 秒；None = OpenRouter 不发（跟随 provider），即梦解析成 5s
+    resolution: str | None = None  # 档位；None = OpenRouter 不发，即梦必填解析成 720p
     aspect_ratio: str = "9:16"
     seed: int = 0
     first_frame: AdhocReferenceSpec | None = None
@@ -1150,6 +1155,10 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         # 视频：默认链 DB > OP_VIDEO_MODEL > heygen，供设置页占位提示
         data["openrouter_video_default_model"] = openrouter_video.resolve_model(
             settings.openrouter_video.model
+        )
+        # 即梦视频：默认链 DB > DREAMINA_VIDEO_MODEL > seedance2.0fast_vip
+        data["dreamina_video_default_model"] = dreamina_video.resolve_model(
+            settings.dreamina_video.model
         )
         # 即梦：CLI 是否可用（登录态在 dreamina login 侧查，这里只探文件在不在）
         try:
@@ -2235,6 +2244,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             video_staged_ids.append(spec.staged_id)
         video_req = adhoc_video_service.VideoRequest(
             prompt=req.prompt,
+            backend=req.backend,
             model=(req.model or "").strip() or None,
             duration=req.duration,
             resolution=(req.resolution or "").strip() or None,

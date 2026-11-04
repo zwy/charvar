@@ -1,10 +1,13 @@
 /* 视频（Playground）页（web 面板）：
-   一级页签 = 模式（文生视频 t2v / 图生视频 i2v = 首帧图生视频），显式选择。
-   与出图（adhoc.js）同构：同一套暂存参考图四件套、主体档案选图、成本预估。
+   二级页签 = 供应商（OpenRouter / 即梦），一级页签 = 模式（文生视频 t2v /
+   图生视频 i2v = 首帧图生视频），显式选择。
+   与出图（adhoc.js）同构：同一套暂存参考图四件套、主体档案选图、供应商切换
+   （档位切走再切回不重置）。
    关键差异：视频是异步作业 —— 提交即返回 run_id，前端每 8s 轮询
    /videos/{run_id}/status 到 ready/failed；页面载入时找未终态的 run 恢复轮询
    （跨刷新不断线）。
-   字段显隐：i2v 只显示首帧区，t2v 只显示参考图区。 */
+   字段显隐：i2v 只显示首帧区，t2v 只显示参考图区；
+   即梦态：seed 收起（即梦不暴露）、无逐条成本预估（按积分计费）。 */
 
 const VIDEO_MODES = {
   t2v: { refs: true, frame: false },
@@ -12,6 +15,7 @@ const VIDEO_MODES = {
 };
 
 const videoState = {
+  backend: "openrouter",
   mode: "t2v",
   catalog: null,
   references: [],
@@ -21,7 +25,20 @@ const videoState = {
   pollTimer: null,
   subjectSlots: {},
   capsToken: 0,
+  /* 切供应商时各记各的档位（切回不重置）；dreaminaCliOk/即梦默认模型懒加载自 /settings */
+  saved: {
+    openrouter: { model: "", aspect: "", resolution: "", duration: "" },
+    dreamina: { model: "", aspect: "", resolution: "", duration: "" },
+  },
+  dreaminaCliOk: undefined,
+  dreaminaDefaults: null,
 };
+
+function videoSegToggle(containerSel, attr, value) {
+  $$(containerSel + " .seg").forEach((btn) =>
+    btn.classList.toggle("active", btn.dataset[attr] === value)
+  );
+}
 
 /* ---------- 模型目录 ---------- */
 
@@ -63,7 +80,8 @@ function videoEnum(entry, key) {
 /* 枚举落到三个 select：默认取第一项（heygen 目录里正好是 480p / 5s / 列表序）；
    目录缺失（未知模型）时收起该字段（跟随 provider 默认），别在前端造参数。
    seed 字段随模型声明显隐（seed:false 的模型如 avatar-iv 收起）。 */
-function applyVideoEnums() {
+function applyVideoEnums(restore = false) {
+  if (videoState.backend === "dreamina") return applyDreaminaVideoEnums(restore);
   const entry = currentVideoModelEntry();
   const aspects = videoEnum(entry, "supported_aspect_ratios");
   const resList = videoEnum(entry, "supported_resolutions");
@@ -92,14 +110,126 @@ function applyVideoEnums() {
   durSel.value = durations.length ? String(durations[0]) : "";
   durSel.parentElement.hidden = durations.length === 0;
 
+  if (restore) {
+    const saved = videoState.saved.openrouter;
+    const apply = (sel, value) => {
+      if (value && [...sel.options].some((o) => o.value === value)) sel.value = value;
+    };
+    const mSel = $("#video-model");
+    if (saved.model && [...mSel.options].some((o) => o.value === saved.model)) mSel.value = saved.model;
+    apply($("#video-aspect"), saved.aspect);
+    apply($("#video-resolution"), saved.resolution);
+    apply($("#video-duration"), saved.duration);
+  }
   $("#video-seed-field").hidden = Boolean(entry && entry.seed === false);
   renderVideoModelInfo();
   updateVideoCostHint();
 }
 
+/* ---------- 即梦（Dreamina）供应商 ---------- */
+
+/* /settings 懒加载一次：即梦 CLI 是否可用 + 视频默认模型（DB > env > 常量）。 */
+async function ensureDreaminaDefaults() {
+  if (videoState.dreaminaDefaults !== null) return;
+  try {
+    const s = await api("/settings");
+    videoState.dreaminaDefaults = {
+      model: s.dreamina_video_default_model || "seedance2.0fast_vip",
+      cliOk: s.dreamina_cli_available !== false,
+    };
+  } catch {
+    videoState.dreaminaDefaults = { model: "seedance2.0fast_vip", cliOk: true };
+  }
+}
+
+/* 模式过滤：t2v 只列支持文生/全能参考的 2.0 系与 2.5；i2v 全列（老 1.0fast/1.5pro 仅 i2v）。 */
+function dreaminaModelOptions() {
+  return Object.entries(DREAMINA_VIDEO_MODELS).filter(([, e]) => e.modes.includes(videoState.mode));
+}
+
+function applyDreaminaVideoModel() {
+  const sel = $("#video-dreamina-model");
+  const models = dreaminaModelOptions();
+  const def = videoState.dreaminaDefaults || {};
+  // 当前值优先（模式/模型切换不丢已选）；当前值不在新清单才回落 saved → 跟随默认
+  const keep = sel.value || videoState.saved.dreamina.model || "";
+  sel.innerHTML = [`<option value="">跟随设置默认（${escapeHtml(def.model || "seedance2.0fast_vip")}）</option>`]
+    .concat(models.map(([id, e]) =>
+      `<option value="${escapeHtml(id)}">${escapeHtml(id)}${e.vipOnly ? "（VIP）" : ""}</option>`))
+    .join("");
+  sel.value = models.some(([id]) => id === keep) ? keep : "";
+  $("#video-dreamina-model-field").hidden = false;
+}
+
+function dreaminaModelEntry() {
+  const id = $("#video-dreamina-model").value || (videoState.dreaminaDefaults || {}).model || "";
+  return DREAMINA_VIDEO_MODELS[id] || null;
+}
+
+/* 即梦枚举：画幅 6 档（i2v 首行「自动 = 按首帧推断」发空串）、分辨率按模型
+   （fast_vip 恒 720p 单值）、时长按模型展开 lo..hi。
+   restore=true（从另一供应商切回）→ 恢复 saved；restore=false（模式/模型切换）
+   → 以当前值为准（不丢已选），当前值不在新枚举里才落默认。
+   2.5 图生视频上游拒收显式 ratio → 画幅锁「自动」。 */
+function applyDreaminaVideoEnums(restore = false) {
+  const entry = dreaminaModelEntry() || { resolutions: ["720p"], durations: [4, 15] };
+  const i2v = videoState.mode === "i2v";
+  const saved = videoState.saved.dreamina;
+  const keep = restore
+    ? { aspect: saved.aspect, resolution: saved.resolution, duration: saved.duration }
+    : {
+        aspect: $("#video-aspect").value,
+        resolution: $("#video-resolution").value,
+        duration: $("#video-duration").value,
+      };
+  const locked = Boolean(entry.i2vRatioLocked) && i2v;
+  const aspectItems = locked
+    ? [["", "自动（2.5 图生视频跟首帧走）"]]
+    : (i2v ? [["", "自动（按首帧推断）"]] : [])
+        .concat(DREAMINA_VIDEO_RATIOS.map((a) => [a, a]));
+  const aspectSel = $("#video-aspect");
+  aspectSel.innerHTML = aspectItems.map(([v, label]) =>
+    `<option value="${v}">${escapeHtml(label)}</option>`).join("");
+  aspectSel.parentElement.hidden = false; // 从 OpenRouter 侧切来时清掉「目录缺失收起」的泄漏
+  const aspectDefault = i2v ? "" : "9:16";
+  aspectSel.value = aspectItems.some(([v]) => v === keep.aspect) ? keep.aspect : aspectDefault;
+
+  const resSel = $("#video-resolution");
+  const resList = entry.resolutions || ["720p"];
+  resSel.innerHTML = resList.map((r) => `<option value="${r}">${r}</option>`).join("");
+  resSel.parentElement.hidden = false;
+  resSel.value = resList.includes(keep.resolution) ? keep.resolution : resList[0];
+
+  const durSel = $("#video-duration");
+  const [lo, hi] = entry.durations || [4, 15];
+  const durItems = [];
+  for (let d = lo; d <= hi; d++) durItems.push(String(d));
+  durSel.innerHTML = durItems.map((d) => `<option value="${d}">${d}s</option>`).join("");
+  durSel.parentElement.hidden = false;
+  durSel.value = durItems.includes(keep.duration) ? keep.duration : (durItems.includes("5") ? "5" : durItems[0]);
+
+  $("#video-seed-field").hidden = true; // 即梦不暴露 seed
+  renderVideoModelInfo();
+  updateVideoCostHint();
+}
+
+function renderDreaminaInfo(el) {
+  const def = videoState.dreaminaDefaults || {};
+  const modelValue = $("#video-dreamina-model").value || def.model || "";
+  const entry = dreaminaModelEntry() || { resolutions: ["720p"], durations: [4, 15] };
+  const parts = [
+    `即梦 ${modelValue}`,
+    `分辨率 ${(entry.resolutions || ["720p"]).join("/")}`,
+    `时长 ${(entry.durations || [4, 15]).join("-")}s`,
+    "6 档画幅",
+  ];
+  if (def.cliOk === false) parts.push("⚠ dreamina CLI 不可用（设置页有提示）");
+  el.textContent = parts.join(" · ");
+}
 function renderVideoModelInfo() {
   const el = $("#video-model-field");
   if (!el) return;
+  if (videoState.backend === "dreamina") return renderDreaminaInfo(el);
   const entry = currentVideoModelEntry();
   if (!entry) {
     el.textContent = "模型目录加载中…";
@@ -119,7 +249,7 @@ function renderVideoModelInfo() {
 
 /* 成本预估（展示用，不参与提交校验）：heygen 系列 pricing_skus 的键是
    duration_seconds_<分辨率小写>；带图（首帧/参考图）换 reference_duration_seconds_*
-   + 每张 reference_input_images。算不出就不显示（别猜价）。 */
+   + 每张 reference_input_images。算不出就不显示（别猜价）；即梦无逐条价，单独分支。 */
 function videoPrice(prefix) {
   const entry = currentVideoModelEntry();
   const skus = (entry && entry.pricing_skus) || {};
@@ -150,6 +280,10 @@ function videoPrice(prefix) {
 function updateVideoCostHint() {
   const el = $("#video-cost-hint");
   if (!el) return;
+  if (videoState.backend === "dreamina") {
+    el.textContent = "即梦按积分/会员权益计费，暂无逐条预估（余额 dreamina user_credit 自查）";
+    return;
+  }
   const seconds = Number($("#video-duration").value || 0);
   // 计费口径：图生视频（有首帧）与文生视频+参考图都按 reference 档
   const imageCount = videoState.mode === "i2v"
@@ -549,6 +683,7 @@ $("#btn-video-generate").addEventListener("click", async () => {
   const seed = seedRaw === "" ? Math.floor(Math.random() * 100001) : Number(seedRaw);
   const body = {
     prompt,
+    backend: videoState.backend,
     aspect_ratio: $("#video-aspect").value || "",
     duration: $("#video-duration").value ? Number($("#video-duration").value) : null,
     resolution: $("#video-resolution").value || null,
@@ -571,16 +706,21 @@ $("#btn-video-generate").addEventListener("click", async () => {
           : { subject_id: videoState.firstFrame.subject_id, kind: videoState.firstFrame.kind })
       : null,
   };
-  const model = $("#video-model").value;
+  const model = videoState.backend === "dreamina"
+    ? $("#video-dreamina-model").value
+    : $("#video-model").value;
   if (model) body.model = model;
 
   const btn = $("#btn-video-generate");
   btn.disabled = true;
-  setStatus($("#video-status"), "提交作业中…（OpenRouter 按秒计费，提交成功即开始计费）");
+  const costNote = videoState.backend === "dreamina"
+    ? "即梦按积分/会员权益计费"
+    : "OpenRouter 按秒计费，提交成功即开始计费";
+  setStatus($("#video-status"), `提交作业中…（${costNote}）`);
   try {
     const out = await api("/videos/generate", { method: "POST", body: JSON.stringify(body) });
     renderVideoResult(out); // pending 阶段先给出 run_id/manifest 信息，轮询起来后更新
-    startVideoPolling(out.run_id);
+    startVideoPolling(out.run_id, videoState.backend);
     loadVideoRecent();
   } catch (err) {
     setStatus($("#video-status"), `提交失败：${err.message}`, true);
@@ -588,9 +728,10 @@ $("#btn-video-generate").addEventListener("click", async () => {
   }
 });
 
-function startVideoPolling(runId) {
+function startVideoPolling(runId, backend) {
   stopVideoPolling();
   videoState.activeRun = runId;
+  videoState.pollBackend = backend || "openrouter";
   setStatus($("#video-status"), "生成中…（一般 1–3 分钟，可离开页面，历史列表会留着）");
   const tick = async () => {
     let s;
@@ -625,7 +766,10 @@ function startVideoPolling(runId) {
       return;
     }
     const waited = Math.round((Date.now() - (videoState.pollSince || Date.now())) / 1000);
-    setStatus($("#video-status"), `生成中…（已等 ${waited}s，OpenRouter 状态 ${s.status}）`);
+    const stateLabel = videoState.pollBackend === "dreamina"
+      ? `即梦状态 ${s.job_status || "querying"}`
+      : `OpenRouter 状态 ${s.status}`;
+    setStatus($("#video-status"), `生成中…（已等 ${waited}s，${stateLabel}）`);
   };
   videoState.pollSince = Date.now();
   tick();
@@ -704,7 +848,7 @@ async function loadVideoRecent() {
     // 页面刷新后接着盯生成中的作业（跨刷新不断线）
     const pending = records.find((r) => r.status === "pending" || r.status === "in_progress");
     if (pending && videoState.activeRun !== pending.run_id) {
-      startVideoPolling(pending.run_id);
+      startVideoPolling(pending.run_id, pending.backend);
     }
   } catch (err) {
     box.innerHTML = `<span class="hint">加载失败：${escapeHtml(err.message)}</span>`;
@@ -730,7 +874,7 @@ function buildVideoRecentCard(rec) {
   }
   const meta = document.createElement("div");
   meta.className = "image-meta";
-  meta.innerHTML = `<span>${escapeHtml(String(rec.model || ""))}</span>
+  meta.innerHTML = `<span>${escapeHtml((rec.backend === "dreamina" ? "即梦 " : "") + String(rec.model || ""))}</span>
     <span>${escapeHtml((rec.created_at || "").slice(5, 16))}</span>`;
   card.appendChild(meta);
   const p = document.createElement("p");
@@ -798,6 +942,31 @@ function buildVideoRecentCard(rec) {
 
 $("#btn-video-recent-refresh").addEventListener("click", loadVideoRecent);
 
+/* ---------- 供应商切换（档位各记各的，切回不重置） ---------- */
+
+async function applyDreaminaPanel(restore) {
+  await ensureDreaminaDefaults();
+  applyDreaminaVideoModel();
+  applyDreaminaVideoEnums(restore);
+  applyVideoMode();
+  renderVideoModelInfo();
+  updateVideoCostHint();
+}
+
+async function applyBackendPanel() {
+  const dreamina = videoState.backend === "dreamina";
+  $("#video-openrouter-model-field").hidden = dreamina;
+  $("#video-dreamina-model-field").hidden = !dreamina;
+  if (dreamina) {
+    await applyDreaminaPanel(true); // 切回供应商：恢复各自档位
+  } else {
+    applyVideoEnums(true);
+    applyVideoMode();
+    renderVideoModelInfo();
+    updateVideoCostHint();
+  }
+}
+
 /* ---------- 初始化 ---------- */
 
 function initVideo() {
@@ -805,17 +974,35 @@ function initVideo() {
   renderVideoRefs();
   renderVideoVrefs();
   applyVideoMode();
-  $("#video-model").addEventListener("change", applyVideoEnums);
+  $("#video-model").addEventListener("change", () => applyVideoEnums(false));
+  $("#video-dreamina-model").addEventListener("change", () => {
+    videoState.saved.dreamina.model = $("#video-dreamina-model").value;
+    applyDreaminaVideoEnums(false);
+  });
   $("#video-duration").addEventListener("change", updateVideoCostHint);
   $("#video-resolution").addEventListener("change", updateVideoCostHint);
+  $$("#video-backend .seg").forEach((btn) =>
+    btn.addEventListener("click", () => {
+      if (videoState.backend === btn.dataset.backend) return;
+      const prev = videoState.backend;
+      const sel = prev === "dreamina" ? "#video-dreamina-model" : "#video-model";
+      videoState.saved[prev].model = $(sel).value;
+      videoState.saved[prev].aspect = $("#video-aspect").value;
+      videoState.saved[prev].resolution = $("#video-resolution").value;
+      videoState.saved[prev].duration = $("#video-duration").value;
+      videoState.backend = btn.dataset.backend;
+      videoSegToggle("#video-backend", "backend", videoState.backend);
+      applyBackendPanel();
+    })
+  );
   $$("#video-mode .seg").forEach((btn) =>
     btn.addEventListener("click", () => {
       if (videoState.mode === btn.dataset.mode) return;
       videoState.mode = btn.dataset.mode;
       $$("#video-mode .seg").forEach((b) =>
         b.classList.toggle("active", b.dataset.mode === videoState.mode));
-      applyVideoMode();
-      updateVideoCostHint();
+      if (videoState.backend === "dreamina") applyDreaminaPanel(false);
+      else { applyVideoMode(); updateVideoCostHint(); }
     })
   );
   loadVideoCatalog().catch(() => {});

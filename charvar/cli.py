@@ -42,7 +42,7 @@ subject_app = typer.Typer(help="主体档案（SQLite 存储）", no_args_is_hel
 subject_image_app = typer.Typer(help="主体档案图片（槽位图导入）", no_args_is_help=True)
 presets_app = typer.Typer(help="YAML 预设", no_args_is_help=True)
 image_app = typer.Typer(help="Playground：给一段提示词直接出一张图", no_args_is_help=True)
-video_app = typer.Typer(help="Playground 视频：给一段提示词直接出一段视频（OpenRouter，异步作业）", no_args_is_help=True)
+video_app = typer.Typer(help="Playground 视频：给一段提示词直接出一段视频（OpenRouter / 即梦，异步作业）", no_args_is_help=True)
 tts_app = typer.Typer(help="Playground 语音：给一段文本直接出一段语音（OpenRouter，同步）", no_args_is_help=True)
 app.add_typer(subject_app, name="subject")
 subject_app.add_typer(subject_image_app, name="image")
@@ -1199,12 +1199,12 @@ def image_models(
 
 # ---------- video（Playground 视频） ----------
 
-def _run_video(req, json_out: bool) -> None:
+def _run_video(req, json_out: bool, *, timeout_s: float, poll_interval: float) -> None:
     """跑一次 Playground 视频生成并输出结果（--json 时 stdout 只有 JSON）。"""
     from charvar import adhoc_video as adhoc_video_service
 
     try:
-        result = adhoc_video_service.generate(req)
+        result = adhoc_video_service.generate(req, poll_interval=poll_interval, timeout_s=timeout_s)
     except adhoc_video_service.AdhocVideoTimeout as exc:
         _die(f"超时未完成（作业还在跑）：{exc}\n  可稍后用网页「视频」页续查，或重跑等待")
         return
@@ -1279,19 +1279,94 @@ def video_openrouter(
         wait=True,
         out=out,
     )
-    _run_video(req, json_out)
+    _run_video(req, json_out, timeout_s=timeout, poll_interval=poll_interval)
+
+
+@video_app.command("dreamina")
+def video_dreamina(
+    prompt: Optional[str] = typer.Option(None, "--prompt", help="视频提示词"),
+    prompt_file: Optional[str] = typer.Option(
+        None, "--prompt-file", help="提示词文件（- 表示读 stdin）"
+    ),
+    ref: Optional[list[str]] = typer.Option(
+        None, "--ref", help="参考图路径，可重复（≤4；即梦走全能参考 multimodal2video）"
+    ),
+    video_ref: Optional[list[str]] = typer.Option(
+        None, "--video-ref", help="参考视频路径，可重复（≤2 条 mp4/mov/mpeg/webm；即梦全能参考）"
+    ),
+    first_frame: Optional[str] = typer.Option(
+        None, "--first-frame", help="首帧图路径（1 张；即梦 image2video；与 --ref/--video-ref 不可同给）"
+    ),
+    aspect: str = typer.Option(
+        "",
+        "--aspect",
+        help="画幅：1:1/3:4/16:9/4:3/9:16/21:9（即梦视频仅 6 档）；空 = 跟随：image2video 按首帧推断，text 走即梦默认 16:9",
+    ),
+    duration: Optional[int] = typer.Option(
+        None, "--duration", help="时长秒数（整数；空 = 5s；2.0 系 4–15s）"
+    ),
+    resolution: Optional[str] = typer.Option(
+        None, "--resolution", help="分辨率档（恒 720p；1080p/4k 仅 seedance2.0_vip，480p 仅 seedance2.5）；空 = 720p"
+    ),
+    model: Optional[str] = typer.Option(
+        None, "--model", help="即梦 model_version；空 = 设置页/env（DREAMINA_VIDEO_MODEL）默认 seedance2.0fast_vip"
+    ),
+    timeout: float = typer.Option(900.0, "--timeout", help="轮询超时秒数（默认 900）"),
+    poll_interval: float = typer.Option(5.0, "--poll-interval", help="轮询间隔秒数（默认 5）"),
+    out: Optional[Path] = typer.Option(None, "--out", "-o", help="另外落一份到这个路径"),
+    json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出到终端"),
+) -> None:
+    """用即梦（Dreamina）官方 CLI 出一段视频（需已 dreamina login；不暴露 seed，消耗即梦积分）。
+
+    默认模型 seedance2.0fast_vip（720p / 4–15s / 6 档画幅，最低价档）。
+    子命令按输入自动分派：纯文生 = text2video，首帧 = image2video，
+    参考图/参考视频 = multimodal2video（全能参考）。
+    """
+    from charvar import adhoc_video as adhoc_video_service
+
+    req = adhoc_video_service.VideoRequest(
+        prompt=_read_prompt(prompt, prompt_file),
+        backend="dreamina",
+        reference_paths=[Path(p).expanduser() for p in (ref or [])],
+        reference_video_paths=[Path(p).expanduser() for p in (video_ref or [])],
+        first_frame=Path(first_frame).expanduser() if first_frame else None,
+        aspect_ratio=aspect,
+        duration=duration,
+        resolution=resolution,
+        model=model,
+        wait=True,
+        out=out,
+    )
+    _run_video(req, json_out, timeout_s=timeout, poll_interval=poll_interval)
 
 
 @video_app.command("models")
 def video_models(
-    refresh: bool = typer.Option(False, "--refresh", help="忽略本地缓存，强制拉取最新目录"),
+    refresh: bool = typer.Option(False, "--refresh", help="忽略本地缓存，强制拉取最新目录（openrouter 专用）"),
+    provider: str = typer.Option("openrouter", "--provider", help="目录来源：openrouter（在线目录）或 dreamina（即梦静态枚举表）"),
     json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出到终端"),
 ) -> None:
-    """列 OpenRouter 可用的视频模型及其合法枚举。
+    """列视频模型及其合法枚举（时长/分辨率/画幅随供应商）。
 
     提交前先跑这个：时长／分辨率／画幅超枚举会在提交阶段被拒，
-    而视频按秒计费，提交成功就开始计费。
+    而 OpenRouter 视频按秒计费，提交成功就开始计费；即梦按积分计费。
     """
+    if provider == "dreamina":
+        from charvar import dreamina_video
+
+        if json_out:
+            typer.echo(json.dumps(dreamina_video.model_list(), ensure_ascii=False))
+            return
+        for model in dreamina_video.model_list():
+            typer.echo(
+                f"{model['id']}\t{'/'.join(model['resolutions'])}\t"
+                f"{model['durations'][0]}-{model['durations'][1]}s\t{'/'.join(model['ratios'])}"
+                + ("\tVIP-only" if model["vip_only"] else "")
+            )
+        return
+    if provider != "openrouter":
+        _die(f"未知供应商：{provider}（支持 openrouter / dreamina）")
+        return
     from charvar import openrouter_video
 
     try:

@@ -163,6 +163,19 @@ async function loadSettings() {
     $("#set-dreamina-model").value = dm.model || "";
     const dmRes = $("#set-dreamina-resolution");
     dmRes.value = Array.from(dmRes.options).some((o) => o.value === dm.resolution) ? dm.resolution : "";
+    // 即梦视频：模型下拉来自 tables.js 静态枚举表；已存值不在清单里时补一项
+    const dv = settings.dreamina_video || {};
+    const dvTable = typeof DREAMINA_VIDEO_MODELS === 'undefined' ? {} : DREAMINA_VIDEO_MODELS;
+    const dvModels = Object.keys(dvTable);
+    const dvSel = $("#set-dreamina-video-model");
+    const dvDefaultHtml = escapeHtml(settings.dreamina_video_default_model || "seedance2.0fast_vip");
+    const dvOptions = [`<option value="">跟随默认（${dvDefaultHtml}）</option>`]
+      .concat(dvModels.map((m) => `<option value="${m}">${m}</option>`));
+    if (dv.model && !dvModels.includes(dv.model)) {
+      dvOptions.push(`<option value="${escapeHtml(dv.model)}">${escapeHtml(dv.model)}（不在当前清单里）</option>`);
+    }
+    dvSel.innerHTML = dvOptions.join("");
+    dvSel.value = dv.model || "";
     // 放在卡片标题行右侧，长句塞不进标题行
     $("#dreamina-cli-status").textContent = settings.dreamina_cli_available === false
       ? "⚠ 未找到 dreamina CLI：安装后 dreamina login 才能出图"
@@ -224,6 +237,10 @@ $("#btn-settings-save").addEventListener("click", async () => {
   // OpenRouter 视频：model 空串 = 落库为空 = 回到 env（OP_VIDEO_MODEL）/ heygen 默认
   patch.openrouter_video = {
     model: $("#set-or-video-model").value.trim(),
+  };
+  // 即梦视频：model 空串 = 落库为空 = 回到 env / seedance2.0fast_vip 默认
+  patch.dreamina_video = {
+    model: $("#set-dreamina-video-model").value.trim(),
   };
   // OpenRouter 语音：model 空串 = 落库为空 = 回到 env（OP_TTS_MODEL）/ 免费默认
   patch.openrouter_tts = {

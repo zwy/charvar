@@ -94,6 +94,22 @@ class OpenRouterVideoSettings(BaseModel):
     model: str = ""
 
 
+class DreaminaVideoSettings(BaseModel):
+    """即梦（Dreamina）视频生成配置（Playground 视频，``charvar.dreamina_video``）。
+
+    - model 空串 = 用 env ``DREAMINA_VIDEO_MODEL``（再缺省 seedance2.0fast_vip
+      —— 用户指定的最低价档；CLI 各子命令自己的默认模型互不相同，charvar 必须
+      显式传 --model_version，不能靠 CLI 默认）；
+    - 鉴权走本机 ``dreamina login`` 的登录态，这里没有 key 可配；
+    - duration / resolution / aspect_ratio 不进配置：resolution 是即梦必填档
+      （缺省 720p）、时长 4-15s 按模型枚举、ratio 6 档，枚举校验在
+      ``charvar.dreamina_video``（静态表，随 CLI -h 同步）；
+    - 即梦不暴露 seed，charvar 的 seed 只记 manifest，不发送。
+    """
+
+    model: str = ""
+
+
 class OpenRouterTtsSettings(BaseModel):
     """OpenRouter 语音合成(TTS)配置(Playground 语音,``charvar.adhoc_tts``)。
 
@@ -115,6 +131,7 @@ class AppSettings(BaseModel):
     openrouter: OpenRouterSettings = Field(default_factory=OpenRouterSettings)
     dreamina: DreaminaSettings = Field(default_factory=DreaminaSettings)
     openrouter_video: OpenRouterVideoSettings = Field(default_factory=OpenRouterVideoSettings)
+    dreamina_video: DreaminaVideoSettings = Field(default_factory=DreaminaVideoSettings)
     openrouter_tts: OpenRouterTtsSettings = Field(default_factory=OpenRouterTtsSettings)
     default_negative_prompt: str = ""
 
@@ -154,6 +171,12 @@ def get_settings(conn: sqlite3.Connection) -> AppSettings:
         if isinstance(ov_raw, dict)
         else OpenRouterVideoSettings()
     )
+    dv_raw = data.get("dreamina_video")
+    dreamina_video = (
+        DreaminaVideoSettings.model_validate(dv_raw)
+        if isinstance(dv_raw, dict)
+        else DreaminaVideoSettings()
+    )
     ot_raw = data.get("openrouter_tts")
     openrouter_tts = (
         OpenRouterTtsSettings.model_validate(ot_raw)
@@ -174,6 +197,7 @@ def get_settings(conn: sqlite3.Connection) -> AppSettings:
         openrouter=openrouter,
         dreamina=dreamina,
         openrouter_video=openrouter_video,
+        dreamina_video=dreamina_video,
         openrouter_tts=openrouter_tts,
         default_negative_prompt=str(data.get("default_negative_prompt") or ""),
     )
@@ -195,6 +219,7 @@ def save_settings(conn: sqlite3.Connection, patch: dict) -> AppSettings:
             "openrouter",
             "dreamina",
             "openrouter_video",
+            "dreamina_video",
             "openrouter_tts",
             "default_negative_prompt",
         ):
@@ -262,6 +287,21 @@ def openrouter_video_config(conn: sqlite3.Connection) -> dict[str, str]:
 
     settings = get_settings(conn)
     return {"model": openrouter_video.resolve_model(settings.openrouter_video.model)}
+
+
+def dreamina_video_config(conn: sqlite3.Connection) -> dict[str, str]:
+    """即梦视频（Playground 视频）的生效配置：DB > env > 缺省（seedance2.0fast_vip）。
+
+    - model 走 dreamina_video.resolve_model 的完整链路（DB 值 > env > 默认）；
+    - resolution / duration / aspect_ratio 不进配置 —— resolution 是即梦必填档
+      （缺省 720p）、时长/画幅枚举按模型在 charvar.dreamina_video 校验；
+    - 提示词长度预检与「首用合规确认」（AigcComplianceConfirmationRequired）话式
+      识别也在 charvar.dreamina_video。
+    """
+    from charvar import dreamina_video
+
+    settings = get_settings(conn)
+    return {"model": dreamina_video.resolve_model(settings.dreamina_video.model)}
 
 
 def openrouter_tts_config(conn: sqlite3.Connection) -> dict[str, str]:

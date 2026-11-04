@@ -9,7 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from charvar import adhoc_video, openrouter_video, storage
+from charvar import adhoc_video, dreamina_video, openrouter_video, storage
 from charvar.api import build_app
 
 
@@ -279,3 +279,48 @@ def test_generate_with_bad_recent_run_id_rejected(client):
 def test_status_404_and_illegal_run_id(client):
     assert client.get("/videos/video_nope/status").status_code == 404
     assert client.get("/videos/evil_/status").status_code in (400, 404)
+
+
+# ---------- 即梦（Dreamina）供应商 ----------
+
+
+def test_generate_dreamina_backend(client, tmp_path, monkeypatch):
+    _inject_catalog(tmp_path, monkeypatch)
+    captured = {}
+
+    def fake_dreamina_submit(**kw):
+        captured.update(kw)
+        return {"submit_id": "dm-submit-1", "gen_status": "querying",
+                "result_json": {"images": [], "videos": []}}
+
+    monkeypatch.setattr(dreamina_video, "submit", fake_dreamina_submit)
+    resp = client.post("/videos/generate", json={
+        "prompt": "dance clip", "backend": "dreamina",
+        "duration": 5, "resolution": "720p", "aspect_ratio": "9:16",
+    })
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["provider"] == "dreamina"
+    assert body["job_id"] == "dm-submit-1"
+    assert body["status"] == "pending"
+    assert body["status_url"].startswith("/videos/")
+    # 默认链落到 charvar 默认档：请求显式给了就走请求值
+    assert captured["model"] == "seedance2.0fast_vip"
+    assert captured["resolution"] == "720p" and captured["duration"] == 5
+
+
+def test_generate_dreamina_empty_params_resolve_defaults(client, tmp_path, monkeypatch):
+    _inject_catalog(tmp_path, monkeypatch)
+    captured = {}
+
+    def fake_dreamina_submit(**kw):
+        captured.update(kw)
+        return {"submit_id": "dm-submit-2", "gen_status": "querying"}
+
+    monkeypatch.setattr(dreamina_video, "submit", fake_dreamina_submit)
+    resp = client.post("/videos/generate", json={
+        "prompt": "clip", "backend": "dreamina",
+    })  # duration/resolution/aspect 缺省：即梦必填档走后端解析（720p / 5s）
+    assert resp.status_code == 200, resp.text
+    assert captured["resolution"] == "720p" and captured["duration"] == 5
+    assert captured["ratio"] == "9:16"  # VideoRequest 默认画幅

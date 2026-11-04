@@ -1,12 +1,12 @@
 ---
 name: charvar-skill
-description: Generate images with the charvar project's ComfyUI, OpenRouter, or Dreamina backends from any project. This skill should be used when the user asks to "用 comfyui 生图", "用 openrouter 生图", "用即梦生图", "charvar 帮我出图", "用 charvar 出张图", "generate an image with comfyui", "generate an image with openrouter", "generate an image with dreamina", or otherwise asks to produce an image via the charvar CLI; also for generating short videos via OpenRouter ("charvar 帮我出段视频", "用 openrouter 生视频", "generate a video with charvar"), for text-to-speech via OpenRouter ("charvar 帮我出语音", "把这段文字变成语音", "用 openrouter 生语音", "generate speech / TTS with charvar"), and for charvar subject-profile tasks such as "导入角色档案", "从模板生成主体档案" or using the charvar subject CLI, and for drafting the five subject-image slot prompts (character_sheet/headshot/front/side/behind) without an existing profile via "charvar subject prompt" ("起草主体图提示词", "AI 起草定妆图提示词", "帮我起草设定图提示词").
+description: Generate images with the charvar project's ComfyUI, OpenRouter, or Dreamina backends from any project. This skill should be used when the user asks to "用 comfyui 生图", "用 openrouter 生图", "用即梦生图", "charvar 帮我出图", "用 charvar 出张图", "generate an image with comfyui", "generate an image with openrouter", "generate an image with dreamina", or otherwise asks to produce an image via the charvar CLI; also for generating short videos via OpenRouter or the Dreamina (即梦) CLI ("charvar 帮我出段视频", "用 openrouter 生视频", "用即梦生视频", "generate a video with charvar"), for text-to-speech via OpenRouter ("charvar 帮我出语音", "把这段文字变成语音", "用 openrouter 生语音", "generate speech / TTS with charvar"), and for charvar subject-profile tasks such as "导入角色档案", "从模板生成主体档案" or using the charvar subject CLI, and for drafting the five subject-image slot prompts (character_sheet/headshot/front/side/behind) without an existing profile via "charvar subject prompt" ("起草主体图提示词", "AI 起草定妆图提示词", "帮我起草设定图提示词").
 ---
 
 # charvar 生图
 
-版本：1.6.0  
-更新：2026-10-28
+版本：1.7.0  
+更新：2026-11-04
 
 通过 charvar 项目的 CLI 出图。三条后端：**comfyui**（本机/局域网 ComfyUI）、
 **openrouter**（OpenRouter 在线生图）和 **dreamina**（即梦官方 CLI，消耗即梦积分）。
@@ -92,10 +92,11 @@ cat prompt.md | ~/.local/bin/charvar image comfyui --prompt-file - --out out.png
 charvar 的网页顶栏也有「Playground」页签（`http://127.0.0.1:8710`），走的是同一条通路。
 用户明确说「在网页上出图 / 用 charvar 的网页」时指那个 —— 告诉用户地址即可，别自己用 CLI 顶替。
 
-## 视频（OpenRouter 通路）
+## 视频（OpenRouter / 即梦通路）
 
-给一段提示词出**一段视频**（异步作业；按秒计费 —— 提交成功就开始计费，长跑前提醒用户）。
-默认模型 `heygen/heygen-video-1`（便宜档 480p $0.02/s），设置里可用 `OP_VIDEO_MODEL` 换：
+给一段提示词出**一段视频**（异步作业；OpenRouter 按秒计费 —— 提交成功就开始计费，
+长跑前提醒用户；即梦按积分计费）。OpenRouter 默认模型 `heygen/heygen-video-1`
+（便宜档 480p $0.02/s），设置里可用 `OP_VIDEO_MODEL` 换：
 
 ```bash
 ~/.local/bin/charvar video openrouter --prompt "a young woman performs a smooth dance" --aspect 9:16 --resolution 480p --duration 5
@@ -112,6 +113,16 @@ charvar 的网页顶栏也有「Playground」页签（`http://127.0.0.1:8710`）
 - 生成要 1–3 分钟，命令阻塞轮询（`--timeout` 默认 900s）；`--json` 给脚本消费。
 - 网页顶栏「视频」页签是同一条通路（`http://127.0.0.1:8710`）。
 
+即梦（Dreamina）走官方 CLI，子命令按输入自动分派：纯文生 `text2video`、首帧
+`image2video`、`--ref`/`--video-ref`（≤4/≤2）走全能参考 `multimodal2video`；
+默认模型 `seedance2.0fast_vip`（最低价档：720p / 4–15s / 6 档画幅）；**没有 `--seed`**：
+
+```bash
+~/.local/bin/charvar video dreamina --prompt "the woman performs a smooth dance" --aspect 9:16 --duration 5
+```
+
+- 枚举两处同源（`_VIDEO_MODELS` / tables.js `DREAMINA_VIDEO_MODELS`），细节与坑见
+  `references/cli.md`；首用合规确认（`AigcComplianceConfirmationRequired`）要去即梦网页端过一次。
 ## 语音（OpenRouter TTS 通路）
 
 给一段文本出**一段音频**（同步：命令块到响应为止，一般几秒到几十秒）。
@@ -292,6 +303,8 @@ PY
 | workflow 找不到 | `data/workflows/` 里没有该名字；用 `--workflow` 给 JSON 路径 |
 
 ## 版本记录
+
+- **1.7.0**（2026-11-04）视频接入即梦（Dreamina CLI）：`charvar video dreamina`（子命令按输入分派，默认 seedance2.0fast_vip）；`video models --provider dreamina`；网页视频页供应商切换；设置页「即梦视频」组。
 
 1.6.0（2026-10-28）：**新增语音生成通路（OpenRouter TTS）**：`charvar tts openrouter`（文本 → wav/mp3，同步）与 `charvar tts models`（模型/voice 清单）。默认模型免费档 `heygen/heygen-voice-1-turbo:free`（`OP_TTS_MODEL` 可换），网页顶栏新增「语音」页签同一条通路。要点：voice 目录枚举非空时实测必填（空值自动取第一项兜底）；HeyGen 系 5000 字符单次上限提交前拦截；裸 PCM 按响应头采样率封装成 wav，MiniMax 只出 mp3（格式给错自动换档重试并记探测缓存）。声音克隆（参考音频）第二期再接。
 
