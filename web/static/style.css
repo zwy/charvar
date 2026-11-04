@@ -227,40 +227,44 @@ td .caption { color: var(--muted); }
   margin: 0;
   margin-top: var(--sp-3); 
 }
-/* 主体档案选择卡：id ＋ 显示名两行文字，网格紧凑排布（替代旧的一行一个列表） */
-.subject-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
-  gap: var(--sp-2);
+/* ---------- 主体档案库（subjects.html 上半）：与人脸、动作、服饰三库同一套
+   master-detail 骨架（.subject-* 与 .face-* / .pose-* / .costume-* 一一对应）。
+   差异：主体没有来源/目录页签（CLI 建档、页面只选不建），工具栏只有搜索行；
+   详情栏不是图片+徽章的阅读面板，而是可编辑档案表单（id 只读展示、保存/删除）。
+   网格行的收缩红线同 .pose-grid 注释——overflow:hidden 卡片 + auto 行高会逐行压叠。 */
+.subject-browser { display: flex; width: 100%; height: 66vh; min-height: 420px; }
+.subject-master { width: 62%; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-3); border-right: 1px solid var(--line); }
+.subject-toolbar { display: flex; flex-direction: column; gap: var(--sp-2); }
+.subject-toolbar-row { display: flex; gap: var(--sp-2); align-items: center; }
+.subject-toolbar-row input { flex: 1 1 auto; min-width: 140px; font: inherit; padding: 6px 9px; max-width: 420px; min-height: var(--ctl-h); border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; color: var(--text); }
+.subject-toolbar-row input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.subject-grid { display: grid; flex: 1 1 0; min-height: 0; overflow-y: auto; padding-right: 6px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); grid-auto-rows: max-content; align-items: start; gap: var(--sp-3); }
+.subject-card { padding: 8px; overflow: visible; position: relative; }
+.subject-thumb { background: #f4f6f9; border-radius: var(--radius-ctl); overflow: hidden; aspect-ratio: 2 / 3; position: relative; }
+.subject-thumb img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.subject-thumb-empty { display: flex; align-items: center; justify-content: center; height: 100%; min-height: 120px; padding: 0 var(--sp-2); font-size: 11px; color: var(--muted); text-align: center; }
+.subject-card.active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.image-card.subject-card .image-meta { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 1px; min-height: 0; }
+.subject-card-name { font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.subject-card-id { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.subject-empty { grid-column: 1 / -1; padding: var(--sp-4); text-align: center; font-size: 12px; color: var(--muted); }
+.subject-detail { width: 38%; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4); background: #fafbfd; overflow-y: auto; border-radius: 0 0 var(--radius-card) var(--radius-card); }
+.subject-detail-titles { display: flex; flex-direction: column; gap: 2px; margin-bottom: var(--sp-3); }
+.subject-detail-titles h3 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.45; }
+.subject-detail-id { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.subject-detail-empty { padding: var(--sp-4) 0; text-align: center; font-size: 12px; color: var(--muted); }
+#subject-form .actions { margin-top: var(--sp-3); }
+.subject-browser-page { height: min(980px, calc(100vh - 210px)); min-height: 520px; }
+.subject-browser-page .subject-detail { border-radius: 0 0 var(--radius-panel) var(--radius-panel); }
+.subject-grid::-webkit-scrollbar, .subject-detail::-webkit-scrollbar { width: 4px; }
+.subject-grid::-webkit-scrollbar-thumb, .subject-detail::-webkit-scrollbar-thumb { background: var(--line); border-radius: 10px; }
+@media (max-width: 720px) {
+  .subject-browser { flex-direction: column; height: auto; }
+  .subject-browser-page { height: auto; min-height: 0; }
+  .subject-master { width: 100%; border-right: 0; border-bottom: 1px solid var(--line); }
+  .subject-grid { flex: 0 0 auto; } /* 列向 flex 里 flex-basis 0 会把网格压成 0 高 */
+  .subject-detail { width: 100%; border-radius: 0; }
 }
-.subject-cards .hint { grid-column: 1 / -1; }
-.subject-card {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 3px;
-  padding: 8px 11px;
-  min-width: 0;
-  min-height: 0;
-  text-align: left;
-}
-.subject-card .sc-id {
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.subject-card .sc-name {
-  font-size: 12px;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.subject-card.active { background: var(--accent-soft); border-color: var(--accent-line); }
-.subject-card.active .sc-id { color: var(--accent); }
 /* 表单分段：基本信息 / 锁定项 / 补充 / 供应商参数 / 参考图 …（小标题 + 分隔线）。
    全站唯一的分组机制 —— 预设页、Playground、视频、主体档案、设置都用它。
    标题右侧可放一句状态（如「已选 0 张」）。 */
@@ -295,11 +299,6 @@ td .caption { color: var(--muted); }
 .or-mode-group .form-section-title { margin-bottom: 0; }
 /* 「保存设置」独立行卡片：全页设置一个入口 */
 .settings-save .hint { flex: 1 1 320px; }
-.import-box { border-top: 1px solid var(--line); padding-top: var(--sp-3); }
-.import-box summary { cursor: pointer; color: var(--muted); font-size: 13px; }
-.import-box textarea { width: 100%; font-family: var(--mono); font-size: 12px; }
-.import-box > * + * { margin-top: var(--sp-2); }
-
 .form-field { display: flex; flex-direction: column; gap: var(--sp-1); font-size: 12px; color: var(--muted); }
 .field-label { color: var(--muted); font-size: 12px; }
 .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }

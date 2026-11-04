@@ -1,7 +1,10 @@
-/* 主体页（/ui/subjects）：主体档案 CRUD、五槽位图、通用提示词模板。
+/* 主体页（/ui/subjects）：主体档案库浏览、五槽位图、通用提示词模板。
+   上半是与人脸/动作/服饰三库同形态的 master-detail：左侧搜索 + 档案卡网格
+   （front 缩略图、缺图占位），右侧详情 = 可编辑档案表单（id 只读展示）。
+   建档统一走 CLI（空态文案指向 CLI 建档），页面只做选择 / 编辑现有档案 / 删除。
    真多页版全局依赖：$/api/apiUpload/setStatus/escapeHtml/SLOT_* 在 core.js；
    renderMarkdown/Media 弹窗在 media.js —— 脚本清单见 subjects.html。
-   拆页改动：loadSubjects 是本页版（只填 #subject-list,不碰预设页的 #gen-subject）。 */
+   拆页改动：loadSubjects 列表只填本页 #subject-list，不碰预设页的 #gen-subject。 */
 
 /* ---------- 本页状态 ---------- */
 const state = {
@@ -9,37 +12,141 @@ const state = {
   currentSubject: null,
   subjectImages: [], // 主体档案图片槽位（当前主体）
   templateMd: "", // 当前主体的通用提示词模板
-};
-
-/* ---------- 本页初始化 ---------- */
+  q: "", // 搜索词（id / 显示名 / 锁定项）
+};/* ---------- 主体档案库（上半：搜索 + 网格 + 常驻详情） ---------- */
 async function loadSubjects() {
   state.subjects = await api("/subjects");
-  renderSubjectList();
+  renderSubjectPage();
 }
-loadSubjects().catch((err) => setStatus($("#subject-list"), `主体列表加载失败：${err.message}`, true));/* ---------- 主体档案 ---------- */
+loadSubjects().catch((err) => {
+  const grid = $("#subject-list");
+  if (grid) grid.innerHTML = `<span class="status error">主体列表加载失败：${escapeHtml(err.message)}</span>`;
+});
+
+/* 搜索素材串：id + 显示名 + 四组锁定项 + extra（matchesQuery 是 core.js 的
+   多词 AND 语义，与三库搜索同一入口） */
+function subjectSearchHay(s) {
+  return [
+    s.id,
+    s.name,
+    ...(s.style_lock || []),
+    ...(s.identity_lock || []),
+    ...(s.body_lock || []),
+    ...(s.outfit_lock || []),
+    s.extra || "",
+  ].join(" ");
+}
+
+function filteredSubjects() {
+  return state.subjects.filter(function (s) {
+    return !state.q || matchesQuery(subjectSearchHay(s), state.q);
+  });
+}
+
+/* 档案卡：2:3 图位（front 缩略图，缺图/加载失败渲染占位）+ 显示名 + mono id。
+   与三库卡片同一形态（.image-card 基类 + .subject-card 修饰）。 */
+function subjectThumbUrl(s) {
+  return `/subjects/${encodeURIComponent(s.id)}/images/front/thumb?t=${Date.now()}`;
+}
+
+function renderSubjectPage() {
+  const stat = $("#subject-page-stat");
+  if (stat) stat.textContent = state.subjects.length + " 个主体";
+  renderSubjectList();
+  wireSubjectSearch();
+}
+
+/* 缺图占位：与 costume/pose 库的 thumb-empty 同款居中灰字 */
+function emptyThumb() {
+  const ph = document.createElement("div");
+  ph.className = "subject-thumb-empty";
+  ph.textContent = "无图";
+  return ph;
+}
+
 function renderSubjectList() {
-  const box = $("#subject-list");
-  box.innerHTML = "";
-  if (!state.subjects.length) {
-    box.innerHTML = `<span class="hint">还没有档案：点「+ 新建」建档，或粘贴 YAML 导入。</span>`;
-    return;
+  const grid = $("#subject-list");
+  grid.innerHTML = "";
+  const items = filteredSubjects();
+  if (!items.length) {
+    grid.innerHTML = state.subjects.length
+      ? '<div class="subject-empty">没有符合条件的主体 —— 换个搜索词</div>'
+      : '<div class="subject-empty">暂无主体档案 —— 用 CLI 建档：charvar subject add presets/subjects/&lt;id&gt;.yaml</div>';
   }
-  for (const s of state.subjects) {
-    const card = document.createElement("button");
-    card.type = "button";
-    card.className = "subject-card"; // id ＋ 显示名两行的紧凑选择卡
-    card.innerHTML = `<span class="sc-id">${escapeHtml(s.id)}</span><span class="sc-name">${escapeHtml(s.name)}</span>`;
-    if (state.currentSubject === s.id) card.classList.add("active");
-    card.addEventListener("click", () => fillSubjectForm(s));
-    box.appendChild(card);
+  items.forEach(function (s) {
+    const card = document.createElement("div");
+    card.className = "image-card subject-card"; // 库网格通用卡 + 主体缩略图修饰
+    card.innerHTML =
+      '<div class="subject-thumb">' +
+      '<img src="' + escapeHtml(subjectThumbUrl(s)) + '" alt="' + escapeHtml(s.id) + '" loading="lazy">' +
+      "</div>" +
+      '<div class="image-meta">' +
+      '<span class="subject-card-name">' + escapeHtml(s.name || s.id) + "</span>" +
+      '<span class="subject-card-id">' + escapeHtml(s.id) + "</span>" +
+      "</div>";
+    card.addEventListener("click", function () {
+      selectSubject(s);
+    });
+    const img = card.querySelector("img");
+    img.addEventListener("error", function () {
+      img.replaceWith(emptyThumb()); // 缺图占位（对齐 costume-thumb-empty）
+    });
+    grid.appendChild(card);
+  });
+  markActiveSubjectCard();
+  /* 首次打开 / 选中项不在当前筛选结果里 → 自动选中第一个（详情栏始终跟随可见项；
+     与三库同一行为）。搜索无命中 → 详情栏清空成占位。 */
+  if (items.length && items.some(function (s) { return s.id === state.currentSubject; })) return;
+  if (items[0]) {
+    selectSubject(items[0]);
+  } else {
+    state.currentSubject = null;
+    renderDetailPane();
   }
 }
 
-function fillSubjectForm(s) {
-  state.currentSubject = s.id;
-  renderSubjectList();
-  $("#subject-form-title").textContent = `档案详情：${s.id}${s.name ? `（${s.name}）` : ""}`;
-  $("#s-id").value = s.id;
+function markActiveSubjectCard() {
+  const items = filteredSubjects();
+  $$("#subject-list .subject-card").forEach(function (el, i) {
+    el.classList.toggle("active", items[i] && items[i].id === state.currentSubject);
+  });
+}
+
+/* 选中主体：标环 + 详情栏（表单值 + 下半两张卡）一次到位 */
+function selectSubject(s) {
+  state.currentSubject = s ? s.id : null;
+  markActiveSubjectCard();
+  renderDetailPane();
+}
+
+function wireSubjectSearch() {
+  const input = $("#subject-q");
+  if (input && !input.dataset.wired) {
+    input.dataset.wired = "1";
+    let timer = null;
+    input.addEventListener("input", function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        state.q = input.value.trim().toLowerCase();
+        renderSubjectList();
+      }, 180);
+    });
+  }
+}
+
+/* ---------- 详情栏：档案表单（id 只读，保存/删除） ---------- */
+/* 详情栏一次渲染：标题（显示名 + mono id）+ 表单值；建档走 CLI，id 不再编辑。
+   初次建档（表单为空）不再提供 —— currentSubject 为空时整栏退回空态。 */
+function renderDetailPane() {
+  const s = state.subjects.find(function (x) { return x.id === state.currentSubject; });
+  const has = !!s;
+  $("#subject-detail-empty").hidden = has;
+  $("#subject-form").hidden = !has;
+  $("#subject-images-card").hidden = !has;
+  $("#template-card").hidden = !has;
+  if (!has) return;
+  $("#subject-detail-name").textContent = s.name || s.id;
+  $("#s-id").textContent = s.id;
   $("#s-name").value = s.name;
   $("#s-noun").value = s.subject_noun;
   $("#s-trigger").value = s.trigger_word || "";
@@ -48,24 +155,15 @@ function fillSubjectForm(s) {
   $("#s-body").value = (s.body_lock || []).join("\n");
   $("#s-outfit").value = (s.outfit_lock || []).join("\n");
   $("#s-extra").value = s.extra || "";
+  setStatus($("#subject-form-status"), "");
   loadSubjectImages();
   loadSubjectTemplate();
-}
-
-function clearSubjectForm() {
-  state.currentSubject = null;
-  renderSubjectList();
-  $("#subject-form-title").textContent = "档案详情";
-  ["s-id", "s-name", "s-trigger", "s-style", "s-identity", "s-body", "s-outfit", "s-extra"].forEach((id) => ($(id).value = ""));
-  $("#s-noun").value = "person";
-  $("#subject-images-card").hidden = true;
-  $("#template-card").hidden = true;
 }
 
 function collectSubjectFromForm() {
   const list = (id) => $(id).value.split("\n").map((v) => v.trim()).filter(Boolean);
   return {
-    id: $("#s-id").value.trim(),
+    id: state.currentSubject,
     name: $("#s-name").value.trim(),
     subject_noun: $("#s-noun").value.trim() || "person",
     trigger_word: $("#s-trigger").value.trim() || null,
@@ -77,84 +175,35 @@ function collectSubjectFromForm() {
   };
 }
 
-$("#btn-subject-new").addEventListener("click", clearSubjectForm);
-
 $("#btn-subject-save").addEventListener("click", async () => {
+  const sid = state.currentSubject;
+  if (!sid) return;
   const profile = collectSubjectFromForm();
-  if (!profile.id || !profile.name) return setStatus($("#gen-status"), "档案需要 ID 与显示名", true);
+  if (!profile.name) return setStatus($("#subject-form-status"), "档案需要显示名", true);
   try {
-    if (state.currentSubject === profile.id) {
-      await api(`/subjects/${encodeURIComponent(profile.id)}`, { method: "PUT", body: JSON.stringify(profile) });
-    } else {
-      await api("/subjects", { method: "POST", body: JSON.stringify(profile) });
-    }
-    await loadSubjects();
-    fillSubjectForm(Object.assign(profile, await api(`/subjects/${encodeURIComponent(profile.id)}`)));
-    setStatus($("#gen-status"), `已保存档案：${profile.id}`);
+    await api(`/subjects/${encodeURIComponent(sid)}`, { method: "PUT", body: JSON.stringify(profile) });
+    const fresh = await api(`/subjects/${encodeURIComponent(sid)}`);
+    const row = state.subjects.find(function (x) { return x.id === sid; });
+    if (row) Object.assign(row, fresh);
+    $("#subject-detail-name").textContent = fresh.name || fresh.id;
+    markActiveSubjectCard();
+    setStatus($("#subject-form-status"), `已保存：${sid}`);
   } catch (err) {
-    setStatus($("#gen-status"), `保存失败：${err.message}`, true);
+    setStatus($("#subject-form-status"), `保存失败：${err.message}`, true);
   }
 });
 
 $("#btn-subject-delete").addEventListener("click", async () => {
-  const id = $("#s-id").value.trim();
-  if (!id) return;
+  const sid = state.currentSubject;
+  if (!sid) return;
+  if (!confirm(`删除主体 ${sid}？档案、五槽位图与模板一并删除，不可恢复。`)) return;
   try {
-    await api(`/subjects/${encodeURIComponent(id)}`, { method: "DELETE" });
-    clearSubjectForm();
-    await loadSubjects();
-    setStatus($("#gen-status"), `已删除档案：${id}`);
+    await api(`/subjects/${encodeURIComponent(sid)}`, { method: "DELETE" });
+    state.currentSubject = null;
+    setStatus($("#subject-form-status"), `已删除：${sid}`);
+    await loadSubjects(); // 重选剩下第一个
   } catch (err) {
-    setStatus($("#gen-status"), `删除失败：${err.message}`, true);
-  }
-});
-
-/* 极简 YAML 解析（主体档案的扁平 schema） */
-function parseSimpleYaml(text) {
-  const data = {};
-  let lastKey = null;
-  for (let raw of text.split("\n")) {
-    const line = raw.replace(/\s+#.*$/, "").trimEnd();
-    if (!line.trim() || line.trim().startsWith("#")) continue;
-    const indent = raw.length - raw.trimStart().length;
-    const item = line.trim();
-    if (item.startsWith("- ") && lastKey) {
-      if (!Array.isArray(data[lastKey])) data[lastKey] = [];
-      data[lastKey].push(unquote(item.slice(2).trim()));
-      continue;
-    }
-    const idx = item.indexOf(":");
-    if (idx === -1) continue;
-    const key = item.slice(0, idx).trim();
-    let value = item.slice(idx + 1).trim();
-    lastKey = key;
-    if (!value) { data[key] = value; continue; }
-    if (value.startsWith("[")) {
-      const inner = value.replace(/^\[|\]$/g, "");
-      data[key] = inner.split(",").map((v) => unquote(v.trim())).filter(Boolean);
-    } else {
-      data[key] = unquote(value);
-    }
-  }
-  return data;
-}
-
-function unquote(text) {
-  if ((text.startsWith('"') && text.endsWith('"')) || (text.startsWith("'") && text.endsWith("'"))) {
-    return text.slice(1, -1);
-  }
-  return text;
-}
-
-$("#btn-subject-import").addEventListener("click", async () => {
-  const data = parseSimpleYaml($("#s-yaml").value);
-  try {
-    await api("/subjects", { method: "POST", body: JSON.stringify(data) });
-    await loadSubjects();
-    fillSubjectForm(await api(`/subjects/${encodeURIComponent(data.id)}`));
-    setStatus($("#gen-status"), `已导入档案：${data.id}`);
-  } catch (err) {
-    setStatus($("#gen-status"), `导入失败：${err.message}`, true);
+    setStatus($("#subject-form-status"), `删除失败：${err.message}`, true);
   }
 });
 
