@@ -17,6 +17,11 @@
 不支持的作氛围描述读取）；``ensemble`` = 伴舞从第 2 镜入画、``shots`` = 镜头数
 （缺省按时长推）—— 随机 MV 配方 `random_mv_video` 即此用法。
 
+特写开场（``opening="face"``）：第 1 镜保持面部大特写（首帧 = 特写），第 2 镜起切到
+全身开始编舞 —— 随机 MV 升级版 `random_mv_video_up` 即此用法。文字特效
+（``text_fx`` 配 ``text_pool``）：两处背景大字（中段爆点 + 末镜亮相），词由
+``pick_text_words`` 池子掷骰、逐词锁进脚本校验。
+
 片段类型的随机不走 LLM：类型池 ``DEFAULT_TYPES``（配方 YAML ``types:`` 可覆盖），
 ``wildcard.rng_for`` 子种子抽取注入 brief —— 掷骰可复现，LLM 只负责把类型编成
 动作脚本。
@@ -47,6 +52,10 @@ DEFAULT_TYPES: tuple[str, ...] = (
     "回眸与眼神流转",
     "轻轻拨弄头发后定格",
 )
+
+# 文字特效词池（配方 YAML text_pool 可覆盖）：背景大字从池子里掷一对（可复现），
+# 中段爆点与末镜亮相各一处 —— 词交给视频模型渲染，超短大写词出字最稳。
+DEFAULT_TEXT_POOL: tuple[str, ...] = ("HIT", "OWN IT", "SHINE", "GO GO", "LOVE")
 
 
 def _brief(
@@ -148,20 +157,54 @@ def _brief_multishot(
     amplitude: str = "normal",
     ensemble: bool = False,
     image_attached: bool = False,
+    opening: str = "body",
+    text_words: list[str] | None = None,
 ) -> str:
-    """多镜 MV brief：编号镜头+分秒切点+机位运镜，正文后附【实录声场】【配乐】两段。"""
+    """多镜 MV brief：编号镜头+分秒切点+机位运镜，正文后附【实录声场】【配乐】两段。
+
+    opening="face" = 特写开场（第 1 镜面部大特写，第 2 镜起切全身）；text_words
+    非空 = 两处背景大字（中段爆点 + 末镜亮相，词已掷定逐词编进对应镜头）。"""
     scene_line = (
         f"【场景与光线（来自场景设计步，全程一致）】\n{scene_text}\n" if scene_text else ""
     )
-    if image_attached:
+    if image_attached and opening == "face":
+        first_frame = "已附的这张图片——首席的面部大特写，第 1 镜的开场画面，特写本身就在图中"
+    elif image_attached:
         first_frame = "已附的这张图片——第 1 镜的开场画面，0 秒就是图中的姿态"
     else:
         first_frame = "另一张已生成的首帧图（随提示词一起发给视频模型）——第 1 镜的开场画面"
+    structure_line = (
+        "，采用多镜头 MV 分镜结构（特写开场：第 1 镜保持面部大特写，第 2 镜起切到全身开始编舞）"
+        if opening == "face"
+        else "，采用多镜头 MV 分镜结构"
+    )
+    if opening == "face":
+        first_shot_rule = (
+            f"第 1 镜（0 秒起至切点）保持面部大特写：0 秒就是附图特写画面（只露脸不露肩），"
+            "直接接续——写眼神流转、表情变化、睫毛与发丝微动、光斑掠过等微动作，"
+            "镜头不切出特写；第 2 镜起切到全身/全景构图，编舞从第 2 镜开始，"
+            "动作在切镜点前后保持衔接感。"
+        )
+        chorus_rule = (
+            "6. 编舞按首席的起始姿态合理可达，结构上：起势（第 1 镜特写中以眼神与表情酝酿，"
+            "切镜即爆发）→ 主段（从第 2 镜起贯穿各镜的 2–3 组动作主题，幅度逐段升级）→ 收尾"
+            "（末镜回到镜头前亮相定格，动作余韵中收束）。"
+        )
+    else:
+        first_shot_rule = (
+            "第 1 镜 0 秒从首帧姿态直接接续，不要先摆好姿势再开始；后续镜头切换机位但仍在"
+            "同一场景中，动作在切镜点前后保持衔接感。"
+        )
+        chorus_rule = (
+            "6. 编舞按首席的起始姿态合理可达，结构上：起势（第 1 镜从首帧姿态带出）→ 主段"
+            "（贯穿各镜的 2–3 组动作主题，幅度逐段升级）→ 收尾（末镜回到镜头前亮相定格，"
+            "动作余韵中收束）。"
+        )
     if ensemble:
         cast_rule = (
-            "4. 伴舞安排：从第 2 镜开始伴舞入画，人数 3–5 名，穿与首席同色系的简化服装、"
-            "与首席保持明显身形区分；动作与首席同步呼应、阵型对称合理并始终让出首席的中心"
-            "位置，不遮挡、不顶替首席。\n"
+            "4. 伴舞安排：第 2 镜起伴舞入画（特写开场时第 3 镜起入画），人数 3–5 名，穿与首席"
+            "同色系的简化服装、与首席保持明显身形区分；动作与首席同步呼应、阵型对称合理并"
+            "始终让出首席的中心位置，不遮挡、不顶替首席。\n"
         )
     else:
         cast_rule = "4. 全程只有首席一人出镜，任何镜头都不出现第二个人或动物。\n"
@@ -174,9 +217,16 @@ def _brief_multishot(
         amp_rule = (
             "5. 动作幅度适中，四肢与手指结构连贯清楚，不做镜头前的怪异扭曲。\n"
         )
+    words = [str(w or "").strip() for w in (text_words or []) if str(w or "").strip()]
+    text_rule = (
+        "7. 文字特效：中段爆点镜（第 2 镜或第 3 镜的最强拍处）与末镜亮相各编入一处背景大字，"
+        f"依次写入「{words[0]}」「{words[1]}」（词已给定，直接采用、不改拼写）；"
+        "大字为超大粗体无衬线大写、亮色闪粉/辉光质感，作为背景图形贴在布景墙面上，"
+        "构图不遮挡首席面部与队形核心，整镜清晰可读；除这两处外画面中不出现任何其他文字。\n"
+    ) if len(words) >= 2 else ""
     return (
         f"你是 MV 导演兼视频编剧。写一段 {duration} 秒、{shots_count} 个镜头的 AI 生成视频"
-        "「直出视频提示词」，采用多镜头 MV 分镜结构。\n"
+        f"「直出视频提示词」{structure_line}。\n"
         f"视频的首帧画面：{first_frame}；后续镜头是脚本切换出的新构图，由视频模型按分镜执行。\n\n"
         + f"【首席·动作描述】\n{pose_text}\n"
         + f"【首席·动作】{pose_title}" + (f"（{category}）" if category else "") + "\n"
@@ -187,24 +237,29 @@ def _brief_multishot(
         + f"1. 开头一句：以输入首帧为唯一视觉依据，生成一段约{duration}秒、{shots_count}个镜头的{clip_type}MV 视频。\n"
         + "2. 分镜编号成文（镜头一／镜头二……）：每镜写明起始秒（第几秒起，切点均匀排满"
         + f"{duration}秒）、镜头语言（从特写、中景、全景、低位仰拍、跟拍后退、横摇、推近、环绕"
-        + "中选用）与该镜的画面内容及编舞细节；第 1 镜 0 秒从首帧姿态直接接续，不要先摆好姿势"
-        + "再开始；后续镜头切换机位但仍在同一场景中，动作在切镜点前后保持衔接感。\n"
+        + "中选用）与该镜的画面内容及编舞细节；"
+        + first_shot_rule
+        + "\n"
         + "3. 硬规则：全程同一首席——同发型同服装同妆容，每个镜头里首席都是画面焦点，不混入"
         + "人群失去主体；切镜不换背景与光线；不出现文字水印；结尾在动作余韵中收束。\n"
         + cast_rule
         + amp_rule
-        + "6. 编舞按首席的起始姿态合理可达，结构上：起势（第 1 镜从首帧姿态带出）→ 主段"
-        + "（贯穿各镜的 2–3 组动作主题，幅度逐段升级）→ 收尾（末镜回到镜头前亮相定格，"
-        + "动作余韵中收束）。\n"
-        + "7. 正文之后按以下两个小段收尾（各 2–3 句）：\n"
+        + chorus_rule
+        + "\n"
+        + text_rule
+        + f"{'8' if text_rule else '7'}. 正文之后按以下两个小段收尾（各 2–3 句）：\n"
         + "【实录声场】写画内实录声音（脚步、呼吸、服装窸窣、现场混响等）；支持音频生成的"
         + "视频模型会按此出声，不支持的模型仅作氛围参考。\n"
         + "【配乐】写画外配乐：曲风、配器要素，以及节奏与编舞动作同步的关系。"
     )
 
 
-def validate_script(text: str, multishot: bool = False) -> str:
-    """校验脚本文本；不合格抛 ValueError。多镜模式另要求分镜结构词。"""
+def validate_script(
+    text: str, multishot: bool = False, text_words: list[str] | None = None
+) -> str:
+    """校验脚本文本；不合格抛 ValueError。
+
+    多镜模式另要求分镜结构词；text_words 非空时逐词要求出现在脚本里（防 LLM 丢词）。"""
     text = str(text or "").strip().strip("“”\"' ")
     if not _CJK_RE.search(text):
         raise ValueError("视频脚本没有中文内容")
@@ -214,6 +269,9 @@ def validate_script(text: str, multishot: bool = False) -> str:
         raise ValueError("视频脚本没有提到「首帧」—— 连续性依据缺失")
     if multishot and "镜头" not in text:
         raise ValueError("多镜模式视频脚本缺少分镜结构（提到「镜头」）")
+    missing = [w for w in (text_words or []) if w and w not in text]
+    if missing:
+        raise ValueError(f"视频脚本丢掉了文字特效词：{'、'.join(missing)}")
     return text
 
 
@@ -226,6 +284,21 @@ def pick_clip_type(seed: int, key: str, types: list[str] | None = None) -> str:
     """片段类型：池子可由配方 YAML types 覆盖；子种子抽取（可复现）。"""
     pool = [t for t in (types or []) if str(t or "").strip()] or list(DEFAULT_TYPES)
     return wildcard.rng_for(seed, key).choice(pool)
+
+
+def pick_text_words(seed: int, key: str, pool: list[str] | None = None) -> list[str]:
+    """文字特效词：池子里掷**两个不同**词（中段爆点 + 末镜亮相各一），可复现。
+
+    池子可由配方 YAML text_pool 覆盖；缺省回退 DEFAULT_TEXT_POOL；池子不足两个
+    有效词时同词复用两处（validate 允许同词出现两处条款）。"""
+    candidates = [str(t or "").strip() for t in (pool or []) if str(t or "").strip()]
+    candidates = candidates or list(DEFAULT_TEXT_POOL)
+    rng = wildcard.rng_for(seed, key)
+    if len(candidates) >= 2:
+        first = rng.choice(candidates)
+        rest = [w for w in candidates if w != first]
+        return [first, rng.choice(rest or candidates)]
+    return [candidates[0], candidates[0]]
 
 
 def _image_data_url(image_path: str | Path) -> str:
@@ -266,6 +339,8 @@ def write_script(
     multishot: bool = False,
     ensemble: bool = False,
     shots: int | None = None,
+    opening: str = "body",
+    text_words: list[str] | None = None,
 ) -> dict:
     """写视频脚本；返回 {"script", "clip_type"}。LLM 失败/输出不合法抛 LLMError/ValueError。
 
@@ -275,6 +350,8 @@ def write_script(
     保持原 brief 不变（向后兼容）。
     multishot=True = 多镜头 MV 分镜：编号镜头+分秒切点+机位运镜，正文后附【实录声场】
     【配乐】两段；ensemble 配合 multishot 写伴舞条款；shots 给定镜头数（缺省按时长推）。
+    opening="face"（须 multishot）= 特写开场：第 1 镜保持面部特写，第 2 镜起切全身。
+    text_words（掷骰词对）= 两处背景大字逐词编进脚本并锁进校验。
     """
     if multishot:
         brief = _brief_multishot(
@@ -289,6 +366,8 @@ def write_script(
             amplitude=amplitude,
             ensemble=bool(ensemble),
             image_attached=bool(image_path),
+            opening=str(opening or "body"),
+            text_words=[w for w in (text_words or []) if str(w or "").strip()],
         )
     else:
         brief = _brief(
@@ -315,4 +394,7 @@ def write_script(
     else:
         messages = [{"role": "user", "content": brief}]
     text = call_llm(messages, model, config)
-    return {"script": validate_script(text, multishot=multishot), "clip_type": clip_type}
+    return {
+        "script": validate_script(text, multishot=multishot, text_words=text_words),
+        "clip_type": clip_type,
+    }

@@ -119,6 +119,32 @@ def kind_of_line(line: str) -> str:
     return LINE_KIND.get(str(line or ""), "full")
 
 
+_CLOSEUP_FRAMING = (
+    "采用面部大特写构图：画面只呈现脸部——从额头到下巴，五官清晰、眼神有神采，"
+    "肤质与发丝质感自然真实；不露肩膀，肩颈不进入画面；浅景深，背景柔化虚化；"
+    "只呈现这一名角色的面部，不出现第二个人。"
+)
+
+
+def build_closeup_prompt(face_section: str | None = "face", background_text: str | None = None) -> str:
+    """MV 特写首帧：**纯脸**参考 → 面部大特写构图 + 场景背景（随机 MV 升级版配方即此用法）。
+
+    不进动作段/服饰段 —— 特写只锚身份（脸库条目 = 唯一参考图），服饰与编舞由脚本
+    的切镜后镜头展开；场景文本照常经 ``background_text`` 替换固定背景句。
+    仅支持 face 段：styling 段自带服装语义，与特写构图打架，显式报错。
+    """
+    if face_section != "face":
+        raise ValueError(f"特写首帧只支持 face 段（当前 {face_section!r}；styling 自带服装语义）")
+    seg = _SEGMENTS["full"]
+    parts = [
+        _FACE_IDENTITY_PLAIN,
+        _CLOSEUP_FRAMING,
+        _background_segment(seg, background_text),
+        seg["guard"],
+    ]
+    return "\n\n".join(part for part in parts if part)
+
+
 def _background_segment(seg: dict, background_text: str | None) -> str:
     """背景段：调用方给了 scene 文本（如配方 scene_design 步的产物）就用它，
     否则保持固定句「背景简洁，突出角色。」。空白串回退固定句（LLM 输出被清空不炸）。"""

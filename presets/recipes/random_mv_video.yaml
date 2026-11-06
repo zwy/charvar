@@ -18,8 +18,8 @@ steps:
     categories: [立ち]
     angle: 正面
   costume:
-    sources: [costume-db-01, studio]
-    categories: [春, パーティ, glamorous_gala_dresses]
+    sources: [studio]
+    categories: [idol_stage]
 
 - kind: scene_design
   label: 场景设计

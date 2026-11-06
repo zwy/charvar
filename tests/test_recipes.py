@@ -1514,6 +1514,137 @@ def test_mv_full_flow(mv_env, monkeypatch):
     assert req.aspect_ratio == "16:9"
 
 
+_UP_YAML_BASE = (
+    _MV_YAML_BASE
+    .replace("name: demo_mv", "name: demo_up")
+    .replace("  strip_accessories: true\n  framing_extra: 全身入镜，四周留余白。\n", "  close_up: true\n")
+    .replace(
+        "  multishot: true\n  ensemble: true\n  shots: 4\n  duration: 15\n",
+        "  multishot: true\n  ensemble: true\n  shots: 4\n  duration: 15\n"
+        "  opening: face\n  text_fx: true\n  text_pool: [HIT, OWN IT, SHINE]\n",
+    )
+)
+
+
+def test_video_script_text_fx_and_closeup_brief(tmp_path, monkeypatch):
+    """文字特效：掷骰词对/池子覆盖/brief 编词/丢词校验；特写开场 brief 分叉。"""
+    from charvar import video_script as script_service
+
+    # 同种子同词对、池子覆盖、两词互异
+    a = script_service.pick_text_words(7, "x", ["OWN IT", "HIT", "LOVE"])
+    b = script_service.pick_text_words(7, "x", ["OWN IT", "HIT", "LOVE"])
+    assert a == b and len(a) == 2 and a[0] != a[1]
+    assert a[0] in ("OWN IT", "HIT", "LOVE")
+    assert script_service.pick_text_words(1, "y", []) == ["LOVE", "SHINE"] or len(
+        script_service.pick_text_words(1, "y", [])
+    ) == 2  # 缺省池回退且两词
+
+    seen: dict = {}
+
+    def fake(messages, model=None, config=None):
+        seen["latest"] = messages
+        return _MV_SCRIPT_TEXT + " HIT OWN IT SHINE GO GO LOVE 画面大字。"
+
+    monkeypatch.setattr(script_service, "call_llm", fake)
+
+    script_service.write_script(
+        pose_text="自然站立。", pose_title="叉腰", clip_type="群舞齐舞卡点",
+        duration=15, multishot=True, ensemble=True, shots=4,
+        opening="face", text_words=["GO GO", "SHINE"],
+    )
+    text = seen["latest"][0]["content"]
+    assert isinstance(text, str)
+    assert "面部大特写" in text and "特写开场" in text
+    assert "第 2 镜起切到全身" in text
+    assert "「GO GO」「SHINE」" in text and "文字特效" in text
+    # 特写开场伴舞顺延条款在 brief 里出现
+    assert "特写开场时第 3 镜起入画" in text
+
+    # body 开场（缺省）不含特写条款
+    script_service.write_script(
+        pose_text="自然站立。", pose_title="叉腰", clip_type="群舞齐舞卡点",
+        duration=15, multishot=True, shots=4,
+    )
+    text = seen["latest"][0]["content"]
+    assert "面部大特写" not in text and "「GO GO」" not in text
+    assert "7. 正文之后" in text  # 无文字特效时收尾条款回 7 号
+
+    # 校验：丢词拒；两词齐放行（长度补足 400+）
+    with pytest.raises(ValueError):
+        script_service.validate_script("首帧" + "画" * 410 + " GO GO", multishot=True, text_words=["GO GO", "SHINE"])
+    ok = script_service.validate_script(
+        "以输入首帧为唯一视觉依据。" + "镜头" + "画" * 200 + " GO GO SHINE" + "画" * 200,
+        multishot=True, text_words=["GO GO", "SHINE"],
+    )
+    assert ok
+
+
+def test_repo_random_mv_up_recipe_parses():
+    """仓库随机 MV 升级版配方解析合法；特写/文字特效字段与 768p 档锁进测试。"""
+    recipe = recipes_service.load_recipe("random_mv_video_up")
+    assert [s.kind for s in recipe.steps] == [
+        "pick", "scene_design", "combo_image", "video_script", "video_model",
+    ]
+    assert [recipes_service.manual_default(s) for s in recipe.steps] == [
+        False, False, True, False, True,
+    ]
+    combo, script, video = recipe.steps[2], recipe.steps[3], recipe.steps[4]
+    assert combo.close_up is True
+    assert combo.strip_accessories is False and not combo.framing_extra
+    assert script.multishot is True and script.opening == "face"
+    assert script.text_fx is True
+    assert script.text_pool == ["HIT", "OWN IT", "SHINE", "GO GO", "LOVE"]
+    assert script.shots == 4 and script.duration == 15 and script.frame_from == "首帧图"
+    assert script.amplitude == "large" and len(script.types) == 5
+    assert video.duration == 15 and video.resolution == "480p"  # 调试档；切回 768p 时同步这里
+    assert video.aspect == "16:9" and video.frame_from == "首帧图"
+
+
+def test_mv_up_static_validation(tmp_path, monkeypatch):
+    """升级版静态约束：opening/text_fx 必配 multishot、text_pool 空白词、close_up 冲突。"""
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CHARVAR_PRESETS_DIR", str(tmp_path / "presets"))
+    base = tmp_path / "presets" / "recipes"
+    base.mkdir(parents=True, exist_ok=True)
+    (base / "mvup_base.yaml").write_text(_UP_YAML_BASE, encoding="utf-8")
+    recipe = recipes_service.load_recipe("mvup_base")
+    assert recipe.steps[2].close_up and recipe.steps[3].opening == "face"
+
+    def bad(stem: str, text: str, match: str) -> None:
+        (base / stem).write_text(text, encoding="utf-8")
+        with pytest.raises(PresetError, match=match):
+            recipes_service.load_recipe(stem[:-5])
+
+    bad(
+        "mvup_open.yaml",
+        _UP_YAML_BASE.replace(
+            "  multishot: true\n  ensemble: true\n  shots: 4\n  duration: 15\n"
+            "  opening: face\n  text_fx: true\n  text_pool: [HIT, OWN IT, SHINE]\n",
+            "  duration: 15\n  opening: face\n",
+        ),
+        "opening",
+    )
+    bad(
+        "mvup_fx.yaml",
+        _UP_YAML_BASE.replace(
+            "  multishot: true\n  ensemble: true\n  shots: 4\n  duration: 15\n"
+            "  opening: face\n  text_fx: true\n  text_pool: [HIT, OWN IT, SHINE]\n",
+            "  duration: 15\n  text_fx: true\n  text_pool: [HIT, SHINE]\n",
+        ),
+        "text_fx",
+    )
+    bad(
+        "mvup_pool.yaml",
+        _UP_YAML_BASE.replace("text_pool: [HIT, OWN IT, SHINE]", 'text_pool: [HIT, ""]'),
+        "text_pool",
+    )
+    bad(
+        "mvup_conflict.yaml",
+        _UP_YAML_BASE.replace("  close_up: true\n", "  close_up: true\n  framing_extra: x\n"),
+        "close_up",
+    )
+
+
 def test_scene_fallback_keeps_fixed_background(model_env):
     """不接 scene_from（或场景文本为空）→ build_prompt 保持固定背景句（CLI/网页零改动）。"""
     from charvar import pose_prompt

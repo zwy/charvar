@@ -78,6 +78,10 @@ _STEP_ROOT_KEYS = frozenset(
         "multishot",                # video_script：多镜头 MV 分镜模式（随机 MV 配方）
         "ensemble",                 # video_script（multishot）：伴舞从第 2 镜入画
         "shots",                    # video_script（multishot）：镜头数（2–6，缺省按时长推）
+        "close_up",                 # combo_image：特写首帧（纯脸参考，随机 MV 升级版）
+        "opening",                  # video_script（multishot）：body 缺省 / face=特写开场
+        "text_fx",                  # video_script（multishot）：两处背景大字（词池掷骰）
+        "text_pool",                # video_script（text_fx）：大字词池覆盖
     }
 )
 
@@ -178,6 +182,10 @@ class RecipeStep(BaseModel):
     multishot: bool = False            # video_script：多镜头 MV 分镜（编号镜头+分秒切点+声场/配乐段）
     ensemble: bool = False             # video_script（multishot）：伴舞从第 2 镜入画
     shots: int | None = None           # video_script（multishot）：镜头数 2–6；None 按 duration 推
+    close_up: bool = False             # combo_image：特写首帧——纯脸参考，不进动作/服饰段
+    opening: Literal["body", "face"] = "body"  # video_script（multishot）：face=第 1 镜保持特写
+    text_fx: bool = False              # video_script（multishot）：两处背景大字
+    text_pool: list[str] = Field(default_factory=list)  # 大字词池覆盖（缺省 DEFAULT_TEXT_POOL）
 
 
 class Recipe(BaseModel):
@@ -350,9 +358,22 @@ def _validate_recipe(recipe: Recipe, path: Path) -> None:
                         f"配方 {path.name} 的 {label}：prompt_from 不能指向 {step.prompt_from!r}"
                         "（必须指向本步之前的 video_script 步）"
                     )
+        if step.kind == "combo_image":
+            if step.close_up and (step.strip_accessories or (step.framing_extra or "").strip()):
+                raise PresetError(
+                    f"配方 {path.name} 的 {label}：close_up 特写模式不进动作/服饰段，"
+                    "与 strip_accessories/framing_extra 语义不相干，不要同给"
+                )
         if step.kind == "video_script":
             if step.ensemble and not step.multishot:
                 raise PresetError(f"配方 {path.name} 的 {label}：ensemble 需要 multishot（伴舞条款只在多镜模式生效）")
+            if step.opening != "body" and not step.multishot:
+                raise PresetError(f"配方 {path.name} 的 {label}：opening: face 需要 multishot（特写开场只在多镜模式生效）")
+            if (step.text_fx or step.text_pool) and not step.multishot:
+                raise PresetError(f"配方 {path.name} 的 {label}：text_fx/text_pool 需要 multishot（文字特效只在多镜模式生效）")
+            for w in step.text_pool:
+                if not str(w or "").strip():
+                    raise PresetError(f"配方 {path.name} 的 {label}：text_pool 的词不能是空白")
             if step.multishot:
                 if not step.duration:
                     raise PresetError(f"配方 {path.name} 的 {label}：multishot 需要显式 duration（分镜切点按时长排）")
@@ -1306,6 +1327,51 @@ def _run_combo_image_step(conn, recipe: Recipe, state: RecipeRunState, step: Rec
             pass  # 产物被清了（或 run_id 脏）：走重新生成
 
     picks = _prior_step_state(state, str(step.input or ""), ("pick",), "input").outputs
+    if step.close_up:
+        # 特写首帧：纯脸参考 + 面部大特写构图（随机 MV 升级版）——不进动作/服饰段，
+        # 服饰与编舞由脚本步的切镜后镜头展开；pose 缺席不影响本步。
+        face = picks.get("face")
+        if not face:
+            raise PresetError(f"{step.label}：随机选库里缺 face（特写首帧以人脸为唯一锚）")
+        db_path = _conn_db_path(conn)
+        try:
+            faces_section = faces_service.item_section(conn, face["face_id"], source=face["source"])
+            face_file = faces_service.prepared_reference_file(face["face_id"], db_path, source=face["source"])
+        except faces_service.FaceError as exc:
+            raise PresetError(f"{step.label}：{exc}") from exc
+        prompt = pose_prompt_service.build_closeup_prompt(
+            faces_section, _scene_text_from(state, step) or None,
+        )
+        req = adhoc_service.AdhocRequest(
+            prompt=prompt,
+            backend=step.backend,
+            model=step.model,
+            negative_prompt=step.negative_prompt,
+            quality=step.quality,
+            reference_paths=[face_file],
+            aspect_ratio=str(step.aspect or "3:4"),
+            resolution=step.resolution or "",
+            seed=int(step.seed) if step.seed is not None else int(recipe.seed),
+            workflow=step.workflow,
+            wait=True,
+        )
+        try:
+            result = adhoc_service.generate(req, db_path)
+        except adhoc_service.AdhocError as exc:
+            raise PresetError(f"{step.label}：{exc}") from exc
+        except Exception as exc:  # noqa: BLE001 - 后端出图失败统一 502（与网页 /adhoc/generate 同策略）
+            raise PresetError(f"{step.label}：出图失败：{exc}", status=502) from exc
+        new_run_id = Path(result.manifest_path).parent.name
+        return {
+            "image_run_id": new_run_id,
+            "image_url": f"/adhoc/{new_run_id}/image",
+            "thumb_url": f"/adhoc/{new_run_id}/thumb",
+            "width": result.width,
+            "height": result.height,
+            "model": result.model,
+            "cost": result.cost,
+            "prompt": prompt,
+        }
     face = picks.get("face")
     pose = picks.get("pose")
     if not face or not pose:
@@ -1428,6 +1494,13 @@ def _run_video_script_step(conn, recipe: Recipe, state: RecipeRunState, step: Re
         # 看图脚本模式：把真实首帧（combo_image 等产物图）随消息带给视觉 LLM；
         # 帧步未完成 → _GateStop 等待（与成片帧同语义）
         frame_path = _produce_frame(conn, state, str(step.frame_from), 0)
+    text_words = (
+        script_service.pick_text_words(
+            int(state.seed), f"{state.recipe_run_id}:textfx:{step.label}", list(step.text_pool) or None
+        )
+        if step.multishot and step.text_fx
+        else []
+    )
     try:
         data = script_service.write_script(
             pose_text=str(pose.get("action_text") or ""),
@@ -1444,10 +1517,12 @@ def _run_video_script_step(conn, recipe: Recipe, state: RecipeRunState, step: Re
             multishot=bool(step.multishot),
             ensemble=bool(step.ensemble),
             shots=step.shots,
+            opening=str(step.opening or "body"),
+            text_words=text_words,
         )
     except (llm.LLMError, ValueError) as exc:
         raise PresetError(f"{step.label}：{exc}", status=502) from exc
-    return {"script": data["script"], "clip_type": clip_type}
+    return {"script": data["script"], "clip_type": clip_type, "text_words": text_words}
 
 
 _HANDLERS = {

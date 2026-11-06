@@ -329,6 +329,22 @@ def test_pose_prompt_builds_by_line_kind():
     assert "<image3>" not in full_still
 
 
+def test_pose_prompt_build_closeup_prompt():
+    """特写首帧 builder：纯脸身份段 + 特写构图 + scene 替换背景；只吃 face 段。"""
+    from charvar import pose_prompt
+
+    prompt = pose_prompt.build_closeup_prompt("face", "明亮的日系礼堂舞台，暖白柔光。")
+    assert prompt.startswith("<image1>为角色脸部参考")  # 纯脸身份段在最前
+    assert "面部大特写构图" in prompt and "浅景深" in prompt
+    assert "明亮的日系礼堂舞台，暖白柔光。" in prompt
+    assert "<image2>" not in prompt and "<image3>" not in prompt  # 无动作/服饰参考槽位
+    # 无 scene 文本回退固定背景句
+    plain = pose_prompt.build_closeup_prompt("face")
+    assert "背景简洁，突出角色。" in plain
+    with pytest.raises(ValueError):
+        pose_prompt.build_closeup_prompt("styling")
+
+
 def test_subject_slot_for_prompt_upper_prefers_headshot(data_dir):
     """半身动作主体参考图用 headshot 槽位；没有半身档位图回退 front；全身/双人恒 front。"""
     with storage.connect() as conn:
