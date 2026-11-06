@@ -1153,6 +1153,210 @@ def test_cast_pick_rerolls_across_runs(cast_env, monkeypatch):
     assert len(set(picks)) >= 2
 
 
+# ---------- ⑦ 随机舞蹈配方（random_dance_video：去包帽 / 看图脚本 / 大幅档） ----------
+
+_DANCE_YAML = """
+name: demo_dance
+type: recipe
+version: 1
+title: 随机舞蹈（测试）
+seed: 3
+steps:
+- kind: pick
+  label: 选库
+  manual: false
+  face: {sources: [face-db-01, face-db-02-cn, face-db-03-cn], section: face}
+  pose: {sources: [pose-db-02], lines: [全身1人・セクシー系, 全身1人・標準系], categories: [立ち], angle: 正面}
+  costume: {sources: [costume-db-01], categories: [春, 夏, 秋, 冬, パーティ, 水着, セクシー]}
+- kind: scene_design
+  label: 场景
+  manual: false
+  input: 选库
+  hint: 舞蹈场景方向。
+- kind: combo_image
+  label: 首帧图
+  input: 选库
+  scene_from: 场景
+  strip_accessories: true
+  framing_extra: 全身入镜，四周留余白。
+  backend: comfyui
+  aspect: "9:16"
+- kind: video_script
+  label: 脚本
+  manual: false
+  input: 选库
+  scene_from: 场景
+  frame_from: 首帧图
+  amplitude: large
+  duration: 8
+  types: [街舞律动, 爵士舞]
+- kind: video_model
+  label: 成片
+  prompt_from: 脚本
+  frame_from: 首帧图
+  duration: 8
+  aspect: "9:16"
+"""
+
+
+def test_repo_dance_recipe_parses():
+    """仓库随机舞蹈配方解析合法；舞蹈开关与检查点布局锁进测试。"""
+    recipe = recipes_service.load_recipe("random_dance_video")
+    assert [s.kind for s in recipe.steps] == [
+        "pick", "scene_design", "combo_image", "video_script", "video_model",
+    ]
+    assert [recipes_service.manual_default(s) for s in recipe.steps] == [
+        False, False, True, False, True,
+    ]
+    combo, script, video = recipe.steps[2], recipe.steps[3], recipe.steps[4]
+    assert combo.strip_accessories is True and "余白" in (combo.framing_extra or "")
+    assert script.amplitude == "large" and script.frame_from == "首帧图"
+    assert script.duration == 8 and len(script.types) == 6
+    assert video.duration == 8 and video.resolution == "768p"
+
+
+@pytest.fixture()
+def dance_env(cast_env):
+    (Path(os.environ["CHARVAR_DATA_DIR"]) / "presets" / "recipes" / "demo_dance.yaml").write_text(
+        _DANCE_YAML, encoding="utf-8"
+    )
+    return cast_env
+
+
+def _dance_script_text() -> str:
+    return (
+        "以输入首帧为唯一视觉依据，生成一段约8秒的单人街舞律动视频。"
+        + "画面连续性：全程同一名人物，发型服装背景光线与首帧保持一致，不切镜头不换场景。首帧" * 14
+    )
+
+
+def test_dance_full_flow(dance_env, monkeypatch):
+    """舞蹈全链：站姿池选取 → 去包帽首帧 → 看图脚本（多模态消息）→ 成片。"""
+    conn = dance_env
+    from charvar import video_script as script_service
+
+    script_calls = []
+
+    def fake_script_llm(messages, model=None, config=None):
+        script_calls.append(messages)
+        return _dance_script_text()
+
+    _stub_llms(monkeypatch)
+    monkeypatch.setattr(script_service, "call_llm", fake_script_llm)
+    monkeypatch.setattr(recipes_service, "_VIDEO_POLL_INTERVAL_S", 0.01)
+    adhoc_reqs = _stub_adhoc_generate(monkeypatch)
+    _stub_adhoc_video(
+        monkeypatch,
+        [{"status": "ready", "job_id": "j1", "model": "heygen/heygen-video-1"}],
+    )
+
+    # run 1：pick + 场景（自动）→ 停在「首帧图」
+    state = recipes_service.start_run(conn, "demo_dance")
+    assert state.status == "waiting"
+    pose_out = state.steps[0].outputs["pose"]
+    assert pose_out["source"] == "pose-db-02"
+    assert pose_out["category"] == "立ち"  # 站姿类过滤器生效（坐/卧类不进池）
+    assert pose_out["action_text"] == _POSE_DESC  # A 路：线稿库同动作描述复制
+
+    # continue 1：去包帽首帧 + 看图脚本 → 停在「成片」
+    state = recipes_service.advance_state(conn, state.recipe_run_id)
+    assert state.status == "waiting"
+    combo_req = adhoc_reqs[0]
+    assert len(combo_req.reference_paths) == 3
+    assert "一律不带入画面" in combo_req.prompt          # 剥离锚句入文
+    assert "同样要装到角色身上" not in combo_req.prompt  # 配件穿戴措辞不残留
+    assert "全身入镜，四周留余白。" in combo_req.prompt  # framing_extra 追加在文
+    assert _SCENE_TEXT in combo_req.prompt               # 场景段不受影响
+    content = script_calls[0][0]["content"]
+    assert isinstance(content, list)                     # 看图模式：多模态消息
+    assert content[0]["type"] == "text" and "已附的这张图片" in content[0]["text"]
+    assert content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+    script_out = state.steps[3].outputs
+    assert script_out["clip_type"] in ("街舞律动", "爵士舞")
+    assert script_out["script"] == _dance_script_text()
+
+    # continue 2：成片（脚本当 prompt）
+    state = recipes_service.advance_state(conn, state.recipe_run_id)
+    assert state.status == "done"
+
+
+def test_dance_script_gates_on_pending_frame(dance_env, monkeypatch):
+    """看图脚本的帧步未完成 → _GateStop 等待（不写脚本，与成片帧同语义）。"""
+    conn = dance_env
+    _stub_llms(monkeypatch)
+    _stub_adhoc_generate(monkeypatch)
+    state = recipes_service.start_run(conn, "demo_dance")  # 停在「首帧图」（combo 未跑）
+    assert state.status == "waiting"
+    recipe = recipes_service.load_recipe("demo_dance")
+    with pytest.raises(recipes_service._GateStop, match="首帧来源步骤"):
+        recipes_service._run_video_script_step(conn, recipe, state, recipe.steps[3], state.steps[3])
+
+
+def test_dance_frame_from_static_validation(tmp_path, monkeypatch):
+    """video_script 的 frame_from 指错位置 / amplitude 非法 → 解析期报错。"""
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CHARVAR_PRESETS_DIR", str(tmp_path / "presets"))
+    base = tmp_path / "presets" / "recipes"
+    base.mkdir(parents=True, exist_ok=True)
+
+    def bad(stem: str, text: str) -> None:
+        (base / stem).write_text(text, encoding="utf-8")
+        with pytest.raises(PresetError, match="frame_from|amplitude"):
+            recipes_service.load_recipe(stem[:-5])
+
+    bad(
+        "badd_kind.yaml",
+        _DANCE_YAML.replace("frame_from: 首帧图", "frame_from: 选库"),
+    )
+    bad(
+        "badd_late.yaml",
+        _DANCE_YAML.replace("frame_from: 首帧图", "frame_from: 成片"),
+    )
+    bad(
+        "badd_amp.yaml",
+        _DANCE_YAML.replace("amplitude: large", "amplitude: huge"),
+    )
+
+
+def test_video_script_amplitude_brief_and_image_mode(tmp_path, monkeypatch):
+    """大幅档 brief（规则 6/7 分叉）与看图模式消息构造；normal 路径保持原行为。"""
+    from charvar import video_script as script_service
+
+    seen: dict = {}
+
+    def fake(messages, model=None, config=None):
+        seen["latest"] = messages
+        return _dance_script_text()
+
+    monkeypatch.setattr(script_service, "call_llm", fake)
+
+    script_service.write_script(
+        pose_text="自然站立。", pose_title="叉腰", clip_type="街舞律动", duration=8
+    )
+    normal = seen["latest"][0]["content"]
+    assert isinstance(normal, str)
+    assert "视频的首帧画面已经存在（另一张已生成的图）" in normal
+    assert "动作幅度适中" in normal and "编排结构" not in normal
+
+    script_service.write_script(
+        pose_text="自然站立。", pose_title="叉腰", clip_type="街舞律动", duration=8, amplitude="large"
+    )
+    text = seen["latest"][0]["content"]
+    assert "动作幅度大" in text and "编排结构" in text and "动作幅度适中" not in text
+    assert "跳跃、转体、甩头、跨步与大幅挥臂" in text
+
+    frame = tmp_path / "frame.png"
+    Image.new("RGB", (2000, 1000), (10, 20, 30)).save(frame)
+    script_service.write_script(
+        pose_text="自然站立。", pose_title="叉腰", clip_type="街舞律动", duration=8,
+        amplitude="large", image_path=frame,
+    )
+    content = seen["latest"][0]["content"]
+    assert content[0]["type"] == "text" and "已附的这张图片" in content[0]["text"]
+    assert content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+    assert "首帧的实际姿态" in content[0]["text"]
+
+
 def test_scene_fallback_keeps_fixed_background(model_env):
     """不接 scene_from（或场景文本为空）→ build_prompt 保持固定背景句（CLI/网页零改动）。"""
     from charvar import pose_prompt

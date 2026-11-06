@@ -4,6 +4,14 @@
 的，脚本**默认文本模式不传图**（不用视觉模型，慢且不必）。成稿结构对齐 dance 系列
 配方的人工提示词（画面连续性 / 镜头 / 动作整体 / 分秒动作顺序 / 衔接 / 避免出现）。
 
+看图模式（``write_script(image_path=…)``）：把**真实首帧图**（combo_image 步产物）
+随消息带给视觉 LLM，brief 换「以附图实际姿态接续」措辞 —— 首帧渲染与描述链有偏差
+时编舞锚在真实画面上（舞蹈变体 random_dance_video 即此用法）。
+
+大幅度档（``amplitude="large"``）：规则 6 换成大幅版（跳跃/转体/甩头/大幅挥臂），并
+追加编排结构规则（起势 → 主段逐段升级 → 收尾定格），正文其余字节不变 —— 舞蹈变体
+配方即此用法；normal 档保持原 brief（向后兼容）。
+
 片段类型的随机不走 LLM：类型池 ``DEFAULT_TYPES``（配方 YAML ``types:`` 可覆盖），
 ``wildcard.rng_for`` 子种子抽取注入 brief —— 掷骰可复现，LLM 只负责把类型编成
 动作脚本。
@@ -12,7 +20,9 @@ LLM 链与其它环节一致：请求显式 model > DB 设置（调用方传入 
 """
 from __future__ import annotations
 
+import base64
 import re
+from pathlib import Path
 
 from charvar import llm, wildcard
 
@@ -42,31 +52,71 @@ def _brief(
     scene_text: str,
     duration: int,
     clip_type: str,
+    amplitude: str = "normal",
+    image_attached: bool = False,
 ) -> str:
     scene_line = f"【场景与光线（来自场景设计步，保持与首帧一致）】\n{scene_text}\n" if scene_text else ""
+    if image_attached:
+        header = (
+            f"你是短视频动作编剧。写一段 {duration} 秒 AI 生成视频的「直出视频提示词」。"
+            "视频的首帧画面：已附的这张图片，你的提示词会连同这张首帧图一起发给"
+            "视频模型，从图中的姿态开始动起来。\n\n"
+        )
+        connect_rule = (
+            "4. 动作顺序必须从附图首帧的实际姿态直接接续 —— 先承接图中人物当下的躯干朝向、"
+            "手臂位置、重心与视线，0 秒就是图中的姿态，"
+            "不要先摆好姿势再开始。\n"
+        )
+    else:
+        header = (
+            f"你是短视频动作编剧。写一段 {duration} 秒 AI 生成视频的「直出视频提示词」。"
+            "视频的首帧画面已经存在（另一张已生成的图），你的提示词会连同首帧一起发给"
+            "视频模型，从首帧开始动起来。\n\n"
+        )
+        connect_rule = (
+            "4. 动作顺序必须从首帧姿态直接接续 —— 首帧是什么姿势，0 秒就是什么姿势，"
+            "不要先摆好姿势再开始。\n"
+        )
+    if amplitude == "large":
+        pose_rule = (
+            "5. 按起始姿态合理设计：站姿类可以做该类型相关的节奏动作，跳跃、跨步、转体都是"
+            "从站姿自然可达的大位移；坐/卧/俯身/倚靠类只做该姿态下自然可达的连贯动态"
+            "（缓慢伸展、转头、重心挪动、手部局部动作），"
+            "不要编排起立、落地之类脱离起始姿态的动作。\n"
+        )
+        amp_rules = (
+            "6. 动作幅度大：允许并鼓励跳跃、转体、甩头、跨步与大幅挥臂，躯干与四肢全程"
+            "参与，面部表情随节奏自然变化；四肢与手指结构连贯清楚，动作连续合理，"
+            "不做镜头前的怪异扭曲。\n"
+            "7. 编排结构：起势——0 秒从首帧姿态直接带出；主段——2–3 组动作主题依次展开，"
+            "幅度逐段升级，头部、肩、手臂、腰胯、腿与脚步轮换参与，不整段重复同一动作；"
+            "收尾——回到镜头前自然亮相定格，在动作余韵中收束。"
+        )
+    else:
+        pose_rule = (
+            "5. 按起始姿态合理设计：站姿类可以做该类型相关的节奏动作；坐/卧/俯身/倚靠类"
+            "只做该姿态下自然可达的连贯动态（缓慢伸展、转头、重心挪动、手部局部动作），"
+            "不要编排站起来、跳跃之类脱离起始姿态的大位移。\n"
+        )
+        amp_rules = "6. 动作幅度适中，四肢与手指结构连贯清楚，不做镜头前的怪异扭曲。"
     return (
-        f"你是短视频动作编剧。写一段 {duration} 秒 AI 生成视频的「直出视频提示词」。"
-        "视频的首帧画面已经存在（另一张已生成的图），你的提示词会连同首帧一起发给"
-        "视频模型，从首帧开始动起来。\n\n"
-        f"【首帧内容·动作描述】\n{pose_text}\n"
-        f"【动作】{pose_title}" + (f"（{category}）" if category else "") + "\n"
+        header
+        + f"【首帧内容·动作描述】\n{pose_text}\n"
+        + f"【动作】{pose_title}" + (f"（{category}）" if category else "") + "\n"
         + (f"【人物服饰要点】\n{costume_text}\n" if costume_text else "")
         + scene_line
         + f"【本段视频类型】{clip_type}\n"
-        "\n输出要求（直接输出提示词正文，中文，不要标题、不要任何解释）：\n"
-        f"1. 开头一句：以输入首帧为唯一视觉依据，生成一段约{duration}秒的单人{clip_type}视频。\n"
-        "2. 分节成文，每节一小段落：画面连续性 / 镜头 / 动作整体 / 动作顺序 / 动作衔接 / "
-        "避免出现。「动作顺序」必须给分段时轴（0—X 秒…共"
-        f"{duration}秒），每段写清身体与四肢的连续动作，前一段自然带出后一段。\n"
-        "3. 硬规则：全程同一名人物、同发型同服装；背景与光线全程与首帧一致；基本固定"
-        "机位一镜到底（最多轻微缓推）；人物始终留在画面内；结尾在自然的动作余韵中"
-        "收束，不要突然僵住；不出现第二个人或动物、不切镜头、不换背景、不出现文字水印。\n"
-        "4. 动作顺序必须从首帧姿态直接接续 —— 首帧是什么姿势，0 秒就是什么姿势，"
-        "不要先摆好姿势再开始。\n"
-        "5. 按起始姿态合理设计：站姿类可以做该类型相关的节奏动作；坐/卧/俯身/倚靠类"
-        "只做该姿态下自然可达的连贯动态（缓慢伸展、转头、重心挪动、手部局部动作），"
-        "不要编排站起来、跳跃之类脱离起始姿态的大位移。\n"
-        "6. 动作幅度适中，四肢与手指结构连贯清楚，不做镜头前的怪异扭曲。"
+        + "\n输出要求（直接输出提示词正文，中文，不要标题、不要任何解释）：\n"
+        + f"1. 开头一句：以输入首帧为唯一视觉依据，生成一段约{duration}秒的单人{clip_type}视频。\n"
+        + "2. 分节成文，每节一小段落：画面连续性 / 镜头 / 动作整体 / 动作顺序 / 动作衔接 / "
+        + "避免出现。「动作顺序」必须给分段时轴（0—X 秒…共"
+        + f"{duration}秒），每段写清身体与四肢的连续动作，前一段自然带出后一段。\n"
+        + "3. 硬规则：全程同一名人物、同发型同服装；背景与光线全程与首帧一致；基本固定"
+        + "机位一镜到底（最多轻微缓推）；人物始终留在画面内；结尾在自然的动作余韵中"
+        + "收束，不要突然僵住；不出现第二个人或动物、不切镜头、不换背景、不出现文字水印。\n"
+        + connect_rule
+        + pose_rule
+        + amp_rules
     )
 
 
@@ -93,6 +143,28 @@ def pick_clip_type(seed: int, key: str, types: list[str] | None = None) -> str:
     return wildcard.rng_for(seed, key).choice(pool)
 
 
+def _image_data_url(image_path: str | Path) -> str:
+    """首帧图 → data URL：长边 ≤1280 JPEG（脚本 LLM 要看的是姿态与构图，不必吃原图）。"""
+    from io import BytesIO
+
+    from PIL import Image
+
+    with Image.open(image_path) as img:
+        img.load()
+        if img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
+        long_edge = max(img.size)
+        if long_edge > 1280:
+            scale = 1280.0 / long_edge
+            img = img.resize(
+                (max(1, round(img.width * scale)), max(1, round(img.height * scale))),
+                Image.LANCZOS,
+            )
+        buf = BytesIO()
+        img.save(buf, format="JPEG", quality=85)
+    return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+
 def write_script(
     *,
     pose_text: str,
@@ -104,21 +176,38 @@ def write_script(
     clip_type: str = "",
     model: str | None = None,
     config: dict | None = None,
+    image_path: str | Path | None = None,
+    amplitude: str = "normal",
 ) -> dict:
-    """写视频脚本；返回 {"script", "clip_type"}。LLM 失败/输出不合法抛 LLMError/ValueError。"""
-    messages = [
-        {
-            "role": "user",
-            "content": _brief(
-                str(pose_text or "").strip(),
-                str(pose_title or ""),
-                str(category or ""),
-                str(costume_text or ""),
-                str(scene_text or ""),
-                int(duration),
-                str(clip_type or "摆动"),
-            ),
-        }
-    ]
+    """写视频脚本；返回 {"script", "clip_type"}。LLM 失败/输出不合法抛 LLMError/ValueError。
+
+    image_path 非空 = 看图模式：messages 附上首帧图（PIL 压到长边 ≤1280 再 base64），
+    brief 换「以附图实际姿态接续」措辞 —— 配方步传 combo_image 的真实产物进来。
+    amplitude="large" = 大幅度档：规则 6 换大幅版并追加编排结构规则；缺省 normal
+    保持原 brief 不变（向后兼容）。
+    """
+    brief = _brief(
+        str(pose_text or "").strip(),
+        str(pose_title or ""),
+        str(category or ""),
+        str(costume_text or ""),
+        str(scene_text or ""),
+        int(duration),
+        str(clip_type or "摆动"),
+        amplitude=amplitude,
+        image_attached=bool(image_path),
+    )
+    if image_path:
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": brief},
+                    {"type": "image_url", "image_url": {"url": _image_data_url(image_path)}},
+                ],
+            }
+        ]
+    else:
+        messages = [{"role": "user", "content": brief}]
     text = call_llm(messages, model, config)
     return {"script": validate_script(text), "clip_type": clip_type}

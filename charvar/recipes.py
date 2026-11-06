@@ -72,6 +72,9 @@ _STEP_ROOT_KEYS = frozenset(
         "types",                    # video_script：片段类型池覆盖
         "hint",                     # scene_design：场景方向提示
         "prompt_from",              # video_model：prompt 取自 video_script 步
+        "strip_accessories",        # combo_image：服饰图锚去包/帽/墨镜/手持物（舞蹈首帧）
+        "framing_extra",            # combo_image：构图段追加（余白/不持物等框景要求）
+        "amplitude",                # video_script：动作幅度档（large=大幅+编排结构）
     }
 )
 
@@ -166,6 +169,9 @@ class RecipeStep(BaseModel):
     scene_from: str | None = None      # 前面 scene_design 步的 label
     types: list[str] = Field(default_factory=list)   # video_script：片段类型池覆盖
     hint: str | None = None            # scene_design：场景方向提示（可选）
+    strip_accessories: bool = False    # combo_image：服饰图锚去包/帽/墨镜/手持物（舞蹈首帧）
+    framing_extra: str | None = None   # combo_image：构图段追加（余白/不持物等框景要求）
+    amplitude: Literal["normal", "large"] = "normal"  # video_script：动作幅度档（large=大幅+编排结构）
 
 
 class Recipe(BaseModel):
@@ -338,6 +344,17 @@ def _validate_recipe(recipe: Recipe, path: Path) -> None:
                         f"配方 {path.name} 的 {label}：prompt_from 不能指向 {step.prompt_from!r}"
                         "（必须指向本步之前的 video_script 步）"
                     )
+        if step.kind == "video_script":
+            # 看图脚本：frame_from 指向本步之前能产图的步骤（combo_image 首帧等）
+            target = by_label.get(step.frame_from) if step.frame_from else None
+            if step.frame_from and (
+                target is None
+                or target.kind not in ("images", "adhoc_image", "combo_image", "overlay")
+            ):
+                raise PresetError(
+                    f"配方 {path.name} 的 {label}：frame_from 不能指向 {step.frame_from!r}"
+                    "（必须指向本步之前的 images/adhoc_image/combo_image 步）"
+                )
         if step.kind == "pick":
             from charvar import casting
 
@@ -1334,6 +1351,8 @@ def _run_combo_image_step(conn, recipe: Recipe, state: RecipeRunState, step: Rec
             pose_display=pose_display,
             face_section=face_section,
             background_text=_scene_text_from(state, step) or None,
+            accessory_strip=step.strip_accessories,
+            framing_extra=step.framing_extra or None,
         )
     except ValueError as exc:
         raise PresetError(f"{step.label}：{exc}") from exc
@@ -1391,6 +1410,11 @@ def _run_video_script_step(conn, recipe: Recipe, state: RecipeRunState, step: Re
     clip_type = script_service.pick_clip_type(
         int(state.seed), f"{state.recipe_run_id}:script:{step.label}", list(step.types) or None
     )
+    frame_path = None
+    if step.frame_from:
+        # 看图脚本模式：把真实首帧（combo_image 等产物图）随消息带给视觉 LLM；
+        # 帧步未完成 → _GateStop 等待（与成片帧同语义）
+        frame_path = _produce_frame(conn, state, str(step.frame_from), 0)
     try:
         data = script_service.write_script(
             pose_text=str(pose.get("action_text") or ""),
@@ -1402,6 +1426,8 @@ def _run_video_script_step(conn, recipe: Recipe, state: RecipeRunState, step: Re
             clip_type=clip_type,
             model=step.model,
             config=settings_service.llm_overrides(conn),
+            image_path=frame_path,
+            amplitude=str(step.amplitude or "normal"),
         )
     except (llm.LLMError, ValueError) as exc:
         raise PresetError(f"{step.label}：{exc}", status=502) from exc

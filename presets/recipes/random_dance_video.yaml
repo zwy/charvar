@@ -1,0 +1,58 @@
+---
+name: random_dance_video
+type: recipe
+version: 1
+title: 随机三库舞蹈：人脸×深度站姿×真人服饰 → 舞蹈首帧 → 8 秒舞蹈视频
+doc: random_dance_video.md
+seed: 0
+steps:
+- kind: pick
+  label: 随机选库
+  manual: false
+  face:
+    sources: [face-db-01, face-db-02-cn, face-db-03-cn]
+    section: face
+  pose:
+    sources: [pose-db-02]
+    lines: [全身1人・セクシー系, 全身1人・標準系]
+    categories: [立ち]
+    angle: 正面
+  costume:
+    sources: [costume-db-01]
+    categories: [春, 夏, 秋, 冬, パーティ, 水着, セクシー]
+
+- kind: scene_design
+  label: 场景设计
+  manual: false
+  input: 随机选库
+  hint: 这是舞蹈视频的首帧，场景要开阔、地面清楚可见（舞蹈教室/舞台/天台/街头空地等），人物四周留出大幅动作空间、无前景遮挡物；光照适合动感画面。
+
+- kind: combo_image
+  label: 首帧图
+  input: 随机选库
+  scene_from: 场景设计
+  strip_accessories: true
+  framing_extra: 这是舞蹈视频的首帧图：全身入镜（头顶到脚完整），头顶与画面四周留出充分余白，让后续视频大幅度的舞蹈动作（跳跃/挥臂/踢腿）始终保持在画面内；地面完整可见；人物双手不持物、头上不戴帽、身上不挎包。
+  backend: comfyui
+  resolution: 2k
+  aspect: "9:16"
+
+- kind: video_script
+  label: 视频脚本
+  manual: false
+  input: 随机选库
+  scene_from: 场景设计
+  frame_from: 首帧图
+  amplitude: large
+  duration: 8
+  types: [韩系流行舞卡点, 街舞律动, 爵士舞, 电子舞步, 拉丁摆胯, 古典舞身韵]
+
+- kind: video_model
+  label: 成片
+  prompt_from: 视频脚本
+  frame_from: 首帧图
+  frame_slot: first_frame
+  duration: 8
+  resolution: 768p
+  aspect: "9:16"
+  wait_s: 600

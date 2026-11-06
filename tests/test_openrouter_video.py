@@ -172,16 +172,61 @@ def test_estimate_cost_t2v(env):
 
 
 def test_estimate_cost_with_references(env):
-    cost = openrouter_video.estimate_cost(
-        _entry(env), seconds=10, resolution="480p", n_refs=1,
-    )
-    assert cost == round(0.07 * 10 + 0.04 * 1, 4)
+    """分档语义（实测对账后）：1 图（首帧）= 普档、无每张图费；2 图 = 参考图档全包。"""
+    entry = _entry(env)
+    assert openrouter_video.estimate_cost(
+        entry, seconds=10, resolution="480p", n_refs=1
+    ) == round(0.02 * 10, 4)
+    assert openrouter_video.estimate_cost(
+        entry, seconds=10, resolution="480p", n_refs=2
+    ) == round(0.07 * 10, 4)
 
 
 def test_estimate_cost_fallback_sku(env):
     entry = {"pricing_skus": {"duration_seconds": "0.05"}}
     assert openrouter_video.estimate_cost(entry, seconds=10) == 0.5
     assert openrouter_video.estimate_cost({}, seconds=10) is None
+
+
+def test_estimate_cost_observed_rate_override(env):
+    """实测价缓存：record 后估算优先用实测每秒率（全包价），同键样本数累加、档位隔离。"""
+    model = "heygen/heygen-video-1"
+    assert openrouter_video.observed_rate(model, "480p", 1) is None
+    assert openrouter_video.record_observed_cost(
+        model, resolution="480p", n_images=1, seconds=8, cost=0.08
+    )
+    assert openrouter_video.observed_rate(model, "480p", 1) == pytest.approx(0.01)
+    assert openrouter_video.estimate_cost(
+        _entry(env), seconds=8, resolution="480p", n_refs=1, model_id=model
+    ) == 0.08  # 实测 0.01/s × 8s
+
+    # 同档再录一单 → samples 加一、per_s 按最近一次覆盖
+    assert openrouter_video.record_observed_cost(
+        model, resolution="480p", n_images=1, seconds=5, cost=0.05
+    )
+    data = json.loads(openrouter_video.observed_costs_path().read_text(encoding="utf-8"))
+    assert data[model]["480p|1"]["samples"] == 2
+    assert data[model]["480p|1"]["per_s"] == pytest.approx(0.01)
+
+    # 档位/图数档隔离：别的桶不串价
+    assert openrouter_video.observed_rate(model, "768p", 1) is None
+    assert openrouter_video.observed_rate(model, "480p", 2) is None
+    # 非法记录（cost≤0 / 时长 0）不落盘
+    assert not openrouter_video.record_observed_cost(
+        model, resolution="480p", n_images=1, seconds=8, cost=0
+    )
+    assert not openrouter_video.record_observed_cost(
+        model, resolution="480p", n_images=1, seconds=0, cost=0.08
+    )
+
+
+def test_learned_rates_for_api(env):
+    openrouter_video.record_observed_cost(
+        "heygen/heygen-video-1", resolution="480p", n_images=2, seconds=11, cost=0.385
+    )
+    rates = openrouter_video.learned_rates_for("heygen/heygen-video-1")
+    assert rates["480p|2+"]["per_s"] == pytest.approx(0.035)
+    assert openrouter_video.learned_rates_for("other/model") == {}
 
 
 # ---------- sniff ----------

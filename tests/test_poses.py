@@ -894,6 +894,55 @@ def test_build_costume_prompt_face():
     assert "穿上<image2>图中的袜类" in add
 
 
+def test_pose_prompt_accessory_strip_and_framing_extra():
+    """配件剥离（舞蹈首帧）+ framing_extra：图锚/要点注记/身材锚换剥离措辞；正常路径不变。"""
+    from charvar import pose_prompt
+
+    kw = "white dress leather bag straw hat"
+    base = pose_prompt.build_prompt(
+        "全身1人・標準系", "呈自然的 S 形曲线", costume=True, costume_keywords=kw, face_section="face",
+    )
+    strip = pose_prompt.build_prompt(
+        "全身1人・標準系", "呈自然的 S 形曲线", costume=True, costume_keywords=kw, face_section="face",
+        accessory_strip=True,
+    )
+    assert base != strip
+    assert "一律不带入画面" in strip and "忽略不画" in strip and "配饰不计入" in strip
+    assert "双手不持物" in strip and "头上不戴帽" in strip
+    assert "包挎在肩上" in base and "包挎在肩上" not in strip  # 穿戴指令只在正常路径
+
+    extra = pose_prompt.build_prompt(
+        "全身1人・標準系", "呈自然的 S 形曲线", framing_extra="全身入镜，四周留余白。"
+    )
+    assert "全身入镜，四周留余白。" in extra
+    assert "全身入镜" not in pose_prompt.build_prompt("全身1人・標準系", "呈自然的 S 形曲线")
+
+    # add（袜类）模式：锚句本就无配件穿戴句，strip 只换要点注记
+    add_strip = pose_prompt.build_prompt(
+        "全身1人・標準系", "呈自然的 S 形曲线", costume=True,
+        costume_keywords="lace thigh highs", costume_policy={"clothing": "add"},
+        face_section="face", accessory_strip=True,
+    )
+    assert "忽略不画" in add_strip
+    assert "袜类参考" in add_strip
+
+    # 主体档案版（无 face_section）同样剥离
+    subj_strip = pose_prompt.build_prompt(
+        "全身1人・標準系", "呈自然的 S 形曲线", costume=True, costume_keywords=kw, accessory_strip=True,
+    )
+    assert "一律不带入画面" in subj_strip and "配饰不计入" in subj_strip
+
+    # 拦截：双人线 / 纯文本条目 / 不换装
+    with pytest.raises(ValueError):
+        pose_prompt.build_prompt("2人絡み", "甲环抱乙", framing_extra="x")
+    with pytest.raises(ValueError):
+        pose_prompt.build_prompt(
+            "全身1人・標準系", "x", costume=True, costume_has_image=False, accessory_strip=True
+        )
+    with pytest.raises(ValueError):
+        pose_prompt.build_prompt("全身1人・標準系", "x", accessory_strip=True)
+
+
 # ---------- 自建文本动作库（display_type=text，无图） ----------
 
 def test_import_catalog_text_library_allows_imageless_rows(data_dir):

@@ -586,14 +586,19 @@ def estimate_cost(
     seconds: float,
     resolution: str | None = None,
     n_refs: int = 0,
+    model_id: str | None = None,
 ) -> float | None:
-    """按 ``pricing_skus`` 估算一条片子的钱（美元）；算不出返 None。
+    """按实测价缓存 / ``pricing_skus`` 估算一条片子的钱（美元）；算不出返 None。
 
-    目录里认识两套键名（只做展示预估，不参与提交校验）：
-    - heygen 系：``duration_seconds_<分辨率小写>``（美元/秒）；带参考图换
-      ``reference_duration_seconds_<分辨率小写>``，另加每张 ``reference_input_images``；
-    - grok 系：``cents_per_video_output_second_<分辨率小写>``（**美分**/秒），
-      输入图统一 ``cents_per_image_input``（美分/张）。
+    实测优先：``model_id`` 有成片历史（``record_observed_cost`` 写入的每秒实收率）
+    就按实测率 × 秒数（全包价，不再加图费）；没历史按目录 SKU。目录分档语义按
+    2026-11-06 全部成片账单对账（只做展示预估，不参与提交校验）：
+    - heygen 系（``duration_seconds_*`` 美元/秒）：**输入图 ≥2 才走
+      ``reference_duration_seconds_*``，且参考图档无「每张图」加费**；只带首帧/
+      单张图按普档计（实测：heygen 单图 = 目录普档价、无每张图费）；
+    - grok 系（``cents_per_video_output_second_*`` **美分**/秒）：普档 + 每张
+      ``cents_per_image_input``（美分/张，实收逐分吻合）；
+    - 参考图每秒档缺失时兜底：普档 + 目录声明的每张图费。
     其它写法（如 avatar-iv 的 ``duration_seconds`` 总价）模糊兜底：找到任何
     以 duration 开头的 SKU 按该值 × 秒数近似。
     """
@@ -602,32 +607,121 @@ def estimate_cost(
         return None
     res = str(resolution or "").strip().lower()
 
+    observed = observed_rate(model_id, res, n_refs) if model_id else None
+    if observed is not None:
+        return round(observed * seconds, 4)
+
     def price(prefix: str) -> float | None:
         candidates = [f"{prefix}_{res}"] if res else []
         # 无分辨率后缀的 SKU 兜底（如 avatar-iv 的 duration_seconds）
         candidates += [k for k in skus if str(k).startswith(prefix)]
         return _sku_price(skus, *candidates)
 
-    def dollars_per_second() -> float | None:
-        """美元/秒：先 heygen 系键名，再 grok 系（美分 → 除 100）。"""
-        rate = price("reference_duration_seconds") if n_refs > 0 else None
-        rate = rate or price("duration_seconds")
-        if rate is not None:
-            return rate
-        cents = price("cents_per_video_output_second")
-        return cents / 100 if cents is not None else None
+    ref_rate = price("reference_duration_seconds")
+    if ref_rate is not None and n_refs >= 2:
+        # 参考图档全包：实测 heygen 的多图计费没有「每张图」附加费
+        return round(ref_rate * seconds, 4)
 
-    per_second = dollars_per_second()
-    if per_second is None:
+    base = price("duration_seconds")
+    if base is not None:
+        cost = base * seconds
+        if ref_rate is not None:
+            # 有参考图档的 USD 家族（heygen 系）：实测单图/无图均按普档计、无每张图费
+            return round(cost, 4)
+        per_image = 0.0
+        if n_refs >= 1:
+            # 目录声明的每张图费照旧（参考图档缺失的兜底场景）
+            per_image = _sku_price(skus, "reference_input_images") or 0.0
+        return round(cost + per_image * n_refs, 4)
+
+    cents = price("cents_per_video_output_second")
+    if cents is None:
         return None
-    cost = per_second * seconds
-    if n_refs > 0:
-        per_image = _sku_price(skus, "reference_input_images")
-        if per_image is None:
-            cents_image = _sku_price(skus, "cents_per_image_input")
-            per_image = cents_image / 100 if cents_image is not None else 0.0
-        cost += per_image * n_refs
+    cost = cents / 100 * seconds
+    if n_refs >= 1:
+        cents_image = _sku_price(skus, "cents_per_image_input")
+        cost += (cents_image / 100) * n_refs if cents_image is not None else 0.0
     return round(cost, 4)
+
+
+# ---------- 实测价缓存（估算的实测优先层） ----------
+#
+# 目录 ``pricing_skus`` 是列表价，与部分供应商的真实扣费不齐（2026-11-06 对账：
+# heygen 全档位实收 = 目录价的一半、只带首帧按普档计且无每张图费；grok/hailuo
+# 逐分吻合）。每次成片的 ``usage.cost`` 回写实测每秒率，估算优先用它；没历史
+# 再回落目录价。缓存是旁路数据：读写失败一律静默，不挡提交/成片。
+
+
+def observed_costs_path() -> Path:
+    """实测价缓存：``{CHARVAR_DATA_DIR}/openrouter/video-costs.json``。"""
+    from charvar import paths
+
+    return paths.data_dir() / "openrouter" / "video-costs.json"
+
+
+def _image_bucket(n_images: int) -> str:
+    """图数 → 缓存键档：0 / 1 / 2+（输入图数；首帧也算一张）。"""
+    n = int(n_images or 0)
+    return "2+" if n >= 2 else str(max(n, 0))
+
+
+def _observed_costs_read() -> dict[str, Any]:
+    try:
+        data = json.loads(observed_costs_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def observed_rate(model_id: str, resolution: str | None, n_images: int) -> float | None:
+    """实测每秒率（全包价：已含输入图的影响）；没记录返回 None。"""
+    key = f"{str(resolution or '').strip().lower()}|{_image_bucket(n_images)}"
+    entry = _observed_costs_read().get(str(model_id or "").strip(), {})
+    record = entry.get(key) if isinstance(entry, dict) else None
+    if not isinstance(record, dict):
+        return None
+    try:
+        rate = float(record.get("per_s"))
+    except (TypeError, ValueError):
+        return None
+    return rate if rate > 0 else None
+
+
+def record_observed_cost(
+    model_id: str, *, resolution: str | None, n_images: int, seconds: float, cost: float
+) -> bool:
+    """成片实收（usage.cost）→ 实测价缓存；每秒实收率覆盖写、样本数累加。
+
+    返回 True = 落盘成功；失败/参数非法返回 False（旁路数据，不许挡成片）。
+    """
+    seconds = float(seconds or 0)
+    cost = float(cost or 0)
+    model = str(model_id or "").strip()
+    if seconds <= 0 or cost <= 0 or not model:
+        return False
+    key = f"{str(resolution or '').strip().lower()}|{_image_bucket(n_images)}"
+    data = _observed_costs_read()
+    model_entry = data.setdefault(model, {})
+    prev = model_entry.get(key) if isinstance(model_entry.get(key), dict) else {}
+    try:
+        samples = int(prev.get("samples") or 0) + 1
+    except (TypeError, ValueError):
+        samples = 1
+    model_entry[key] = {"per_s": round(cost / seconds, 6), "samples": samples}
+    try:
+        observed_costs_path().parent.mkdir(parents=True, exist_ok=True)
+        observed_costs_path().write_text(
+            json.dumps(data, ensure_ascii=False, indent=1, sort_keys=True), encoding="utf-8"
+        )
+        return True
+    except OSError:
+        return False
+
+
+def learned_rates_for(model_id: str) -> dict[str, Any]:
+    """给 /videos/models 的实测率块：``{"480p|1": {"per_s": …, "samples": …}}``。"""
+    data = _observed_costs_read().get(str(model_id or "").strip(), {})
+    return data if isinstance(data, dict) else {}
 
 
 def pricing_hints(entry: dict[str, Any]) -> list[str]:

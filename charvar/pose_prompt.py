@@ -126,6 +126,14 @@ def _background_segment(seg: dict, background_text: str | None) -> str:
     return text or str(seg["background"])
 
 
+def _framing_segment(seg: dict, framing_extra: str | None) -> str:
+    """构图段：调用方给了追加段（如舞蹈首帧的余白/不持物要求）就换行拼在后面，
+    空白串保持原段（配方步输出被清空不炸）。"""
+    base = str(seg["framing"])
+    extra = str(framing_extra or "").strip()
+    return base + "\n" + extra if extra else base
+
+
 def build_prompt(
     line: str,
     action_text: str,
@@ -141,6 +149,8 @@ def build_prompt(
     pose_display: str = "line",
     face_section: str | None = None,
     background_text: str | None = None,
+    accessory_strip: bool = False,
+    framing_extra: str | None = None,
 ) -> str:
     """按线型拼 demo 结构；动作描述必须是已写好的视角级文本。
 
@@ -161,6 +171,10 @@ def build_prompt(
     face 版身份句/身材锚/融合句 —— 见 face 分段家族注释。双人线显式报错。
     background_text（可选）：配方 scene_design 步设计的场景/光照段 —— 给了就替换
     固定的「背景简洁，突出角色。」句（_background_segment，空白回退固定句）。
+    accessory_strip（缺省 False）：配件剥离版 —— 服饰图锚/要点注记/身材锚换「只锚
+    服装主件与鞋袜，包/帽/墨镜/手持物一律不带入画面」的措辞组（舞蹈首帧等场景）；
+    replace 模式锚句与身材锚都换，add（袜类）模式锚句本就不含配件、只换要点注记。
+    framing_extra（可选）：框景追加段，非空时拼在构图段之后（仅单人全身/半身生效）。
     """
     kind = LINE_KIND.get(str(line or ""), "full")
     seg = _SEGMENTS[kind]
@@ -171,6 +185,13 @@ def build_prompt(
         raise ValueError("display_type=text 的姿势库是无图文本库，没有姿势参考图可锚")
     if face_section is not None and face_section not in ("face", "styling"):
         raise ValueError(f"未知人脸条目形态：{face_section}（可选 face/styling）")
+    if accessory_strip and (kind == "pair" or not costume or not costume_has_image):
+        raise ValueError(
+            "accessory_strip 仅适用于单人 + 带参考图的服饰条目"
+            "（纯文本条目/不换装没有配饰可剥离）"
+        )
+    if framing_extra and kind == "pair":
+        raise ValueError("framing_extra 仅支持单人全身/半身构图（双人无此段）")
     # 无图文本动作：mannequin 段整个去掉（join 过滤空段），lead 换文本版 ——
     # 动作描述（视角级文本）承担全部动作锚（见 _POSE_TEXT_LEAD 段说明）。
     if pose_text and kind == "pair":
@@ -196,16 +217,17 @@ def build_prompt(
         identity = _FACE_IDENTITY_REPLACE if mode == "replace" else _FACE_IDENTITY_ADD
         fusion = _COSTUME_FUSION_FACE if mode == "replace" else m["fusion_pose"]
         guard = _FACE_GUARD_REPLACE if mode == "replace" else _FACE_GUARD_ADD
+        strip = accessory_strip and mode == "replace"
         parts = [
             identity.format(slot=3),
             mannequin,
             _display_form(costume_display, 3),
-            m["anchor"].format(slot=3),
-            _costume_keywords(costume_keywords, 3),
-            _figure_anchor_face(3, body_lock),
+            (_COSTUME_ANCHOR_STRIP if strip else m["anchor"]).format(slot=3),
+            _costume_keywords(costume_keywords, 3, strip=accessory_strip),
+            _figure_anchor_face(3, body_lock, strip=strip),
             _lead + text,
             fusion.format(slot=3) if mode == "add" else fusion,
-            seg["framing"],
+            _framing_segment(seg, framing_extra),
             _background_segment(seg, background_text),
             _guard_with_costume(seg["guard"], guard),
         ]
@@ -215,7 +237,7 @@ def build_prompt(
             _FACE_IDENTITY_PLAIN,
             mannequin,
             _lead + text,
-            seg["framing"],
+            _framing_segment(seg, framing_extra),
             _background_segment(seg, background_text),
             seg["guard"],
         ]
@@ -260,21 +282,22 @@ def build_prompt(
                 figure,
                 _lead + text,
                 _COSTUME_TEXT_FUSION,
-                seg["framing"],
+                _framing_segment(seg, framing_extra),
                 _background_segment(seg, background_text),
                 _guard_with_costume(seg["guard"]),
             ]
             return "\n\n".join(part for part in parts if part)
+        strip = accessory_strip and mode == "replace"
         parts = [
             m["identity"].format(slot=3),
             mannequin,
             _display_form(costume_display, 3),
-            m["anchor"].format(slot=3),
-            _costume_keywords(costume_keywords, 3),
-            _figure_anchor(3, body_lock),
+            (_COSTUME_ANCHOR_STRIP if strip else m["anchor"]).format(slot=3),
+            _costume_keywords(costume_keywords, 3, strip=accessory_strip),
+            _figure_anchor(3, body_lock, strip=strip),
             _lead + text,
             m["fusion_pose"].format(slot=3),
-            seg["framing"],
+            _framing_segment(seg, framing_extra),
             _background_segment(seg, background_text),
             _guard_with_costume(seg["guard"], m["guard"]),
         ]
@@ -283,7 +306,7 @@ def build_prompt(
         seg["identity"],
         mannequin,
         _lead + text,
-        seg["framing"],
+        _framing_segment(seg, framing_extra),
         _background_segment(seg, background_text),
         seg["guard"],
     ]
@@ -319,17 +342,35 @@ _COSTUME_KEYWORDS_LEAD = (
     "按此清单逐项核对服装部件，不缺件、不改部件类型。"
 )
 
+# 配件剥离（舞蹈首帧等场景）版组（accessory_strip=True）：默认版要求包/帽等配件全部
+# 穿戴还原 —— 背着包跳舞不成画面，所以整套换图锚/要点注记/身材锚的剥离措辞，
+# 只锚服装主件与鞋袜；围巾、手套保留不剥离。
+_COSTUME_ANCHOR_STRIP = (
+    "<image{slot}>为服装参考，仅参考其中的服装与鞋袜：服装参考其款式、轮廓、"
+    "配色、面料质感、图案、领口、袖型、腰线、衣摆与层次结构，鞋袜参考鞋、袜的款式与穿着方式；"
+    "图中若附有包、帽、墨镜或其他手持、头戴的配饰，一律不带入画面：人物双手不持物、"
+    "头上不戴帽、身上不挎包。若图中含人物，不采用其脸、发型、肤色、体型、姿势、"
+    "背景或画风。未展示的服装部分按同一套结构合理补全，不额外添加无关装饰。"
+)
 
-def _costume_keywords(keywords: str | None, slot: int) -> str:
+_COSTUME_KEYWORDS_LEAD_STRIP = (
+    "<image{slot}>服装要点（英文关键词，与图一致）：{keywords}。"
+    "按此清单核对服装主件（衣物与鞋袜）；清单中的包、帽、墨镜、手持物类配饰忽略不画。"
+)
+
+
+def _costume_keywords(keywords: str | None, slot: int, strip: bool = False) -> str:
     """服装要点注记：catalog 英文关键词原文整段进提示词（不译写，同服装段约定）。
 
     单靠图锚定模型会误读部件类型（实测 WIN-0001 长裙三次种子读成长裤，
     包类配件时有时无）——注记一行写出部件清单，锚定句有文本可依。
+    strip=True 时注记换成主件版：清单里的包/帽/墨镜类配饰忽略不画。
     """
     text = str(keywords or "").strip()
     if not text:
         return ""
-    return _COSTUME_KEYWORDS_LEAD.format(slot=slot, keywords=text)
+    lead = _COSTUME_KEYWORDS_LEAD_STRIP if strip else _COSTUME_KEYWORDS_LEAD
+    return lead.format(slot=slot, keywords=text)
 
 
 def _display_form(display: str, slot: int) -> str:
@@ -362,16 +403,22 @@ _FIGURE_ANCHOR = (
     "并按<image1>角色的身材重新合身。"
 )
 
+_FIGURE_ANCHOR_STRIP = (
+    "角色身材、身高与四肢比例一律以<image1>为准；<image{slot}>图为服装参考，"
+    "服装的款式、面料要按图中还原，衣物与鞋袜都要保留，包、帽、墨镜等配饰不计入；"
+    "并按<image1>角色的身材重新合身。"
+)
 
-def _figure_anchor(costume_slot: int, body_lock: list[str] | None) -> str:
+
+def _figure_anchor(costume_slot: int, body_lock: list[str] | None, strip: bool = False) -> str:
     """换装流的身材锚段：身材归 <image1>，服装图只管款式面料。
 
     实测背景：服装图是「穿在身上的衣服」，自带隐含身体模板 —— 不锚的话
     身材会随服装图走（胸部缩水/拉伸拉高）。主体档案 body_lock（可缺省，
     英文体形锚 1–2 条）原文拼接进来当第二层锚 —— 与服装段「语言不限、
-    不译写」同一约定。
+    不译写」同一约定。strip=True 换配件剥离版（包/帽等不计入）。
     """
-    parts = [_FIGURE_ANCHOR.format(slot=costume_slot)]
+    parts = [(_FIGURE_ANCHOR_STRIP if strip else _FIGURE_ANCHOR).format(slot=costume_slot)]
     parts.extend(str(x).strip() for x in (body_lock or []) if str(x).strip())
     return "\n".join(parts)
 
@@ -553,6 +600,12 @@ _FIGURE_ANCHOR_FACE = (
     "都要保留，并按角色自身的身材重新合身。"
 )
 
+_FIGURE_ANCHOR_FACE_STRIP = (
+    "角色身材、身高与四肢比例保持自然协调、整体匀称，与该角色的美术风格一致；"
+    "<image{slot}>图为服装参考，服装的款式、面料要按图中还原，衣物与鞋袜都要保留，"
+    "包、帽、墨镜等配饰不计入，并按角色自身的身材重新合身。"
+)
+
 # face 段的换装融合句（replace 版）：照 _COSTUME_FUSION 但去掉「替换其原有服装（不是
 # 叠穿在原服装外面）」—— face 图没有原服装，提它反而召唤底装残留。
 _COSTUME_FUSION_FACE = (
@@ -577,9 +630,9 @@ _FACE_WEAR_LEAD_REPLACE = "让<image1>图中的角色穿上<image{slot}>图中�
 _FACE_WEAR_LEAD_ADD = "让<image1>图中的角色穿上<image{slot}>图中的袜类。"
 
 
-def _figure_anchor_face(costume_slot: int, body_lock: list[str] | None) -> str:
+def _figure_anchor_face(costume_slot: int, body_lock: list[str] | None, strip: bool = False) -> str:
     """face 版身材锚段：身材不来自图（正面向き胸像），自洽句 + body_lock 原文。"""
-    parts = [_FIGURE_ANCHOR_FACE.format(slot=costume_slot)]
+    parts = [(_FIGURE_ANCHOR_FACE_STRIP if strip else _FIGURE_ANCHOR_FACE).format(slot=costume_slot)]
     parts.extend(str(x).strip() for x in (body_lock or []) if str(x).strip())
     return "\n".join(parts)
 

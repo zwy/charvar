@@ -2163,6 +2163,8 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                     "supported_frame_images": item.get("supported_frame_images"),
                     "seed": bool(item.get("seed")),
                     "pricing_skus": item.get("pricing_skus") or {},
+                    # 实测价缓存（成片 usage.cost 折算的每秒实收率；估算优先用它）
+                    "learned_rates": openrouter_video.learned_rates_for(str(item.get("id") or "")),
                 }
             )
         with _db() as conn:

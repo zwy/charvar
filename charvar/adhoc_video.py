@@ -678,6 +678,23 @@ def _finalize(
         cost = usage.get("cost")
         job = manifest.get("job") or {}
         request = manifest.get("request") or {}
+        # 实测价缓存：usage.cost 回写每秒实收率（估算的实测优先层；写失败不挡成片）
+        if isinstance(cost, (int, float)) and float(cost) > 0:
+            try:
+                openrouter_video.record_observed_cost(
+                    str(job.get("model") or ""),
+                    resolution=request.get("resolution"),
+                    n_images=(1 if request.get("first_frame") else 0)
+                    + len(request.get("reference_paths") or []),
+                    seconds=float(request.get("duration") or 0),
+                    cost=float(cost),
+                )
+            except Exception:  # noqa: BLE001 - 旁路数据，不挡成片；warning 留痕便于发现接线错误
+                import logging
+
+                logging.getLogger("charvar.adhoc_video").warning(
+                    "实测价缓存回写失败（video run %s）", run_id, exc_info=True
+                )
         result = VideoResult(
             run_id=run_id,
             video_path=str(destination),

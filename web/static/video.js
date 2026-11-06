@@ -247,9 +247,12 @@ function renderVideoModelInfo() {
   el.textContent = parts.filter(Boolean).join(" · ");
 }
 
-/* 成本预估（展示用，不参与提交校验）：heygen 系列 pricing_skus 的键是
-   duration_seconds_<分辨率小写>；带图（首帧/参考图）换 reference_duration_seconds_*
-   + 每张 reference_input_images。算不出就不显示（别猜价）；即梦无逐条价，单独分支。 */
+/* 成本预估（展示用，不参与提交校验）。目录 pricing_skus 认两套键名：heygen 系
+   duration_seconds_<分辨率小写>（美元/秒，reference_duration_seconds_* = 多图档）；
+   grok 系 cents_per_video_output_second_*（美分/秒，每张输入图
+   cents_per_image_input 美分）。实测对账（2026-11-06，全部成片账单）：heygen
+   实收 = 目录价的一半，单图/无图按普档、参考图档无每张图费 —— 有成片历史时
+   估算优先用实测每秒率（learned_rates，/videos/models 带回），目录价兜底。 */
 function videoPrice(prefix) {
   const entry = currentVideoModelEntry();
   const skus = (entry && entry.pricing_skus) || {};
@@ -285,14 +288,40 @@ function updateVideoCostHint() {
     return;
   }
   const seconds = Number($("#video-duration").value || 0);
-  // 计费口径：图生视频（有首帧）与文生视频+参考图都按 reference 档
   const imageCount = videoState.mode === "i2v"
     ? (videoState.firstFrame ? 1 : 0)
     : videoState.references.length;
-  // 参考图档（heygen 系）算不出就回退普档（grok 系：参考图不影响每秒价）
-  let rate = imageCount > 0 ? videoPrice("reference_duration_seconds") : null;
-  if (rate == null) rate = videoPrice("duration_seconds");
-  const perImage = imageCount > 0 ? (videoPrice("reference_input_images") || 0) : 0;
+  const res = ($("#video-resolution").value || "").toLowerCase();
+  // 实测价优先：/videos/models 带回的实测每秒率（成片 usage.cost 折算，全包价）
+  const entry0 = currentVideoModelEntry();
+  if (entry0 && res && seconds > 0) {
+    const bucket = imageCount >= 2 ? "2+" : String(imageCount);
+    const learned = Number(((entry0.learned_rates || {})[`${res}|${bucket}`] || {}).per_s);
+    if (Number.isFinite(learned) && learned > 0) {
+      const seg = (videoState.mode === "i2v" ? "图生视频" : "文生视频") +
+        (imageCount ? ` · ${imageCount} 张图` : "");
+      el.textContent = `预计 ≈ $${(learned * seconds).toFixed(2)}（实测价 · ${seg} · ${seconds}s${$("#video-resolution").value ? ` · ${$("#video-resolution").value}` : ""}，以账单为准）`;
+      return;
+    }
+  }
+  // 目录 SKU 估算（分档语义按实测对账）：输入图 ≥2 才走参考图档（无每张图费）；
+  // 单图/无图走普档（实测 heygen 单图不带费）；参考图档缺失的兜底保留每张图费
+  const entry = currentVideoModelEntry();
+  const hasRefRate = Object.keys((entry && entry.pricing_skus) || {}).some(
+    (k) => k.startsWith("reference_duration_seconds")
+  );
+  let rate = null;
+  let perImage = 0;
+  if (hasRefRate) {
+    if (imageCount >= 2) {
+      rate = videoPrice("reference_duration_seconds");
+    } else {
+      rate = videoPrice("duration_seconds"); // 单图（首帧）/无图：普档，无图费
+    }
+  } else {
+    rate = videoPrice("duration_seconds");
+    perImage = imageCount > 0 ? (videoPrice("reference_input_images") || 0) : 0;
+  }
   if (!rate || !seconds) {
     el.textContent = "";
     return;
@@ -300,7 +329,7 @@ function updateVideoCostHint() {
   const estimate = rate * seconds + perImage * imageCount;
   const seg = (videoState.mode === "i2v" ? "图生视频" : "文生视频") +
     (imageCount ? ` · ${imageCount} 张图` : "");
-  el.textContent = `预计 ≈ $${estimate.toFixed(2)}（${seg} · ${seconds}s${$("#video-resolution").value ? ` · ${$("#video-resolution").value}` : ""}，以账单为准）`;
+  el.textContent = `预计 ≈ $${estimate.toFixed(2)}（目录价 · ${seg} · ${seconds}s${$("#video-resolution").value ? ` · ${$("#video-resolution").value}` : ""}，以账单为准）`;
 }
 /* ---------- 模式与面板显隐 ---------- */
 
