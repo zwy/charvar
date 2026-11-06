@@ -98,7 +98,7 @@ def test_openrouter_per_mode_fields_and_legacy_migration(client, tmp_path):
     # 设置了 t2i_model 后 i2i 仍回退旧值；单独设置 i2i_model 则各自生效
     client.put(
         "/settings",
-        json={"openrouter": {"t2i_model": "a/t2i", "i2i_model": "b/i2i", "api_key": ""}},
+        json={"openrouter": {"t2i_model": "a/t2i", "i2i_model": "b/i2i"}},
     )
     settings = get_settings(storage.connect(db))
     assert settings.openrouter.t2i_model == "a/t2i"
@@ -114,7 +114,7 @@ def test_openrouter_mode_config_merges_env(client, tmp_path, monkeypatch):
     db = pathlib.Path(tmp_path) / "test.db"
     client.put(
         "/settings",
-        json={"openrouter": {"t2i_model": "db/t2i", "t2i_resolution": "2K", "t2i_quality": "high", "api_key": ""}},
+        json={"openrouter": {"t2i_model": "db/t2i", "t2i_resolution": "2K", "t2i_quality": "high"}},
     )
     modes = settings_service.openrouter_mode_config(storage.connect(db))
     assert modes["t2i"] == {"model": "db/t2i", "resolution": "2K", "quality": "high"}

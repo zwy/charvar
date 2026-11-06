@@ -18,6 +18,8 @@ from charvar.preset_loader import load
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    # 改写管线的缺 key 检查在 HTTP 打桩之前：给一把假 key 过检（conftest 已清掉真 .env）
+    monkeypatch.setenv("LLM_API_KEY", "sk-rewrite-test")
     app = build_app(static_dir=None, db_path=pathlib.Path(tmp_path) / "test.db")
     return TestClient(app)
 

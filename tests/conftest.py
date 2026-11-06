@@ -10,6 +10,23 @@ if str(ROOT) not in sys.path:
 from charvar.models import SubjectProfile  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _isolate_openrouter_env(monkeypatch):
+    """清掉仓库 .env 的真实凭据，防测试里误打真请求 / 断言里混进真实 key。
+
+    各用例在 fixture 之后自己 setenv 的值不受影响（monkeypatch 优先级正常）。
+    """
+    for key in (
+        "OP_API_KEY",
+        "OP_BASE_URL",
+        "OP_IMAGE_API_KEY",
+        "LLM_API_KEY",
+        "LLM_BASE_URL",
+        "LLM_MODEL",
+    ):
+        monkeypatch.delenv(key, raising=False)
+
+
 @pytest.fixture()
 def silver_witch() -> SubjectProfile:
     return SubjectProfile(

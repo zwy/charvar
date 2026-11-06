@@ -726,7 +726,8 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                     aspect_ratio=req.aspect_ratio,
                     resolution=(req.resolution or "").strip() or mcfg["resolution"],
                     model=(req.model or "").strip() or mcfg["model"],
-                    api_key=openrouter_image.resolve_api_key(settings.openrouter.api_key or None),
+                    api_key=settings.openrouter.api_key or None,
+                    base_url=settings.openrouter.base_url or None,
                     quality=(req.quality or "").strip() or mcfg["quality"],
                     settings=settings,
                 )
@@ -1148,7 +1149,9 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         data["llm"]["api_key"] = ""
         data["llm_configured"] = bool(settings.llm.api_key) or bool(llm.get_llm_config().get("api_key"))
         data["openrouter"]["api_key"] = ""
-        data["openrouter_configured"] = bool(openrouter_image.resolve_api_key())
+        data["openrouter_configured"] = bool(
+            openrouter_image.resolve_api_key(settings.openrouter.api_key or None)
+        )
         # 模型默认按模式给（env 兜底链在 resolve_model 里），供设置页占位提示
         data["openrouter_default_t2i_model"] = openrouter_image.resolve_model(mode="t2i")
         data["openrouter_default_i2i_model"] = openrouter_image.resolve_model(mode="i2i")
@@ -1579,6 +1582,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         reference_paths: list[Path],
         model: str,
         api_key: str | None,
+        base_url: str | None = None,
         seed: int | None,
         quality: str | None = None,
     ) -> dict[str, Any]:
@@ -1604,6 +1608,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                 height=height,
                 model=model,
                 api_key=api_key,
+                base_url=base_url,
                 seed=int(effective_seed) if effective_seed is not None else None,
                 reference_paths=reference_paths,
                 aspect_ratio=ratio or None,
@@ -1653,7 +1658,8 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         )
         effective_resolution = (resolution or "").strip() or mcfg["resolution"]
         effective_quality = (quality or "").strip() or mcfg["quality"]
-        api_key = openrouter_image.resolve_api_key(settings_service.get_settings(conn).openrouter.api_key or None)
+        creds = settings_service.openrouter_credentials(conn)
+        api_key, base_url = creds["api_key"], creds["base_url"]
         entries: list[dict[str, Any]] = []
         with ThreadPoolExecutor(max_workers=_OPENROUTER_CONCURRENCY) as pool:
             futures = {
@@ -1666,6 +1672,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                     reference_paths=reference_paths,
                     model=effective_model,
                     api_key=api_key,
+                    base_url=base_url,
                     seed=seed,
                     quality=effective_quality,
                 ): item
@@ -1861,7 +1868,13 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         """
         try:
             if refresh:
-                openrouter_image.list_models(force_refresh=True)
+                with _db() as conn:
+                    creds = settings_service.openrouter_credentials(conn)
+                openrouter_image.list_models(
+                    force_refresh=True,
+                    api_key=creds["api_key"],
+                    base_url=creds["base_url"],
+                )
             return {"models": openrouter_image.model_choices()}
         except openrouter_image.OpenRouterImageError as exc:
             raise HTTPException(502, f"读 OpenRouter 模型清单失败：{exc}") from exc
@@ -2146,7 +2159,11 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     def api_video_models(refresh: bool = Query(False)) -> dict[str, Any]:
         """视频模型目录（每模型的时长/分辨率/画幅枚举 + 价格 SKU；缓存本地 JSON）。"""
         try:
-            data = openrouter_video.list_models(force_refresh=refresh)
+            with _db() as conn:
+                creds = settings_service.openrouter_credentials(conn)
+            data = openrouter_video.list_models(
+                force_refresh=refresh, api_key=creds["api_key"], base_url=creds["base_url"]
+            )
         except openrouter_video.OpenRouterVideoError as exc:
             raise HTTPException(502, f"读视频模型目录失败：{exc}") from exc
         models: list[dict[str, Any]] = []
@@ -2334,7 +2351,11 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     def api_tts_models(refresh: bool = Query(False)) -> dict[str, Any]:
         """语音模型目录（每模型的 voice 枚举 + 目录价；缓存本地 JSON）。"""
         try:
-            data = openrouter_tts.list_models(force_refresh=refresh)
+            with _db() as conn:
+                creds = settings_service.openrouter_credentials(conn)
+            data = openrouter_tts.list_models(
+                force_refresh=refresh, api_key=creds["api_key"], base_url=creds["base_url"]
+            )
         except openrouter_tts.OpenRouterTtsError as exc:
             raise HTTPException(502, f"读语音模型目录失败：{exc}") from exc
         models: list[dict[str, Any]] = []
@@ -2476,6 +2497,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                 model = openrouter_image.resolve_model(
                     (str(queued.get("model") or "")).strip() or mcfg["model"], mode=mode
                 )
+                creds = settings_service.openrouter_credentials(conn)
                 entry = _openrouter_generate_one(
                     single,
                     item,
@@ -2483,9 +2505,8 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                     resolution=(str(queued.get("resolution") or "")).strip() or mcfg["resolution"],
                     reference_paths=reference_paths,
                     model=model,
-                    api_key=openrouter_image.resolve_api_key(
-                        settings_service.get_settings(conn).openrouter.api_key or None
-                    ),
+                    api_key=creds["api_key"],
+                    base_url=creds["base_url"],
                     seed=seed,
                     quality=(str(queued.get("quality") or "")).strip() or mcfg["quality"],
                 )

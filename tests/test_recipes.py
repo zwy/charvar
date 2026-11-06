@@ -998,7 +998,10 @@ def test_repo_random_cast_recipe_parses():
     assert [recipes_service.manual_default(s) for s in recipe.steps] == [
         False, False, True, False, True,
     ]
-    assert recipe.steps[3].duration == 5 and recipe.steps[4].duration == 5
+    script, video = recipe.steps[3], recipe.steps[4]
+    assert script.duration == 8 and script.frame_from == "首帧图"
+    assert video.duration == 8 and video.resolution == "768p"
+    assert recipe.steps[0].face["sources"] == ["face-db-01", "face-db-02-cn", "face-db-03-cn"]
 
 
 def test_cast_static_validation_errors(model_env):

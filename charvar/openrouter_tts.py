@@ -44,8 +44,6 @@ from charvar.openrouter_image import (
 logger = logging.getLogger(__name__)
 
 _BASE_URL = openrouter_image._BASE_URL
-_CREATE_URL = f"{_BASE_URL}/audio/speech"
-_LIST_MODELS_URL = f"{_BASE_URL}/models"
 _LIST_MODELS_QUERY = "output_modalities=speech"
 
 _DEFAULT_MODEL = "heygen/heygen-voice-1-turbo:free"
@@ -110,8 +108,13 @@ def resolve_model(model: str | None = None) -> str:
 
 
 def resolve_api_key(api_key: str | None = None) -> str:
-    """API key 与生图/视频同链路(同一家 OpenRouter):显式 > OP_IMAGE_API_KEY > LLM_API_KEY。"""
+    """API key 与生图/视频同链路(同一家 OpenRouter):显式 > OP_API_KEY > OP_IMAGE_API_KEY(旧) > LLM_API_KEY(旧回退)。"""
     return openrouter_image.resolve_api_key(api_key)
+
+
+def resolve_base_url(base_url: str | None = None) -> str:
+    """生效的 API 基址(与生图同链):显式 > ``OP_BASE_URL`` > 默认。"""
+    return openrouter_image.resolve_base_url(base_url)
 
 
 def resolve_timeout(timeout_s: float | None = None) -> float:
@@ -189,7 +192,9 @@ def _error_from_response(resp: httpx.Response) -> OpenRouterTtsError:
 # ---------- 模型目录 ----------
 
 
-def list_models(*, force_refresh: bool = False, api_key: str | None = None) -> dict:
+def list_models(
+    *, force_refresh: bool = False, api_key: str | None = None, base_url: str | None = None
+) -> dict:
     """读 ``GET /api/v1/models?output_modalities=speech``(本地缓存优先,无则拉取并落盘)。
 
     与生图/视频共用锁与原子写逻辑(openrouter_image):冷缓存并发只拉一次。
@@ -211,7 +216,9 @@ def list_models(*, force_refresh: bool = False, api_key: str | None = None) -> d
             headers["Authorization"] = f"Bearer {key}"
         try:
             with _http_client(_LIST_MODELS_TIMEOUT_S) as client:
-                resp = client.get(f"{_LIST_MODELS_URL}?{_LIST_MODELS_QUERY}", headers=headers)
+                resp = client.get(
+                    f"{resolve_base_url(base_url)}/models?{_LIST_MODELS_QUERY}", headers=headers
+                )
         except httpx.HTTPError as exc:
             raise OpenRouterTtsFetchError(f"请求 OpenRouter 语音模型目录失败:{exc}") from exc
         if resp.status_code != 200:
@@ -438,6 +445,7 @@ def _post_speech(
     body: dict[str, Any],
     *,
     key: str,
+    base_url: str | None = None,
     model_id: str,
     timeout_s: float | None,
 ) -> tuple[bytes, str, int | None, int | None, str, str | None]:
@@ -457,7 +465,7 @@ def _post_speech(
         try:
             with _http_client(resolve_timeout(timeout_s)) as client:
                 resp = client.post(
-                    _CREATE_URL,
+                    f"{resolve_base_url(base_url)}/audio/speech",
                     headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
                     json=current,
                 )
@@ -501,6 +509,7 @@ def generate(
     voice: str | None = None,
     response_format: str | None = None,
     api_key: str | None = None,
+    base_url: str | None = None,
     timeout_s: float | None = None,
 ) -> SpeechResult:
     """调 OpenRouter ``POST /api/v1/audio/speech`` 合成一段语音(同步)。
@@ -512,7 +521,8 @@ def generate(
             枚举为空的模型原样不发送,由 provider 裁决。
         response_format: mp3/pcm;空 = 探测缓存 > 静态表 > 不发(API 默认 pcm),
             被拒时按 provider 话术换值重试并记档。
-        api_key: OpenRouter key;缺省 ``OP_IMAGE_API_KEY`` / ``LLM_API_KEY``。
+        api_key: OpenRouter key;缺省 ``OP_API_KEY`` / ``OP_IMAGE_API_KEY`` / ``LLM_API_KEY``。
+        base_url: API 基址;缺省 ``OP_BASE_URL`` / openrouter.ai/api/v1。
         timeout_s: HTTP 超时(秒);缺省 ``OP_TTS_TIMEOUT`` 或 300。
 
     Raises:
@@ -527,7 +537,7 @@ def generate(
     key = resolve_api_key(api_key)
     if not key:
         raise OpenRouterTtsParamError(
-            "缺少 OpenRouter API Key:请设置 OP_IMAGE_API_KEY / LLM_API_KEY,或在「设置」页配置"
+            "缺少 OpenRouter API Key:请设置 OP_API_KEY,或在「设置」页 / 旧环境变量 OP_IMAGE_API_KEY、LLM_API_KEY 配"
         )
 
     entry = speech_model_entry(model_id)
@@ -555,7 +565,7 @@ def generate(
         body.pop("response_format", None)
 
     audio, content_type, rate, channels, generation_id, format_sent = _post_speech(
-        body, key=key, model_id=model_id, timeout_s=timeout_s
+        body, key=key, base_url=base_url, model_id=model_id, timeout_s=timeout_s
     )
 
     ext = sniff_audio_ext(audio)

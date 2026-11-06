@@ -48,7 +48,7 @@ def _inject_catalog(tmp_path, monkeypatch):
 def _stub_modules(monkeypatch, *, final=None, submit_error=None, cost=0.12):
     poll_seq = []
 
-    def fake_submit(body, *, api_key=None, timeout_s=None):
+    def fake_submit(body, *, api_key=None, base_url=None, timeout_s=None):
         if submit_error is not None:
             raise submit_error
         return openrouter_video.VideoJob("job-9", "pending")
@@ -56,13 +56,13 @@ def _stub_modules(monkeypatch, *, final=None, submit_error=None, cost=0.12):
     def fake_wait(job_id, **kw):
         raise AssertionError("web 通路不该阻塞轮询")
 
-    def fake_poll(job_id, *, api_key=None, timeout_s=None):
+    def fake_poll(job_id, *, api_key=None, base_url=None, timeout_s=None):
         if poll_seq:
             return poll_seq.pop(0)
         return final or {"status": "completed", "unsigned_urls": ["https://x/0"],
                          "usage": {"cost": cost}}
 
-    def fake_download(job_id, *, url=None, api_key=None, timeout_s=None):
+    def fake_download(job_id, *, url=None, api_key=None, base_url=None, timeout_s=None):
         return b"\x00\x00\x00\x20ftypisom\x00" + b"\x00" * 16
 
     def fake_poster(video_path, run_dir):
@@ -160,7 +160,7 @@ def test_generate_with_first_frame_and_references(client, tmp_path, monkeypatch)
     _inject_catalog(tmp_path, monkeypatch)
     seen = {}
 
-    def fake_submit(body, *, api_key=None, timeout_s=None):
+    def fake_submit(body, *, api_key=None, base_url=None, timeout_s=None):
         seen.update(body)
         return openrouter_video.VideoJob("job-10", "pending")
 
@@ -207,6 +207,7 @@ def test_generate_submit_error_maps_400(client, tmp_path, monkeypatch):
 
 def test_generate_missing_api_key(client, tmp_path, monkeypatch):
     _inject_catalog(tmp_path, monkeypatch)
+    monkeypatch.delenv("OP_API_KEY", raising=False)
     monkeypatch.delenv("OP_IMAGE_API_KEY")
     monkeypatch.delenv("LLM_API_KEY", raising=False)
     resp = client.post("/videos/generate", json={"prompt": "p"})
@@ -236,7 +237,7 @@ def test_generate_with_recent_run_first_frame(client, tmp_path, monkeypatch):
     _inject_catalog(tmp_path, monkeypatch)
     seen = {}
 
-    def fake_submit(body, *, api_key=None, timeout_s=None):
+    def fake_submit(body, *, api_key=None, base_url=None, timeout_s=None):
         seen.update(body)
         return openrouter_video.VideoJob("job-11", "pending")
 

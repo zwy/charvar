@@ -64,26 +64,26 @@ def _stub_openrouter(monkeypatch, *, poll_payloads=None, final=None, cost=0.12,
     calls = {"submit": [], "download": []}
     poll_seq = list(poll_payloads or [])
 
-    def fake_submit(body, *, api_key=None, timeout_s=None):
+    def fake_submit(body, *, api_key=None, base_url=None, timeout_s=None):
         calls["submit"].append(dict(body))
         if submit_error is not None:
             raise submit_error
         return openrouter_video.VideoJob("job-1", "pending")
 
-    def fake_wait(job_id, *, poll_interval=5.0, timeout_s=900.0, sleep=time.sleep,
-                  timeout_error=None):
+    def fake_wait(job_id, *, api_key=None, base_url=None, poll_interval=5.0, timeout_s=900.0,
+                  sleep=time.sleep, timeout_error=None):
         payload = poll_seq.pop(0) if poll_seq else (final or {
             "status": "completed", "unsigned_urls": ["https://x/0"],
             "usage": {"cost": cost},
         })
         return payload
 
-    def fake_poll(job_id, *, api_key=None, timeout_s=None):
+    def fake_poll(job_id, *, api_key=None, base_url=None, timeout_s=None):
         if poll_seq:
             return poll_seq.pop(0)
         return final or {"status": "in_progress", "id": job_id}
 
-    def fake_download(job_id, *, url=None, api_key=None, timeout_s=None):
+    def fake_download(job_id, *, url=None, api_key=None, base_url=None, timeout_s=None):
         calls["download"].append(job_id)
         return _mp4_bytes()
 

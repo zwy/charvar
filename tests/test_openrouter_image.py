@@ -269,12 +269,25 @@ def test_403_without_policy_keyword_is_auth_error():
 
 
 def test_resolve_api_key_falls_back_to_llm_key(monkeypatch):
+    """key 链：显式 > OP_API_KEY > OP_IMAGE_API_KEY（旧） > LLM_API_KEY（旧回退）。"""
+    monkeypatch.delenv("OP_API_KEY", raising=False)
     monkeypatch.delenv("OP_IMAGE_API_KEY", raising=False)
     monkeypatch.setenv("LLM_API_KEY", "sk-llm")
     assert openrouter_image.resolve_api_key() == "sk-llm"
     monkeypatch.setenv("OP_IMAGE_API_KEY", "sk-or")
     assert openrouter_image.resolve_api_key() == "sk-or"
+    monkeypatch.setenv("OP_API_KEY", "sk-op")
+    assert openrouter_image.resolve_api_key() == "sk-op"
     assert openrouter_image.resolve_api_key("sk-explicit") == "sk-explicit"
+
+
+def test_resolve_base_url(monkeypatch):
+    """base_url 链：显式 > OP_BASE_URL > 默认；尾部 / 去掉。"""
+    monkeypatch.delenv("OP_BASE_URL", raising=False)
+    assert openrouter_image.resolve_base_url() == "https://openrouter.ai/api/v1"
+    monkeypatch.setenv("OP_BASE_URL", "https://proxy.example.com/api/v1/")
+    assert openrouter_image.resolve_base_url() == "https://proxy.example.com/api/v1"
+    assert openrouter_image.resolve_base_url("https://x.example/v1//") == "https://x.example/v1"
 
 
 def test_resolve_model_precedence(monkeypatch):
@@ -357,6 +370,7 @@ def test_generate_image_decodes_b64(monkeypatch):
 
 
 def test_generate_image_requires_api_key(monkeypatch):
+    monkeypatch.delenv("OP_API_KEY", raising=False)
     monkeypatch.delenv("OP_IMAGE_API_KEY", raising=False)
     monkeypatch.delenv("LLM_API_KEY", raising=False)
     with pytest.raises(openrouter_image.OpenRouterParamError):
@@ -542,10 +556,14 @@ def test_openrouter_missing_reference_image_returns_400(client, monkeypatch):
 
 
 def test_settings_expose_openrouter_masked(client, monkeypatch):
+    """OpenRouter key 走共享凭据：api_key 掩码空、base_url 回显、env 配了即已配置。"""
+    monkeypatch.delenv("OP_API_KEY", raising=False)
+    monkeypatch.delenv("OP_IMAGE_API_KEY", raising=False)
     monkeypatch.setenv("OP_IMAGE_API_KEY", "sk-or-test")
     monkeypatch.delenv("OP_IMAGE_MODEL", raising=False)
     data = client.get("/settings").json()
     assert data["openrouter"]["api_key"] == ""
+    assert data["openrouter"]["base_url"] == ""
     assert data["openrouter_configured"] is True
     assert data["openrouter_default_t2i_model"] == "meta/muse-image"
     assert data["openrouter_default_i2i_model"] == "meta/muse-image"
@@ -553,7 +571,7 @@ def test_settings_expose_openrouter_masked(client, monkeypatch):
 
 def test_settings_save_openrouter_model(client):
     resp = client.put(
-        "/settings", json={"openrouter": {"model": "qwen/qwen-image-2.1-turbo", "api_key": ""}}
+        "/settings", json={"openrouter": {"model": "qwen/qwen-image-2.1-turbo"}}
     )
     assert resp.status_code == 200
     assert resp.json()["openrouter"]["model"] == "qwen/qwen-image-2.1-turbo"

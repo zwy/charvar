@@ -340,12 +340,16 @@ def generate(req: TtsRequest, db_path: Path | None = None, *, timeout_s: float |
     manifest["submitted_at"] = started
     _write_manifest(run_dir, manifest)
 
+    with _conn(db_path) as conn:
+        creds = settings_service.openrouter_credentials(conn)
     try:
         speech = openrouter_tts.generate(
             text=req.text,
             model=model,
             voice=req.request_voice(),
             response_format=req.request_format(),
+            api_key=creds["api_key"],
+            base_url=creds["base_url"],
             timeout_s=timeout_s,
         )
     except Exception as exc:  # noqa: BLE001 - 失败也要留痕(历史列表里能看见失败原因)

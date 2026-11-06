@@ -479,7 +479,8 @@ def _generate_openrouter(
     prepared = _prepare_references(req, run_dir)
     with _conn(db_path) as conn:
         modes = settings_service.openrouter_mode_config(conn)
-        api_key = openrouter_image.resolve_api_key(settings_service.get_settings(conn).openrouter.api_key or None)
+        creds = settings_service.openrouter_credentials(conn)
+    api_key, base_url = creds["api_key"], creds["base_url"]
     # 模式对齐 ComfyUI：带参考图 = 图片编辑（i2i / edit workflow），否则文生图（t2i）
     mode = "i2i" if prepared else "t2i"
     mcfg = modes[mode]
@@ -489,7 +490,7 @@ def _generate_openrouter(
     quality = (req.quality or "").strip() or mcfg["quality"]
     if not api_key:
         raise AdhocError(
-            "缺少 OpenRouter API Key：请设置 OP_IMAGE_API_KEY / LLM_API_KEY，或在「设置」页配置"
+            "缺少 OpenRouter API Key：请设置 OP_API_KEY，或在「设置」页 / 旧环境变量 OP_IMAGE_API_KEY、LLM_API_KEY 配"
         )
 
     result = to_generate_result(req, run_id)
@@ -515,6 +516,7 @@ def _generate_openrouter(
             height=height,
             model=model,
             api_key=api_key,
+            base_url=base_url,
             seed=req.seed,
             reference_paths=prepared,
             aspect_ratio=req.aspect_ratio,

@@ -430,6 +430,7 @@ def generate_subject_image_openrouter(
     resolution: str | None = None,
     model: str | None = None,
     api_key: str | None = None,
+    base_url: str | None = None,
     quality: str | None = None,
     settings: Any = None,
 ) -> SubjectImageSlot:
@@ -482,6 +483,7 @@ def generate_subject_image_openrouter(
         height=height,
         model=model_id,
         api_key=api_key,
+        base_url=base_url,
         seed=seed,
         reference_paths=reference_paths,
         aspect_ratio=ratio if ratio != "auto" else None,

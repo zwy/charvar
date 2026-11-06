@@ -37,8 +37,6 @@ from PIL import Image
 logger = logging.getLogger(__name__)
 
 _BASE_URL = "https://openrouter.ai/api/v1"
-_LIST_MODELS_URL = f"{_BASE_URL}/images/models"
-_GENERATE_URL = f"{_BASE_URL}/images"
 
 _DEFAULT_MODEL = "meta/muse-image"
 _DEFAULT_TIMEOUT_S = 300.0
@@ -140,15 +138,25 @@ def _env(name: str, default: str = "") -> str:
 
 
 def resolve_api_key(api_key: str | None = None) -> str:
-    """生效的 API Key：显式传入 > OP_IMAGE_API_KEY > LLM_API_KEY。
+    """生效的 API Key：显式传入 > ``OP_API_KEY`` > 旧的 ``OP_IMAGE_API_KEY`` > ``LLM_API_KEY``。
 
-    两者都是 OpenRouter 的 key，``.env`` 里往往只配了 LLM_API_KEY，
-    回退它省得用户再配一份。
+    ``OP_API_KEY`` 是生图/视频/语音共用的 OpenRouter key（2026-11 起）；
+    旧名与 LLM key 保留为回退，存量 .env 不用立刻改。
     """
-    for candidate in (api_key, _env("OP_IMAGE_API_KEY"), _env("LLM_API_KEY")):
+    for candidate in (api_key, _env("OP_API_KEY"), _env("OP_IMAGE_API_KEY"), _env("LLM_API_KEY")):
         if candidate and str(candidate).strip():
             return str(candidate).strip()
     return ""
+
+
+def resolve_base_url(base_url: str | None = None) -> str:
+    """生效的 API 基址：显式传入 > ``OP_BASE_URL`` > 默认 openrouter.ai/api/v1。
+
+    生图 / 视频 / 语音共用（LLM 文本通路有自己的 LLM_BASE_URL，不在此链）。
+    尾部 ``/`` 去掉，防 ``/api/v1//images`` 这类拼接事故。
+    """
+    candidate = (base_url or "").strip() or _env("OP_BASE_URL").strip()
+    return (candidate or _BASE_URL).rstrip("/")
 
 
 def resolve_model(model: str | None = None, mode: str = "t2i") -> str:
@@ -295,7 +303,9 @@ def _write_cache_atomic(path: Path, data: dict) -> None:
                 pass
 
 
-def list_models(*, force_refresh: bool = False, api_key: str | None = None) -> dict:
+def list_models(
+    *, force_refresh: bool = False, api_key: str | None = None, base_url: str | None = None
+) -> dict:
     """读 ``GET /api/v1/images/models``（本地优先，无则拉取并落盘）。
 
     冷缓存时并发调用只会真的拉一次（其余线程等锁后直接读缓存）。
@@ -311,17 +321,17 @@ def list_models(*, force_refresh: bool = False, api_key: str | None = None) -> d
             cached = _read_cache(cache_path)
             if cached is not None:
                 return cached
-        return _fetch_and_cache_models(cache_path, api_key)
+        return _fetch_and_cache_models(cache_path, api_key, base_url)
 
 
-def _fetch_and_cache_models(cache_path: Path, api_key: str | None) -> dict:
+def _fetch_and_cache_models(cache_path: Path, api_key: str | None, base_url: str | None = None) -> dict:
     headers = {"Accept": "application/json"}
     key = resolve_api_key(api_key)
     if key:
         headers["Authorization"] = f"Bearer {key}"
     try:
         with _http_client(_LIST_MODELS_TIMEOUT_S) as client:
-            resp = client.get(_LIST_MODELS_URL, headers=headers)
+            resp = client.get(f"{resolve_base_url(base_url)}/images/models", headers=headers)
     except httpx.HTTPError as exc:
         raise OpenRouterFetchError(f"请求 OpenRouter 模型清单失败：{exc}") from exc
     if resp.status_code != 200:
@@ -779,6 +789,7 @@ def generate_image(
     height: int,
     model: str | None = None,
     api_key: str | None = None,
+    base_url: str | None = None,
     seed: int | None = None,
     reference_paths: list[Path] | None = None,
     timeout_s: float | None = None,
@@ -792,7 +803,8 @@ def generate_image(
         prompt: 图片提示词（必填）。
         width / height: 输出像素尺寸（必填），拼成 ``size`` 参数。
         model: 模型 slug；缺省用 ``OP_IMAGE_MODEL``。
-        api_key: OpenRouter API key；缺省用 ``OP_IMAGE_API_KEY`` / ``LLM_API_KEY``。
+        api_key: OpenRouter API key；缺省 ``OP_API_KEY`` / ``OP_IMAGE_API_KEY`` / ``LLM_API_KEY``。
+        base_url: API 基址；缺省 ``OP_BASE_URL`` / openrouter.ai/api/v1。
         seed: 采样种子（provider 不保证确定性，只是尽量可复现）。
         reference_paths: 本地参考图（按顺序对应提示词里的 the first/second… reference image）。
         timeout_s: HTTP 超时（秒）；缺省 ``OP_IMAGE_TIMEOUT`` 或 300。
@@ -812,7 +824,7 @@ def generate_image(
     key = resolve_api_key(api_key)
     if not key:
         raise OpenRouterParamError(
-            "缺少 OpenRouter API Key：请设置 OP_IMAGE_API_KEY / LLM_API_KEY，或在「设置」页配置"
+            "缺少 OpenRouter API Key：请设置 OP_API_KEY（或在「设置」页 / 旧环境变量 OP_IMAGE_API_KEY、LLM_API_KEY 配）"
         )
 
     caps = model_capabilities(model_id)
@@ -832,6 +844,7 @@ def generate_image(
     payload, body = _post_generate(
         body,
         key=key,
+        base_url=base_url,
         timeout_s=timeout_s,
         model_id=model_id,
         fallback_aspect_ratio=aspect_ratio,
@@ -879,6 +892,7 @@ def _post_generate(
     body: dict[str, Any],
     *,
     key: str,
+    base_url: str | None = None,
     timeout_s: float | None,
     model_id: str,
     fallback_aspect_ratio: str | None = None,
@@ -900,7 +914,7 @@ def _post_generate(
         try:
             with _http_client(resolve_timeout(timeout_s)) as client:
                 resp = client.post(
-                    _GENERATE_URL,
+                    f"{resolve_base_url(base_url)}/images",
                     headers={
                         "Authorization": f"Bearer {key}",
                         "Content-Type": "application/json",

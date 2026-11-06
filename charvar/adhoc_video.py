@@ -562,10 +562,12 @@ def _submit(req: VideoRequest, run_id: str, db_path: Path | None) -> dict[str, A
         return _submit_dreamina(req, run_id, db_path)
     run_dir = _run_dir(run_id)
     model = _resolve_model(req, db_path)
-    api_key = openrouter_video.resolve_api_key()
+    with _conn(db_path) as conn:
+        creds = settings_service.openrouter_credentials(conn)
+    api_key, base_url = creds["api_key"], creds["base_url"]
     if not api_key:
         raise AdhocVideoError(
-            "缺少 OpenRouter API Key：请设置 OP_IMAGE_API_KEY / LLM_API_KEY，或在「设置」页配置"
+            "缺少 OpenRouter API Key：请设置 OP_API_KEY，或在「设置」页 / 旧环境变量 OP_IMAGE_API_KEY、LLM_API_KEY 配"
         )
     first_frame, last_frame, refs = _prepare_images(req, run_dir)
     # 参考视频不预处理（无压缩逻辑可用；原样 data URL 发），但先把魔数验一遍
@@ -589,7 +591,7 @@ def _submit(req: VideoRequest, run_id: str, db_path: Path | None) -> dict[str, A
             reference_paths=refs,
             reference_videos=list(req.reference_video_paths),
         )
-        job = openrouter_video.submit(body, api_key=api_key)
+        job = openrouter_video.submit(body, api_key=api_key, base_url=base_url)
     except _ORError as exc:
         raise AdhocVideoError(f"OpenRouter 视频提交失败：{exc}") from exc
 
@@ -649,7 +651,13 @@ def _submit_dreamina(req: VideoRequest, run_id: str, db_path: Path | None) -> di
 
 
 def _finalize(
-    run_id: str, manifest: dict[str, Any], payload: dict[str, Any], submitted_at: float
+    run_id: str,
+    manifest: dict[str, Any],
+    payload: dict[str, Any],
+    submitted_at: float,
+    *,
+    api_key: str | None = None,
+    base_url: str | None = None,
 ) -> dict[str, Any]:
     """拿终态 payload 收尾：completed 下载成片 + 海报 + 清暂存；failed 记错误。
 
@@ -666,7 +674,7 @@ def _finalize(
         job_id = (manifest.get("job") or {}).get("id") or ""
         unsigned = payload.get("unsigned_urls")
         url = unsigned[0] if isinstance(unsigned, list) and unsigned else None
-        data = openrouter_video.download(job_id, url=url)
+        data = openrouter_video.download(job_id, url=url, api_key=api_key, base_url=base_url)
         ext = openrouter_video.sniff_video_ext(data)
         if ext == "bin":
             raise AdhocVideoError("OpenRouter 返回的不是可识别的视频格式")
@@ -879,7 +887,11 @@ def refresh(run_id: str, db_path: Path | None = None) -> dict[str, Any]:
             _write_manifest(_run_dir(run_id), manifest)
         return _summary(manifest)
     try:
-        payload = openrouter_video.poll(job_id)
+        with _conn(db_path) as conn:
+            creds = settings_service.openrouter_credentials(conn)
+        payload = openrouter_video.poll(
+            job_id, api_key=creds["api_key"], base_url=creds["base_url"]
+        )
     except _ORError as exc:
         # 网络抖动不该打断前端的轮询节奏：返回当前摘要并带上 poll_error（状态不变）
         summary = _summary(manifest)
@@ -890,7 +902,10 @@ def refresh(run_id: str, db_path: Path | None = None) -> dict[str, Any]:
     if status_now in ("completed", "failed", "cancelled", "expired"):
         submitted = float(manifest.get("submitted_at") or time.time())
         try:
-            manifest = _finalize(run_id, manifest, payload, submitted)
+            manifest = _finalize(
+                run_id, manifest, payload, submitted,
+                api_key=creds["api_key"], base_url=creds["base_url"],
+            )
         except (AdhocVideoError, _ORError) as exc:
             message = str(exc)
             if isinstance(exc, _ORError):
@@ -958,6 +973,11 @@ def generate(
     if not req.wait:
         return pending()
 
+    creds_key, creds_url = None, None
+    if req.backend != "dreamina":
+        with _conn(db_path) as conn:
+            creds = settings_service.openrouter_credentials(conn)
+        creds_key, creds_url = creds["api_key"], creds["base_url"]
     try:
         if req.backend == "dreamina":
             payload = dreamina_video.wait_for_video(
@@ -969,11 +989,13 @@ def generate(
         else:
             payload = openrouter_video.wait_for_job(
                 job_id,
+                api_key=creds_key,
+                base_url=creds_url,
                 poll_interval=poll_interval,
                 timeout_s=timeout_s,
                 timeout_error=AdhocVideoTimeout,
             )
-        _finalize(run_id, manifest, payload, submitted_at)
+        _finalize(run_id, manifest, payload, submitted_at, api_key=creds_key, base_url=creds_url)
     except AdhocVideoTimeout:
         # 作业还在跑：状态保持 in_progress，refresh/CLI 再查可以续
         manifest["submitted_at"] = submitted_at

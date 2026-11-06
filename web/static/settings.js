@@ -1,4 +1,4 @@
-/* 设置页（/ui/settings）：LLM / ComfyUI workflow / OpenRouter 生图（t2i+i2i 两组）/ 即梦 /
+/* 设置页（/ui/settings）：LLM / ComfyUI workflow / OpenRouter 凭据+生图（t2i+i2i 两组）/ 即梦 /
    OpenRouter 视频 / OpenRouter 语音 / 主体图默认尺寸。
    真多页版全局依赖：$/api/setStatus/escapeHtml/SLOT_LABELS 在 core.js —— 脚本清单见 settings.html。
    拆页改动：不再跨页调 gen 页的 refreshGenBackendPanel（真跳页后 gen 页加载时本来就重算）。 *//* ---------- 设置 ---------- */
@@ -124,8 +124,9 @@ async function loadSettings() {
     const list = $("#or-model-options");
     list.innerHTML = OR_MODEL_OPTIONS.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`).join("");
     await refreshOpenRouterSettingFields(settings);
+    $("#set-or-base").value = or.base_url || "";
     $("#set-or-key").value = "";
-    $("#set-or-key").placeholder = settings.openrouter_configured ? "已配置（留空保持不变）" : "留空 = OP_IMAGE_API_KEY / LLM_API_KEY";
+    $("#set-or-key").placeholder = settings.openrouter_configured ? "已配置（留空保持不变）" : "留空 = OP_API_KEY（再回退 LLM_API_KEY）";
     // OpenRouter 视频：模型下拉来自 /videos/models 目录；已存值不在清单里时补一项
     const orv = settings.openrouter_video || {};
     let videoCatalog = null;
@@ -218,16 +219,18 @@ $("#btn-settings-save").addEventListener("click", async () => {
     base_url: $("#set-llm-base").value.trim(),
     model: $("#set-llm-model").value.trim(),
   };
-  // openrouter 同理：model 空串 = 落库为空 = 回到 env；api_key 空串 = 保留已存值；
-  // 分辨率/质量收不起来（模型没声明）时 select 值就是空串 → 落库空 = env 默认
+  // openrouter：凭据整行发送（base_url/model 空串要能落库=回到 env）；
+  // api_key 空串 = 后端保留已存值；分辨率/质量收不起来（模型没声明）时
+  // select 值就是空串 → 落库空 = env 默认
   patch.openrouter = {
+    base_url: $("#set-or-base").value.trim(),
+    api_key: $("#set-or-key").value.trim(),
     t2i_model: $("#set-or-t2i-model").value.trim(),
     t2i_resolution: $("#set-or-t2i-res-field").hidden ? "" : $("#set-or-t2i-resolution").value,
     t2i_quality: $("#set-or-t2i-quality-field").hidden ? "" : $("#set-or-t2i-quality").value,
     i2i_model: $("#set-or-i2i-model").value.trim(),
     i2i_resolution: $("#set-or-i2i-res-field").hidden ? "" : $("#set-or-i2i-resolution").value,
     i2i_quality: $("#set-or-i2i-quality-field").hidden ? "" : $("#set-or-i2i-quality").value,
-    api_key: $("#set-or-key").value.trim(),
   };
   // 即梦：model 空串 = 落库为空 = 回到 env / CLI 默认；分辨率档空 = env（2K）默认
   patch.dreamina = {

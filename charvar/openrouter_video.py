@@ -39,8 +39,6 @@ from charvar.openrouter_image import (
 logger = logging.getLogger(__name__)
 
 _BASE_URL = openrouter_image._BASE_URL
-_CREATE_URL = f"{_BASE_URL}/videos"
-_LIST_MODELS_URL = f"{_BASE_URL}/videos/models"
 
 _DEFAULT_MODEL = "heygen/heygen-video-1"
 _DEFAULT_TIMEOUT_S = 300.0
@@ -102,8 +100,13 @@ def resolve_model(model: str | None = None) -> str:
 
 
 def resolve_api_key(api_key: str | None = None) -> str:
-    """API key 与生图同链路（同一家 OpenRouter）：显式 > OP_IMAGE_API_KEY > LLM_API_KEY。"""
+    """API key 与生图同链路：显式 > OP_API_KEY > OP_IMAGE_API_KEY（旧） > LLM_API_KEY（旧回退）。"""
     return openrouter_image.resolve_api_key(api_key)
+
+
+def resolve_base_url(base_url: str | None = None) -> str:
+    """生效的 API 基址（与生图同链）：显式 > ``OP_BASE_URL`` > 默认。"""
+    return openrouter_image.resolve_base_url(base_url)
 
 
 def resolve_timeout(timeout_s: float | None = None) -> float:
@@ -168,7 +171,9 @@ def _error_from_response(resp: httpx.Response) -> OpenRouterVideoError:
 # ---------- 模型目录 ----------
 
 
-def list_models(*, force_refresh: bool = False, api_key: str | None = None) -> dict:
+def list_models(
+    *, force_refresh: bool = False, api_key: str | None = None, base_url: str | None = None
+) -> dict:
     """读 ``GET /api/v1/videos/models``（本地缓存优先，无则拉取并落盘）。
 
     与生图共用锁与原子写逻辑（``openrouter_image``）：冷缓存并发只拉一次。
@@ -190,7 +195,7 @@ def list_models(*, force_refresh: bool = False, api_key: str | None = None) -> d
             headers["Authorization"] = f"Bearer {key}"
         try:
             with _http_client(_LIST_MODELS_TIMEOUT_S) as client:
-                resp = client.get(_LIST_MODELS_URL, headers=headers)
+                resp = client.get(f"{resolve_base_url(base_url)}/videos/models", headers=headers)
         except httpx.HTTPError as exc:
             raise OpenRouterVideoFetchError(f"请求 OpenRouter 视频模型目录失败：{exc}") from exc
         if resp.status_code != 200:
@@ -451,7 +456,13 @@ def _extract_job(payload: dict[str, Any]) -> VideoJob:
 _DEGRADABLE = ("seed", "duration", "resolution", "aspect_ratio", "frame_images", "input_references")
 
 
-def submit(body: dict[str, Any], *, api_key: str | None = None, timeout_s: float | None = None) -> VideoJob:
+def submit(
+    body: dict[str, Any],
+    *,
+    api_key: str | None = None,
+    base_url: str | None = None,
+    timeout_s: float | None = None,
+) -> VideoJob:
     """提交视频作业；provider 拒了某个参数就摘掉重试（自动降级）。
 
     与生图 :meth:`openrouter_image._post_generate` 同思路：只对「参数不被接受」
@@ -461,7 +472,7 @@ def submit(body: dict[str, Any], *, api_key: str | None = None, timeout_s: float
     key = resolve_api_key(api_key)
     if not key:
         raise OpenRouterVideoParamError(
-            "缺少 OpenRouter API Key：请设置 OP_IMAGE_API_KEY / LLM_API_KEY，或在「设置」页配置"
+            "缺少 OpenRouter API Key：请设置 OP_API_KEY，或在「设置」页 / 旧环境变量 OP_IMAGE_API_KEY、LLM_API_KEY 配"
         )
     current = dict(body)
     tried: set[str] = set()
@@ -469,7 +480,7 @@ def submit(body: dict[str, Any], *, api_key: str | None = None, timeout_s: float
         try:
             with _http_client(resolve_timeout(timeout_s)) as client:
                 resp = client.post(
-                    _CREATE_URL,
+                    f"{resolve_base_url(base_url)}/videos",
                     headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
                     json=current,
                 )
@@ -497,7 +508,13 @@ def submit(body: dict[str, Any], *, api_key: str | None = None, timeout_s: float
             raise error
 
 
-def poll(job_id: str, *, api_key: str | None = None, timeout_s: float | None = None) -> dict[str, Any]:
+def poll(
+    job_id: str,
+    *,
+    api_key: str | None = None,
+    base_url: str | None = None,
+    timeout_s: float | None = None,
+) -> dict[str, Any]:
     """轮询一次作业状态：返回原 payload（含 status / error? / usage? / unsigned_urls?）。"""
     key = resolve_api_key(api_key)
     if not key:
@@ -506,7 +523,10 @@ def poll(job_id: str, *, api_key: str | None = None, timeout_s: float | None = N
         raise OpenRouterVideoParamError("job_id 不能为空")
     try:
         with _http_client(resolve_timeout(timeout_s)) as client:
-            resp = client.get(f"{_CREATE_URL}/{job_id}", headers={"Authorization": f"Bearer {key}"})
+            resp = client.get(
+                f"{resolve_base_url(base_url)}/videos/{job_id}",
+                headers={"Authorization": f"Bearer {key}"},
+            )
     except httpx.HTTPError as exc:
         raise OpenRouterVideoFetchError(f"请求 OpenRouter 视频状态失败：{exc}") from exc
     if resp.status_code != 200:
@@ -524,6 +544,7 @@ def wait_for_job(
     job_id: str,
     *,
     api_key: str | None = None,
+    base_url: str | None = None,
     poll_interval: float = 5.0,
     timeout_s: float = 900.0,
     sleep: Any = time.sleep,
@@ -535,7 +556,7 @@ def wait_for_job(
     """
     deadline = time.monotonic() + max(1.0, timeout_s)
     while True:
-        payload = poll(job_id, api_key=api_key)
+        payload = poll(job_id, api_key=api_key, base_url=base_url)
         status = str(payload.get("status") or "")
         if status in (_TERMINAL_OK, *_TERMINAL_FAIL):
             return payload
@@ -545,14 +566,21 @@ def wait_for_job(
         sleep(max(0.5, poll_interval))
 
 
-def download(job_id: str, *, url: str | None = None, api_key: str | None = None, timeout_s: float | None = None) -> bytes:
+def download(
+    job_id: str,
+    *,
+    url: str | None = None,
+    api_key: str | None = None,
+    base_url: str | None = None,
+    timeout_s: float | None = None,
+) -> bytes:
     """下载成片字节（未签名 URL 也要带 Authorization：与轮询同一把 key）。"""
     key = resolve_api_key(api_key)
     if not key:
         raise OpenRouterVideoParamError("缺少 OpenRouter API Key")
     if not str(job_id or "").strip() and not url:
         raise OpenRouterVideoParamError("job_id 不能为空")
-    target = url or f"{_CREATE_URL}/{job_id}/content?index=0"
+    target = url or f"{resolve_base_url(base_url)}/videos/{job_id}/content?index=0"
     try:
         with _http_client(resolve_timeout(timeout_s)) as client:
             resp = client.get(target, headers={"Authorization": f"Bearer {key}"})

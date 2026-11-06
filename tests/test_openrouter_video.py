@@ -309,6 +309,7 @@ def test_submit_auth_error_not_degraded(env):
 
 
 def test_submit_requires_api_key(env, monkeypatch):
+    monkeypatch.delenv("OP_API_KEY", raising=False)
     monkeypatch.delenv("OP_IMAGE_API_KEY")
     monkeypatch.delenv("LLM_API_KEY", raising=False)
     with pytest.raises(openrouter_video.OpenRouterVideoParamError):

@@ -447,6 +447,7 @@ def test_pipeline_last_frame_rejected_no_run(env):
 
 def test_openrouter_backend_untouched(env, monkeypatch):
     """OpenRouter 分支保持原行为（provider/落盘/作业 id 语义不回归）。"""
+    monkeypatch.setenv("OP_IMAGE_API_KEY", "sk-test")  # 缺 key 检查在提交前（conftest 已清真 .env）
     catalog = {
         "data": [{
             "id": "heygen/heygen-video-1", "name": "HeyGen Video",
@@ -461,7 +462,7 @@ def test_openrouter_backend_untouched(env, monkeypatch):
     cache.write_text(json.dumps(catalog), encoding="utf-8")
     calls = {"submit": [], "download": []}
 
-    def fake_submit(body, *, api_key=None, timeout_s=None):
+    def fake_submit(body, *, api_key=None, base_url=None, timeout_s=None):
         calls["submit"].append(dict(body))
         return openrouter_video.VideoJob("job-or-1", "pending")
 
@@ -471,7 +472,7 @@ def test_openrouter_backend_untouched(env, monkeypatch):
     def fake_poll(job_id, **kw):
         return {"status": "in_progress", "id": job_id}
 
-    def fake_download(job_id, *, url=None, api_key=None, timeout_s=None):
+    def fake_download(job_id, *, url=None, api_key=None, base_url=None, timeout_s=None):
         calls["download"].append(job_id)
         return _mp4_bytes()
 

@@ -50,11 +50,15 @@ class OpenRouterSettings(BaseModel):
       值是 provider 清单里的枚举写法（如 "1K" / "4K" / "medium"）：
       **请求显式给了就不用它，没给才作为默认**；能不能发还得以所选模型的
       supported_parameters 枚举为准（charvar/openrouter_image 在调用时校验）。
-    - api_key 空串 = 用 env OP_IMAGE_API_KEY，再缺省回退 LLM_API_KEY（同一家 OpenRouter）
+    - base_url / api_key 是**生图 / 视频 / 语音共用**的 OpenRouter 凭据（不按模式拆）：
+      请求显式 > DB > env ``OP_BASE_URL`` / ``OP_API_KEY`` > 旧 env（OP_IMAGE_API_KEY / LLM_API_KEY）>
+      默认（openrouter.ai/api/v1 / 缺 key 报错）。api_key 读接口永远掩码；
+      LLM 文本通路不在这条链上（LLM_* 独立供应商）。
     """
 
     model: str = ""  # 旧字段：仅作 t2i/i2i_model 都为空时的迁移来源，新代码不再写它
-    api_key: str = ""  # 读接口永远掩码
+    base_url: str = ""  # 共享凭据：空 = env OP_BASE_URL / openrouter.ai 默认
+    api_key: str = ""  # 共享凭据：读接口永远掩码
     t2i_model: str = ""
     t2i_resolution: str = ""  # provider 格式（1K/2K/4K…），charvar 档位 1k/2k 也会被归一
     t2i_quality: str = ""  # auto/low/medium/high…，"auto" = 不发送该参数
@@ -206,9 +210,8 @@ def get_settings(conn: sqlite3.Connection) -> AppSettings:
 def save_settings(conn: sqlite3.Connection, patch: dict) -> AppSettings:
     """partial 合并：只更新 patch 里出现的顶层键。
 
-    llm 三项整行覆盖，但 api_key 空串 = 保留已存值：
+    llm / openrouter 两行覆盖，api_key 空串 = 保留已存值：
     读接口永远掩码不回显 key，前端无法回填，空串只能是「没改」。
-    openrouter 同理。
     """
     for key, value in patch.items():
         if key not in (
@@ -227,9 +230,25 @@ def save_settings(conn: sqlite3.Connection, patch: dict) -> AppSettings:
         if key in ("llm", "openrouter") and isinstance(value, dict):
             value = {**value}
             if not str(value.get("api_key") or "").strip():
-                value["api_key"] = getattr(get_settings(conn), key).api_key
+                value["api_key"] = getattr(get_settings(conn), "llm").api_key
         storage.set_setting(conn, key, value)
     return get_settings(conn)
+
+
+def openrouter_credentials(conn: sqlite3.Connection) -> dict[str, str]:
+    """OpenRouter 凭据（生图 / 视频 / 语音共用）：DB > env > 缺省。
+
+    - base_url：设置页 > ``OP_BASE_URL`` > openrouter.ai/api/v1；
+    - api_key：设置页 > ``OP_API_KEY`` > 旧 ``OP_IMAGE_API_KEY`` / ``LLM_API_KEY``。
+    缺 key 返回空串（上游函数抛参数错误并给配置指引），这里不预拦。
+    """
+    from charvar import openrouter_image
+
+    settings = get_settings(conn)
+    return {
+        "base_url": openrouter_image.resolve_base_url(settings.openrouter.base_url or None),
+        "api_key": openrouter_image.resolve_api_key(settings.openrouter.api_key or None),
+    }
 
 
 def openrouter_mode_config(conn: sqlite3.Connection) -> dict[str, dict[str, str]]:

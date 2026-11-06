@@ -17,6 +17,11 @@
 <label>图片编辑 workflow（LLM 模式变体 / 档案单图）<select id="set-edit"></select></label>
 <p class="form-note">各槽位一律按「主体图默认尺寸」的画幅 × 分辨率出图，参考图只提供外观。</p>
 </div></div>
+<div class="card"><h2>OpenRouter 凭据</h2><div class="settings-grid">
+<label>Base URL<input type="text" id="set-or-base" placeholder="留空 = OP_BASE_URL（默认 openrouter.ai/api/v1）"></label>
+<label>API Key<input type="password" id="set-or-key" placeholder="留空 = OP_API_KEY（再回退 LLM_API_KEY）" autocomplete="off"></label>
+<p class="form-note">生图 / 视频 / 语音共用；默认链：这里 &gt; env。LLM 通路不在这张卡上。</p>
+</div></div>
 <div class="card"><h2>OpenRouter 生图</h2>
 <div class="or-mode-grid">
 <section class="or-mode-group">
@@ -32,9 +37,8 @@
 <label id="set-or-i2i-quality-field" hidden>质量档<select id="set-or-i2i-quality"></select></label>
 </section>
 <section class="or-mode-group">
-<div class="form-section-title">凭据</div>
-<label>API Key<input type="password" id="set-or-key" placeholder="留空 = OP_IMAGE_API_KEY / LLM_API_KEY" autocomplete="off"></label>
 <div class="actions"><button id="btn-or-models-refresh">拉取模型清单</button><span id="or-models-status" class="status"></span></div>
+<p class="form-note">API Key 统一用环境变量 OP_IMAGE_API_KEY / LLM_API_KEY，设置页不再配置。</p>
 </section>
 <p class="form-note">分辨率 / 质量档按模型声明动态显示，不支持的档不出现；留空 = 请求显式值 &gt; 这里 &gt; env。</p>
 </div>

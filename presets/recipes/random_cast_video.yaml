@@ -2,7 +2,7 @@
 name: random_cast_video
 type: recipe
 version: 1
-title: 随机三库组合：人脸×单人动作×服饰 → 首帧 → 5 秒视频
+title: 随机三库组合：人脸×单人动作×服饰 → 首帧 → 8 秒视频
 doc: random_cast_video.md
 seed: 0
 steps:
@@ -10,7 +10,7 @@ steps:
   label: 随机选库
   manual: false
   face:
-    sources: [face-db-01]
+    sources: [face-db-01, face-db-02-cn, face-db-03-cn]
     section: face
   pose:
     sources: [pose-db-01, pose-db-02]
@@ -36,14 +36,15 @@ steps:
   manual: false
   input: 随机选库
   scene_from: 场景设计
-  duration: 5
+  frame_from: 首帧图
+  duration: 8
 
 - kind: video_model
   label: 成片
   prompt_from: 视频脚本
   frame_from: 首帧图
   frame_slot: first_frame
-  duration: 5
-  resolution: 480p
+  duration: 8
+  resolution: 768p
   aspect: "9:16"
-  wait_s: 420
+  wait_s: 600
