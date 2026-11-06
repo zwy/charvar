@@ -68,8 +68,10 @@ def _brief(
     clip_type: str,
     amplitude: str = "normal",
     image_attached: bool = False,
+    style_text: str = "",
 ) -> str:
     scene_line = f"【场景与光线（来自场景设计步，保持与首帧一致）】\n{scene_text}\n" if scene_text else ""
+    style_line = f"【全局质感（全程一致）】\n{style_text}\n" if style_text else ""
     if image_attached:
         header = (
             f"你是短视频动作编剧。写一段 {duration} 秒 AI 生成视频的「直出视频提示词」。"
@@ -119,6 +121,7 @@ def _brief(
         + f"【动作】{pose_title}" + (f"（{category}）" if category else "") + "\n"
         + (f"【人物服饰要点】\n{costume_text}\n" if costume_text else "")
         + scene_line
+        + style_line
         + f"【本段视频类型】{clip_type}\n"
         + "\n输出要求（直接输出提示词正文，中文，不要标题、不要任何解释）：\n"
         + f"1. 开头一句：以输入首帧为唯一视觉依据，生成一段约{duration}秒的单人{clip_type}视频。\n"
@@ -159,14 +162,21 @@ def _brief_multishot(
     image_attached: bool = False,
     opening: str = "body",
     text_words: list[str] | None = None,
+    style_text: str = "",
 ) -> str:
     """多镜 MV brief：编号镜头+分秒切点+机位运镜，正文后附【实录声场】【配乐】两段。
 
     opening="face" = 特写开场（第 1 镜面部大特写，第 2 镜起切全身）；text_words
-    非空 = 两处背景大字（中段爆点 + 末镜亮相，词已掷定逐词编进对应镜头）。"""
+    非空 = 两处背景大字（中段爆点 + 末镜亮相，词已掷定逐词编进对应镜头）；
+    style_text = 全局质感句（写成【全局质感】材料段，全程一致）。"""
     scene_line = (
         f"【场景与光线（来自场景设计步，全程一致）】\n{scene_text}\n" if scene_text else ""
     )
+    style_line = (
+        f"【全局质感（来自配方 style_lock，全程一致）】\n{style_text}\n"
+        "（正文开头一句之后按原样嵌入一句：「本支 MV 全片质感：" + style_text
+        + "」——逐字采用，不得改写或拆散。）\n"
+    ) if style_text else ""
     if image_attached and opening == "face":
         first_frame = "已附的这张图片——首席的面部大特写，第 1 镜的开场画面，特写本身就在图中"
     elif image_attached:
@@ -180,9 +190,12 @@ def _brief_multishot(
     )
     if opening == "face":
         first_shot_rule = (
-            f"第 1 镜（0 秒起至切点）保持面部大特写：0 秒就是附图特写画面（只露脸不露肩），"
-            "直接接续——写眼神流转、表情变化、睫毛与发丝微动、光斑掠过等微动作，"
-            "镜头不切出特写；第 2 镜起切到全身/全景构图，编舞从第 2 镜开始，"
+            f"第 1 镜（0 秒起至切点）保持面部大特写（只露脸不露肩）：0 秒从附图特写画面直接"
+            "接续，镜头固定不切出特写；先以柔和定妆光定住，随后一道暖金色光带从画面一侧"
+            "平滑地横扫过整张脸（1–1.5 秒内单次扫完，不频闪、不往复），扫过处眼瞳亮起高光、"
+            "脸颊被提亮、发丝边缘晕出金色逆光；光带扫完光线落回柔和定妆光，只写眼神流转、"
+            "睫毛轻眨、嘴角逐渐绽成明亮微笑等表情微动作；切镜点安排在光带扫完、微笑绽到"
+            "高点的那一拍。第 2 镜起切到全身/全景构图，编舞从第 2 镜开始，"
             "动作在切镜点前后保持衔接感。"
         )
         chorus_rule = (
@@ -232,6 +245,7 @@ def _brief_multishot(
         + f"【首席·动作】{pose_title}" + (f"（{category}）" if category else "") + "\n"
         + (f"【首席·服饰要点】\n{costume_text}\n" if costume_text else "")
         + scene_line
+        + style_line
         + f"【本支 MV 风格】{clip_type}\n"
         + "\n输出要求（直接输出提示词正文，中文，不要标题、不要任何解释）：\n"
         + f"1. 开头一句：以输入首帧为唯一视觉依据，生成一段约{duration}秒、{shots_count}个镜头的{clip_type}MV 视频。\n"
@@ -341,6 +355,7 @@ def write_script(
     shots: int | None = None,
     opening: str = "body",
     text_words: list[str] | None = None,
+    style_text: str = "",
 ) -> dict:
     """写视频脚本；返回 {"script", "clip_type"}。LLM 失败/输出不合法抛 LLMError/ValueError。
 
@@ -352,6 +367,7 @@ def write_script(
     【配乐】两段；ensemble 配合 multishot 写伴舞条款；shots 给定镜头数（缺省按时长推）。
     opening="face"（须 multishot）= 特写开场：第 1 镜保持面部特写，第 2 镜起切全身。
     text_words（掷骰词对）= 两处背景大字逐词编进脚本并锁进校验。
+    style_text（配方 style_lock）= 全局质感句，写成【全局质感（全程一致）】材料段铆进 brief。
     """
     if multishot:
         brief = _brief_multishot(
@@ -368,6 +384,7 @@ def write_script(
             image_attached=bool(image_path),
             opening=str(opening or "body"),
             text_words=[w for w in (text_words or []) if str(w or "").strip()],
+            style_text=str(style_text or "").strip(),
         )
     else:
         brief = _brief(
@@ -380,6 +397,7 @@ def write_script(
             str(clip_type or "摆动"),
             amplitude=amplitude,
             image_attached=bool(image_path),
+            style_text=str(style_text or "").strip(),
         )
     if image_path:
         messages = [

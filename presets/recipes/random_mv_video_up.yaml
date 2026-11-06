@@ -35,6 +35,10 @@ steps:
   backend: comfyui
   resolution: 2k
   aspect: "16:9"
+  style_lock:
+  - cinematic live-action，真人实拍电影感画质
+  - high-key bright lighting，高调明亮打光（画面明亮通透、阴影浅、对比柔和，色彩清透粉嫩）
+  - 全片同一调色与光线风格，任何镜头不变暗、不变灰、不换画风
 
 - kind: video_script
   label: 视频脚本
@@ -51,6 +55,10 @@ steps:
   text_fx: true
   text_pool: [HIT, OWN IT, SHINE, GO GO, LOVE]
   types: [群舞齐舞卡点, 队形变换走位, 可爱跳跃齐舞, 手部动作群舞（指枪/爱心/波浪）, 帅气系齐舞]
+  style_lock:
+  - cinematic live-action，真人实拍电影感画质
+  - high-key bright lighting，高调明亮打光（画面明亮通透、阴影浅、对比柔和，色彩清透粉嫩）
+  - 全片同一调色与光线风格，任何镜头不变暗、不变灰、不换画风
 
 - kind: video_model
   label: 成片
@@ -58,6 +66,6 @@ steps:
   frame_from: 首帧图
   frame_slot: first_frame
   duration: 15
-  resolution: 480p
+  resolution: 768p
   aspect: "16:9"
   wait_s: 900

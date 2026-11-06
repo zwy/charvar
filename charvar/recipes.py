@@ -82,6 +82,7 @@ _STEP_ROOT_KEYS = frozenset(
         "opening",                  # video_script（multishot）：body 缺省 / face=特写开场
         "text_fx",                  # video_script（multishot）：两处背景大字（词池掷骰）
         "text_pool",                # video_script（text_fx）：大字词池覆盖
+        "style_lock",               # combo_image/video_script：全局质感句（首帧+脚本两头注入）
     }
 )
 
@@ -186,6 +187,7 @@ class RecipeStep(BaseModel):
     opening: Literal["body", "face"] = "body"  # video_script（multishot）：face=第 1 镜保持特写
     text_fx: bool = False              # video_script（multishot）：两处背景大字
     text_pool: list[str] = Field(default_factory=list)  # 大字词池覆盖（缺省 DEFAULT_TEXT_POOL）
+    style_lock: list[str] = Field(default_factory=list)  # 全局质感锁（铆进首帧提示词与脚本 brief）
 
 
 class Recipe(BaseModel):
@@ -364,7 +366,11 @@ def _validate_recipe(recipe: Recipe, path: Path) -> None:
                     f"配方 {path.name} 的 {label}：close_up 特写模式不进动作/服饰段，"
                     "与 strip_accessories/framing_extra 语义不相干，不要同给"
                 )
+            if any(not str(w or "").strip() for w in step.style_lock):
+                raise PresetError(f"配方 {path.name} 的 {label}：style_lock 条目不能是空白")
         if step.kind == "video_script":
+            if any(not str(w or "").strip() for w in step.style_lock):
+                raise PresetError(f"配方 {path.name} 的 {label}：style_lock 条目不能是空白")
             if step.ensemble and not step.multishot:
                 raise PresetError(f"配方 {path.name} 的 {label}：ensemble 需要 multishot（伴舞条款只在多镜模式生效）")
             if step.opening != "body" and not step.multishot:
@@ -1304,6 +1310,11 @@ def _run_scene_design_step(conn, recipe: Recipe, state: RecipeRunState, step: Re
     return {"scene_text": data["scene"]}
 
 
+def _style_text_of(step: RecipeStep) -> str:
+    """style_lock 条目串成一段全局质感文本（配方级铆钉：首帧提示词与脚本 brief 两头共用）。"""
+    return "；".join(w.strip() for w in step.style_lock if str(w or "").strip())
+
+
 def _run_combo_image_step(conn, recipe: Recipe, state: RecipeRunState, step: RecipeStep, st: StepState) -> dict[str, Any]:
     """三库组合出图步：pick 的条目 → build_prompt（scene 段替换固定背景句）→ Playground 通路。
 
@@ -1341,6 +1352,7 @@ def _run_combo_image_step(conn, recipe: Recipe, state: RecipeRunState, step: Rec
             raise PresetError(f"{step.label}：{exc}") from exc
         prompt = pose_prompt_service.build_closeup_prompt(
             faces_section, _scene_text_from(state, step) or None,
+            style_text=_style_text_of(step) or None,
         )
         req = adhoc_service.AdhocRequest(
             prompt=prompt,
@@ -1435,6 +1447,8 @@ def _run_combo_image_step(conn, recipe: Recipe, state: RecipeRunState, step: Rec
         )
     except ValueError as exc:
         raise PresetError(f"{step.label}：{exc}") from exc
+    if _style_text_of(step):
+        prompt = prompt + "\n\n【全局质感（全程一致）】\n" + _style_text_of(step)
 
     reference_paths = [
         faces_service.prepared_reference_file(face["face_id"], db_path, source=face["source"]),
@@ -1519,6 +1533,7 @@ def _run_video_script_step(conn, recipe: Recipe, state: RecipeRunState, step: Re
             shots=step.shots,
             opening=str(step.opening or "body"),
             text_words=text_words,
+            style_text=_style_text_of(step),
         )
     except (llm.LLMError, ValueError) as exc:
         raise PresetError(f"{step.label}：{exc}", status=502) from exc

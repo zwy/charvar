@@ -120,17 +120,23 @@ def kind_of_line(line: str) -> str:
 
 
 _CLOSEUP_FRAMING = (
-    "采用面部大特写构图：画面只呈现脸部——从额头到下巴，五官清晰、眼神有神采，"
-    "肤质与发丝质感自然真实；不露肩膀，肩颈不进入画面；浅景深，背景柔化虚化；"
-    "只呈现这一名角色的面部，不出现第二个人。"
+    "采用面部大特写构图：画面被脸部充满——从额头到下巴，额头贴近画面上缘、下巴贴近画面"
+    "下缘，五官清晰、眼神有神采，肤质与发丝质感自然真实；构图比脸部参考照更紧：脖子、"
+    "肩、锁骨一律不进入画面（不露肩膀，肩颈不入画，下巴以下没有任何身体部位）；浅景深，"
+    "背景柔化虚化；只呈现这一名角色的面部，不出现第二个人。"
 )
 
 
-def build_closeup_prompt(face_section: str | None = "face", background_text: str | None = None) -> str:
+def build_closeup_prompt(
+    face_section: str | None = "face",
+    background_text: str | None = None,
+    style_text: str | None = None,
+) -> str:
     """MV 特写首帧：**纯脸**参考 → 面部大特写构图 + 场景背景（随机 MV 升级版配方即此用法）。
 
     不进动作段/服饰段 —— 特写只锚身份（脸库条目 = 唯一参考图），服饰与编舞由脚本
-    的切镜后镜头展开；场景文本照常经 ``background_text`` 替换固定背景句。
+    的切镜后镜头展开；场景文本照常经 ``background_text`` 替换固定背景句；
+    ``style_text``（配方 style_lock）= 全局质感段，插在构图句与背景段之间。
     仅支持 face 段：styling 段自带服装语义，与特写构图打架，显式报错。
     """
     if face_section != "face":
@@ -139,6 +145,7 @@ def build_closeup_prompt(face_section: str | None = "face", background_text: str
     parts = [
         _FACE_IDENTITY_PLAIN,
         _CLOSEUP_FRAMING,
+        str(style_text or "").strip(),
         _background_segment(seg, background_text),
         seg["guard"],
     ]

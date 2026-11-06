@@ -27,6 +27,7 @@ charvar recipes run random_mv_video --continue # 提交视频作业并轮询（�
 - **镜头数**：`video_script` 步 `shots:`（2–6）；删掉则按时长自动推（≥12s→4 镜 / ≥8s→3 镜 / 其余→2 镜）。`multishot` 要求显式 `duration:`。切点均匀度与镜头语言由脚本步的 brief 硬规则给出。
 - **阵容**：`ensemble: false`（或删掉该行）= 全程仅首席一人；`true` = 伴舞从第 2 镜入画（人数 3–5 由 brief 锁定）。multishot 才带伴舞条款。
 - **风格池**：`types:` 就是 MV 编舞风格池，想增删直接改（如加「宅舞」「复古 disco」「偶像打 call 舞」）。
+- **质感锁**：首帧步与脚本步都有 `style_lock:`（同一句两头铆钉——分别拼进首帧提示词与脚本 brief 的【全局质感】段）：现铆 **cinematic live-action / high-key bright lighting**（真人实拍电影感、高调明亮打光，校准自 MV 样片）；换调性时两处条目同步改。
 - **时长/档位**：`video_script.duration` 与 `video_model.duration` 要一起改；heygen 支持 5–30s。
 - **画质**：本配方 `resolution: 768p`（目录 0.036/s、实测 0.018/s；480p 实测会偏软；跨「长时档」费率另计，实测价自动记入 `data/openrouter/video-costs.json`）。
 

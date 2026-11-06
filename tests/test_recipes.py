@@ -1398,6 +1398,16 @@ def test_video_script_multishot_brief(tmp_path, monkeypatch):
     assert "伴舞安排" in text and "3–5 名" in text
     assert "【实录声场】" in text and "【配乐】" in text
     assert "【首席·动作描述】" in text and "【本支 MV 风格】群舞齐舞卡点" in text
+    assert "【全局质感" not in text  # 缺省 brief 不带质感段
+    # 配方 style_lock 经 write_script(style_text=…) 铆进 brief 材料段
+    script_service.write_script(
+        pose_text="自然站立。", pose_title="叉腰", clip_type="群舞齐舞卡点",
+        duration=15, multishot=True,
+        style_text="cinematic live-action，真人实拍电影感画质；high-key bright lighting",
+    )
+    text = seen["latest"][0]["content"]
+    assert "【全局质感（来自配方 style_lock，全程一致）】" in text
+    assert "high-key bright lighting" in text and "cinematic live-action" in text
 
     script_service.write_script(
         pose_text="自然站立。", pose_title="叉腰", clip_type="群舞齐舞卡点",
@@ -1437,6 +1447,8 @@ def test_repo_random_mv_recipe_parses():
     assert script.amplitude == "large" and len(script.types) == 5
     assert video.duration == 15 and video.resolution == "768p"
     assert video.aspect == "16:9" and video.frame_from == "首帧图"
+    assert len(combo.style_lock) == 3 and any("high-key" in w for w in combo.style_lock)
+    assert any("live-action" in w for w in script.style_lock)
 
 
 def test_mv_script_static_validation(tmp_path, monkeypatch):
@@ -1555,6 +1567,7 @@ def test_video_script_text_fx_and_closeup_brief(tmp_path, monkeypatch):
     text = seen["latest"][0]["content"]
     assert isinstance(text, str)
     assert "面部大特写" in text and "特写开场" in text
+    assert "光带" in text and "不频闪、不往复" in text  # 特写扫光条款（校准自原片）
     assert "第 2 镜起切到全身" in text
     assert "「GO GO」「SHINE」" in text and "文字特效" in text
     # 特写开场伴舞顺延条款在 brief 里出现
@@ -1596,8 +1609,10 @@ def test_repo_random_mv_up_recipe_parses():
     assert script.text_pool == ["HIT", "OWN IT", "SHINE", "GO GO", "LOVE"]
     assert script.shots == 4 and script.duration == 15 and script.frame_from == "首帧图"
     assert script.amplitude == "large" and len(script.types) == 5
-    assert video.duration == 15 and video.resolution == "480p"  # 调试档；切回 768p 时同步这里
+    assert video.duration == 15 and video.resolution == "768p"  # 过审档（实测 $0.018/s）
     assert video.aspect == "16:9" and video.frame_from == "首帧图"
+    assert len(combo.style_lock) == 3 and any("high-key" in w for w in combo.style_lock)
+    assert any("live-action" in w for w in script.style_lock)
 
 
 def test_mv_up_static_validation(tmp_path, monkeypatch):
@@ -1637,6 +1652,14 @@ def test_mv_up_static_validation(tmp_path, monkeypatch):
         "mvup_pool.yaml",
         _UP_YAML_BASE.replace("text_pool: [HIT, OWN IT, SHINE]", 'text_pool: [HIT, ""]'),
         "text_pool",
+    )
+    bad(
+        "mvup_style.yaml",
+        _UP_YAML_BASE.replace(
+            "text_pool: [HIT, OWN IT, SHINE]",
+            'text_pool: [HIT, SHINE]\n  style_lock: [""]',
+        ),
+        "style_lock",
     )
     bad(
         "mvup_conflict.yaml",

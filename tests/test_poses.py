@@ -336,11 +336,15 @@ def test_pose_prompt_build_closeup_prompt():
     prompt = pose_prompt.build_closeup_prompt("face", "明亮的日系礼堂舞台，暖白柔光。")
     assert prompt.startswith("<image1>为角色脸部参考")  # 纯脸身份段在最前
     assert "面部大特写构图" in prompt and "浅景深" in prompt
+    assert "构图比脸部参考照更紧" in prompt and "肩、锁骨一律不进入画面" in prompt  # 只露脸收紧条款
     assert "明亮的日系礼堂舞台，暖白柔光。" in prompt
     assert "<image2>" not in prompt and "<image3>" not in prompt  # 无动作/服饰参考槽位
     # 无 scene 文本回退固定背景句
     plain = pose_prompt.build_closeup_prompt("face")
     assert "背景简洁，突出角色。" in plain
+    # style_lock 质感段插入构图句与背景句之间；缺省不带
+    styled = pose_prompt.build_closeup_prompt("face", "礼堂", style_text="cinematic live-action")
+    assert "cinematic live-action" in styled and "cinematic live-action" not in prompt
     with pytest.raises(ValueError):
         pose_prompt.build_closeup_prompt("styling")
 
