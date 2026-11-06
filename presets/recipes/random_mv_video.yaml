@@ -1,0 +1,61 @@
+---
+name: random_mv_video
+type: recipe
+version: 1
+title: 随机选角 MV：首席+伴舞 · 多镜头分镜 → 15 秒宽屏视频
+doc: random_mv_video.md
+seed: 0
+steps:
+- kind: pick
+  label: 随机选库
+  manual: false
+  face:
+    sources: [face-db-01]
+    section: face
+  pose:
+    sources: [pose-db-02]
+    lines: [全身1人・セクシー系, 全身1人・標準系]
+    categories: [立ち]
+    angle: 正面
+  costume:
+    sources: [costume-db-01, studio]
+    categories: [春, パーティ, glamorous_gala_dresses]
+
+- kind: scene_design
+  label: 场景设计
+  manual: false
+  input: 随机选库
+  hint: 这是日系女团 MV 的画面场景：舞台礼堂、白栅栏天台或舞蹈镜室等开阔场地，地面质感清晰（最好有柔和反光），首席四周与纵深留出群舞队型的空间、前景无遮挡；明亮青春的可爱系舞台灯光，节拍化光效。
+
+- kind: combo_image
+  label: 首帧图
+  input: 随机选库
+  scene_from: 场景设计
+  strip_accessories: true
+  framing_extra: 这是 MV 首帧图（16:9 横画幅）：首席全身入镜（头顶到脚完整），站位居中，头顶、左右与画面四周留出充分余白，为后续切镜的群舞队型与机位横移留纵深空间；地面完整可见；人物双手不持物、头上不戴帽、身上不挎包。
+  backend: comfyui
+  resolution: 2k
+  aspect: "16:9"
+
+- kind: video_script
+  label: 视频脚本
+  manual: false
+  input: 随机选库
+  scene_from: 场景设计
+  frame_from: 首帧图
+  multishot: true
+  ensemble: true
+  shots: 4
+  duration: 15
+  amplitude: large
+  types: [群舞齐舞卡点, 队形变换走位, 可爱跳跃齐舞, 手部动作群舞（指枪/爱心/波浪）, 帅气系齐舞]
+
+- kind: video_model
+  label: 成片
+  prompt_from: 视频脚本
+  frame_from: 首帧图
+  frame_slot: first_frame
+  duration: 15
+  resolution: 768p
+  aspect: "16:9"
+  wait_s: 900

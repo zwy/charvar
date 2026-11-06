@@ -12,6 +12,11 @@
 追加编排结构规则（起势 → 主段逐段升级 → 收尾定格），正文其余字节不变 —— 舞蹈变体
 配方即此用法；normal 档保持原 brief（向后兼容）。
 
+多镜头 MV 模式（``write_script(multishot=True)``）：编号镜头 + 每镜起始秒切点 + 机位
+运镜的分镜结构，正文后附【实录声场】【配乐】两段（支持音频生成的模型照此出声，
+不支持的作氛围描述读取）；``ensemble`` = 伴舞从第 2 镜入画、``shots`` = 镜头数
+（缺省按时长推）—— 随机 MV 配方 `random_mv_video` 即此用法。
+
 片段类型的随机不走 LLM：类型池 ``DEFAULT_TYPES``（配方 YAML ``types:`` 可覆盖），
 ``wildcard.rng_for`` 子种子抽取注入 brief —— 掷骰可复现，LLM 只负责把类型编成
 动作脚本。
@@ -120,8 +125,86 @@ def _brief(
     )
 
 
-def validate_script(text: str) -> str:
-    """校验脚本文本；不合格抛 ValueError。"""
+def _resolve_shots(duration: int, shots: int | None) -> int:
+    """镜头数：给定点用给定值；缺省按时长推（≥12→4 / ≥8→3 / 其余→2）。"""
+    if shots is not None:
+        return int(shots)
+    if duration >= 12:
+        return 4
+    if duration >= 8:
+        return 3
+    return 2
+
+
+def _brief_multishot(
+    pose_text: str,
+    pose_title: str,
+    category: str,
+    costume_text: str,
+    scene_text: str,
+    duration: int,
+    clip_type: str,
+    shots_count: int,
+    amplitude: str = "normal",
+    ensemble: bool = False,
+    image_attached: bool = False,
+) -> str:
+    """多镜 MV brief：编号镜头+分秒切点+机位运镜，正文后附【实录声场】【配乐】两段。"""
+    scene_line = (
+        f"【场景与光线（来自场景设计步，全程一致）】\n{scene_text}\n" if scene_text else ""
+    )
+    if image_attached:
+        first_frame = "已附的这张图片——第 1 镜的开场画面，0 秒就是图中的姿态"
+    else:
+        first_frame = "另一张已生成的首帧图（随提示词一起发给视频模型）——第 1 镜的开场画面"
+    if ensemble:
+        cast_rule = (
+            "4. 伴舞安排：从第 2 镜开始伴舞入画，人数 3–5 名，穿与首席同色系的简化服装、"
+            "与首席保持明显身形区分；动作与首席同步呼应、阵型对称合理并始终让出首席的中心"
+            "位置，不遮挡、不顶替首席。\n"
+        )
+    else:
+        cast_rule = "4. 全程只有首席一人出镜，任何镜头都不出现第二个人或动物。\n"
+    if amplitude == "large":
+        amp_rule = (
+            "5. 动作幅度大：允许并鼓励跳跃、转体、甩头、跨步与大幅挥臂，躯干与四肢全程参与，"
+            "面部表情随节奏自然变化；四肢与手指结构连贯清楚，不做镜头前的怪异扭曲。\n"
+        )
+    else:
+        amp_rule = (
+            "5. 动作幅度适中，四肢与手指结构连贯清楚，不做镜头前的怪异扭曲。\n"
+        )
+    return (
+        f"你是 MV 导演兼视频编剧。写一段 {duration} 秒、{shots_count} 个镜头的 AI 生成视频"
+        "「直出视频提示词」，采用多镜头 MV 分镜结构。\n"
+        f"视频的首帧画面：{first_frame}；后续镜头是脚本切换出的新构图，由视频模型按分镜执行。\n\n"
+        + f"【首席·动作描述】\n{pose_text}\n"
+        + f"【首席·动作】{pose_title}" + (f"（{category}）" if category else "") + "\n"
+        + (f"【首席·服饰要点】\n{costume_text}\n" if costume_text else "")
+        + scene_line
+        + f"【本支 MV 风格】{clip_type}\n"
+        + "\n输出要求（直接输出提示词正文，中文，不要标题、不要任何解释）：\n"
+        + f"1. 开头一句：以输入首帧为唯一视觉依据，生成一段约{duration}秒、{shots_count}个镜头的{clip_type}MV 视频。\n"
+        + "2. 分镜编号成文（镜头一／镜头二……）：每镜写明起始秒（第几秒起，切点均匀排满"
+        + f"{duration}秒）、镜头语言（从特写、中景、全景、低位仰拍、跟拍后退、横摇、推近、环绕"
+        + "中选用）与该镜的画面内容及编舞细节；第 1 镜 0 秒从首帧姿态直接接续，不要先摆好姿势"
+        + "再开始；后续镜头切换机位但仍在同一场景中，动作在切镜点前后保持衔接感。\n"
+        + "3. 硬规则：全程同一首席——同发型同服装同妆容，每个镜头里首席都是画面焦点，不混入"
+        + "人群失去主体；切镜不换背景与光线；不出现文字水印；结尾在动作余韵中收束。\n"
+        + cast_rule
+        + amp_rule
+        + "6. 编舞按首席的起始姿态合理可达，结构上：起势（第 1 镜从首帧姿态带出）→ 主段"
+        + "（贯穿各镜的 2–3 组动作主题，幅度逐段升级）→ 收尾（末镜回到镜头前亮相定格，"
+        + "动作余韵中收束）。\n"
+        + "7. 正文之后按以下两个小段收尾（各 2–3 句）：\n"
+        + "【实录声场】写画内实录声音（脚步、呼吸、服装窸窣、现场混响等）；支持音频生成的"
+        + "视频模型会按此出声，不支持的模型仅作氛围参考。\n"
+        + "【配乐】写画外配乐：曲风、配器要素，以及节奏与编舞动作同步的关系。"
+    )
+
+
+def validate_script(text: str, multishot: bool = False) -> str:
+    """校验脚本文本；不合格抛 ValueError。多镜模式另要求分镜结构词。"""
     text = str(text or "").strip().strip("“”\"' ")
     if not _CJK_RE.search(text):
         raise ValueError("视频脚本没有中文内容")
@@ -129,6 +212,8 @@ def validate_script(text: str) -> str:
         raise ValueError(f"视频脚本长度不合适：{len(text)} 字（限 {_MIN_LEN}–{_MAX_LEN}）")
     if "首帧" not in text:
         raise ValueError("视频脚本没有提到「首帧」—— 连续性依据缺失")
+    if multishot and "镜头" not in text:
+        raise ValueError("多镜模式视频脚本缺少分镜结构（提到「镜头」）")
     return text
 
 
@@ -178,6 +263,9 @@ def write_script(
     config: dict | None = None,
     image_path: str | Path | None = None,
     amplitude: str = "normal",
+    multishot: bool = False,
+    ensemble: bool = False,
+    shots: int | None = None,
 ) -> dict:
     """写视频脚本；返回 {"script", "clip_type"}。LLM 失败/输出不合法抛 LLMError/ValueError。
 
@@ -185,18 +273,35 @@ def write_script(
     brief 换「以附图实际姿态接续」措辞 —— 配方步传 combo_image 的真实产物进来。
     amplitude="large" = 大幅度档：规则 6 换大幅版并追加编排结构规则；缺省 normal
     保持原 brief 不变（向后兼容）。
+    multishot=True = 多镜头 MV 分镜：编号镜头+分秒切点+机位运镜，正文后附【实录声场】
+    【配乐】两段；ensemble 配合 multishot 写伴舞条款；shots 给定镜头数（缺省按时长推）。
     """
-    brief = _brief(
-        str(pose_text or "").strip(),
-        str(pose_title or ""),
-        str(category or ""),
-        str(costume_text or ""),
-        str(scene_text or ""),
-        int(duration),
-        str(clip_type or "摆动"),
-        amplitude=amplitude,
-        image_attached=bool(image_path),
-    )
+    if multishot:
+        brief = _brief_multishot(
+            str(pose_text or "").strip(),
+            str(pose_title or ""),
+            str(category or ""),
+            str(costume_text or ""),
+            str(scene_text or ""),
+            int(duration),
+            str(clip_type or "摆动"),
+            _resolve_shots(int(duration), shots),
+            amplitude=amplitude,
+            ensemble=bool(ensemble),
+            image_attached=bool(image_path),
+        )
+    else:
+        brief = _brief(
+            str(pose_text or "").strip(),
+            str(pose_title or ""),
+            str(category or ""),
+            str(costume_text or ""),
+            str(scene_text or ""),
+            int(duration),
+            str(clip_type or "摆动"),
+            amplitude=amplitude,
+            image_attached=bool(image_path),
+        )
     if image_path:
         messages = [
             {
@@ -210,4 +315,4 @@ def write_script(
     else:
         messages = [{"role": "user", "content": brief}]
     text = call_llm(messages, model, config)
-    return {"script": validate_script(text), "clip_type": clip_type}
+    return {"script": validate_script(text, multishot=multishot), "clip_type": clip_type}

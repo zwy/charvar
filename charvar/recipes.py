@@ -75,6 +75,9 @@ _STEP_ROOT_KEYS = frozenset(
         "strip_accessories",        # combo_image：服饰图锚去包/帽/墨镜/手持物（舞蹈首帧）
         "framing_extra",            # combo_image：构图段追加（余白/不持物等框景要求）
         "amplitude",                # video_script：动作幅度档（large=大幅+编排结构）
+        "multishot",                # video_script：多镜头 MV 分镜模式（随机 MV 配方）
+        "ensemble",                 # video_script（multishot）：伴舞从第 2 镜入画
+        "shots",                    # video_script（multishot）：镜头数（2–6，缺省按时长推）
     }
 )
 
@@ -172,6 +175,9 @@ class RecipeStep(BaseModel):
     strip_accessories: bool = False    # combo_image：服饰图锚去包/帽/墨镜/手持物（舞蹈首帧）
     framing_extra: str | None = None   # combo_image：构图段追加（余白/不持物等框景要求）
     amplitude: Literal["normal", "large"] = "normal"  # video_script：动作幅度档（large=大幅+编排结构）
+    multishot: bool = False            # video_script：多镜头 MV 分镜（编号镜头+分秒切点+声场/配乐段）
+    ensemble: bool = False             # video_script（multishot）：伴舞从第 2 镜入画
+    shots: int | None = None           # video_script（multishot）：镜头数 2–6；None 按 duration 推
 
 
 class Recipe(BaseModel):
@@ -345,6 +351,13 @@ def _validate_recipe(recipe: Recipe, path: Path) -> None:
                         "（必须指向本步之前的 video_script 步）"
                     )
         if step.kind == "video_script":
+            if step.ensemble and not step.multishot:
+                raise PresetError(f"配方 {path.name} 的 {label}：ensemble 需要 multishot（伴舞条款只在多镜模式生效）")
+            if step.multishot:
+                if not step.duration:
+                    raise PresetError(f"配方 {path.name} 的 {label}：multishot 需要显式 duration（分镜切点按时长排）")
+                if step.shots is not None and not 2 <= int(step.shots) <= 6:
+                    raise PresetError(f"配方 {path.name} 的 {label}：shots 只支持 2–6，当前 {step.shots!r}")
             # 看图脚本：frame_from 指向本步之前能产图的步骤（combo_image 首帧等）
             target = by_label.get(step.frame_from) if step.frame_from else None
             if step.frame_from and (
@@ -1428,6 +1441,9 @@ def _run_video_script_step(conn, recipe: Recipe, state: RecipeRunState, step: Re
             config=settings_service.llm_overrides(conn),
             image_path=frame_path,
             amplitude=str(step.amplitude or "normal"),
+            multishot=bool(step.multishot),
+            ensemble=bool(step.ensemble),
+            shots=step.shots,
         )
     except (llm.LLMError, ValueError) as exc:
         raise PresetError(f"{step.label}：{exc}", status=502) from exc

@@ -1233,6 +1233,21 @@ def _dance_script_text() -> str:
     )
 
 
+_MV_YAML_BASE = _DANCE_YAML.replace("name: demo_dance", "name: demo_mv").replace(
+    "  amplitude: large\n  duration: 8\n",
+    "  amplitude: large\n  multishot: true\n  ensemble: true\n  shots: 4\n  duration: 15\n",
+).replace("  duration: 8\n  aspect", "  duration: 15\n  aspect").replace(
+    "  duration: 15\n  aspect: \"9:16\"", "  duration: 15\n  resolution: 480p\n  aspect: \"16:9\""
+)
+
+
+_MV_SCRIPT_TEXT = (
+    "以输入首帧为唯一视觉依据，生成一段约15秒、4个镜头的群舞齐舞卡点MV视频。"
+    "镜头一 0 秒起，镜头二 4 秒起，镜头三 8 秒起，镜头四 11 秒起。"
+    + "画面连续性：全程同一首席，发型服装背景光线与首帧保持一致。首帧" * 14
+)
+
+
 def test_dance_full_flow(dance_env, monkeypatch):
     """舞蹈全链：站姿池选取 → 去包帽首帧 → 看图脚本（多模态消息）→ 成片。"""
     conn = dance_env
@@ -1358,6 +1373,145 @@ def test_video_script_amplitude_brief_and_image_mode(tmp_path, monkeypatch):
     assert content[0]["type"] == "text" and "已附的这张图片" in content[0]["text"]
     assert content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
     assert "首帧的实际姿态" in content[0]["text"]
+
+
+def test_video_script_multishot_brief(tmp_path, monkeypatch):
+    """多镜 brief：镜头数/分镜/声场/配乐/伴舞条款；shots 推导；缺分镜词拒。"""
+    from charvar import video_script as script_service
+
+    seen: dict = {}
+
+    def fake(messages, model=None, config=None):
+        seen["latest"] = messages
+        return _MV_SCRIPT_TEXT
+
+    monkeypatch.setattr(script_service, "call_llm", fake)
+
+    script_service.write_script(
+        pose_text="自然站立。", pose_title="叉腰", clip_type="群舞齐舞卡点",
+        duration=15, multishot=True, ensemble=True, shots=4,
+    )
+    text = seen["latest"][0]["content"]
+    assert isinstance(text, str)
+    assert "15 秒、4 个镜头" in text and "多镜头 MV 分镜" in text
+    assert "第几秒起" in text and "低位仰拍" in text
+    assert "伴舞安排" in text and "3–5 名" in text
+    assert "【实录声场】" in text and "【配乐】" in text
+    assert "【首席·动作描述】" in text and "【本支 MV 风格】群舞齐舞卡点" in text
+
+    script_service.write_script(
+        pose_text="自然站立。", pose_title="叉腰", clip_type="群舞齐舞卡点",
+        duration=15, multishot=True,
+    )
+    text = seen["latest"][0]["content"]
+    assert "只有首席一人出镜" in text and "伴舞安排" not in text
+    assert "15 秒、4 个镜头" in text  # shots 缺省按时长推：15s → 4
+
+    script_service.write_script(
+        pose_text="自然站立。", pose_title="叉腰", clip_type="群舞齐舞卡点",
+        duration=8, multishot=True,
+    )
+    assert "8 秒、3 个镜头" in seen["latest"][0]["content"]
+
+    # 多镜校验：缺「镜头」拒；提到「镜头」放行
+    with pytest.raises(ValueError):
+        script_service.validate_script("首帧" + "画" * 410, multishot=True)
+    ok = script_service.validate_script("以输入首帧为唯一视觉依据。" + "镜头" + "画" * 405, multishot=True)
+    assert ok
+
+
+def test_repo_random_mv_recipe_parses():
+    """仓库随机 MV 配方解析合法；多镜字段、16:9 与检查点布局锁进测试。"""
+    recipe = recipes_service.load_recipe("random_mv_video")
+    assert [s.kind for s in recipe.steps] == [
+        "pick", "scene_design", "combo_image", "video_script", "video_model",
+    ]
+    assert [recipes_service.manual_default(s) for s in recipe.steps] == [
+        False, False, True, False, True,
+    ]
+    combo, script, video = recipe.steps[2], recipe.steps[3], recipe.steps[4]
+    assert recipe.steps[0].face["sources"] == ["face-db-01"]
+    assert combo.strip_accessories is True and "16:9" in (combo.framing_extra or "")
+    assert script.multishot is True and script.ensemble is True and script.shots == 4
+    assert script.duration == 15 and script.frame_from == "首帧图"
+    assert script.amplitude == "large" and len(script.types) == 5
+    assert video.duration == 15 and video.resolution == "768p"
+    assert video.aspect == "16:9" and video.frame_from == "首帧图"
+
+
+def test_mv_script_static_validation(tmp_path, monkeypatch):
+    """multishot 静态约束：ensemble 必配 multishot / shots 限 2–6 / duration 必显式。"""
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CHARVAR_PRESETS_DIR", str(tmp_path / "presets"))
+    base = tmp_path / "presets" / "recipes"
+    base.mkdir(parents=True, exist_ok=True)
+    (base / "mvok_base.yaml").write_text(_MV_YAML_BASE, encoding="utf-8")
+    recipe = recipes_service.load_recipe("mvok_base")
+    assert recipe.steps[3].multishot and recipe.steps[3].ensemble and recipe.steps[3].shots == 4
+
+    def bad(stem: str, text: str) -> None:
+        (base / stem).write_text(text, encoding="utf-8")
+        with pytest.raises(PresetError, match="multishot|ensemble|shots"):
+            recipes_service.load_recipe(stem[:-5])
+
+    bad("demmv_ens.yaml", _MV_YAML_BASE.replace("  multishot: true\n", ""))
+    bad("demmv_shots.yaml", _MV_YAML_BASE.replace("shots: 4", "shots: 8"))
+    bad(
+        "demmv_dur.yaml",
+        _MV_YAML_BASE.replace(
+            "  multishot: true\n  ensemble: true\n  shots: 4\n  duration: 15\n",
+            "  multishot: true\n  ensemble: true\n  shots: 4\n",
+        ),
+    )
+
+
+@pytest.fixture()
+def mv_env(dance_env):
+    (Path(os.environ["CHARVAR_DATA_DIR"]) / "presets" / "recipes" / "demo_mv.yaml").write_text(
+        _MV_YAML_BASE, encoding="utf-8"
+    )
+    return dance_env
+
+
+def test_mv_full_flow(mv_env, monkeypatch):
+    """MV 全链：多镜看图脚本（multishot/ensemble/shots 进 brief）→ 15s 480p 16:9 成片。"""
+    conn = mv_env
+    from charvar import video_script as script_service
+
+    script_calls = []
+    submit_reqs = []
+
+    def fake_script_llm(messages, model=None, config=None):
+        script_calls.append(messages)
+        return _MV_SCRIPT_TEXT
+
+    _stub_llms(monkeypatch)
+    monkeypatch.setattr(script_service, "call_llm", fake_script_llm)
+    monkeypatch.setattr(recipes_service, "_VIDEO_POLL_INTERVAL_S", 0.01)
+    _stub_adhoc_generate(monkeypatch)
+    submit_reqs = _stub_adhoc_video(
+        monkeypatch,
+        [{"status": "ready", "job_id": "j1", "model": "heygen/heygen-video-1"}],
+    )
+
+    state = recipes_service.start_run(conn, "demo_mv")
+    assert state.status == "waiting"  # 停在「首帧图」
+
+    state = recipes_service.advance_state(conn, state.recipe_run_id)
+    assert state.status == "waiting"  # 停在「成片」
+    content = script_calls[0][0]["content"]
+    assert isinstance(content, list)  # 看图模式照常生效
+    text = content[0]["text"]
+    assert "第 1 镜的开场画面" in text and "15 秒、4 个镜头" in text
+    assert "伴舞安排" in text and "【实录声场】" in text and "【配乐】" in text
+    script_out = state.steps[3].outputs
+    assert script_out["script"] == _MV_SCRIPT_TEXT
+
+    state = recipes_service.advance_state(conn, state.recipe_run_id)
+    assert state.status == "done"
+    req = submit_reqs[0]
+    assert req.duration == 15 and req.resolution == "480p"
+    assert req.aspect_ratio == "16:9"
 
 
 def test_scene_fallback_keeps_fixed_background(model_env):

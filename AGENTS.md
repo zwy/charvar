@@ -241,8 +241,8 @@ DB → 仓库对偶：`charvar subject export <id>` 快照成 `presets/subjects/
   **`--continue` 是「续跑已有运行」——首次必须不带它**（`charvar recipes run <名>` 建运行并停在首个检查点），否则报「没有可继续的运行」。
 - **状态**：`data/generated/recipe_runs/<recipe_id>/manifest.json`（recipe_id 白名单 `^recipe_[A-Za-z0-9_.-]+$` 且无 `..`，同 adhoc 严格度），**不建 DB 表**、不落 runs 表；配方定义改版（步数不一致）时 continue 拒绝，要求重建。
 - **入口三处同语义**：`charvar recipes list|run|status`（`--continue` 续最近一次）、`/recipes*` API、「配方」页签（`recipes.js`）。
-- 示例配方：`presets/recipes/stockings_showcase.yaml`（推 ComfyUI，跑一次会真出 27 张图——**跑之前想清楚**）、`presets/recipes/model_clip_demo.yaml`（生成配方，heygen 480p 实测$0.01/s，缺省 manual，真跑要 key）。
-- **随机三库配方**（`random_cast_video`；舞蹈版 `random_dance_video`：站姿池/去包帽）：`pick` 随机选角（人脸×单人动作×服饰；描述 A→B 补齐）→ `scene_design` 场景 → `combo_image` 首帧 → `video_script` 脚本（看首帧） → `video_model`（`prompt_from`）。掷骰种子含 run_id：每运行换批。
+- 示例配方：`presets/recipes/stockings_showcase.yaml`（推 ComfyUI，跑一次会真出 27 张图——**跑之前想清楚**）、`presets/recipes/model_clip_demo.yaml`（生成配方，heygen 480p 实测$0.01/s，真跑要 key）。
+- **随机三库配方**（`random_cast_video`；舞蹈版 `random_dance_video`：站姿池/去包帽；MV 版 `random_mv_video`：多镜分切/伴舞/16:9）：`pick` 随机选角（人脸×动作×服饰；描述补齐）→ `scene_design` 场景 → `combo_image` 首帧 → `video_script` 脚本（看首帧） → `video_model`。种子含 run_id：每运行换批。
 
 ### 生成步与参考视频
 
