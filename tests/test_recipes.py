@@ -1615,6 +1615,37 @@ def test_repo_random_mv_up_recipe_parses():
     assert any("live-action" in w for w in script.style_lock)
 
 
+def test_repo_photo_idol_mv10_recipe_parses():
+    """固定模板特效配方（照片变身打歌 MV 10 秒版）解析合法；两段提示词逐字、10s 768p 档锁进测试。"""
+    recipe = recipes_service.load_recipe("photo_idol_mv10")
+    assert [s.kind for s in recipe.steps] == ["adhoc_image", "video_model"]
+    assert all(recipes_service.manual_default(s) for s in recipe.steps)
+    ref = recipe.refs[0]
+    assert ref.label == "用户照片" and ref.source == "asset" and ref.path == "user_photo.jpg"
+    img, video = recipe.steps[0], recipe.steps[1]
+    # 首帧通路钉 openai/gpt-image-2.6-flare：Qwen-Edit 试跑不过验收清单（肩入画+素颜），编辑系模型才跟得动
+    # 「极近特写重构图 + 日系 idol 妆」两条硬要求（实测 flare 一把过，$0.023/张）
+    assert img.backend == "openrouter" and img.model == "openai/gpt-image-2.6-flare"
+    assert img.aspect == "16:9" and img.resolution is None  # flare 不声明 resolution，不发
+    assert img.reference_labels == ["用户照片"]
+    # 提示词 A 逐字锚点（身份唯一参考 + 构图红线 + 质感锁柔光变体）
+    assert "以素材1中的人物为唯一身份参考" in img.prompt
+    assert "脖子、肩膀、锁骨及任何衣服、领口、肩带均不得入画" in img.prompt
+    assert "high-key bright lighting，高调明亮柔光" in img.prompt
+    assert "cinematic live-action" in img.prompt
+    # 提示词 B 逐字锚点（四镜 2+2+3+3 / 双字卡 / 身份稳定设计 / 统一约束）
+    assert "【镜头一｜0–2秒：贴脸对视】" in video.prompt
+    assert "【镜头二｜2–4秒：READY，登场即起舞】" in video.prompt
+    assert "【镜头三｜4–7秒：全员齐舞，动作爆发】" in video.prompt
+    assert "【镜头四｜7–10秒：SHINE，最后一拍亮相】" in video.prompt
+    assert "单次扫完，不频闪、不往复" in video.prompt
+    assert "主角不从远处人群中走近" in video.prompt and "不甩头、不转身" in video.prompt
+    assert "除“READY”“SHINE”外，无其他文字、字幕、Logo或水印" in video.prompt
+    assert video.model == "heygen/heygen-video-1"  # 固定模板钉供应商（无声，音乐段当氛围读）
+    assert video.duration == 10 and video.resolution == "768p"  # 实测折半 ≈$0.18/条
+    assert video.aspect == "16:9" and video.frame_from == "首帧图" and video.frame_slot == "first_frame"
+
+
 def test_mv_up_static_validation(tmp_path, monkeypatch):
     """升级版静态约束：opening/text_fx 必配 multishot、text_pool 空白词、close_up 冲突。"""
     monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
