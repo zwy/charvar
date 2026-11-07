@@ -64,6 +64,7 @@ _STEP_ROOT_KEYS = frozenset(
         # ---- ⑤ 生成配方步 ----
         "prompt", "backend", "model", "duration", "resolution", "quality",
         "negative_prompt", "reference_labels", "video_ref_labels",
+        "dress_from",                # adhoc_image：服装文本来自 pick 产物（{{服装}} 占位符注入）
         "frame_from", "frame_index", "frame_ref", "frame_slot",
         "last_frame_from", "last_frame_index", "video_from", "wait_s",
         # ---- ⑥ 随机三库配方步 ----
@@ -88,7 +89,7 @@ _STEP_ROOT_KEYS = frozenset(
 
 
 class RecipeRef(BaseModel):
-    """配方自带的参考图/参考视频声明；步内按 label 引用（reference_labels 等）。
+    """配方素材声明；步内按 label 引用（reference_labels 等）。
 
     refs = 图片素材；video_refs = 视频素材（video_model 步消费，video_url 通路，
     Seedance gen2+ 才接）。subject 来源只有图片（档案里没有视频槽位）。
@@ -96,10 +97,11 @@ class RecipeRef(BaseModel):
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    source: Literal["subject", "run", "asset"] = Field(alias="from")
+    source: Literal["subject", "run", "asset", "pick"] = Field(alias="from")
     slot: str | None = None       # source=subject：主体档案槽位（front/...）
     run_id: str | None = None     # source=run：历史生成原图（图片）或 adhoc_video 作业成片（视频）
     path: str | None = None       # source=asset：配方素材（presets/recipes/assets/<file>）
+    step: str | None = None       # source=pick：随机选库步 label（运行时取其产出的人脸条目图）
     index: int = 0                # source=run（图片）：original/ 里第几个条目
     label: str | None = None
 
@@ -147,13 +149,14 @@ class RecipeStep(BaseModel):
     use_labeled: bool = True           # 输入 run 有贴字产物时优先用 labeled/
 
     # ---- adhoc_image 步（单图；Playground 通路） ----
-    prompt: str | None = None          # 原样使用，不做模板替换
+    prompt: str | None = None          # 原样使用；唯一的模板机制 = {{服装}} 占位符（配 dress_from）
     backend: Literal["comfyui", "openrouter", "dreamina"] = "openrouter"
     model: str | None = None           # 空 = 设置页/env 默认链
     resolution: str | None = None      # charvar 档位或 provider 枚举；空 = 跟随默认
     quality: str | None = None         # 仅 OpenRouter 生效
     negative_prompt: str | None = None # 仅 ComfyUI 生效
     reference_labels: list[str] = Field(default_factory=list)  # recipe.refs 的 label
+    dress_from: str | None = None      # 服装文本来自 pick 步服饰条目（prompt_text 优先）；配 {{服装}} 占位符
 
     # ---- video_model 步（OpenRouter 异步作业） ----
     duration: int | None = None        # 秒；None = 不发；video_script 步 = 脚本时长
@@ -282,8 +285,10 @@ def _validate_recipe(recipe: Recipe, path: Path) -> None:
                 raise PresetError(f"{source_name} 里有 source=run 但缺 run_id")
             if ref.source == "asset" and not ref.path:
                 raise PresetError(f"{source_name} 里有 source=asset 但缺 path")
-            if list_name == "video_refs" and ref.source == "subject":
-                raise PresetError(f"{source_name} 不支持 source=subject（主体档案没有视频；用 asset 或 run）")
+            if ref.source == "pick" and not ref.step:
+                raise PresetError(f"{source_name} 里有 source=pick 但缺 step（随机选库步 label）")
+            if list_name == "video_refs" and ref.source in ("subject", "pick"):
+                raise PresetError(f"{source_name} 不支持 source={ref.source}（主体档案与选库产物都只有图;用 asset 或 run）")
 
     images_seen = False
     labels: list[str] = []  # 当前步**之前**的步 label（video_model 的引用必须指向前置步）
@@ -428,9 +433,36 @@ def _validate_recipe(recipe: Recipe, path: Path) -> None:
                     f"配方 {path.name} 的 {label}：scene_from 不能指向 {step.scene_from!r}"
                     "（必须指向本步之前的 scene_design 步）"
                 )
+        if step.dress_from is not None:
+            if step.kind != "adhoc_image":
+                raise PresetError(f"配方 {path.name} 的 {label}：dress_from 只用于 adhoc_image 步")
+            target = by_label.get(step.dress_from)
+            if target is None:
+                raise PresetError(
+                    f"配方 {path.name} 的 {label}：dress_from 引用的步骤不存在或不在本步之前：{step.dress_from!r}"
+                )
+            if target.kind != "pick" or not target.costume:
+                raise PresetError(
+                    f"配方 {path.name} 的 {label}：dress_from 必须指向声明了 costume 过滤器的 pick 步，当前 {step.dress_from!r}"
+                )
+            if step.prompt is None or "{{服装}}" not in step.prompt:
+                raise PresetError(
+                    f"配方 {path.name} 的 {label}：dress_from 需要提示词里有 {{{{服装}}}} 占位符"
+                )
+        elif step.kind == "adhoc_image" and step.prompt and "{{服装}}" in step.prompt:
+            raise PresetError(
+                f"配方 {path.name} 的 {label}：提示词有 {{{{服装}}}} 占位符但没声明 dress_from"
+            )
         images_seen = images_seen or step.kind == "images"
         labels.append(label)
         by_label[label] = step
+    # refs(=pick) 必须指向真实存在的随机选库步（运行时 gate 管完成态，这里管拼写）
+    pick_labels = {lbl for lbl, st in by_label.items() if st.kind == "pick"}
+    for ref in recipe.refs:
+        if ref.source == "pick" and ref.step not in pick_labels:
+            raise PresetError(
+                f"配方 {path.name} 的 refs（label={ref.label!r}）：step 必须指向 pick 步，当前 {ref.step!r}"
+            )
 
 
 def parse_recipe_file(path: Path) -> Recipe:
@@ -947,13 +979,37 @@ def _recipe_asset_path(recipe_name: str, path: str, *, video: bool) -> Path:
     return target
 
 
-def _resolve_ref_image(conn, recipe: Recipe, label: str) -> Path:
-    """``recipe.refs`` 的 label → 本地图片路径（主体槽位 / run 条目 / 配方素材）。"""
+def _resolve_ref_image(conn, recipe: Recipe, label: str, state: "RecipeRunState | None" = None) -> Path:
+    """``recipe.refs`` 的 label → 本地图片路径（主体槽位 / run 条目 / 配方素材 / 随机选库产物）。"""
     ref = next((r for r in recipe.refs if r.label == label), None)
     if ref is None:
         raise PresetError(f"配方 {recipe.name}：refs 里没有 label {label!r}")
     if ref.source == "asset":
         return _recipe_asset_path(recipe.name, str(ref.path), video=False)
+    if ref.source == "pick":
+        from charvar import faces as faces_service
+
+        target = next(
+            (s for s in (state.steps if state else []) if s.kind == "pick" and s.label == (ref.step or "")),
+            None,
+        )
+        if target is None:
+            raise PresetError(f"配方 {recipe.name} 的 refs {label!r}：随机选库步 {ref.step!r} 不存在")
+        if target.status != "done":
+            raise _GateStop(f"随机选库步 {ref.step!r} 未完成（先 continue 把选库跑完）")
+        face = dict(target.outputs.get("face") or {})
+        if not face.get("face_id"):
+            raise PresetError(f"配方 {recipe.name} 的 refs {label!r}：随机选库步没有产出人脸条目")
+        if not face.get("source"):
+            raise PresetError(f"配方 {recipe.name} 的 refs {label!r}：随机选库步产出缺 source（人脸库 id）")
+        try:
+            return faces_service.prepared_reference_file(
+                str(face["face_id"]), db_path=_conn_db_path(conn), source=str(face["source"])
+            )
+        except faces_service.FaceError as exc:
+            raise _GateStop(
+                f"人脸库图片不存在：{face.get('source')}/{face.get('face_id')}（{exc}）"
+            ) from exc
     if ref.source == "run":
         from charvar.assets import original_dir
 
@@ -1062,9 +1118,27 @@ def _run_adhoc_image_step(conn, recipe: Recipe, state: RecipeRunState, step: Rec
         except (FileNotFoundError, adhoc_service.AdhocError):
             pass  # 产物被清了（或 run_id 脏）：走重新生成
 
-    reference_paths = [_resolve_ref_image(conn, recipe, lab) for lab in step.reference_labels]
+    reference_paths = [_resolve_ref_image(conn, recipe, lab, state) for lab in step.reference_labels]
+    prompt = str(step.prompt or "")
+    if step.dress_from:
+        from charvar import costumes as costumes_service
+
+        picks = _prior_step_state(state, str(step.dress_from or ""), ("pick",), "dress_from").outputs
+        costume = dict(picks.get("costume") or {})
+        ref = str(costume.get("ref") or f"{costume.get('source') or ''}/{costume.get('item_id') or ''}")
+        if not costume.get("item_id"):
+            raise PresetError(
+                f"随机选库步 {step.dress_from} 没有产出服饰条目——先在 pick 里声明 costume 过滤器"
+            )
+        try:
+            dress = costumes_service.note_text(conn, ref)
+        except costumes_service.CostumeError as exc:
+            raise PresetError(f"{step.label}：服饰文本取数失败：{exc}") from exc
+        if not str(dress or "").strip():
+            raise PresetError(f"{step.label}：服饰条目 {ref} 没有可用文本（prompt_text/keywords 均空）")
+        prompt = prompt.replace("{{服装}}", str(dress))
     req = adhoc_service.AdhocRequest(
-        prompt=str(step.prompt or ""),
+        prompt=prompt,
         backend=step.backend,
         model=step.model,
         negative_prompt=step.negative_prompt,
@@ -1098,7 +1172,7 @@ def _submit_video_job(conn, recipe: Recipe, state: RecipeRunState, step: RecipeS
     frame_path: Path | None = None
     last_frame_path: Path | None = None
     if step.frame_ref:
-        frame_path = _resolve_ref_image(conn, recipe, step.frame_ref)
+        frame_path = _resolve_ref_image(conn, recipe, step.frame_ref, state)
     if step.frame_from:
         produced = _produce_frame(conn, state, step.frame_from, step.frame_index)
         if step.frame_slot == "first_frame":

@@ -1718,3 +1718,305 @@ def test_scene_fallback_keeps_fixed_background(model_env):
         validate_scene("短")
     with pytest.raises(ValueError):
         validate_scene("长" * 221)
+
+
+# ---------- ⑧ 舞蹈随机脸版（refs source=pick：随机选库产物作 <image1>） ----------
+
+def test_repo_dance_a_random_face_parses():
+    """舞蹈配方 A 随机脸版（v2）：pick → adhoc_image（pick 引用）→ video_model；服装段唯一改写处锁进测试。"""
+    recipe = recipes_service.load_recipe("dance_a_sway")
+    assert [s.kind for s in recipe.steps] == ["pick", "adhoc_image", "video_model"]
+    assert [recipes_service.manual_default(s) for s in recipe.steps] == [False, True, True]
+    pick, img, video = recipe.steps
+    assert pick.face == {"sources": ["face-db-01"], "section": "face"}
+    assert pick.costume == {"sources": ["studio"], "categories": ["idol_stage"]}
+    ref = recipe.refs[0]
+    assert ref.source == "pick" and ref.step == "随机选脸" and ref.label == "脸部参考"
+    assert img.reference_labels == ["脸部参考"]
+    assert img.dress_from == "随机选脸" and img.prompt.count("{{服装}}") == 1
+    assert "不沿用<image1>的衣着" in img.prompt
+    assert img.backend == "openrouter" and img.model == "openai/gpt-image-2.6-flare"
+    assert img.aspect == "9:16"
+    # 服装段唯一改写处：占位符注入（face 段纯脸无服装可沿用）
+    assert "沿用<image1>中人物的服装" not in img.prompt
+    # 身份段等其余段落保留原文锚点
+    assert "以<image1>中的人物为唯一主体" in img.prompt
+    assert "真人照片保持自然真实的摄影质感，绘画角色保持原有绘画风格" in img.prompt
+    # 舞步视频提示词逐字未动（锚点抽两处）+ 档位不变
+    vp = video.prompt
+    assert "以输入首帧为唯一视觉依据，生成一段约5秒的单人轻快摇摆舞视频" in vp
+    assert "4.4—5秒，俏皮亮相" in vp
+    assert video.model == "heygen/heygen-video-1"
+    assert video.duration == 5 and video.resolution == "480p" and video.aspect == "9:16"
+
+
+_PICK_REF_YAML = """
+name: pick_ref_demo
+type: recipe
+version: 1
+title: pick 引用 demo
+seed: 0
+refs:
+- from: pick
+  {step_line}
+  label: 脸部参考
+steps:
+- kind: pick
+  label: 随机选脸
+  manual: false
+  face:
+    sources: [face-db-01]
+    section: face
+- kind: adhoc_image
+  label: 首帧图
+  prompt: 随机脸首帧测试
+  backend: comfyui
+  aspect: "9:16"
+  reference_labels: [脸部参考]
+"""
+
+
+_DANCE_RANDOM_EXPECT = {
+    "dance_b_catpaw": ("双爪轻探", "不额外添加猫耳、尾巴、手套"),
+    "dance_c_fansa": ("看到你，开心招手", "不额外添加头饰、手套或其他配饰"),
+    "dance_d_zhuman": ("轻轻展翅", "不要擅自换成古装"),
+    "dance_e_penguin": ("左侧点步", "不添加企鹅服、动物头套、翅膀"),
+    "dance_f_chaoxi": ("向画面左侧推收", "不要强制换成西装"),
+    "dance_g_yangge": ("第一个完整推收", "不额外添加墨镜、首饰、手套或其他配饰"),
+}
+
+
+def test_dress_from_static_validation(tmp_path, monkeypatch):
+    """dress_from：缺占位符 / 占位符缺字段 / 指向非 pick / pick 无 costume → 解析期报错。"""
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CHARVAR_PRESETS_DIR", str(tmp_path / "presets"))
+    base = tmp_path / "presets" / "recipes"
+    base.mkdir(parents=True, exist_ok=True)
+
+    _YAML = """
+name: dress_demo__SUFFIX__
+type: recipe
+version: 1
+title: dress 注入 demo
+seed: 0
+refs:
+- from: pick
+  step: 随机选脸
+  label: 脸部参考
+steps:
+- kind: pick
+  label: 随机选脸
+  manual: false
+  face:
+    sources: [face-db-01]
+    section: face
+__COSTUME__
+- kind: adhoc_image
+  label: 首帧图
+  prompt: __PROMPT__
+  __DRESS__
+  backend: comfyui
+  aspect: "9:16"
+  reference_labels: [脸部参考]
+"""
+    ok = _YAML.replace("__SUFFIX__", "_ok").replace(
+        "__COSTUME__", "  costume:\n    sources: [studio]\n    categories: [idol_stage]"
+    ).replace("__PROMPT__", "穿{{服装}}起舞").replace("__DRESS__", "dress_from: 随机选脸")
+    (base / "dress_demo_ok.yaml").write_text(ok, encoding="utf-8")
+    recipe = recipes_service.load_recipe("dress_demo_ok")
+    assert recipe.steps[1].dress_from == "随机选脸"
+
+    # 占位符但缺 dress_from
+    bad1 = ok.replace("dress_from: 随机选脸\n  ", "").replace("__SUFFIX__", "_nol")
+    (base / "dress_demo_nol.yaml").write_text(bad1, encoding="utf-8")  # ok 文本已无 __SUFFIX__，再写入原样
+    with pytest.raises(PresetError, match="没声明 dress_from"):
+        recipes_service.load_recipe("dress_demo_nol")
+
+    # dress_from 但提示词没占位符
+    bad2 = ok.replace("穿{{服装}}起舞", "直接起舞")
+    (base / "dress_demo_noh.yaml").write_text(bad2, encoding="utf-8")
+    with pytest.raises(PresetError, match="占位符"):
+        recipes_service.load_recipe("dress_demo_noh")
+
+    # pick 没有 costume 过滤器
+    bad3 = _YAML.replace("__SUFFIX__", "_nop").replace("__COSTUME__", "").replace(
+        "__PROMPT__", "穿{{服装}}起舞").replace("__DRESS__", "dress_from: 随机选脸")
+    (base / "dress_demo_nop.yaml").write_text(bad3, encoding="utf-8")
+    with pytest.raises(PresetError, match="costume 过滤器"):
+        recipes_service.load_recipe("dress_demo_nop")
+
+
+def test_dress_from_injection(monkeypatch, tmp_path):
+    """{{服装}} 运行时注入：取 pick 产物条目的 prompt_text 替换占位符；未产条目 → PresetError。"""
+    from types import SimpleNamespace
+
+    import charvar.adhoc as adhoc_service
+    from charvar import costumes as costumes_service
+    from charvar import faces as faces_service
+
+    recipe = recipes_service.load_recipe("dance_a_sway")
+
+    def manifest(costume_outputs: dict):
+        face_out = {"source": "face-db-01", "face_id": "f009267e478", "section": "face", "hair": "ショート"}
+        return {
+            "recipe": "dance_a_sway", "title": "",
+            "recipe_run_id": "recipe_dance_a_sway_s0_20261107140000000000",
+            "created_at": "2026-11-07 14:00:00", "seed": 0, "status": "running",
+            "steps": [
+                {"index": 0, "kind": "pick", "label": "随机选脸", "manual": False,
+                 "status": "done", "note": "", "outputs": {"face": face_out, **costume_outputs}},
+                {"index": 1, "kind": "adhoc_image", "label": "首帧图", "manual": True,
+                 "status": "pending", "note": "", "outputs": {}},
+                {"index": 2, "kind": "video_model", "label": "直出片段", "manual": True,
+                 "status": "pending", "note": "", "outputs": {}},
+            ],
+        }
+
+    monkeypatch.setattr(costumes_service, "note_text", lambda conn, ref: f"wearing a {ref} outfit, barefoot")
+    monkeypatch.setattr(faces_service, "prepared_reference_file",
+                        lambda face_id, db_path=None, source="": tmp_path / "face.jpg")
+    (tmp_path / "face.jpg").write_bytes(b"jpeg")
+
+    captured = {}
+
+    def fake_generate(req, db_path=None):
+        captured["prompt"] = req.prompt
+        return SimpleNamespace(manifest_path=str(tmp_path / "run" / "manifest.json"),
+                               width=864, height=1536, model="openai/gpt-image-2.6-flare", cost=0.03)
+
+    monkeypatch.setattr(adhoc_service, "generate", fake_generate)
+    tmp_path_run = tmp_path / "run"
+    tmp_path_run.mkdir(exist_ok=True)
+
+    state = recipes_service.RecipeRunState.model_validate(manifest(
+        {"costume": {"source": "studio", "item_id": "idol_stage_sailor_heart", "category": "idol_stage",
+                     "ref": "studio/idol_stage_sailor_heart", "keywords": "white sailor"}}))
+    steps = {s.kind: s for s in recipe.steps}
+    out = recipes_service._run_adhoc_image_step(None, recipe, state, steps["adhoc_image"], state.steps[1])
+    assert "{{服装}}" not in captured["prompt"]
+    assert "wearing a studio/idol_stage_sailor_heart outfit" in captured["prompt"]
+    assert "不沿用<image1>的衣着" in captured["prompt"]
+    assert out["image_run_id"]
+
+    state_missing = recipes_service.RecipeRunState.model_validate(manifest({}))
+    with pytest.raises(PresetError, match="没有产出服饰条目"):
+        recipes_service._run_adhoc_image_step(None, recipe, state_missing, steps["adhoc_image"], state_missing.steps[1])
+
+
+def test_repo_dance_random_faces_parses():
+    """舞蹈 B–G 随机脸版：pick → adhoc_image（pick 引用）→ video_model；服装统一粉裙、档位不变。"""
+    for name, (video_anchor, cloth_anchor) in _DANCE_RANDOM_EXPECT.items():
+        recipe = recipes_service.load_recipe(name)
+        assert [s.kind for s in recipe.steps] == ["pick", "adhoc_image", "video_model"], name
+        assert [recipes_service.manual_default(s) for s in recipe.steps] == [False, True, True], name
+        pick, img, video = recipe.steps
+        assert pick.face == {"sources": ["face-db-01"], "section": "face"}, name
+        assert pick.costume == {"sources": ["studio"], "categories": ["idol_stage"]}, name
+        ref = recipe.refs[0]
+        assert ref.source == "pick" and ref.step == "随机选脸" and ref.label == "脸部参考", name
+        assert img.reference_labels == ["脸部参考"], name
+        assert img.dress_from == "随机选脸" and img.prompt.count("{{服装}}") == 1, name
+        # 首帧走 flare：ComfyUI 对纯脸+文本姿态/构图 5/6 不达标（2026-11-07 实测）， flare 一次过硬
+        assert img.backend == "openrouter" and img.model == "openai/gpt-image-2.6-flare", name
+        assert img.aspect == "9:16", name
+        assert "沿用<image1>中人物" not in img.prompt, name
+        assert cloth_anchor in img.prompt, name
+        # 舞步分秒段锚点（视频提示词保真）
+        assert video_anchor in video.prompt, name
+        assert video.model == "heygen/heygen-video-1", name
+        assert video.duration == 5 and video.resolution == "480p" and video.aspect == "9:16", name
+
+
+def test_repo_dance_g_random_face_debound():
+    """舞蹈 G：卡通画风与眼镜条款在随机脸版里清干净（首帧+视频提示词都不再出现）。"""
+    recipe = recipes_service.load_recipe("dance_g_yangge")
+    img, video = recipe.steps[1], recipe.steps[2]
+    for text in (img.prompt, video.prompt):
+        assert "眼镜" not in text
+        assert "卡通插画" not in text
+    assert "保持真人实拍质感" in img.prompt
+    assert "保持首帧的真人实拍质感" in video.prompt
+    # 动作编排锚点保留（推收两段 + 收尾亮相）
+    assert "0—1.2秒，起势" in video.prompt and "4.0—5秒，收尾亮相" in video.prompt
+
+
+def test_pick_ref_static_validation(tmp_path, monkeypatch):
+    """refs source=pick：缺 step / step 不是 pick 步 / video_refs 用 pick → 解析期报错；合法形态通过。"""
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CHARVAR_PRESETS_DIR", str(tmp_path / "presets"))
+    base = tmp_path / "presets" / "recipes"
+    base.mkdir(parents=True, exist_ok=True)
+
+    good = base / "pick_ref_ok.yaml"
+    good.write_text(_PICK_REF_YAML.replace("{step_line}", "step: 随机选脸"), encoding="utf-8")
+    recipe = recipes_service.load_recipe("pick_ref_ok")
+    assert recipe.refs[0].source == "pick" and recipe.refs[0].step == "随机选脸"
+
+    (base / "pick_ref_nostep.yaml").write_text(
+        _PICK_REF_YAML.replace("{step_line}", ""), encoding="utf-8"
+    )
+    with pytest.raises(PresetError, match="缺 step"):
+        recipes_service.load_recipe("pick_ref_nostep")
+
+    (base / "pick_ref_badstep.yaml").write_text(
+        _PICK_REF_YAML.replace("{step_line}", "step: 不存在的步"), encoding="utf-8"
+    )
+    with pytest.raises(PresetError, match="step 必须指向 pick"):
+        recipes_service.load_recipe("pick_ref_badstep")
+
+    (base / "pick_ref_vref.yaml").write_text(
+        _PICK_REF_YAML.replace("{step_line}", "step: 随机选脸").replace("refs:", "video_refs:"),
+        encoding="utf-8",
+    )
+    with pytest.raises(PresetError, match="source=pick"):
+        recipes_service.load_recipe("pick_ref_vref")
+
+
+def test_pick_ref_resolution_and_gate(monkeypatch, tmp_path):
+    """source=pick 运行时解析：pick 完成取条目压缩图；未完成 → gate；无产出 → 报错；参数透传。"""
+    from charvar import faces as faces_service
+
+    recipe = recipes_service.load_recipe("dance_a_sway")
+
+    def manifest(pick_status: str, pick_outputs: dict):
+        return {
+            "recipe": "dance_a_sway",
+            "title": "",
+            "recipe_run_id": "recipe_dance_a_sway_s0_20261107130000000000",
+            "created_at": "2026-11-07 13:00:00",
+            "seed": 0,
+            "status": "running",
+            "steps": [
+                {"index": 0, "kind": "pick", "label": "随机选脸", "manual": False,
+                 "status": pick_status, "note": "", "outputs": pick_outputs},
+                {"index": 1, "kind": "adhoc_image", "label": "首帧图", "manual": True,
+                 "status": "pending", "note": "", "outputs": {}},
+                {"index": 2, "kind": "video_model", "label": "直出片段", "manual": True,
+                 "status": "pending", "note": "", "outputs": {}},
+            ],
+        }
+
+    state = recipes_service.RecipeRunState.model_validate(manifest("pending", {}))
+    with pytest.raises(recipes_service._GateStop, match="未完成"):
+        recipes_service._resolve_ref_image(None, recipe, "脸部参考", state)
+
+    state = recipes_service.RecipeRunState.model_validate(manifest("done", {}))
+    with pytest.raises(PresetError, match="没有产出人脸条目"):
+        recipes_service._resolve_ref_image(None, recipe, "脸部参考", state)
+
+    calls: list[tuple[str, str]] = []
+
+    def fake_prepared(face_id: str, db_path=None, source: str = "face-db-01") -> Path:
+        calls.append((face_id, source))
+        out = tmp_path / f"face_{face_id}.jpg"
+        out.write_bytes(b"jpeg")
+        return out
+
+    monkeypatch.setattr(faces_service, "prepared_reference_file", fake_prepared)
+    state = recipes_service.RecipeRunState.model_validate(
+        manifest("done", {"face": {"source": "face-db-01", "face_id": "f009267e478",
+                                   "section": "face", "hair": "ショート"}})
+    )
+    resolved = recipes_service._resolve_ref_image(None, recipe, "脸部参考", state)
+    assert resolved.read_bytes() == b"jpeg"
+    assert calls == [("f009267e478", "face-db-01")]

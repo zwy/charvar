@@ -1,16 +1,24 @@
 ---
 name: dance_b_catpaw
 type: recipe
-version: 2
-title: 舞蹈配方 B：猫爪弹弹舞（单图 → 首帧 → 视频模型直出）
+version: 3
+title: 舞蹈配方 B：猫爪弹弹舞（随机选脸 → 首帧 → 视频模型直出）
 doc: dance_b_catpaw.md
-subject: yellow_dress_bob
 seed: 0
 refs:
-- label: front
-  from: subject
-  slot: front
+- from: pick
+  step: 随机选脸
+  label: 脸部参考
 steps:
+- kind: pick
+  label: 随机选脸
+  manual: false
+  face:
+    sources: [face-db-01]
+    section: face
+  costume:
+    sources: [studio]
+    categories: [idol_stage]
 - kind: adhoc_image
   label: 首帧图
   prompt: |
@@ -20,7 +28,7 @@ steps:
     保留<image1>中人物的五官特征、脸型、发型、发色、肤色、原有体型与个人辨识度，不替换成统一的网红脸，不改变人物的性别表达。真人照片保持自然真实的摄影质感，绘画角色保持原有绘画风格。
 
     人物服装：
-    沿用<image1>中人物原有的服装，保持可见的款式、颜色、领口、袖型和图案。原图未展示的部分自然延续已有服装设计。双手不持物，不额外添加猫耳、尾巴、手套或其他动物装饰。
+    {{服装}}——服装以本段描述为准，不沿用<image1>的衣着。双手不持物，不额外添加猫耳、尾巴、手套或其他动物装饰。
 
     构图与镜头：
     9:16竖版，正面平视，单人居中，完整展示头顶至大腿中段。头顶留出少量空间，双肩、双肘、双手完整入镜，身体两侧留出摆臂空间。人物躯干正对镜头，肩膀放松，不侧身，不采用俯拍、仰拍或广角畸变。
@@ -38,9 +46,13 @@ steps:
 
     最终画面：
     像人物已经摆好猫爪，准备下一刻跟着节奏跳舞。人体比例自然，手部结构清楚，没有文字、水印、拼图或动作残影。
-  backend: comfyui
+
+    人物为成年女性（约二十五岁），整体是健康清新的日系偶像舞台摄影。
+  backend: openrouter
+  model: openai/gpt-image-2.6-flare
   aspect: "9:16"
-  reference_labels: [front]
+  reference_labels: [脸部参考]
+  dress_from: 随机选脸
 
 - kind: video_model
   label: 直出片段

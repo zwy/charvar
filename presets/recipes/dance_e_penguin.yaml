@@ -1,16 +1,24 @@
 ---
 name: dance_e_penguin
 type: recipe
-version: 4
-title: 舞蹈配方 E：企鹅舞（单图 → 全身首帧 → 视频模型直出）
+version: 5
+title: 舞蹈配方 E：企鹅舞（随机选脸 → 全身首帧 → 视频模型直出）
 doc: dance_e_penguin.md
-subject: yellow_dress_bob
 seed: 0
 refs:
-- label: front
-  from: subject
-  slot: front
+- from: pick
+  step: 随机选脸
+  label: 脸部参考
 steps:
+- kind: pick
+  label: 随机选脸
+  manual: false
+  face:
+    sources: [face-db-01]
+    section: face
+  costume:
+    sources: [studio]
+    categories: [idol_stage]
 - kind: adhoc_image
   label: 首帧图
   prompt: |
@@ -21,7 +29,7 @@ steps:
     真人照片保持自然真实的摄影质感，绘画角色保持原有绘画风格。
 
     人物服装：
-    沿用<image1>中人物可见的服装，保持款式、颜色、领口、袖型和图案。原图没有展示的下装自然补全为与现有服装协调的日常下装，双脚穿简洁的平底浅口单鞋，鞋跟低平。
+    {{服装}}——服装以本段描述为准（含脚部造型），不沿用<image1>的衣着。
     不擅自换成黑白配色，不添加企鹅服、动物头套、翅膀、喙或其他动物装饰。人物双手不持物。
 
     构图与镜头：
@@ -43,9 +51,13 @@ steps:
 
     最终画面：
     正常人物认真准备跳企鹅拟态舞的瞬间。保持人体比例、服装结构和双手双脚自然，没有文字、水印、拼图或动作残影。
-  backend: comfyui
+
+    人物为成年女性（约二十五岁），整体是健康清新的日系偶像舞台摄影。
+  backend: openrouter
+  model: openai/gpt-image-2.6-flare
   aspect: "9:16"
-  reference_labels: [front]
+  reference_labels: [脸部参考]
+  dress_from: 随机选脸
 
 - kind: video_model
   label: 直出片段

@@ -1,16 +1,24 @@
 ---
 name: dance_c_fansa
 type: recipe
-version: 1
-title: 舞蹈配方 C：饭撒摇（单图 → 首帧 → 视频模型直出）
+version: 2
+title: 舞蹈配方 C：饭撒摇（随机选脸 → 首帧 → 视频模型直出）
 doc: dance_c_fansa.md
-subject: yellow_dress_bob
 seed: 0
 refs:
-- label: front
-  from: subject
-  slot: front
+- from: pick
+  step: 随机选脸
+  label: 脸部参考
 steps:
+- kind: pick
+  label: 随机选脸
+  manual: false
+  face:
+    sources: [face-db-01]
+    section: face
+  costume:
+    sources: [studio]
+    categories: [idol_stage]
 - kind: adhoc_image
   label: 首帧图
   prompt: |
@@ -20,7 +28,7 @@ steps:
     保留<image1>中人物的五官特征、脸型、发型、发色、肤色、原有体型与个人辨识度，不替换成统一的网红脸，不改变人物的性别表达。真人照片保持自然真实的摄影质感，绘画角色保持原有绘画风格。
 
     人物服装：
-    沿用<image1>中人物原有的服装，保持可见的款式、颜色、领口、袖型与图案。双手不持物，不额外添加头饰、手套或其他配饰。
+    {{服装}}——服装以本段描述为准，不沿用<image1>的衣着。双手不持物，不额外添加头饰、手套或其他配饰。
 
     构图与镜头：
     9:16竖版，正面平视，单人居中，完整展示头顶至腰部。头顶留出少量空间，人物两侧留出抬手和摆手的空间，双肘与双手均在画面内。人物躯干正对镜头，不侧身，不俯拍、不仰拍，不使用广角畸变。
@@ -40,9 +48,13 @@ steps:
 
     最终画面：
     像人物正准备向镜头打招呼的瞬间。保持人物比例自然、手部结构清楚、服装细节完整，没有文字、水印、拼图或动作残影。
-  backend: comfyui
+
+    人物为成年女性（约二十五岁），整体是健康清新的日系偶像舞台摄影。
+  backend: openrouter
+  model: openai/gpt-image-2.6-flare
   aspect: "9:16"
-  reference_labels: [front]
+  reference_labels: [脸部参考]
+  dress_from: 随机选脸
 
 - kind: video_model
   label: 直出片段
