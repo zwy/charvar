@@ -1,0 +1,39 @@
+item_id: idol_stage_ruby_gala
+source_id: studio
+display_type: flat_lay
+category: idol_stage
+label: 红宝石夜会（宝石红金饰打歌服）
+keywords: ruby satin idol dress, gold jeweled neckline, gold lace overlay, huge organza
+  back bow, gold fringe hem
+prompt_text: wearing a ruby satin idol dress with a gold jeweled neckline, gold lace
+  overlay and a huge organza back bow, barefoot
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white
+  background: a complete Japanese idol stage costume laid flat as separate pieces:
+  one ruby satin dress with a gold jeweled neckline and gold lace overlay, and one
+  large ruby organza ribbon bow accessory. Laid flat and separated with clear gaps,
+  no pieces overlapping, all edges fully inside the frame with margin around them,
+  realistic relative sizes. Neckline toward the top of the frame, hems toward the
+  bottom. Soft diffused studio lighting from the upper left, faint contact shadows.
+  No people, no mannequin, no hangers, no text.'
+subject_policy: {}
+caption_tags:
+  rose_charm: 粉白丝带荷叶边偶像台装
+  mint_sorbet: 薄荷白泡泡袖偶像台装
+  sailor_heart: 白水手领红心结偶像台装
+  peach_soleil: 蜜桃薄纱层绽偶像裙子
+  lavender_ray: 薰衣草白袖偶像台装
+  pearl_parade: 象牙金边欧根纱偶像台装
+  academy_pop: 学院水手偶像制服装
+  cherry_fight: 红白应援偶像台装
+  star_baton: 藏青金穗流苏星星打歌服
+  prism_revue: 彩虹渐变荷叶边打歌服
+  sugar_rock: 桃红银铆钉流苏打歌服
+  ruby_gala: 宝石红金饰打歌服
+  milky_stardom: 蓝银星星闪亮打歌服
+  ribbon_circus: 红白条纹大缎带打歌服
+sort_order: 11
+images:
+  file_path: png/idol_stage_ruby_gala.png
+  image_path: img/idol_stage_ruby_gala.webp
+  thumb_path: thumbs/idol_stage_ruby_gala.webp
