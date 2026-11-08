@@ -1,0 +1,18 @@
+item_id: bodysuit_variations_worn_bs03
+source_id: studio-mannequin
+display_type: mannequin
+category: bodysuit_variations_worn
+label: 抹胸颈链紧身衣
+keywords: strapless bandeau one-piece swimsuit, matching thin fabric choker, solid dark espresso brown, high-cut leg
+prompt_text: wearing a solid dark espresso brown strapless bandeau one-piece swimsuit with a straight strapless neckline and a high-cut leg, plus a matching thin fabric choker at the neck
+prompt_source: manual
+ref_prompt: Apparel design illustration of strapless bandeau one-piece swimsuit, matching thin fabric choker, solid dark espresso brown, high-cut leg. Shown worn on a headless, faceless mannequin torso, soft anime illustration style with subtle shading, plain pure white background, garment front centered, all edges fully inside the frame with margin. No text, no numbers, no decorations.
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 2
+images:
+  file_path: png/bodysuit_variations_worn_bs03.png
+  image_path: img/bodysuit_variations_worn_bs03.webp
+  thumb_path: thumbs/bodysuit_variations_worn_bs03.webp

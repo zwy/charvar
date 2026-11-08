@@ -1970,7 +1970,7 @@ def costume_import_cmd(source: str = typer.Argument(None, help="库 id（缺省 
 
 @costume_app.command("import-studio")
 def costume_import_studio_cmd() -> None:
-    """presets/costumes/studio/ 镜像逐条 → 自建服饰行（source_id=studio，flat_lay）。
+    """presets/costumes/<自建库>/ 镜像逐条 → 自建服饰行（平铺库 studio / 人台库 studio-mannequin）。
 
     DB 是运行时真源，镜像只是重建快照：已存在整条跳过（不覆盖 DB 里改过的文本），
     缺行按镜像补齐（sort_order 家族次序在内）。镜像由 charvar costume export 维护。
@@ -2181,10 +2181,10 @@ def face_list_cmd(
 # ---------- 服饰条目编辑（policy / keywords / 收藏 / 制图提示词 / 重生成） ----------
 
 def _costume_sync_mirror(conn: object, source_id: str, item_id: str) -> None:
-    """studio 条目编辑后自动同步镜像 yaml（站点条目无镜像 —— DB 就是它的真源）。"""
+    """自建条目编辑后自动同步镜像 yaml（站点条目无镜像 —— DB 就是它的真源）。"""
     from charvar import costumes as costumes_service
 
-    if source_id == costumes_service.STUDIO_SOURCE_ID:
+    if source_id in costumes_service.STUDIO_SOURCE_IDS:
         costumes_service.export_item(conn, f"{source_id}/{item_id}")
 
 

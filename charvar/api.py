@@ -1001,7 +1001,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         return str(source), str(item_id)
 
     def _costume_export_mirror(conn: object, source_id: str, item_id: str) -> None:
-        if source_id == costumes_service.STUDIO_SOURCE_ID:
+        if source_id in costumes_service.STUDIO_SOURCE_IDS:
             costumes_service.export_item(conn, f"{source_id}/{item_id}")
 
     @app.put("/costumes/{source_id}/{item_id}/prompt-text")

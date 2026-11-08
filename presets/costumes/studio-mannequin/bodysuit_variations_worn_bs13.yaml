@@ -1,0 +1,18 @@
+item_id: bodysuit_variations_worn_bs13
+source_id: studio-mannequin
+display_type: mannequin
+category: bodysuit_variations_worn
+label: 露胸镂空挂脖紧身衣
+keywords: halter mock-neck bodysuit, open-bust cups with separated inner edges, wide center cutout, solid dark brown, high-cut
+prompt_text: wearing a solid dark brown halter mock-neck bodysuit with open-bust cups, the inner edges of the cups separated and a wide center cutout between them, a narrow V panel below the bust, high-cut leg
+prompt_source: manual
+ref_prompt: Apparel design illustration of halter mock-neck bodysuit, open-bust cups with separated inner edges, wide center cutout, solid dark brown, high-cut. Shown worn on a headless, faceless mannequin torso, soft anime illustration style with subtle shading, plain pure white background, garment front centered, all edges fully inside the frame with margin. No text, no numbers, no decorations.
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 12
+images:
+  file_path: png/bodysuit_variations_worn_bs13.png
+  image_path: img/bodysuit_variations_worn_bs13.webp
+  thumb_path: thumbs/bodysuit_variations_worn_bs13.webp

@@ -1,0 +1,18 @@
+item_id: bodysuit_variations_worn_bs11
+source_id: studio-mannequin
+display_type: mannequin
+category: bodysuit_variations_worn
+label: 高领平角紧身衣（五分腿）
+keywords: sleeveless mock-neck shorts bodysuit, keyhole plunge opening at the chest, solid dark brown, legs ending at mid-thigh
+prompt_text: wearing a solid dark brown sleeveless mock-neck shorts bodysuit with a keyhole plunge opening at the center chest, legs ending at mid-thigh
+prompt_source: manual
+ref_prompt: Apparel design illustration of sleeveless mock-neck shorts bodysuit, keyhole plunge opening at the chest, solid dark brown, legs ending at mid-thigh. Shown worn on a headless, faceless mannequin torso, soft anime illustration style with subtle shading, plain pure white background, garment front centered, all edges fully inside the frame with margin. No text, no numbers, no decorations.
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 10
+images:
+  file_path: png/bodysuit_variations_worn_bs11.png
+  image_path: img/bodysuit_variations_worn_bs11.webp
+  thumb_path: thumbs/bodysuit_variations_worn_bs11.webp

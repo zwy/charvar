@@ -1,0 +1,18 @@
+item_id: bodysuit_variations_worn_bs04
+source_id: studio-mannequin
+display_type: mannequin
+category: bodysuit_variations_worn
+label: 网纱拼接短袖紧身衣
+keywords: short-sleeve mesh bodysuit, mock neck, sheer dark-brown stretch mesh sleeves and midriff, opaque black bust band, high-cut brief lower
+prompt_text: wearing a semi-sheer dark-brown mesh short-sleeve bodysuit with mock neck, an opaque black bust band across the chest, and a high-cut one-piece lower
+prompt_source: manual
+ref_prompt: Apparel design illustration of short-sleeve mesh bodysuit, mock neck, sheer dark-brown stretch mesh sleeves and midriff, opaque black bust band, high-cut brief lower. Shown worn on a headless, faceless mannequin torso, soft anime illustration style with subtle shading, plain pure white background, garment front centered, all edges fully inside the frame with margin. No text, no numbers, no decorations.
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 3
+images:
+  file_path: png/bodysuit_variations_worn_bs04.png
+  image_path: img/bodysuit_variations_worn_bs04.webp
+  thumb_path: thumbs/bodysuit_variations_worn_bs04.webp

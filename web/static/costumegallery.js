@@ -33,7 +33,7 @@ const CostumeGallery = (() => {
 
     /* 来源中文名（自建库、站点库与动漫库的来源页签/徽章行都读它；未知 id 原样显示。
        服务端 sources 行自带 zh —— 展示优先用服务端值，这里只是未知 id 的回退） */
-    const SOURCE_ZH = { "costume-db-01": "站点库", "costume-anime-db-01": "动漫库", "studio": "自建库" };
+    const SOURCE_ZH = { "costume-db-01": "站点库", "costume-anime-db-01": "动漫库", "studio": "自建库（平铺）", "studio-mannequin": "自建库（人台）" };
 
     /* 媒体维度（真人/动漫筛选 chips 用；值 = 条目 media_type） */
     const MEDIA_ZH = { "real": "真人", "anime": "动漫" };
@@ -216,9 +216,10 @@ const CostumeGallery = (() => {
       return (allData && allData.items ? allData.items : []).filter(matches);
     }
 
-    /* 平铺条目的缩略图框是 3:4（图像本体 3:4，塞 2:3 框会上下留灰带）；站点库 2:3。 */
+    /* 平铺/人台条目的缩略图框是 3:4（图像本体 3:4，塞 2:3 框会上下留灰带）；站点库 2:3。 */
     function thumbClass(it) {
-      return it.display_type === "flat_lay" ? " costume-thumb-34" : "";
+      return it.display_type === "flat_lay" || it.display_type === "mannequin"
+        ? " costume-thumb-34" : "";
     }
 
     /* 卡片：图位（站点 2:3 / 平铺 3:4）+ 收藏星标（右上角，点了不选卡）+ 中文 label
@@ -247,7 +248,8 @@ const CostumeGallery = (() => {
           "</div>" +
           '<div class="image-meta">' +
           '<div class="costume-card-title">' +
-          (isFlat(it) ? '<span class="costume-badge">平铺</span>' : "") +
+          (isFlat(it) ? '<span class="costume-badge">平铺</span>'
+            : isMannequin(it) ? '<span class="costume-badge">人台</span>' : "") +
           "<strong>" + esc(it.label || it.item_id) + "</strong>" +
           "</div>" +
           (it.label
@@ -277,6 +279,10 @@ const CostumeGallery = (() => {
 
     function isFlat(it) {
       return it.display_type === "flat_lay";
+    }
+
+    function isMannequin(it) {
+      return it.display_type === "mannequin";
     }
 
     /* 卡片预览行：关键词先行；无关键词回退文本层。 */

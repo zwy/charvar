@@ -32,9 +32,11 @@ from pathlib import Path
 
 from charvar import paths
 
-# 库 id（磁盘目录名与 URL source 段）；studio = 自建条目（outfits 迁移 / 手工新增）
+# 库 id（磁盘目录名与 URL source 段）；studio = 自建条目（outfits 迁移 / 手工新增），
+# studio-mannequin = 自建人台库（假人台陈列图，display_type=mannequin）。
 SOURCE_ID = "costume-db-01"
 STUDIO_SOURCE_ID = "studio"
+STUDIO_SOURCE_IDS: tuple[str, ...] = ("studio", "studio-mannequin")
 
 # 库登记表：source_id → 中文标签 + media 缺省（real=真人/实拍感 / anime=动漫；
 # import 按它填 media_type 列，storage 启动回填也读这里）。多源结构仿 faces.py：
@@ -46,7 +48,8 @@ STUDIO_SOURCE_ID = "studio"
 COSTUME_SOURCES: dict[str, dict] = {
     "costume-db-01": {"zh": "站点库（実写版）", "media": "real"},
     "costume-anime-db-01": {"zh": "动漫库（アニメ版）", "media": "anime"},
-    "studio": {"zh": "自建库", "media": "real"},
+    "studio": {"zh": "自建库（平铺）", "media": "real"},
+    "studio-mannequin": {"zh": "自建库（人台）", "media": "real"},
 }
 
 # item_id / source 是浏览器发来的关键字（拼进查找 URL 与文件定位），只放行安全字符。
@@ -79,6 +82,7 @@ STUDIO_FAMILY_ZH: dict[str, str] = {
     "retro_sheer_nightgowns": "复古睡裙",
     "character_outfit_debug": "调试条款",
     "bodysuit_variations": "紧身衣",
+    "bodysuit_variations_worn": "紧身衣·人台",
 }
 
 
@@ -113,10 +117,11 @@ def _source_or_raise(source_id: str) -> dict:
 
 
 # 展示形态（display_type）：ghost = 隐形模特（ghost mannequin）——无头无身、服装保持
-# 穿着的立体形态悬空陈列；flat_lay = 平铺展示——俯视平铺陈列。站点 catalog 没有这个
-# 字段且 1407 条实测全 ghost（缺省缺条 = ghost）；侧车文件只记要覆盖的条目。
-# catalog.json 逐字保留红线不动，类型数据进侧车（display_types.json 同目录）。
-DISPLAY_TYPES: tuple[str, ...] = ("ghost", "flat_lay")
+# 穿着的立体形态悬空陈列；flat_lay = 平铺展示——俯视平铺陈列；mannequin = 假人台
+# 展示——服装穿在无头无脸的假模特身体上陈列（有身体形、无皮肤头脸四肢）。
+# 站点 catalog 没有这个字段且 1407 条实测全 ghost（缺省缺条 = ghost）；侧车文件只记
+# 要覆盖的条目。catalog.json 逐字保留红线不动，类型数据进侧车（display_types.json 同目录）。
+DISPLAY_TYPES: tuple[str, ...] = ("ghost", "flat_lay", "mannequin")
 
 
 class CostumeError(Exception):
@@ -637,7 +642,7 @@ def set_keywords(conn: sqlite3.Connection, source_id: str, item_id: str, keyword
     站点条目的 keywords 逐字来自 catalog.json（站点数据红线），拒绝修改。
     """
     source_id, item_id = str(source_id or ""), str(item_id or "")
-    if source_id != STUDIO_SOURCE_ID:
+    if source_id not in STUDIO_SOURCE_IDS:
         raise CostumeError(
             f"站点条目的关键词是站点数据（逐字保留），只有自建条目可改：{source_id}/{item_id}"
         )
@@ -697,76 +702,88 @@ def toggle_favorite(
     return {"source_id": source_id, "item_id": item_id, "favorite": state}
 
 
-# ---------- 自建条目（studio：从 export 镜像自举；display_type=flat_lay） ----------
+# ---------- 自建条目（studio 型双库：从 export 镜像自举；平铺库 flat_lay / 人台库 mannequin） ----------
 
 def import_studio_yaml(conn: sqlite3.Connection) -> dict:
-    """presets/costumes/studio/*.yaml（export 镜像逐条）→ costume_items（insert-if-missing）。
+    """presets/costumes/<自建库>/*.yaml（export 镜像逐条）→ costume_items（insert-if-missing）。
 
-    DB 是运行时真源，镜像文件只是重建快照：已存在的行整条跳过（不覆盖用户在 DB
-    里改过的 keywords/文本层/label），缺行按镜像补齐（sort_order 家族次序在内）。
-    逐条文件名必须与其 item_id 一致，id 只认安全字符 —— 路径拼不过校验整批拒绝。
+    自建库 = STUDIO_SOURCE_IDS（studio 平铺 / studio-mannequin 人台），各扫各的镜像
+    目录（文件 source_id 必须与目录一致）。DB 是运行时真源，镜像文件只是重建快照：
+    已存在的行整条跳过（不覆盖用户在 DB 里改过的 keywords/文本层/label），缺行按镜像
+    补齐（sort_order 家族次序在内）。逐条文件名必须与其 item_id 一致，id 只认安全字符
+    —— 路径拼不过校验整批拒绝。
     """
     import yaml
 
-    base = paths.presets_dir() / "costumes" / STUDIO_SOURCE_ID
-    files = sorted(base.glob("*.yaml"))
     added = 0
     skipped = 0
-    for path in files:
-        try:
-            doc = yaml.safe_load(path.read_text(encoding="utf-8"))
-        except (OSError, yaml.YAMLError) as exc:
-            raise CostumeError(f"镜像读取失败：{path.name}：{exc}") from exc
-        if not isinstance(doc, dict) or doc.get("source_id") != STUDIO_SOURCE_ID:
-            raise CostumeError(f"镜像文件不是 studio 服饰条目：{path.name}")
-        item_id = str(doc.get("item_id") or "").strip()
-        if not ITEM_ID_RE.fullmatch(item_id) or path.stem != item_id:
-            raise CostumeError(f"镜像条目 id 非法或与文件名不一致：{path.name} → {item_id[:60]}")
-        if doc.get("display_type") not in DISPLAY_TYPES:
-            raise CostumeError(f"镜像条目 display_type 非法：{path.name} → {doc.get('display_type')}")
-        exists = conn.execute(
-            "SELECT 1 FROM costume_items WHERE source_id = ? AND item_id = ?",
-            (STUDIO_SOURCE_ID, item_id),
-        ).fetchone()
-        if exists:
-            skipped += 1
-            continue
-        images = doc.get("images") or {}
-        now = _now()
-        conn.execute(
-            """INSERT INTO costume_items
-               (source_id, item_id, display_type, category, label, keywords,
-                file_path, image_path, thumb_path, subject_policy, caption_tags,
-                sort_order, media_type, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                STUDIO_SOURCE_ID, item_id, doc["display_type"], str(doc.get("category") or ""),
-                str(doc.get("label") or ""), str(doc.get("keywords") or ""),
-                str(images.get("file_path") or ""), str(images.get("image_path") or ""),
-                str(images.get("thumb_path") or ""),
-                json.dumps(doc.get("subject_policy") or {}, ensure_ascii=False)
-                if doc.get("subject_policy") else "",
-                json.dumps(doc.get("caption_tags") or {}, ensure_ascii=False)
-                if doc.get("caption_tags") else "",
-                int(doc.get("sort_order") or 0),
-                str(COSTUME_SOURCES[STUDIO_SOURCE_ID].get("media") or ""), now, now,
-            ),
-        )
-        text = str(doc.get("prompt_text") or "").strip()
-        ref_prompt = str(doc.get("ref_prompt") or "").strip()
-        prompt = get_costume_prompt(conn, STUDIO_SOURCE_ID, item_id)
-        if (text or ref_prompt) and not (
-            prompt["prompt_text"].strip() or prompt["ref_prompt"].strip()
-        ):
+    dirs: list[str] = []
+    for source_id in STUDIO_SOURCE_IDS:
+        base = paths.presets_dir() / "costumes" / source_id
+        dirs.append(str(base))
+        files = sorted(base.glob("*.yaml"))
+        for path in files:
+            try:
+                doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+            except (OSError, yaml.YAMLError) as exc:
+                raise CostumeError(f"镜像读取失败：{path.name}：{exc}") from exc
+            src_id = str(doc.get("source_id") or "") if isinstance(doc, dict) else ""
+            if not isinstance(doc, dict) or src_id != source_id:
+                raise CostumeError(
+                    f"镜像文件不是 {source_id} 服饰条目（source_id 不匹配）：{path.name}"
+                )
+            item_id = str(doc.get("item_id") or "").strip()
+            if not ITEM_ID_RE.fullmatch(item_id) or path.stem != item_id:
+                raise CostumeError(
+                    f"镜像条目 id 非法或与文件名不一致：{path.name} → {item_id[:60]}"
+                )
+            if doc.get("display_type") not in DISPLAY_TYPES:
+                raise CostumeError(
+                    f"镜像条目 display_type 非法：{path.name} → {doc.get('display_type')}"
+                )
+            exists = conn.execute(
+                "SELECT 1 FROM costume_items WHERE source_id = ? AND item_id = ?",
+                (source_id, item_id),
+            ).fetchone()
+            if exists:
+                skipped += 1
+                continue
+            images = doc.get("images") or {}
+            now = _now()
             conn.execute(
-                """INSERT INTO costume_prompts (source_id, item_id, prompt_text, ref_prompt, source, created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (STUDIO_SOURCE_ID, item_id, text, ref_prompt,
-                 str(doc.get("prompt_source") or "manual")[:30], now, now),
+                """INSERT INTO costume_items
+                   (source_id, item_id, display_type, category, label, keywords,
+                    file_path, image_path, thumb_path, subject_policy, caption_tags,
+                    sort_order, media_type, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    source_id, item_id, doc["display_type"], str(doc.get("category") or ""),
+                    str(doc.get("label") or ""), str(doc.get("keywords") or ""),
+                    str(images.get("file_path") or ""), str(images.get("image_path") or ""),
+                    str(images.get("thumb_path") or ""),
+                    json.dumps(doc.get("subject_policy") or {}, ensure_ascii=False)
+                    if doc.get("subject_policy") else "",
+                    json.dumps(doc.get("caption_tags") or {}, ensure_ascii=False)
+                    if doc.get("caption_tags") else "",
+                    int(doc.get("sort_order") or 0),
+                    str(COSTUME_SOURCES[source_id].get("media") or ""), now, now,
+                ),
             )
-        added += 1
+            text = str(doc.get("prompt_text") or "").strip()
+            ref_prompt = str(doc.get("ref_prompt") or "").strip()
+            prompt = get_costume_prompt(conn, source_id, item_id)
+            if (text or ref_prompt) and not (
+                prompt["prompt_text"].strip() or prompt["ref_prompt"].strip()
+            ):
+                conn.execute(
+                    """INSERT INTO costume_prompts (source_id, item_id, prompt_text, ref_prompt, source, created_at, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (source_id, item_id, text, ref_prompt,
+                     str(doc.get("prompt_source") or "manual")[:30], now, now),
+                )
+            added += 1
     conn.commit()
-    return {"added": added, "skipped": skipped, "dir": str(base)}
+    return {"added": added, "skipped": skipped, "dir": ",".join(dirs)}
 
 
 # ---------- DB → 仓库镜像（仿主体档案 export；DB 是运行时真源） ----------
@@ -875,8 +892,8 @@ def regenerate_reference(
     from charvar import adhoc
     from charvar import storage
 
-    if str(source_id or "") != STUDIO_SOURCE_ID:
-        raise CostumeError("参考图重生成只对自建（studio）条目开放（站点图是数据资产）")
+    if str(source_id or "") not in STUDIO_SOURCE_IDS:
+        raise CostumeError("参考图重生成只对自建（studio 型）条目开放（站点图是数据资产）")
     with storage.connect(db_path) as conn:
         item_row(conn, f"{source_id}/{item_id}")  # 不存在报错
         prompt = get_costume_prompt(conn, source_id, item_id)

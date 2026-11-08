@@ -1,0 +1,18 @@
+item_id: bodysuit_variations_worn_bs14
+source_id: studio-mannequin
+display_type: mannequin
+category: bodysuit_variations_worn
+label: 网纱腰段短袖紧身衣
+keywords: espresso brown short-sleeve mock-neck bodysuit, semi-sheer mesh sleeves, wide sheer mesh waist panel, high-cut leg
+prompt_text: wearing an espresso brown short-sleeve mock-neck bodysuit with semi-sheer mesh at the sleeves, a wide semi-sheer mesh panel at the waist, and a solid opaque body, high-cut leg
+prompt_source: manual
+ref_prompt: Apparel design illustration of espresso brown short-sleeve mock-neck bodysuit, semi-sheer mesh sleeves, wide sheer mesh waist panel, high-cut leg. Shown worn on a headless, faceless mannequin torso, soft anime illustration style with subtle shading, plain pure white background, garment front centered, all edges fully inside the frame with margin. No text, no numbers, no decorations.
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 13
+images:
+  file_path: png/bodysuit_variations_worn_bs14.png
+  image_path: img/bodysuit_variations_worn_bs14.webp
+  thumb_path: thumbs/bodysuit_variations_worn_bs14.webp

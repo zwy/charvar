@@ -1,0 +1,18 @@
+item_id: bodysuit_variations_worn_bs10
+source_id: studio-mannequin
+display_type: mannequin
+category: bodysuit_variations_worn
+label: 短袖短上衣×高腰腿环底裤两件套
+keywords: espresso brown short-sleeve mock-neck crop top with a sheer corset waistband, matching high-waist brief with a hip garter strap
+prompt_text: wearing an espresso brown short-sleeve mock-neck crop top with a semi-sheer corset waistband, and a matching high-waist brief with a thin hip garter strap
+prompt_source: manual
+ref_prompt: Apparel design illustration of espresso brown short-sleeve mock-neck crop top with a sheer corset waistband, matching high-waist brief with a hip garter strap. Shown worn on a headless, faceless mannequin torso, soft anime illustration style with subtle shading, plain pure white background, garment front centered, all edges fully inside the frame with margin. No text, no numbers, no decorations.
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 9
+images:
+  file_path: png/bodysuit_variations_worn_bs10.png
+  image_path: img/bodysuit_variations_worn_bs10.webp
+  thumb_path: thumbs/bodysuit_variations_worn_bs10.webp

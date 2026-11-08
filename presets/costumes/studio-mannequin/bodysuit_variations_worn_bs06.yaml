@@ -1,0 +1,18 @@
+item_id: bodysuit_variations_worn_bs06
+source_id: studio-mannequin
+display_type: mannequin
+category: bodysuit_variations_worn
+label: 网纱罩衫×三角底裤两件套
+keywords: sheer brown mesh short-sleeve shrug with standing collar, black bandeau bra, black low-rise string bikini bottom
+prompt_text: wearing a sheer brown mesh short-sleeve shrug with a standing collar over a black bandeau bra, and a black low-rise string bikini bottom, bare midriff between them
+prompt_source: manual
+ref_prompt: Apparel design illustration of sheer brown mesh short-sleeve shrug with standing collar, black bandeau bra, black low-rise string bikini bottom. Shown worn on a headless, faceless mannequin torso, soft anime illustration style with subtle shading, plain pure white background, garment front centered, all edges fully inside the frame with margin. No text, no numbers, no decorations.
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 5
+images:
+  file_path: png/bodysuit_variations_worn_bs06.png
+  image_path: img/bodysuit_variations_worn_bs06.webp
+  thumb_path: thumbs/bodysuit_variations_worn_bs06.webp

@@ -70,20 +70,21 @@ class OutfitPreset(BaseModel):
 # ---------- 加载（costume 双表视图：DB 是运行时真源，presets/outfits 已退役） ----------
 
 def list_outfit_presets(db_path: Path | None = None) -> list[dict[str, Any]]:
-    """服饰家族清单：studio 条目按 category（=家族名）分组，家族内按 sort_order。
+    """服饰家族清单：自建条目（studio 型双库）按 category（=家族名）分组，家族内按 sort_order。
 
-    迁移/重建走 charvar costume import-studio（镜像在 presets/costumes/studio/）；
+    迁移/重建走 charvar costume import-studio（镜像在 presets/costumes/<自建库>/）；
     家族描述没有 DB 列，返回空串（列表展示用）。库空 / 未迁入 → 空清单，不报错。
     """
 
     from charvar import costumes, storage
 
     with storage.connect(db_path) as conn:
+        marks = ",".join("?" * len(costumes.STUDIO_SOURCE_IDS))
         rows = conn.execute(
             "SELECT item_id, category, label"
-            " FROM costume_items WHERE source_id = ?"
+            f" FROM costume_items WHERE source_id IN ({marks})"
             " ORDER BY category, sort_order, item_id",
-            (costumes.STUDIO_SOURCE_ID,),
+            tuple(costumes.STUDIO_SOURCE_IDS),
         ).fetchall()
     families: dict[str, dict[str, Any]] = {}
     for r in rows:
@@ -119,14 +120,15 @@ def load_outfit(name: str, db_path: Path | None = None) -> OutfitPreset:
     if not clean or "/" in clean or "\\" in clean or clean in (".", ".."):
         raise PresetError(f"服饰家族名不合法：{name!r}", status=400)
     with storage.connect(db_path) as conn:
+        marks = ",".join("?" * len(costumes.STUDIO_SOURCE_IDS))
         rows = conn.execute(
             "SELECT ci.item_id, ci.category, ci.label, ci.keywords,"
             " ci.subject_policy, ci.caption_tags, cp.prompt_text"
             " FROM costume_items AS ci LEFT JOIN costume_prompts AS cp"
             " ON cp.source_id = ci.source_id AND cp.item_id = ci.item_id"
-            " WHERE ci.source_id = ? AND ci.category = ?"
+            f" WHERE ci.source_id IN ({marks}) AND ci.category = ?"
             " ORDER BY ci.sort_order, ci.item_id",
-            (costumes.STUDIO_SOURCE_ID, clean),
+            tuple(costumes.STUDIO_SOURCE_IDS) + (clean,),
         ).fetchall()
     if not rows:
         raise PresetError(
