@@ -1,0 +1,18 @@
+item_id: preppy_variations_pp01
+source_id: studio-mannequin
+display_type: mannequin
+category: preppy_variations
+label: 粉纹衬衫百褶裙
+keywords: long-sleeve blush pink striped blouse with white scalloped collar and small black bow, gray pleated miniskirt with ivory lace hem
+prompt_text: wearing a blush pink striped blouse with a white scalloped collar and small black bow, and a gray pleated miniskirt with an ivory lace hem
+prompt_source: manual
+ref_prompt: Apparel design illustration of long-sleeve blush pink striped blouse with white scalloped collar and small black bow, gray pleated miniskirt with ivory lace hem. Shown worn on a headless, faceless mannequin torso with a natural pale skin tone, soft anime illustration style with subtle shading, plain pure white background, garment front centered, all edges fully inside the frame with margin. No text, no numbers, no decorations.
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 0
+images:
+  file_path: png/preppy_variations_pp01.png
+  image_path: img/preppy_variations_pp01.webp
+  thumb_path: thumbs/preppy_variations_pp01.webp

@@ -1,0 +1,18 @@
+item_id: preppy_variations_pp07
+source_id: studio-mannequin
+display_type: mannequin
+category: preppy_variations
+label: 红结泡泡袖裙
+keywords: white puff-sleeve blouse with button cuffs, deep red satin ribbon bow with long streaming tails, gray box-pleated skirt
+prompt_text: wearing a white puff-sleeve blouse with button cuffs and a deep red satin ribbon bow with long streaming tails, and a gray box-pleated skirt
+prompt_source: manual
+ref_prompt: Apparel design illustration of white puff-sleeve blouse with button cuffs, deep red satin ribbon bow with long streaming tails, gray box-pleated skirt. Shown worn on a headless, faceless mannequin torso with a natural pale skin tone, soft anime illustration style with subtle shading, plain pure white background, garment front centered, all edges fully inside the frame with margin. No text, no numbers, no decorations.
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 6
+images:
+  file_path: png/preppy_variations_pp07.png
+  image_path: img/preppy_variations_pp07.webp
+  thumb_path: thumbs/preppy_variations_pp07.webp

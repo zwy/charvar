@@ -1,0 +1,18 @@
+item_id: preppy_variations_pp02
+source_id: studio-mannequin
+display_type: mannequin
+category: preppy_variations
+label: 藏青贴边衬衫裙
+keywords: short-sleeve white blouse with navy contrast collar and cuffs, two-button front, navy wrap miniskirt
+prompt_text: wearing a short-sleeve white blouse with a navy contrast collar and cuffs, and a navy wrap front miniskirt
+prompt_source: manual
+ref_prompt: Apparel design illustration of short-sleeve white blouse with navy contrast collar and cuffs, two-button front, navy wrap miniskirt. Shown worn on a headless, faceless mannequin torso with a natural pale skin tone, soft anime illustration style with subtle shading, plain pure white background, garment front centered, all edges fully inside the frame with margin. No text, no numbers, no decorations.
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 1
+images:
+  file_path: png/preppy_variations_pp02.png
+  image_path: img/preppy_variations_pp02.webp
+  thumb_path: thumbs/preppy_variations_pp02.webp

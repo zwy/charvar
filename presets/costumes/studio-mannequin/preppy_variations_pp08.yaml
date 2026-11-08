@@ -1,0 +1,18 @@
+item_id: preppy_variations_pp08
+source_id: studio-mannequin
+display_type: mannequin
+category: preppy_variations
+label: 花纹领带套裙
+keywords: white short-sleeve blouse, black-and-white printed necktie, navy gathered pencil miniskirt
+prompt_text: wearing a white short-sleeve blouse with a black-and-white printed necktie, and a navy gathered pencil miniskirt
+prompt_source: manual
+ref_prompt: Apparel design illustration of white short-sleeve blouse, black-and-white printed necktie, navy gathered pencil miniskirt. Shown worn on a headless, faceless mannequin torso with a natural pale skin tone, soft anime illustration style with subtle shading, plain pure white background, garment front centered, all edges fully inside the frame with margin. No text, no numbers, no decorations.
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 7
+images:
+  file_path: png/preppy_variations_pp08.png
+  image_path: img/preppy_variations_pp08.webp
+  thumb_path: thumbs/preppy_variations_pp08.webp

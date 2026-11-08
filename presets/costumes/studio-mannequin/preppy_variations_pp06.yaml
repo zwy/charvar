@@ -1,0 +1,18 @@
+item_id: preppy_variations_pp06
+source_id: studio-mannequin
+display_type: mannequin
+category: preppy_variations
+label: 藏青金扣红格套装
+keywords: navy short-sleeve blouse with white sailor collar and gold-button placket, red tartan necktie, red-green tartan pleated skirt
+prompt_text: wearing a navy short-sleeve blouse with a white sailor collar, gold-button placket and red tartan necktie, and a red-and-green tartan pleated skirt
+prompt_source: manual
+ref_prompt: Apparel design illustration of navy short-sleeve blouse with white sailor collar and gold-button placket, red tartan necktie, red-green tartan pleated skirt. Shown worn on a headless, faceless mannequin torso with a natural pale skin tone, soft anime illustration style with subtle shading, plain pure white background, garment front centered, all edges fully inside the frame with margin. No text, no numbers, no decorations.
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 5
+images:
+  file_path: png/preppy_variations_pp06.png
+  image_path: img/preppy_variations_pp06.webp
+  thumb_path: thumbs/preppy_variations_pp06.webp

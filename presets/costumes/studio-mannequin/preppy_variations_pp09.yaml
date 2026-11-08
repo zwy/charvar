@@ -1,0 +1,18 @@
+item_id: preppy_variations_pp09
+source_id: studio-mannequin
+display_type: mannequin
+category: preppy_variations
+label: 黑开衫红格套装
+keywords: black short-sleeve top with white button placket, red tartan necktie, black pleated skirt with brown belt
+prompt_text: wearing a black short-sleeve top with a white button placket and red tartan necktie, and a black pleated skirt with a brown belt
+prompt_source: manual
+ref_prompt: Apparel design illustration of black short-sleeve top with white button placket, red tartan necktie, black pleated skirt with brown belt. Shown worn on a headless, faceless mannequin torso with a natural pale skin tone, soft anime illustration style with subtle shading, plain pure white background, garment front centered, all edges fully inside the frame with margin. No text, no numbers, no decorations.
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 8
+images:
+  file_path: png/preppy_variations_pp09.png
+  image_path: img/preppy_variations_pp09.webp
+  thumb_path: thumbs/preppy_variations_pp09.webp

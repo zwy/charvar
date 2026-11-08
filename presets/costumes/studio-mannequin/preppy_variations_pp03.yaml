@@ -1,0 +1,18 @@
+item_id: preppy_variations_pp03
+source_id: studio-mannequin
+display_type: mannequin
+category: preppy_variations
+label: 红格纹领带套装
+keywords: white blouse, loose red tartan plaid necktie, red tartan pleated skirt
+prompt_text: wearing a white short-sleeve blouse with a loose red tartan plaid necktie hanging down, and a red tartan plaid pleated skirt
+prompt_source: manual
+ref_prompt: Apparel design illustration of white blouse, loose red tartan plaid necktie, red tartan pleated skirt. Shown worn on a headless, faceless mannequin torso with a natural pale skin tone, soft anime illustration style with subtle shading, plain pure white background, garment front centered, all edges fully inside the frame with margin. No text, no numbers, no decorations.
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 2
+images:
+  file_path: png/preppy_variations_pp03.png
+  image_path: img/preppy_variations_pp03.webp
+  thumb_path: thumbs/preppy_variations_pp03.webp

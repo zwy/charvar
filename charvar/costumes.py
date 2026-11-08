@@ -83,6 +83,7 @@ STUDIO_FAMILY_ZH: dict[str, str] = {
     "character_outfit_debug": "调试条款",
     "bodysuit_variations": "紧身衣",
     "bodysuit_variations_worn": "紧身衣·人台",
+    "preppy_variations": "学院风套装",
 }
 
 
