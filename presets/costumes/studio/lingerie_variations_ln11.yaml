@@ -1,0 +1,18 @@
+item_id: lingerie_variations_ln11
+source_id: studio
+display_type: flat_lay
+category: lingerie_variations
+label: 竞背蕾丝套装
+keywords: burgundy racerback lace top with scalloped edges, paired with matching full-cut lace bottoms
+prompt_text: wearing a burgundy racerback lace top and matching full lace bottoms
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white background: a matching lingerie set, burgundy racerback lace top with scalloped edges, paired with matching full-cut lace bottoms; the top piece above and the bottom piece below, all edges fully inside the frame with margin around it. Soft even lighting, faint contact shadows, realistic woven fabric and lace texture. No people, no mannequin, no hangers, no text.'
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 10
+images:
+  file_path: png/lingerie_variations_ln11.png
+  image_path: img/lingerie_variations_ln11.webp
+  thumb_path: thumbs/lingerie_variations_ln11.webp

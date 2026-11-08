@@ -1,0 +1,18 @@
+item_id: lingerie_variations_ln07
+source_id: studio
+display_type: flat_lay
+category: lingerie_variations
+label: 交叉织带套装
+keywords: burgundy lace cups set in a strappy cross-framed top with O-ring details, paired with matching bottoms
+prompt_text: wearing a burgundy lace cup top in a strappy cross frame and matching bottoms
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white background: a matching lingerie set, burgundy lace cups set in a strappy cross-framed top with O-ring details, paired with matching bottoms; the top piece above and the bottom piece below, all edges fully inside the frame with margin around it. Soft even lighting, faint contact shadows, realistic woven fabric and lace texture. No people, no mannequin, no hangers, no text.'
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 6
+images:
+  file_path: png/lingerie_variations_ln07.png
+  image_path: img/lingerie_variations_ln07.webp
+  thumb_path: thumbs/lingerie_variations_ln07.webp

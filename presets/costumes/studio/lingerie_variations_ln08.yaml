@@ -1,0 +1,18 @@
+item_id: lingerie_variations_ln08
+source_id: studio
+display_type: flat_lay
+category: lingerie_variations
+label: 高领蕾丝长衣
+keywords: black semi-sheer floral lace long one-piece garment with a high neckline and a front lace panel, extending to the hips
+prompt_text: wearing a black semi-sheer floral lace long one-piece garment with a high neckline
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white background: a matching lingerie set, black semi-sheer floral lace long one-piece garment with a high neckline and a front lace panel, extending to the hips; the top piece above and the bottom piece below, all edges fully inside the frame with margin around it. Soft even lighting, faint contact shadows, realistic woven fabric and lace texture. No people, no mannequin, no hangers, no text.'
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 7
+images:
+  file_path: png/lingerie_variations_ln08.png
+  image_path: img/lingerie_variations_ln08.webp
+  thumb_path: thumbs/lingerie_variations_ln08.webp

@@ -1,0 +1,18 @@
+item_id: underwear_variations_uw11
+source_id: studio-mannequin
+display_type: mannequin
+category: underwear_variations
+label: 抹胸式文胸·丁字内裤
+keywords: lilac ruched bandeau top with a wide gathered band, paired with narrow thong bottoms
+prompt_text: wearing a lilac ruched bandeau top and matching narrow bottoms
+prompt_source: manual
+ref_prompt: ''
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 10
+images:
+  file_path: png/underwear_variations_uw11.png
+  image_path: img/underwear_variations_uw11.webp
+  thumb_path: thumbs/underwear_variations_uw11.webp

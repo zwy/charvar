@@ -1,0 +1,18 @@
+item_id: swimwear_variations_sw02
+source_id: studio-mannequin
+display_type: mannequin
+category: swimwear_variations
+label: 经典三角比基尼
+keywords: classic coral red slide-triangle top with halter strings and low-rise bottoms with thin self ties at the hips
+prompt_text: wearing a classic coral red slide-triangle top with halter strings and low-rise bottoms with thin ties at the hips
+prompt_source: manual
+ref_prompt: Photorealistic fashion catalog photo of classic coral red slide-triangle top with halter strings and low-rise bottoms with thin self ties at the hips. Shown worn on a headless, faceless mannequin torso with a natural pale skin tone, realistic fabric texture and studio lighting, plain pure white background, garment front centered, all edges fully inside the frame with margin. No text, no numbers, no decorations.
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 1
+images:
+  file_path: png/swimwear_variations_sw02.png
+  image_path: img/swimwear_variations_sw02.webp
+  thumb_path: thumbs/swimwear_variations_sw02.webp

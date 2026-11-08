@@ -84,6 +84,9 @@ STUDIO_FAMILY_ZH: dict[str, str] = {
     "bodysuit_variations": "紧身衣",
     "bodysuit_variations_worn": "紧身衣·人台",
     "preppy_variations": "学院风套装",
+    "swimwear_variations": "泳装·人台",
+    "lingerie_variations": "蕾丝内衣",
+    "underwear_variations": "内衣·人台",
 }
 
 

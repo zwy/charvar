@@ -1,0 +1,18 @@
+item_id: underwear_variations_uw10
+source_id: studio-mannequin
+display_type: mannequin
+category: underwear_variations
+label: 束身衣式长文胸·内裤
+keywords: lilac longline corset-style bustier top with seamed boning panels, paired with moderate brief bottoms
+prompt_text: wearing a lilac longline corset-style top with seamed panels and matching brief bottoms
+prompt_source: manual
+ref_prompt: ''
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 9
+images:
+  file_path: png/underwear_variations_uw10.png
+  image_path: img/underwear_variations_uw10.webp
+  thumb_path: thumbs/underwear_variations_uw10.webp

@@ -1,0 +1,18 @@
+item_id: swimwear_variations_sw03
+source_id: studio-mannequin
+display_type: mannequin
+category: swimwear_variations
+label: 荷叶边露肩比基尼
+keywords: coral red off-shoulder ruffled flounce top with a gathered straight neckline, high-cut bottoms with thin side ties
+prompt_text: wearing a coral red off-shoulder ruffled flounce top and high-cut bottoms with thin side ties
+prompt_source: manual
+ref_prompt: Photorealistic fashion catalog photo of coral red off-shoulder ruffled flounce top with a gathered straight neckline, high-cut bottoms with thin side ties. Shown worn on a headless, faceless mannequin torso with a natural pale skin tone, realistic fabric texture and studio lighting, plain pure white background, garment front centered, all edges fully inside the frame with margin. No text, no numbers, no decorations.
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 2
+images:
+  file_path: png/swimwear_variations_sw03.png
+  image_path: img/swimwear_variations_sw03.webp
+  thumb_path: thumbs/swimwear_variations_sw03.webp

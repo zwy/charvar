@@ -1,0 +1,18 @@
+item_id: lingerie_variations_ln04
+source_id: studio
+display_type: flat_lay
+category: lingerie_variations
+label: 束身胸衣套装
+keywords: black longline laced corset-style bustier with boning seams and a lace trim, paired with narrow bottoms
+prompt_text: wearing a black longline corset-style bustier with boning seams and matching narrow bottoms
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white background: a matching lingerie set, black longline laced corset-style bustier with boning seams and a lace trim, paired with narrow bottoms; the top piece above and the bottom piece below, all edges fully inside the frame with margin around it. Soft even lighting, faint contact shadows, realistic woven fabric and lace texture. No people, no mannequin, no hangers, no text.'
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 3
+images:
+  file_path: png/lingerie_variations_ln04.png
+  image_path: img/lingerie_variations_ln04.webp
+  thumb_path: thumbs/lingerie_variations_ln04.webp

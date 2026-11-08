@@ -1,0 +1,18 @@
+item_id: swimwear_variations_sw07
+source_id: studio-mannequin
+display_type: mannequin
+category: swimwear_variations
+label: 荷叶抹胸比基尼
+keywords: coral red straight bandeau top with layered shoulder ruffles and a wide ruffle band, classic matching bottoms
+prompt_text: wearing a coral red bandeau top with layered shoulder ruffles and classic matching bottoms
+prompt_source: manual
+ref_prompt: Photorealistic fashion catalog photo of coral red straight bandeau top with layered shoulder ruffles and a wide ruffle band, classic matching bottoms. Shown worn on a headless, faceless mannequin torso with a natural pale skin tone, realistic fabric texture and studio lighting, plain pure white background, garment front centered, all edges fully inside the frame with margin. No text, no numbers, no decorations.
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 6
+images:
+  file_path: png/swimwear_variations_sw07.png
+  image_path: img/swimwear_variations_sw07.webp
+  thumb_path: thumbs/swimwear_variations_sw07.webp

@@ -1,0 +1,18 @@
+item_id: swimwear_variations_sw08
+source_id: studio-mannequin
+display_type: mannequin
+category: swimwear_variations
+label: 缠绕绑带连体泳衣
+keywords: coral red deep-V one-piece with thin cross straps lacing over the torso and a high-cut leg
+prompt_text: wearing a coral red deep-V one-piece with thin cross straps lacing over the torso and a high-cut leg
+prompt_source: manual
+ref_prompt: Photorealistic fashion catalog photo of coral red deep-V one-piece with thin cross straps lacing over the torso and a high-cut leg. Shown worn on a headless, faceless mannequin torso with a natural pale skin tone, realistic fabric texture and studio lighting, plain pure white background, garment front centered, all edges fully inside the frame with margin. No text, no numbers, no decorations.
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 7
+images:
+  file_path: png/swimwear_variations_sw08.png
+  image_path: img/swimwear_variations_sw08.webp
+  thumb_path: thumbs/swimwear_variations_sw08.webp

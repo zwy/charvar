@@ -1,0 +1,18 @@
+item_id: swimwear_variations_sw01
+source_id: studio-mannequin
+display_type: mannequin
+category: swimwear_variations
+label: 复古挂脖连体泳衣
+keywords: coral red halter-neck one-piece with a gathered sweetheart neckline, side ruching and a fitted pin-up cut
+prompt_text: wearing a coral red halter-neck one-piece with a gathered sweetheart neckline and side ruching
+prompt_source: manual
+ref_prompt: Photorealistic fashion catalog photo of coral red halter-neck one-piece with a gathered sweetheart neckline, side ruching and a fitted pin-up cut. Shown worn on a headless, faceless mannequin torso with a natural pale skin tone, realistic fabric texture and studio lighting, plain pure white background, garment front centered, all edges fully inside the frame with margin. No text, no numbers, no decorations.
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 0
+images:
+  file_path: png/swimwear_variations_sw01.png
+  image_path: img/swimwear_variations_sw01.webp
+  thumb_path: thumbs/swimwear_variations_sw01.webp

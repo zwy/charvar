@@ -1,0 +1,18 @@
+item_id: underwear_variations_uw07
+source_id: studio-mannequin
+display_type: mannequin
+category: underwear_variations
+label: 三角杯系带文胸·三角内裤
+keywords: lilac soft triangle top with adjustable straps and a small front bow, paired with brief bottoms with thin side ties
+prompt_text: wearing a lilac soft triangle top with a small front bow and matching bottoms with thin side ties
+prompt_source: manual
+ref_prompt: ''
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 6
+images:
+  file_path: png/underwear_variations_uw07.png
+  image_path: img/underwear_variations_uw07.webp
+  thumb_path: thumbs/underwear_variations_uw07.webp

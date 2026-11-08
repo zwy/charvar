@@ -1,0 +1,18 @@
+item_id: underwear_variations_uw01
+source_id: studio-mannequin
+display_type: mannequin
+category: underwear_variations
+label: 阳台杯文胸·经典内裤
+keywords: lilac balconette top with seamed cups and a wide elastic underband, paired with full-cut brief bottoms with a wide waistband
+prompt_text: wearing a lilac balconette top with seamed cups and matching full brief bottoms
+prompt_source: manual
+ref_prompt: ''
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 0
+images:
+  file_path: png/underwear_variations_uw01.png
+  image_path: img/underwear_variations_uw01.webp
+  thumb_path: thumbs/underwear_variations_uw01.webp

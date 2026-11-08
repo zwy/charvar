@@ -1,0 +1,18 @@
+item_id: swimwear_variations_sw06
+source_id: studio-mannequin
+display_type: mannequin
+category: swimwear_variations
+label: 挂脖绑带比基尼
+keywords: coral red tie-front triangle top with long ribbon bow at the center chest, string bottoms with side ties
+prompt_text: wearing a coral red tie-front triangle top with a long ribbon bow at the chest and string bottoms with side ties
+prompt_source: manual
+ref_prompt: Photorealistic fashion catalog photo of coral red tie-front triangle top with long ribbon bow at the center chest, string bottoms with side ties. Shown worn on a headless, faceless mannequin torso with a natural pale skin tone, realistic fabric texture and studio lighting, plain pure white background, garment front centered, all edges fully inside the frame with margin. No text, no numbers, no decorations.
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 5
+images:
+  file_path: png/swimwear_variations_sw06.png
+  image_path: img/swimwear_variations_sw06.webp
+  thumb_path: thumbs/swimwear_variations_sw06.webp

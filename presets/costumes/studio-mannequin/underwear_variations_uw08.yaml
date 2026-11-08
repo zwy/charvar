@@ -1,0 +1,18 @@
+item_id: underwear_variations_uw08
+source_id: studio-mannequin
+display_type: mannequin
+category: underwear_variations
+label: 深V文胸·丁字内裤
+keywords: lilac deep plunge top with a U-shaped low center gore, paired with narrow thong bottoms
+prompt_text: wearing a lilac deep plunge top and matching narrow bottoms
+prompt_source: manual
+ref_prompt: ''
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 7
+images:
+  file_path: png/underwear_variations_uw08.png
+  image_path: img/underwear_variations_uw08.webp
+  thumb_path: thumbs/underwear_variations_uw08.webp

@@ -1,0 +1,18 @@
+item_id: swimwear_variations_sw04
+source_id: studio-mannequin
+display_type: mannequin
+category: swimwear_variations
+label: 简约连体泳衣
+keywords: plain coral red scoop-neck one-piece with wide shoulder straps and a smooth moderate-cut leg line
+prompt_text: wearing a coral red scoop-neck one-piece with wide shoulder straps and a moderate-cut leg line
+prompt_source: manual
+ref_prompt: Photorealistic fashion catalog photo of plain coral red scoop-neck one-piece with wide shoulder straps and a smooth moderate-cut leg line. Shown worn on a headless, faceless mannequin torso with a natural pale skin tone, realistic fabric texture and studio lighting, plain pure white background, garment front centered, all edges fully inside the frame with margin. No text, no numbers, no decorations.
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 3
+images:
+  file_path: png/swimwear_variations_sw04.png
+  image_path: img/swimwear_variations_sw04.webp
+  thumb_path: thumbs/swimwear_variations_sw04.webp

@@ -1,0 +1,18 @@
+item_id: underwear_variations_uw13
+source_id: studio-mannequin
+display_type: mannequin
+category: underwear_variations
+label: 无肩带文胸·高腰内裤
+keywords: lilac strapless top with a wide band and a small center bow, paired with high-rise brief bottoms
+prompt_text: wearing a lilac strapless top with a center bow and matching high-rise brief bottoms
+prompt_source: manual
+ref_prompt: ''
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 12
+images:
+  file_path: png/underwear_variations_uw13.png
+  image_path: img/underwear_variations_uw13.webp
+  thumb_path: thumbs/underwear_variations_uw13.webp

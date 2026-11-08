@@ -1,0 +1,18 @@
+item_id: underwear_variations_uw14
+source_id: studio-mannequin
+display_type: mannequin
+category: underwear_variations
+label: 光面全罩文胸·丁字内裤
+keywords: lilac smooth full-coverage top with seamed panels and a wide band, paired with narrow thong bottoms
+prompt_text: wearing a lilac smooth full-coverage top and matching narrow bottoms
+prompt_source: manual
+ref_prompt: ''
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 13
+images:
+  file_path: png/underwear_variations_uw14.png
+  image_path: img/underwear_variations_uw14.webp
+  thumb_path: thumbs/underwear_variations_uw14.webp

@@ -1,0 +1,18 @@
+item_id: lingerie_variations_ln10
+source_id: studio
+display_type: flat_lay
+category: lingerie_variations
+label: 颈环蕾丝套装
+keywords: black lace cup top with a slender collar band and a small chain accent at the neck base, paired with matching lace bottoms
+prompt_text: wearing a black lace cup top with a slender collar band and chain accent, and matching lace bottoms
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white background: a matching lingerie set, black lace cup top with a slender collar band and a small chain accent at the neck base, paired with matching lace bottoms; the top piece above and the bottom piece below, all edges fully inside the frame with margin around it. Soft even lighting, faint contact shadows, realistic woven fabric and lace texture. No people, no mannequin, no hangers, no text.'
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 9
+images:
+  file_path: png/lingerie_variations_ln10.png
+  image_path: img/lingerie_variations_ln10.webp
+  thumb_path: thumbs/lingerie_variations_ln10.webp
