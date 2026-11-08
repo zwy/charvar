@@ -1,0 +1,18 @@
+item_id: bodysuit_variations_bs10
+source_id: studio
+display_type: flat_lay
+category: bodysuit_variations
+label: 短袖短上衣×高腰腿环底裤两件套
+keywords: espresso brown short-sleeve mock-neck crop top with a sheer corset waistband, matching high-waist brief with a hip garter strap
+prompt_text: wearing an espresso brown short-sleeve mock-neck crop top with a semi-sheer corset waistband, and a matching high-waist brief with a thin hip garter strap
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white background: one espresso brown short-sleeve crop top with a mock-neck collar ending just under the bust, its hem finished with a semi-sheer mesh corset band showing vertical boning lines, and one matching espresso brown high-waist brief with a thin strap running over the hip down onto the thigh. Two separate pieces laid flat and separated with a clear gap, all edges fully inside the frame with margin. Soft diffused studio lighting from the upper left, faint contact shadows. No people, no mannequin, no hangers, no text.'
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 9
+images:
+  file_path: png/bodysuit_variations_bs10.png
+  image_path: img/bodysuit_variations_bs10.webp
+  thumb_path: thumbs/bodysuit_variations_bs10.webp

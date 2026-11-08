@@ -1,0 +1,18 @@
+item_id: bodysuit_variations_bs02
+source_id: studio
+display_type: flat_lay
+category: bodysuit_variations
+label: 露肩镂空短袖紧身衣
+keywords: cold-shoulder mock-neck bodysuit, short sleeves, open shoulders, keyhole chest cutout, solid espresso brown
+prompt_text: wearing a solid espresso brown cold-shoulder mock-neck bodysuit with short sleeves, open shoulders, and a leaf-shaped keyhole cutout at the center chest, high-cut leg
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white background: one bodysuit in solid espresso brown, a mock turtleneck collar, two short sleeves, both shoulders open and bare of fabric at the shoulder tops, a leaf-shaped keyhole cutout showing through at the center chest, high-cut leg openings. Laid flat, all edges fully inside the frame with margin, neckline at the top, hem toward the bottom. Soft diffused studio lighting from the upper left, faint contact shadows. No people, no mannequin, no hangers, no text.'
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 1
+images:
+  file_path: png/bodysuit_variations_bs02.png
+  image_path: img/bodysuit_variations_bs02.webp
+  thumb_path: thumbs/bodysuit_variations_bs02.webp

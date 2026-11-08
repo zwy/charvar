@@ -1,0 +1,18 @@
+item_id: bodysuit_variations_bs05
+source_id: studio
+display_type: flat_lay
+category: bodysuit_variations
+label: 高领短上衣×腰绑带底裤两件套
+keywords: espresso brown mock-neck sleeveless crop top, matching bikini brief with a wrap strap band across the hips
+prompt_text: wearing an espresso brown sleeveless mock-neck crop top with full bust coverage ending above the waist, and a matching bikini brief with a decorative wrap strap band across the hips
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white background: one espresso brown sleeveless crop top with a mock-neck collar and full bust coverage ending just above the waist, and one matching espresso brown bikini brief whose top edge is finished with a wide band of thin parallel straps wrapping across the hips. Two separate pieces laid flat and separated with a clear gap, all edges fully inside the frame with margin. Soft diffused studio lighting from the upper left, faint contact shadows. No people, no mannequin, no hangers, no text.'
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 4
+images:
+  file_path: png/bodysuit_variations_bs05.png
+  image_path: img/bodysuit_variations_bs05.webp
+  thumb_path: thumbs/bodysuit_variations_bs05.webp

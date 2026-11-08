@@ -1,0 +1,18 @@
+item_id: bodysuit_variations_bs15
+source_id: studio
+display_type: flat_lay
+category: bodysuit_variations
+label: 缠绕式文胸×镂空边底裤两件套
+keywords: black plunge push-up bra with thin straps, black cheeky brief with strap-framed cutout side panels
+prompt_text: wearing a black plunge push-up bra with thin straps, and a black cheeky brief whose hip sides are framed by thin strap lines forming cutout panels, bare midriff
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white background: one black plunge push-up bra with thin shoulder straps, and one black cheeky brief whose side panels are framed by thin black strap lines forming open cutout hip panels. Two separate pieces laid flat and separated with a clear gap, bra above the brief in the frame, all edges fully inside with margin. Soft diffused studio lighting from the upper left, faint contact shadows. No people, no mannequin, no hangers, no text.'
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 14
+images:
+  file_path: png/bodysuit_variations_bs15.png
+  image_path: img/bodysuit_variations_bs15.webp
+  thumb_path: thumbs/bodysuit_variations_bs15.webp

@@ -1,0 +1,18 @@
+item_id: bodysuit_variations_bs07
+source_id: studio
+display_type: flat_lay
+category: bodysuit_variations
+label: 深V挂脖紧身衣
+keywords: plunging halter one-piece, attached halter collar, deep V neckline, wide side panels, solid dark brown
+prompt_text: wearing a solid dark brown plunging halter one-piece with an attached halter collar, a deep V neckline down to the belly, and wide side panels covering the sides, high waist front
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white background: one one-piece swimsuit in solid dark brown with an attached halter collar, a deep plunging V opening at the center front, two wide side panels, and a high-waist brief lower. Laid flat, all edges fully inside the frame with margin, neckline at the top, hem toward the bottom. Soft diffused studio lighting from the upper left, faint contact shadows. No people, no mannequin, no hangers, no text.'
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 6
+images:
+  file_path: png/bodysuit_variations_bs07.png
+  image_path: img/bodysuit_variations_bs07.webp
+  thumb_path: thumbs/bodysuit_variations_bs07.webp

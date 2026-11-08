@@ -78,6 +78,7 @@ STUDIO_FAMILY_ZH: dict[str, str] = {
     "polka_dot_cami_shorts": "波点套装",
     "retro_sheer_nightgowns": "复古睡裙",
     "character_outfit_debug": "调试条款",
+    "bodysuit_variations": "紧身衣",
 }
 
 

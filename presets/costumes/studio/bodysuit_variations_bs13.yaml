@@ -1,0 +1,18 @@
+item_id: bodysuit_variations_bs13
+source_id: studio
+display_type: flat_lay
+category: bodysuit_variations
+label: 露胸镂空挂脖紧身衣
+keywords: halter mock-neck bodysuit, open-bust cups with separated inner edges, wide center cutout, solid dark brown, high-cut
+prompt_text: wearing a solid dark brown halter mock-neck bodysuit with open-bust cups, the inner edges of the cups separated and a wide center cutout between them, a narrow V panel below the bust, high-cut leg
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white background: one sleeveless bodysuit in solid dark brown with a mock-neck collar, two shaped bust cups whose inner edges are open, a wide V-shaped center cutout between the cups, and a narrow V panel below the bust, high-cut leg openings. Laid flat, all edges fully inside the frame with margin, neckline at the top, hem toward the bottom. Soft diffused studio lighting from the upper left, faint contact shadows. No people, no mannequin, no hangers, no text.'
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 12
+images:
+  file_path: png/bodysuit_variations_bs13.png
+  image_path: img/bodysuit_variations_bs13.webp
+  thumb_path: thumbs/bodysuit_variations_bs13.webp

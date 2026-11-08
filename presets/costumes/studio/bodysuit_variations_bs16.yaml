@@ -1,0 +1,18 @@
+item_id: bodysuit_variations_bs16
+source_id: studio
+display_type: flat_lay
+category: bodysuit_variations
+label: 网纱罩衣×深V紧身衣两件套
+keywords: sheer light-brown mesh choker shrug, short sleeves, black plunge one-piece with curved underbust seams, high-cut leg
+prompt_text: wearing a sheer light-brown mesh short-sleeve shrug with a standing choker-style collar and a deep scoop front, over a black plunge one-piece bodysuit with curved underbust seams and a high-cut leg
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white background: a short-sleeve shrug in semi-sheer light-brown mesh with a standing choker-style collar and a deep scoop front, and one black plunge one-piece bodysuit with narrow shoulder straps, curved underbust seams and a high-cut leg. Two separate pieces laid flat and separated with a clear gap, no pieces overlapping. Soft diffused studio lighting from the upper left, faint contact shadows. No people, no mannequin, no hangers, no text.'
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 15
+images:
+  file_path: png/bodysuit_variations_bs16.png
+  image_path: img/bodysuit_variations_bs16.webp
+  thumb_path: thumbs/bodysuit_variations_bs16.webp

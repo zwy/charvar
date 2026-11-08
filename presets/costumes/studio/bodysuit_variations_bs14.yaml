@@ -1,0 +1,18 @@
+item_id: bodysuit_variations_bs14
+source_id: studio
+display_type: flat_lay
+category: bodysuit_variations
+label: 网纱腰段短袖紧身衣
+keywords: espresso brown short-sleeve mock-neck bodysuit, semi-sheer mesh sleeves, wide sheer mesh waist panel, high-cut leg
+prompt_text: wearing an espresso brown short-sleeve mock-neck bodysuit with semi-sheer mesh at the sleeves, a wide semi-sheer mesh panel at the waist, and a solid opaque body, high-cut leg
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white background: one short-sleeve bodysuit in solid espresso brown with a mock-neck collar, short sleeves in semi-sheer brown mesh, and a wide semi-sheer mesh panel around the waist, high-cut leg openings. Laid flat, all edges fully inside the frame with margin, neckline at the top, hem toward the bottom. Soft diffused studio lighting from the upper left, faint contact shadows. No people, no mannequin, no hangers, no text.'
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 13
+images:
+  file_path: png/bodysuit_variations_bs14.png
+  image_path: img/bodysuit_variations_bs14.webp
+  thumb_path: thumbs/bodysuit_variations_bs14.webp

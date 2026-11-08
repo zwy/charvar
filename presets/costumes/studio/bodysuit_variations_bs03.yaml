@@ -1,0 +1,18 @@
+item_id: bodysuit_variations_bs03
+source_id: studio
+display_type: flat_lay
+category: bodysuit_variations
+label: 抹胸颈链紧身衣
+keywords: strapless bandeau one-piece swimsuit, matching thin fabric choker, solid dark espresso brown, high-cut leg
+prompt_text: wearing a solid dark espresso brown strapless bandeau one-piece swimsuit with a straight strapless neckline and a high-cut leg, plus a matching thin fabric choker at the neck
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white background: one strapless bandeau one-piece swimsuit in solid dark espresso brown, a straight strapless neckline, a smooth shaped front, high-cut leg openings, and one separate thin matching fabric choker, a single flat narrow band. Two separate pieces laid flat and separated with a clear gap, no pieces overlapping, all edges fully inside the frame with margin. Soft diffused studio lighting from the upper left, faint contact shadows. No people, no mannequin, no hangers, no text.'
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 2
+images:
+  file_path: png/bodysuit_variations_bs03.png
+  image_path: img/bodysuit_variations_bs03.webp
+  thumb_path: thumbs/bodysuit_variations_bs03.webp

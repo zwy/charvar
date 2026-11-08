@@ -579,6 +579,28 @@ function renderAdhocResult(out) {
 }
 
 /* ---------- 最近生成 ---------- */
+/* 下载原图：fetch 拿 blob 后走 object URL 触发下载，文件名用 run_id +
+   实际格式后缀（从响应 MIME 推）—— 不依赖 URL 名，也不动后端。 */
+const ADHOC_MIME_EXT = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
+async function downloadAdhocRecentImage(rec) {
+  try {
+    const res = await fetch(`/adhoc/${encodeURIComponent(rec.run_id)}/image`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const ext = ADHOC_MIME_EXT[blob.type] || (blob.type.split("/")[1] || "png").replace(/^x-/, "");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${rec.run_id}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+    setStatus($(`#adhoc-status`), `已下载 ${rec.run_id}.${ext}`);
+  } catch (err) {
+    setStatus($(`#adhoc-status`), `下载失败：${err.message}`, true);
+  }
+}
+
 async function loadAdhocRecent() {
   const box = $("#adhoc-recent");
   try {
@@ -627,6 +649,10 @@ async function loadAdhocRecent() {
         openBtn.addEventListener("click", () =>
           Media.showImageModal(`/adhoc/${encodeURIComponent(rec.run_id)}/image`, rec.prompt || ""));
         actions.appendChild(openBtn);
+        const dlBtn = document.createElement("button");
+        dlBtn.textContent = "下载图片";
+        dlBtn.addEventListener("click", () => downloadAdhocRecentImage(rec));
+        actions.appendChild(dlBtn);
       }
       const reuseBtn = document.createElement("button");
       reuseBtn.textContent = "复用提示词";

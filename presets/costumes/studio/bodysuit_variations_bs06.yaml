@@ -1,0 +1,18 @@
+item_id: bodysuit_variations_bs06
+source_id: studio
+display_type: flat_lay
+category: bodysuit_variations
+label: 网纱罩衫×三角底裤两件套
+keywords: sheer brown mesh short-sleeve shrug with standing collar, black bandeau bra, black low-rise string bikini bottom
+prompt_text: wearing a sheer brown mesh short-sleeve shrug with a standing collar over a black bandeau bra, and a black low-rise string bikini bottom, bare midriff between them
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white background: a short-sleeve shrug made of a single layer of very sheer translucent brown tulle mesh with no lining, completely see-through, with a standing collar and a deep scooped open front, one black bandeau bra, and one black low-rise string bikini bottom. Three separate pieces laid flat and separated with clear gaps, no pieces overlapping. Soft diffused studio lighting from the upper left, faint contact shadows. No people, no mannequin, no hangers, no text.'
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 5
+images:
+  file_path: png/bodysuit_variations_bs06.png
+  image_path: img/bodysuit_variations_bs06.webp
+  thumb_path: thumbs/bodysuit_variations_bs06.webp

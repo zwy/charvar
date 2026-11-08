@@ -1,0 +1,18 @@
+item_id: bodysuit_variations_bs11
+source_id: studio
+display_type: flat_lay
+category: bodysuit_variations
+label: 高领平角紧身衣（五分腿）
+keywords: sleeveless mock-neck shorts bodysuit, keyhole plunge opening at the chest, solid dark brown, legs ending at mid-thigh
+prompt_text: wearing a solid dark brown sleeveless mock-neck shorts bodysuit with a keyhole plunge opening at the center chest, legs ending at mid-thigh
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white background: one sleeveless shorts bodysuit in solid dark brown, a mock turtleneck collar, a keyhole plunge opening at the center front chest, legs ending at mid-thigh (halfway between the crotch and the knees). Laid flat, all edges fully inside the frame with margin, neckline at the top, hems toward the bottom. Soft diffused studio lighting from the upper left, faint contact shadows. No people, no mannequin, no hangers, no text.'
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 10
+images:
+  file_path: png/bodysuit_variations_bs11.png
+  image_path: img/bodysuit_variations_bs11.webp
+  thumb_path: thumbs/bodysuit_variations_bs11.webp

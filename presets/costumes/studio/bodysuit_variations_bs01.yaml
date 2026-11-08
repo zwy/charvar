@@ -1,0 +1,18 @@
+item_id: bodysuit_variations_bs01
+source_id: studio
+display_type: flat_lay
+category: bodysuit_variations
+label: 无袖高领紧身衣
+keywords: sleeveless mock-neck bodysuit, solid deep espresso brown, smooth seamless front, high-cut leg
+prompt_text: wearing a solid deep espresso brown sleeveless mock-neck bodysuit with a smooth seamless front and a high-cut leg
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white background: one sleeveless bodysuit in solid deep espresso brown, a close-fitting mock turtleneck collar, a smooth shaped front, high-cut leg openings. Laid flat, all edges fully inside the frame with margin around it, neckline at the top, hem toward the bottom. Soft diffused studio lighting from the upper left, faint contact shadows. No people, no mannequin, no hangers, no text.'
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 0
+images:
+  file_path: png/bodysuit_variations_bs01.png
+  image_path: img/bodysuit_variations_bs01.webp
+  thumb_path: thumbs/bodysuit_variations_bs01.webp

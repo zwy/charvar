@@ -1,0 +1,18 @@
+item_id: bodysuit_variations_bs08
+source_id: studio
+display_type: flat_lay
+category: bodysuit_variations
+label: 钢圈文胸×腿环底裤两件套
+keywords: black balconette underwire bra, thin straps, black cheeky brief with a single thigh garter strap
+prompt_text: wearing a black balconette underwire bra with thin straps, and a black cheeky brief with a single thin garter strap around the upper thigh on one leg, bare midriff
+prompt_source: manual
+ref_prompt: 'Flat lay clothing product photography, top-down view, on a pure white background: one black balconette underwire bra with thin shoulder straps, and one black cheeky brief with a single thin garter strap laid along one leg opening. Two separate pieces laid flat and separated with a clear gap, bra above the brief in the frame, all edges fully inside with margin. Soft diffused studio lighting from the upper left, faint contact shadows. No people, no mannequin, no hangers, no text.'
+subject_policy:
+  clothing: replace
+  accessories: keep
+caption_tags: {}
+sort_order: 7
+images:
+  file_path: png/bodysuit_variations_bs08.png
+  image_path: img/bodysuit_variations_bs08.webp
+  thumb_path: thumbs/bodysuit_variations_bs08.webp
