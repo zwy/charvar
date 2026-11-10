@@ -152,6 +152,30 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   line-height: 1.5;
   border-radius: var(--radius-ctl);
 }
+/* 卡片小动作的纯图标按钮（.image-actions 内）：与 .btn-sm 同高、正方形小方块，全站唯一图标按钮形态 */
+.btn-icon {
+  padding: 3px;
+  min-height: 0;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: var(--radius-ctl);
+  border: 1px solid var(--line);
+  background: #fff;
+}
+.btn-icon svg { display: block; }
+/* 卡内图标按钮要压过 .image-card .image-actions button 的 4px 10px 内边距 */
+.image-card .image-actions .btn-icon,
+.ref-pick .btn-icon {
+  padding: 3px;
+  width: 26px;
+  height: 26px;
+  flex: none;
+}
 button:focus-visible, .btn:focus-visible, .tab:focus-visible, .chip:focus-visible,
 .seg:focus-visible, .subject-card:focus-visible, .ref-pick:focus-visible,
 .image-card:focus-visible, label.file-btn:focus-within {
@@ -383,6 +407,12 @@ td .caption { color: var(--muted); }
 .modal-body img { display: block; width: 100%; max-height: min(70vh, 720px); object-fit: contain; border-radius: var(--radius-panel); background: #f4f6f9; }
 .modal-body > pre { margin: 0; font-family: inherit; font-size: 12px; line-height: 1.6; color: var(--muted); white-space: pre-wrap; word-break: break-word; }
 .modal-open { overflow: hidden; }
+
+/* AI 文案弹层的三段文案：标签行（标题 + 复制钮）+ 可滚动 pre（同 .prompt-view 语言） */
+.copy-section { display: flex; flex-direction: column; gap: var(--sp-1); }
+.copy-section-head { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-2); }
+.copy-section-head strong { font-size: 13px; }
+.copy-section-head .btn-sm { flex: none; }
 
 /* 主体档案图片槽位：一行一个，避免横图/有图无图时宽度不一 */
 .slot-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }

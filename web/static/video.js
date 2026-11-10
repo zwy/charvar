@@ -943,14 +943,17 @@ function buildVideoRecentCard(rec) {
   actions.className = "image-actions";
   if (rec.prompt && rec.prompt.trim()) {
     const promptBtn = document.createElement("button");
-    promptBtn.textContent = "查看提示词";
+    promptBtn.textContent = "提示词";
     promptBtn.addEventListener("click", () =>
       Media.showTextModal("视频 · 提示词", rec.prompt || "", { copyable: true }));
     actions.appendChild(promptBtn);
   }
   if (rec.has_video) {
     const openBtn = document.createElement("button");
-    openBtn.textContent = "在弹层播放";
+    openBtn.className = "btn-icon";
+    openBtn.title = "弹层播放";
+    openBtn.setAttribute("aria-label", "弹层播放");
+    openBtn.innerHTML = icon("play");
     openBtn.addEventListener("click", () => {
       Media.showPanelModal("视频 · " + rec.run_id, (body) => {
         const vid = document.createElement("video");
@@ -967,14 +970,16 @@ function buildVideoRecentCard(rec) {
     // 下载 MP4：与「生成结果 → 合成视频」卡同一个做法（media.js 的下载链接）。
     // URL 末段是 "video"，所以显式给文件名，否则存下来没有扩展名。
     const dl = document.createElement("a");
-    dl.className = "btn";
+    dl.className = "btn btn-icon";
     dl.href = `/videos/${encodeURIComponent(rec.run_id)}/video`;
     dl.download = `${rec.run_id}.mp4`;
-    dl.textContent = "下载 MP4";
+    dl.title = "下载 MP4";
+    dl.setAttribute("aria-label", "下载 MP4");
+    dl.innerHTML = icon("download");
     actions.appendChild(dl);
   }
   const reuseBtn = document.createElement("button");
-  reuseBtn.textContent = "复用提示词";
+  reuseBtn.textContent = "复用";
   reuseBtn.addEventListener("click", () => {
     $("#video-prompt").value = rec.prompt || "";
     if (rec.aspect_ratio) {
@@ -984,6 +989,26 @@ function buildVideoRecentCard(rec) {
     if (rec.seed != null) $("#video-seed").value = rec.seed;
   });
   actions.appendChild(reuseBtn);
+  if (rec.prompt && rec.prompt.trim()) {
+    const copyBtn = document.createElement("button");
+    copyBtn.textContent = "AI 文案";
+    copyBtn.addEventListener("click", async () => {
+      if (rec.copy) return showVideoCopyModal(rec);
+      copyBtn.disabled = true;
+      copyBtn.textContent = "生成中…";
+      try {
+        rec.copy = await api(`/videos/${encodeURIComponent(rec.run_id)}/copy`, { method: "POST" });
+      } catch (err) {
+        setStatus($("#video-status"), `AI 文案生成失败（${rec.run_id}）：${err.message}`, true);
+        return;
+      } finally {
+        copyBtn.disabled = false;
+        copyBtn.textContent = "AI 文案";
+      }
+      showVideoCopyModal(rec);
+    });
+    actions.appendChild(copyBtn);
+  }
   card.appendChild(actions);
   const note = document.createElement("div");
   note.className = "image-meta";
@@ -996,6 +1021,86 @@ function buildVideoRecentCard(rec) {
     card.appendChild(errLine);
   }
   return card;
+}
+
+/* ---------- 视频文案弹层（LLM 生成，存 manifest["copy"]） ---------- */
+
+/* 弹层内一处文案（标签行 + 复制钮 + 可滚动 pre）；返回 { wrap, sync }，sync 换新文案用。 */
+function buildCopySection(label, initialText) {
+  const wrap = document.createElement("div");
+  wrap.className = "copy-section";
+  const head = document.createElement("div");
+  head.className = "copy-section-head";
+  head.innerHTML = `<strong>${escapeHtml(label)}</strong>`;
+  const copyBtn = document.createElement("button");
+  copyBtn.className = "btn-sm";
+  copyBtn.textContent = "复制";
+  let text = initialText || "";
+  copyBtn.addEventListener("click", async () => {
+    copyBtn.textContent = (await copyText(text)) ? "已复制 ✓" : "复制失败";
+    setTimeout(() => { copyBtn.textContent = "复制"; }, 1500);
+  });
+  head.appendChild(copyBtn);
+  const pre = document.createElement("pre");
+  pre.className = "prompt-view";
+  wrap.append(head, pre);
+  return {
+    wrap,
+    set(next) {
+      text = next || "";
+      pre.textContent = text;
+    },
+  };
+}
+
+/* AI 文案弹层：有存稿直接展示，「重新生成」调 POST 覆盖（成功后同步 rec）。 */
+function showVideoCopyModal(rec) {
+  Media.showPanelModal("视频 · AI 文案", (body) => {
+    const title = buildCopySection("标题", "");
+    const intro = buildCopySection("简介", "");
+    const tags = buildCopySection("话题 #", "");
+    const row = document.createElement("div");
+    row.className = "actions";
+    const regen = document.createElement("button");
+    regen.className = "btn-sm";
+    regen.textContent = "重新生成";
+    const stamp = document.createElement("span");
+    stamp.className = "hint";
+    const tagsText = (copy) => (copy.tags || []).map((t) => "#" + t).join(" ");
+    const render = (copy) => {
+      title.set(copy.title);
+      intro.set(copy.intro);
+      tags.set(tagsText(copy));
+      stamp.textContent = copy.generated_at ? "生成于 " + copy.generated_at : "";
+      rec.copy = copy;
+    };
+    const copyAll = document.createElement("button");
+    copyAll.className = "btn-sm";
+    copyAll.textContent = "复制全部";
+    copyAll.addEventListener("click", async () => {
+      const copy = rec.copy || {};
+      const text = [copy.title, copy.intro, tagsText(copy)].filter(Boolean).join("\n");
+      copyAll.textContent = (await copyText(text)) ? "已复制 ✓" : "复制失败";
+      setTimeout(() => { copyAll.textContent = "复制全部"; }, 1500);
+    });
+    const generate = async () => {
+      regen.disabled = true;
+      stamp.className = "hint";
+      stamp.textContent = "生成中…";
+      try {
+        render(await api(`/videos/${encodeURIComponent(rec.run_id)}/copy`, { method: "POST" }));
+      } catch (err) {
+        stamp.className = "hint status error";
+        stamp.textContent = "生成失败：" + err.message;
+      }
+      regen.disabled = false;
+    };
+    regen.addEventListener("click", generate);
+    row.append(regen, copyAll, stamp);
+    body.append(title.wrap, intro.wrap, tags.wrap, row);
+    if (rec.copy) render(rec.copy);
+    else generate();
+  });
 }
 
 $("#btn-video-recent-refresh").addEventListener("click", () => loadVideoRecent());

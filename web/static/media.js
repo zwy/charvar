@@ -164,13 +164,13 @@ const Media = {
       card.className = "image-card";
       const imageSrc = item.thumb_url || item.primary_url;
       const promptText = String(item.text || "").trim();
-      // 查看提示词 / 复制 / 重新生成（与档案图片槽位同一套弹层：可滚动 pre + 复制全文）
+      // 提示词 / 复制 / 重生成（与档案图片槽位同一套弹层：可滚动 pre + 复制全文）
       let actionsHtml = promptText
-        ? `<button class="btn-sm" data-prompt-view>查看提示词</button><button class="btn-sm" data-prompt-copy>复制</button><button class="btn-sm" data-regen title="同一提示词换个随机种子，按原出图设置重推 ComfyUI 出一张新图">重新生成</button>`
+        ? `<button class="btn-sm" data-prompt-view>提示词</button><button class="btn-sm" data-prompt-copy>复制</button><button class="btn-sm" data-regen title="同一提示词换个随机种子，按原出图设置重推 ComfyUI 出一张新图">重生成</button>`
         : `<span class="hint">（无提示词记录）</span>`;
       if (item.labeled_url) {
         actionsHtml =
-          `<button class="btn-sm" data-labeled title="贴字后的成片（labeled/，原图不动）">看贴字图</button>` +
+          `<button class="btn-sm" data-labeled title="贴字后的成片（labeled/，原图不动）">贴字图</button>` +
           actionsHtml;
       }
       if (imageSrc) {
@@ -242,7 +242,7 @@ const Media = {
     for (const vid of data.videos || []) {
       const card = document.createElement("div");
       card.className = "image-card video-card";
-      card.innerHTML = `<video controls preload="metadata" src="${vid.url}"></video><div class="image-meta"><strong>合成视频</strong><span>${vid.name}</span></div><div class="image-actions"><a class="btn" href="${vid.url}" download>下载 MP4</a></div>`;
+      card.innerHTML = `<video controls preload="metadata" src="${vid.url}"></video><div class="image-meta"><strong>合成视频</strong><span>${vid.name}</span></div><div class="image-actions"><a class="btn btn-icon" href="${vid.url}" download title="下载 MP4" aria-label="下载 MP4">${icon("download")}</a></div>`;
       grid.appendChild(card);
     }
   },

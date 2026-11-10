@@ -661,24 +661,30 @@ async function loadAdhocRecent(page = adhocRecentState.page) {
       // 提示词在卡片里最多 3 行（.adhoc-recent p 的 CSS），全文走弹层
       if (rec.prompt && rec.prompt.trim()) {
         const promptBtn = document.createElement("button");
-        promptBtn.textContent = "查看提示词";
+        promptBtn.textContent = "提示词";
         promptBtn.addEventListener("click", () =>
           Media.showTextModal("Playground · 提示词", rec.prompt || "", { copyable: true }));
         actions.appendChild(promptBtn);
       }
       if (rec.has_image) {
         const openBtn = document.createElement("button");
-        openBtn.textContent = "查看大图";
+        openBtn.className = "btn-icon";
+        openBtn.title = "查看大图";
+        openBtn.setAttribute("aria-label", "查看大图");
+        openBtn.innerHTML = icon("eye");
         openBtn.addEventListener("click", () =>
           Media.showImageModal(`/adhoc/${encodeURIComponent(rec.run_id)}/image`, rec.prompt || ""));
         actions.appendChild(openBtn);
         const dlBtn = document.createElement("button");
-        dlBtn.textContent = "下载图片";
+        dlBtn.className = "btn-icon";
+        dlBtn.title = "下载图片";
+        dlBtn.setAttribute("aria-label", "下载图片");
+        dlBtn.innerHTML = icon("download");
         dlBtn.addEventListener("click", () => downloadAdhocRecentImage(rec));
         actions.appendChild(dlBtn);
       }
       const reuseBtn = document.createElement("button");
-      reuseBtn.textContent = "复用提示词";
+      reuseBtn.textContent = "复用";
       reuseBtn.addEventListener("click", () => {
         $("#adhoc-prompt").value = rec.prompt || "";
         $("#adhoc-aspect").value =

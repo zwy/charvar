@@ -95,7 +95,7 @@ cards) · `--radius-card: 12px` (page cards, modals) · `999px` pills (chip, bad
 ### Control sizing
 `--ctl-h: 35px` standard input/select/button height; checkbox rows borrow it to
 bottom-align with the input row beside them. Small in-row buttons (`.btn-sm`): `4px 10px`,
-12px text.
+12px text; card icon buttons (`.btn-icon`): 26×26 with a 3px pad.
 
 ### Shadows
 Focus rings only: `0 0 0 3px var(--accent-soft)`. Active segmented key:
@@ -126,7 +126,12 @@ card padding shrinks).
 - **Form fields** are label-wrapped: muted 12px label above a full-width 35px control.
 - **Hints** are muted 12px secondary text. Treat them as a scarce resource — see below.
 - **Reference images** are 92px-min thumbnail cards with a role dropdown.
-- **Icons**: the app has no icon set. Buttons are text-only. Keep it that way.
+- **Icons**: the app has no third-party icon set. Main/form buttons stay text-only.
+  **Card-level action rows** (`.image-actions`) may use small inline SVG icon buttons
+  (`.btn-icon`, 26×26, 14px glyph, `currentColor`, only for unambiguous verbs — play /
+  download / preview; the single source is `icon(name)` in `core.js`) mixed with 1–2-word
+  text labels (「提示词」「复用」). Longer explanatory labels (查看提示词 / 复用提示词)
+  are trimmed — the tooltip (`title`) carries the full verb.
 
 ## Copy policy (this round's focus)
 

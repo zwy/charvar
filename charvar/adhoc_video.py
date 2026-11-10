@@ -363,6 +363,8 @@ def list_recent(limit: int = 20, offset: int = 0) -> list[dict[str, Any]]:
                 "error": manifest.get("error") or "",
                 # 只提交（未终态）与失败的记录没有成片 → 前端别去取（否则 404）
                 "has_video": has_video,
+                # AI 文案（有 = 卡片直接弹层展示旧的，不重新生成）
+                "copy": manifest.get("copy") or None,
             }
         )
     return records
@@ -374,6 +376,16 @@ def read_manifest(run_id: str) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(f"没有 manifest：{run_id}")
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def save_copy(run_id: str, copy: dict[str, Any]) -> dict[str, Any]:
+    """把生成的文案写进 manifest["copy"]（带时间戳），返回写进去的内容。"""
+    directory = run_dir(run_id)
+    manifest = read_manifest(run_id)
+    stored = {**copy, "generated_at": time.strftime("%Y-%m-%d %H:%M:%S")}
+    manifest["copy"] = stored
+    _write_manifest(directory, manifest)
+    return stored
 
 
 def _write_manifest(run_dir: Path, manifest: dict[str, Any]) -> None:

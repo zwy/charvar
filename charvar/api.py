@@ -30,6 +30,7 @@ from charvar import dreamina_video
 from charvar import openrouter_image
 from charvar import openrouter_tts
 from charvar import openrouter_video
+from charvar import social_copy
 from charvar import costumes as costumes_service
 from charvar import faces as faces_service
 from charvar import poses as poses_service
@@ -2350,6 +2351,28 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         if not path.exists():
             raise HTTPException(404, f"没有 manifest：{run_id}")
         return json.loads(path.read_text(encoding="utf-8"))
+
+    @app.post("/videos/{run_id}/copy")
+    def api_video_copy(run_id: str) -> dict[str, Any]:
+        """给该视频 run 生成一套发布文案（标题/简介/话题），结果写进 manifest["copy"]。"""
+        try:
+            manifest = adhoc_video_service.read_manifest(run_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except adhoc_video_service.AdhocVideoError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        prompt = str((manifest.get("request") or {}).get("prompt") or "").strip()
+        if not prompt:
+            raise HTTPException(400, "该视频记录没有提示词，无法生成文案")
+        with _db() as conn:
+            config = settings_service.llm_overrides(conn)
+        try:
+            copy = social_copy.generate_copy(video_prompt=prompt, config=config)
+        except llm.LLMError as exc:
+            raise HTTPException(502, f"LLM 生成文案失败：{exc}") from exc
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(502, f"LLM 文案输出不合格：{exc}") from exc
+        return adhoc_video_service.save_copy(run_id, copy)
 
     # ---- Playground 语音（charvar.adhoc_tts：web 与 CLI charvar tts 同一通路） ----
     # 同步生成（与视频的异步作业不同）：/tts/generate 等音频字节返回后再响应，

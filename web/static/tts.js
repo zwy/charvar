@@ -231,25 +231,30 @@ function buildTtsRecentCard(rec) {
   actions.className = "image-actions";
   if (rec.text && rec.text.trim()) {
     const textBtn = document.createElement("button");
-    textBtn.textContent = "查看文本";
+    textBtn.textContent = "文本";
     textBtn.addEventListener("click", () =>
       Media.showTextModal("语音 · 文本", rec.text || "", { copyable: true }));
     actions.appendChild(textBtn);
   }
   if (rec.has_audio) {
     const playBtn = document.createElement("button");
-    playBtn.textContent = "试放";
+    playBtn.className = "btn-icon";
+    playBtn.title = "试放";
+    playBtn.setAttribute("aria-label", "试放");
+    playBtn.innerHTML = icon("play");
     playBtn.addEventListener("click", () => audio.play().catch(() => {}));
     actions.appendChild(playBtn);
     const dl = document.createElement("a");
-    dl.className = "btn";
+    dl.className = "btn btn-icon";
     dl.href = `/tts/${encodeURIComponent(rec.run_id)}/audio`;
     dl.download = `${rec.run_id}.wav`;
-    dl.textContent = "下载";
+    dl.title = "下载音频";
+    dl.setAttribute("aria-label", "下载音频");
+    dl.innerHTML = icon("download");
     actions.appendChild(dl);
   }
   const reuseBtn = document.createElement("button");
-  reuseBtn.textContent = "复用文本";
+  reuseBtn.textContent = "复用";
   reuseBtn.addEventListener("click", () => {
     $("#tts-text").value = rec.text || "";
     if (rec.voice) {

@@ -120,6 +120,20 @@ function matchesQuery(hay, q, glossary) {
   return true;
 }
 
+/* 卡片小动作按钮的线性 SVG 图标（14px，stroke: currentColor；全站唯一图标来源，
+   design-system.md 的卡级动作按钮规范）。icon(name) 返回可直接 innerHTML 的 svg 字符串。 */
+const ICON_PATHS = {
+  play: '<path d="M3 2.5l12 7.5-12 7.5z" fill="currentColor" stroke="none"/>',
+  download: '<path d="M10 2v11m0 0l-4.5-4.5M10 13l4.5-4.5M3.5 18h13" fill="none"/>',
+  eye: '<path d="M1.8 10s3.2-5.4 8.2-5.4S18.2 10 18.2 10 15 15.4 10 15.4 1.8 10 1.8 10z" fill="none"/><circle cx="10" cy="10" r="2.6" fill="none"/>',
+};
+const ICON_NAMES = Object.keys(ICON_PATHS);
+function icon(name) {
+  const body = ICON_PATHS[name];
+  if (!body) return "";
+  return `<svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+}
+
 /* 主体档案 5 种槽位的文案（gen 页 sticker 提示与主体页槽位共用） */
 const SLOT_LABELS = {
   character_sheet: "人物半身像＋三视图",
