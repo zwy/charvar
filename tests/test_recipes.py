@@ -2494,3 +2494,83 @@ def test_casting_pick_pose_ids_pin(absurd_env):
     )
     with pytest.raises(casting.CastingError, match="被过滤空"):
         casting.pick_pose(conn, missing, wildcard.rng_for(3, "missing"))
+
+
+# ---------- ⑧ 随机贱猫小品配方（amplitude=skit：拟人剧本三拍，只接猫） ----------
+
+
+def test_repo_skit_recipe_parses():
+    """仓库随机贱猫小品配方解析合法；剧本池分类、skit 档与检查点布局锁进测试。"""
+    recipe = recipes_service.load_recipe("random_cat_skit_video")
+    assert [s.kind for s in recipe.steps] == [
+        "pick", "scene_design", "combo_image", "video_script", "video_model",
+    ]
+    assert [recipes_service.manual_default(s) for s in recipe.steps] == [
+        False, False, True, False, True,
+    ]
+    pick = recipe.steps[0]
+    assert pick.face is None and pick.costume is None
+    assert pick.pose["sources"] == ["studio"] and pick.pose["allow_text"] is True
+    assert pick.pose["categories"] == ["荒诞猫剧本"]
+    combo, script, video = recipe.steps[2], recipe.steps[3], recipe.steps[4]
+    assert combo.subject_kind == "cat" and len(combo.appearances) >= 12
+    assert script.subject_kind == "cat" and script.frame_from == "首帧图"
+    assert script.amplitude == "skit" and script.duration == 8
+    assert "拟人" in (combo.framing_extra or "")
+    assert combo.safety_lock == script.safety_lock and len(combo.safety_lock) >= 3
+    assert video.duration == 8 and video.resolution == "768p"
+
+
+def test_video_script_skit_brief(monkeypatch):
+    """skit 档：brief 换剧本三拍规则与猫头/外观/安全材料；large 四足规则不串入；人版报错。"""
+    from charvar import video_script as script_service
+
+    seen = []
+
+    def fake_call_llm(messages, model=None, config=None):
+        seen.append(messages)
+        return _script_stub_text()
+
+    monkeypatch.setattr(script_service, "call_llm", fake_call_llm)
+    script_service.write_script(
+        pose_text="一只猫像人一样双腿直立站定。", pose_title="煎饼电话",
+        clip_type="拟人猫咪喜剧小品", duration=8, amplitude="skit",
+        subject_kind="cat", appearance_text="一只橘色中华田园猫",
+        safety_text="「砸」一律是笑点假动作",
+    )
+    brief = seen[0][0]["content"]
+    assert "视频的主角是一只猫" in brief
+    assert "按剧本三拍演" in brief and "贱兮兮" in brief and "转折" in brief
+    assert "四足站定可以做该类型相关的动作" not in brief
+    assert "8. 安全红线" in brief and "「砸」一律是笑点假动作" in brief
+
+    seen.clear()
+    script_service.write_script(
+        pose_text="一只猫像人一样双腿直立站定。", pose_title="煎饼电话",
+        clip_type="拟人猫咪喜剧小品", duration=8, amplitude="skit", subject_kind="cat",
+    )
+    brief2 = seen[0][0]["content"]
+    assert "安全红线" not in brief2
+
+    with pytest.raises(ValueError, match="只接猫版"):
+        script_service.write_script(
+            pose_text="正面站立。", pose_title="叉腰",
+            clip_type="拟人猫咪喜剧小品", duration=8, amplitude="skit",
+        )
+
+
+def test_skit_static_validation(tmp_path, monkeypatch):
+    """amplitude=skit 配人版 → 解析期报错（剧本三拍措辞只接猫版拟人剧本）。"""
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CHARVAR_PRESETS_DIR", str(tmp_path / "presets"))
+    base = tmp_path / "presets" / "recipes"
+    base.mkdir(parents=True, exist_ok=True)
+
+    (base / "bad_skit_person.yaml").write_text(
+        _ABSURD_YAML.replace("amplitude: large", "amplitude: skit").replace(
+            "name: demo_absurd", "name: bad_skit_person"
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(PresetError, match="只接猫版"):
+        recipes_service.load_recipe("bad_skit_person")

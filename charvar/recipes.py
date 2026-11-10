@@ -75,7 +75,7 @@ _STEP_ROOT_KEYS = frozenset(
         "prompt_from",              # video_model：prompt 取自 video_script 步
         "strip_accessories",        # combo_image：服饰图锚去包/帽/墨镜/手持物（舞蹈首帧）
         "framing_extra",            # combo_image：构图段追加（余白/不持物等框景要求）
-        "amplitude",                # video_script：动作幅度档（large=大幅+编排结构）
+        "amplitude",                # video_script：动作幅度档（large=大幅+编排结构；skit=拟人剧本三拍）
         "multishot",                # video_script：多镜头 MV 分镜模式（随机 MV 配方）
         "ensemble",                 # video_script（multishot）：伴舞从第 2 镜入画
         "shots",                    # video_script（multishot）：镜头数（2–6，缺省按时长推）
@@ -185,7 +185,9 @@ class RecipeStep(BaseModel):
     hint: str | None = None            # scene_design：场景方向提示（可选）
     strip_accessories: bool = False    # combo_image：服饰图锚去包/帽/墨镜/手持物（舞蹈首帧）
     framing_extra: str | None = None   # combo_image：构图段追加（余白/不持物等框景要求）
-    amplitude: Literal["normal", "large"] = "normal"  # video_script：动作幅度档（large=大幅+编排结构）
+    amplitude: Literal["normal", "large", "skit"] = (
+        "normal"  # video_script：动作幅度档（large=大幅+编排；skit=拟人贱剧三拍，只接猫）
+    )
     multishot: bool = False            # video_script：多镜头 MV 分镜（编号镜头+分秒切点+声场/配乐段）
     ensemble: bool = False             # video_script（multishot）：伴舞从第 2 镜入画
     shots: int | None = None           # video_script（multishot）：镜头数 2–6；None 按 duration 推
@@ -399,6 +401,8 @@ def _validate_recipe(recipe: Recipe, path: Path) -> None:
                 raise PresetError(f"配方 {path.name} 的 {label}：subject_kind=cat 暂只支持单镜脚本（多镜/伴舞不接）")
             if step.subject_kind == "cat" and not step.frame_from:
                 raise PresetError(f"配方 {path.name} 的 {label}：subject_kind=cat 需要看图脚本（frame_from 指向猫首帧步）——脚本措辞按真实首帧接续")
+            if step.amplitude == "skit" and step.subject_kind != "cat":
+                raise PresetError(f"配方 {path.name} 的 {label}：amplitude=skit 目前只接猫版拟人剧本（subject_kind=cat）——按剧本三拍写的规则措辞专配猫")
             if any(not str(w or "").strip() for w in step.style_lock):
                 raise PresetError(f"配方 {path.name} 的 {label}：style_lock 条目不能是空白")
             if any(not str(w or "").strip() for w in step.safety_lock):
