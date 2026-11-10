@@ -33,9 +33,15 @@ def _brief(
     category: str,
     costume_text: str,
     hint: str,
+    script_text: str = "",
 ) -> str:
     costume_line = f"- 人物服饰：{costume_text}\n" if costume_text else ""
     hint_line = f"- 设计方向（用户提示）：{hint}\n" if hint else ""
+    script_line = (
+        f"\n【视频脚本（已定稿，首帧画面从这些拍点开始）】\n{script_text}\n"
+        if str(script_text or "").strip()
+        else ""
+    )
     return (
         "你是画面氛围设计师。给一张即将生成的 AI 图片设计「环境/背景/光线」。\n"
         "这张图：一个人物居中的单人构图，人物正摆出下面的动作：\n"
@@ -45,15 +51,18 @@ def _brief(
         + "\n"
         + costume_line
         + hint_line
+        + script_line
         + "\n输出 JSON：{\"scene\": \"背景与光线描述\"}\n"
         "要求：\n"
         "1. 只写 环境/地点/时间天气/背景物件 与 光照（自然光或人工光的主方向、软硬、"
         "色温、明暗对比、氛围），2–3 句成文、40–120 字，不要写成长段落；\n"
         "2. 场景要与动作和服饰合理相称（坐/卧姿给可靠的支撑面，礼服别配工地，运动装"
         "别配晚宴厅），但不给前景加会遮挡或抢视线的复杂物件；\n"
-        "3. 不写人物的外观（发型/发色/服装/身材/表情）、不写人数、不写姿势动作（那些由"
+        "3. 有【视频脚本】材料时以脚本为最高依据：脚本拍点涉及的舞台、道具与其方位"
+        "必须在场景里装得下，别引入脚本之外的画面事件；\n"
+        "4. 不写人物的外观（发型/发色/服装/身材/表情）、不写人数、不写姿势动作（那些由"
         "其它段落定）、不写画风/相机参数/文字水印；\n"
-        "4. 光线必须能照亮人物主体，不让主要光落在人物背后造成剪影。"
+        "5. 光线必须能照亮人物主体，不让主要光落在人物背后造成剪影。"
     )
 
 
@@ -83,6 +92,7 @@ def design_scene(
     category: str = "",
     costume_text: str = "",
     hint: str = "",
+    script_text: str = "",
     model: str | None = None,
     config: dict | None = None,
 ) -> dict:
@@ -92,7 +102,7 @@ def design_scene(
             "role": "user",
             "content": _brief(
                 str(pose_text or "").strip(), str(pose_title or ""), str(category or ""),
-                str(costume_text or ""), str(hint or ""),
+                str(costume_text or ""), str(hint or ""), str(script_text or ""),
             ),
         }
     ]

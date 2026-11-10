@@ -70,12 +70,15 @@ _STEP_ROOT_KEYS = frozenset(
         # ---- ⑥ 随机三库配方步 ----
         "face", "pose", "costume",  # pick 步：三库过滤器（dict）
         "scene_from",               # 消费 scene_design 步的 label（combo_image / video_script）
+        "script_from",              # scene_design：消费 video_script 步的成稿（场景逆推脚本）
         "types",                    # video_script：片段类型池覆盖
         "hint",                     # scene_design：场景方向提示
         "prompt_from",              # video_model：prompt 取自 video_script 步
         "strip_accessories",        # combo_image：服饰图锚去包/帽/墨镜/手持物（舞蹈首帧）
         "framing_extra",            # combo_image：构图段追加（余白/不持物等框景要求）
-        "amplitude",                # video_script：动作幅度档（large=大幅+编排结构；skit=拟人剧本三拍）
+        "action_anchor",            # combo_image（猫）：首帧动作锚范围（full=整段；setup=起手+机位）
+        "crowd",                    # combo_image/video_script：背景人物档（solo 禁人类；backdrop 允许远景虚焦路人）
+        "amplitude",                # video_script：动作幅度档（large=大幅+编排结构；skit=拟人剧本三拍；naughty=真猫捣乱三拍）
         "multishot",                # video_script：多镜头 MV 分镜模式（随机 MV 配方）
         "ensemble",                 # video_script（multishot）：伴舞从第 2 镜入画
         "shots",                    # video_script（multishot）：镜头数（2–6，缺省按时长推）
@@ -181,12 +184,19 @@ class RecipeStep(BaseModel):
 
     # ---- 跨库消费步 ----
     scene_from: str | None = None      # 前面 scene_design 步的 label
+    script_from: str | None = None     # 前面 video_script 步的 label（scene_design：场景以已定稿脚本为据）
     types: list[str] = Field(default_factory=list)   # video_script：片段类型池覆盖
     hint: str | None = None            # scene_design：场景方向提示（可选）
     strip_accessories: bool = False    # combo_image：服饰图锚去包/帽/墨镜/手持物（舞蹈首帧）
     framing_extra: str | None = None   # combo_image：构图段追加（余白/不持物等框景要求）
-    amplitude: Literal["normal", "large", "skit"] = (
-        "normal"  # video_script：动作幅度档（large=大幅+编排；skit=拟人贱剧三拍，只接猫）
+    action_anchor: Literal["full", "setup"] = (
+        "full"  # combo_image（猫）：full=整段动作文本进首帧；setup=只锚起手+机位，剧本尾段（「下一拍…」）归脚本步
+    )
+    crowd: Literal["solo", "backdrop"] = (
+        "solo"  # combo_image/video_script：solo=全片禁人类第二动物（现行为）；backdrop=允许远景虚焦的背景人物（无互动，市井合理性）
+    )
+    amplitude: Literal["normal", "large", "skit", "naughty"] = (
+        "normal"  # video_script：动作幅度档（large=大幅+编排；skit=拟人贱剧三拍、naughty=真猫捣乱三拍，只接猫）
     )
     multishot: bool = False            # video_script：多镜头 MV 分镜（编号镜头+分秒切点+声场/配乐段）
     ensemble: bool = False             # video_script（multishot）：伴舞从第 2 镜入画
@@ -379,6 +389,19 @@ def _validate_recipe(recipe: Recipe, path: Path) -> None:
             )
         if step.appearances and step.kind != "combo_image":
             raise PresetError(f"配方 {path.name} 的 {label}：appearances 外观池只进 combo_image 步（掷骰产物由脚本步继承）")
+        if step.script_from and step.kind != "scene_design":
+            raise PresetError(f"配方 {path.name} 的 {label}：script_from 只对 scene_design 步生效（场景以已定稿视频脚本为据）")
+        if step.crowd != "solo" and step.kind not in ("combo_image", "video_script"):
+            raise PresetError(f"配方 {path.name} 的 {label}：crowd 只对 combo_image/video_script 步生效（背景人物档）")
+        if step.kind == "scene_design" and step.script_from:
+            target = by_label.get(step.script_from)
+            if target is None or target.kind != "video_script":
+                raise PresetError(
+                    f"配方 {path.name} 的 {label}：script_from 必须指向本步之前的 video_script 步（以已定稿脚本搭台），"
+                    f"当前 {step.script_from!r}"
+                )
+        if step.action_anchor != "full" and step.kind != "combo_image":
+            raise PresetError(f"配方 {path.name} 的 {label}：action_anchor 只进 combo_image 步（首帧动作锚范围）")
         if step.kind == "combo_image":
             if step.close_up and (step.strip_accessories or (step.framing_extra or "").strip()):
                 raise PresetError(
@@ -396,13 +419,26 @@ def _validate_recipe(recipe: Recipe, path: Path) -> None:
                     raise PresetError(f"配方 {path.name} 的 {label}：subject_kind=cat 不吃服饰锚，strip_accessories 无效")
                 if not step.appearances:
                     raise PresetError(f"配方 {path.name} 的 {label}：subject_kind=cat 需要 appearances 外观池（至少 1 条非空描述）")
+            if step.action_anchor == "setup" and step.subject_kind != "cat":
+                raise PresetError(f"配方 {path.name} 的 {label}：action_anchor=setup 目前只接猫首帧（拟人剧本条目的尾段归视频脚本步）")
         if step.kind == "video_script":
             if step.subject_kind == "cat" and (step.multishot or step.ensemble or step.close_up):
                 raise PresetError(f"配方 {path.name} 的 {label}：subject_kind=cat 暂只支持单镜脚本（多镜/伴舞不接）")
             if step.subject_kind == "cat" and not step.frame_from:
-                raise PresetError(f"配方 {path.name} 的 {label}：subject_kind=cat 需要看图脚本（frame_from 指向猫首帧步）——脚本措辞按真实首帧接续")
+                # 脚本先行的猫配方（贱猫小品的「脚本→场景→首帧」次序）：无图写稿，
+                # 外观由脚本步按固定 key 自掷 —— 池子必须存在于配方里，脚本与首帧同一只猫
+                if not any(
+                    s.kind == "combo_image" and s.subject_kind == "cat" and s.appearances
+                    for s in recipe.steps
+                ):
+                    raise PresetError(
+                        f"配方 {path.name} 的 {label}：subject_kind=cat 无 frame_from（脚本先行）时，"
+                        "配方里要有一个带 appearances 外观池的猫首帧步（外观掷骰 key 固定 = 脚本与首帧同一只猫）"
+                    )
             if step.amplitude == "skit" and step.subject_kind != "cat":
                 raise PresetError(f"配方 {path.name} 的 {label}：amplitude=skit 目前只接猫版拟人剧本（subject_kind=cat）——按剧本三拍写的规则措辞专配猫")
+            if step.amplitude == "naughty" and step.subject_kind != "cat":
+                raise PresetError(f"配方 {path.name} 的 {label}：amplitude=naughty 目前只接猫版捣乱剧本（subject_kind=cat）——按恶作剧三拍写的规则措辞专配猫")
             if any(not str(w or "").strip() for w in step.style_lock):
                 raise PresetError(f"配方 {path.name} 的 {label}：style_lock 条目不能是空白")
             if any(not str(w or "").strip() for w in step.safety_lock):
@@ -496,6 +532,13 @@ def _validate_recipe(recipe: Recipe, path: Path) -> None:
             raise PresetError(
                 f"配方 {path.name} 的 refs（label={ref.label!r}）：step 必须指向 pick 步，当前 {ref.step!r}"
             )
+    # 背景人物档在首帧与脚本之间必须一致（不然首帧有人、成片规则禁人，自相矛盾）
+    crowd_states = sorted({s.crowd for s in recipe.steps if s.kind in ("combo_image", "video_script")})
+    if len(crowd_states) > 1:
+        raise PresetError(
+            f"配方 {path.name}：combo_image/video_script 的 crowd 不一致（{crowd_states}）——"
+            "首帧与脚本要么都允许远景背景人物、要么都禁"
+        )
 
 
 def parse_recipe_file(path: Path) -> Recipe:
@@ -1402,6 +1445,10 @@ def _run_scene_design_step(conn, recipe: Recipe, state: RecipeRunState, step: Re
     if not pose:
         raise PresetError(f"{step.label}：随机选库里没有动作（pose）——先在 pick 步声明 pose 过滤器")
     costume = picks.get("costume") or {}
+    script_text = ""
+    if step.script_from:
+        target = _prior_step_state(state, str(step.script_from), ("video_script",), "script_from")
+        script_text = str(target.outputs.get("script") or "")
     try:
         data = scene_service.design_scene(
             pose_text=str(pose.get("action_text") or ""),
@@ -1409,6 +1456,7 @@ def _run_scene_design_step(conn, recipe: Recipe, state: RecipeRunState, step: Re
             category=str(pose.get("category_zh") or ""),
             costume_text=str(costume.get("keywords") or ""),
             hint=str(step.hint or ""),
+            script_text=script_text,
             model=step.model,
             config=settings_service.llm_overrides(conn),
         )
@@ -1646,11 +1694,20 @@ def _run_combo_image_step_cat(conn, recipe: Recipe, state: RecipeRunState, step:
         appearance = wildcard.rng_for(
             int(state.seed), f"{state.recipe_run_id}:appearance"
         ).choice(pool)
+    if step.action_anchor == "setup":
+        # 首帧只锚起手+机位段：剧本尾段（「下一拍…」三拍）是给视频脚本步的——
+        # 整段进首帧时，尾段的瘫/躺/跑姿势会把额外的猫召唤进图片（实测地铁霸座两连翻车）。
+        cut = action_text.find("下一拍")
+        if cut > 0:
+            anchored = action_text[:cut].strip()
+            if anchored:
+                action_text = anchored if anchored[-1] in "。！？；…" else anchored + "。"
     prompt = pose_prompt_service.build_cat_prompt(
         appearance,
         action_text,
         background_text=_scene_text_from(state, step) or None,
         framing_extra=step.framing_extra or None,
+        crowd=str(step.crowd or "solo"),
     )
     if _style_text_of(step):
         prompt = prompt + "\n\n【全局质感（全程一致）】\n" + _style_text_of(step)
@@ -1716,6 +1773,24 @@ def _run_video_script_step(conn, recipe: Recipe, state: RecipeRunState, step: Re
             state, str(step.frame_from), ("images", "adhoc_image", "combo_image", "overlay"), "frame_from"
         )
         appearance_text = str(target.outputs.get("appearance") or "").strip()
+    elif step.subject_kind == "cat" and not step.frame_from:
+        # 脚本先行的猫配方：外观池在（后面的）猫首帧步上 —— 按同一把固定 key 掷骰，
+        # 脚本与首帧天然同一只猫（key = {run_id}:appearance，与 combo 步完全一致）
+        from charvar import wildcard
+
+        combo_step = next(
+            (
+                s for s in recipe.steps
+                if s.kind == "combo_image" and s.subject_kind == "cat" and s.appearances
+            ),
+            None,
+        )
+        if combo_step is None:
+            raise PresetError(f"{step.label}：cat 无图脚本需要配方里有带 appearances 外观池的猫首帧步")
+        pool = [str(w or "").strip() for w in combo_step.appearances if str(w or "").strip()]
+        appearance_text = wildcard.rng_for(
+            int(state.seed), f"{state.recipe_run_id}:appearance"
+        ).choice(pool)
     text_words = (
         script_service.pick_text_words(
             int(state.seed), f"{state.recipe_run_id}:textfx:{step.label}", list(step.text_pool) or None
@@ -1745,10 +1820,11 @@ def _run_video_script_step(conn, recipe: Recipe, state: RecipeRunState, step: Re
             safety_text=_safety_text_of(step),
             subject_kind=str(step.subject_kind or "person"),
             appearance_text=appearance_text,
+            crowd=str(step.crowd or "solo"),
         )
     except (llm.LLMError, ValueError) as exc:
         raise PresetError(f"{step.label}：{exc}", status=502) from exc
-    return {"script": data["script"], "clip_type": clip_type, "text_words": text_words}
+    return {"script": data["script"], "clip_type": clip_type, "text_words": text_words, "appearance": appearance_text}
 
 
 _HANDLERS = {

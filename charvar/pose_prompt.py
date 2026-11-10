@@ -173,13 +173,16 @@ def build_cat_prompt(
     *,
     background_text: str | None = None,
     framing_extra: str | None = None,
+    crowd: str = "solo",
 ) -> str:
     """无参考图的**猫主角**首帧提示词（random_cat_video 配方专用）。
 
     与 build_prompt 的人像文案群平行：没有 <imageN> 槽位 —— 外观（随机猫描写）
     承担身份锚，动作描述（自建猫动作库文本，起势+蓄势句）承担动作锚。结构：
     外观段 → 引导句+动作 → 构图句(+追加) → 场景句 → 禁令句。appearance 或
-    action_text 为空显式报错（外观池掷骰与文本动作描述不可能为空）。"""
+    action_text 为空显式报错（外观池掷骰与文本动作描述不可能为空）。
+    crowd="backdrop" = 允许远景虚焦的背景人物（市井合理性，地铁/街头/饭馆类舞台；
+    缺省 solo 一律禁人类）。"""
     appearance = str(appearance or "").strip()
     action_text = str(action_text or "").strip()
     if not appearance or not action_text:
@@ -192,6 +195,19 @@ def build_cat_prompt(
     if extra:
         framing = framing + "\n" + extra
     background = str(background_text or "").strip() or "背景简洁，突出主角。"
+    if (crowd or "solo").strip() == "backdrop":
+        guard = (
+            "主角猫是画面里唯一的清晰主角；描述里写到的背景人物只出现在远景并整体虚焦，"
+            "与猫零互动、不接近主角、不遮挡主角；"
+            "避免多余腿、多余肢体、关节扭曲与肢体粘连；毛发不要塑料感或贴图感；"
+            "画面中不出现文字水印。"
+        )
+    else:
+        guard = (
+            "画面固定为一只猫，不要出现人类、不要出现第二只动物；"
+            "避免多余腿、多余肢体、关节扭曲与肢体粘连；毛发不要塑料感或贴图感；"
+            "画面中不出现文字水印。"
+        )
     parts = [
         # 外观池条目按约定自带量词（「一只…」）；不带时补「一只」，避免「一只一只」叠加
         (f"主角是{appearance}。" if appearance.startswith("一只") else f"主角是一只{appearance}。")
@@ -199,11 +215,7 @@ def build_cat_prompt(
         "让主角猫做出下面的动作：\n" + action_text,
         framing,
         background,
-        (
-            "画面固定为一只猫，不要出现人类、不要出现第二只动物；"
-            "避免多余腿、多余肢体、关节扭曲与肢体粘连；毛发不要塑料感或贴图感；"
-            "画面中不出现文字水印。"
-        ),
+        guard,
     ]
     return "\n\n".join(parts)
 

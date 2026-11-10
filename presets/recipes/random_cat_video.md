@@ -1,22 +1,24 @@
 # random_cat_video · 随机荒诞猫视频
 
-五步的**生成配方**（末步 `video_model`）：随机掷出**一只随机生成的猫**（外观池掷骰）
-× 一个**猫荒诞动作**（自建文本池）→ 无参考图出一张猫首帧 → 直出一段 8 秒搞笑猫咪视频。
-**针对池而不是某条**——每跑一次换一批（动作换、猫也换）；YAML 里不写死任何一条动作/外观。
+五步的**生成配方**（末步 `video_model`），**脚本先行**（与随机贱猫小品同架构）：随机掷出
+**一只随机生成的猫**（外观池掷骰）× 一个**猫荒诞动作**（自建文本池）→ **先写视频脚本**
+（人工过目，零成本）→ LLM 按已定稿脚本设计场景 → 按场景+起手出猫首帧（人工过目）→
+直出一段 8 秒搞笑猫咪视频。**针对池而不是某条**——每跑一次换一批（动作换、猫也换）；
+YAML 里不写死任何一条动作/外观。
 
 | 步 | 干什么 | manual |
 |---|---|---|
 | `pick` 随机选库 | **只抽动作**：`studio` 库 `荒诞猫挑战` 分类的文本动作（`allow_text: true`，22 条混合池：拟人社 × 自然行为夸张）掷 1 条；没有 face/costume 目标——猫外观不在库里 | false |
-| `scene_design` 场景设计 | LLM 按动作描述+动作名出场景/光照文本；`hint:` 钉方向——猫日常可及的真实室内/户外场地（客厅/窗边/厨房台面/社区广场），开阔无遮挡 | false |
-| `combo_image` 首帧图 | **猫版无参考图首帧**（`subject_kind: cat`）：`appearances:` 外观池**掷骰出一只随机猫**（12 种毛色体型，掷骰 key 固定 = 首帧与脚本同一只）+ 猫动作文本 = 全部锚（`build_cat_prompt`，**没有任何 <imageN> 槽位**，ComfyUI 纯文生图 2k 9:16）；`framing_extra` 猫全身含尾完整入镜 | **true** |
-| `video_script` 视频脚本 | 看图脚本（`frame_from: 首帧图`）+ 大幅档 + `subject_kind: cat`（**猫版措辞**：「全程同一只猫」「不出现人类」等按真实首帧续编）；类型池掷骰喜剧标签 | false |
+| `video_script` 视频脚本 | **无图写稿**（无 `frame_from`）：视觉 LLM 只吃动作全文（含「下一拍」动态尾段）+ 大幅档 `amplitude: large` + 外观自掷（**掷骰 key 与首帧步同一把 = 同一只猫**）；类型池掷骰喜剧标签。**0–8s 分秒脚本在这里定稿，人工过目/改稿** | true（门停在场景步） |
+| `scene_design` 场景设计 | LLM 按动作 + **`script_from: 视频脚本`（已定稿脚本为最高依据：拍点的舞台/道具/方位都要装得下）** + hint 逆推规则出场景/光照文本 | false |
+| `combo_image` 首帧图 | **猫版无参考图首帧**（`subject_kind: cat`）：外观掷骰（同 key 复现脚本那只猫）+ `action_anchor: setup`（**只锚起手+机位段**，「下一拍」动态尾段不进图）+ 场景 + 双锁 → `build_cat_prompt` 全文本锚、无任何 <imageN> 槽位，ComfyUI 纯文生图 2k 9:16 | **true** |
 | `video_model` 成片 | 脚本 + 首帧 → OpenRouter 视频异步作业（`heygen/heygen-video-1`，8s 768p；实测 ≈$0.018/s，一条约 $0.14） | **true** |
 
 ## 运行
 
 ```bash
-python3 -m charvar.cli recipes run random_cat_video            # 选动作 + 场景，停在「首帧图」
-python3 -m charvar.cli recipes run random_cat_video --continue # 出猫首帧 + 写脚本，停在「成片」
+python3 -m charvar.cli recipes run random_cat_video            # 掷动作 + 写脚本，停在「场景设计」——先过目脚本（零成本）
+python3 -m charvar.cli recipes run random_cat_video --continue # 按脚本设计场景 + 出首帧，停在「成片」——过目首帧
 python3 -m charvar.cli recipes run random_cat_video --continue # 提交视频作业并轮询（真金白银）
 ```
 
@@ -26,12 +28,14 @@ python3 -m charvar.cli recipes run random_cat_video --continue # 提交视频作
 
 - **外观 = 文本池掷骰**：`combo_image.appearances:` 就是猫外观池（品种+体型+毛色+眼色，
   每条 20–30 字，**不写性格**——性格由动作带）。`wildcard.rng_for(seed, "{run_id}:appearance")`
-  掷一条并记进步 outputs；脚本步 `subject_kind: cat` 从首帧步 outputs **继承同一只猫**
-  （brief 里写【主角·外观（与首帧是同一只猫）】段）。加猫 = 改 YAML 池，零库零状态。
+  是固定 key：脚本步与首帧步**各滚同一把骰子**，结果恒相同（脚本先行后首帧还没生成，
+  外观不能再从首帧步继承）；`video_script.appearance` 记进步 outputs 可从 manifest 查。
+  加猫 = 改 YAML 池，零库零状态。
 - **一致性只在一条视频内成立**：每跑换一只猫（与三库配方「每跑换批」同语义）；
   要跨视频同一只猫（IP 猫系列）是后续方向——先出猫定妆图存档、后续步骤拿它当参考图。
-- **首帧与动作全部文本锚**（`pose_prompt.build_cat_prompt`）：外观段 + 「让主角猫做出
-  下面的动作」+ 构图/场景/禁令；无参考图 = ComfyUI 纯文生图（Playground 同通路）。
+- **首帧锚起手段**（`action_anchor: setup`）：池条目都是「起手定格 + 『下一拍』动态尾段」
+  结构，首帧只锚首个「下一拍」之前的静态起手+机位——跑动/拍打的动态词不进首帧提示词，
+  画面更干净；动态尾段仍全额进脚本 brief 当拍点材料。
 
 ## 安全层（防封）
 
@@ -51,13 +55,13 @@ python3 -m charvar.cli recipes run random_cat_video --continue # 提交视频作
   猫式蛙跳 / 扑追空气红点 / 疯狂甩毛 / 侧滚三圈翻肚皮 / 炸毛横跳表演 / 猫爬架旋转下扑
 
 带器械的条目（跑步机/扫地机/电子琴/键盘/扫帚/托盘/纸箱/猫爬架/镜子）在起势文本里
-点明道具，场景步会带进画面。新条目照现有写法（一只猫 + 身体事实 + 机位事实 + 蓄势句），
-写好灌库：`python3 -m charvar.cli pose import-studio`。
+点明道具，场景步按逆推规则跟着条目走。新条目照现有写法（一只猫 + 身体事实 + 机位事实 +
+蓄势句 + 「下一拍将开始…」动态尾段），写好灌库：`python3 -m charvar.cli pose import-studio`。
 
 ## 换池 / 调流程
 
 - 更换外观池：`combo_image.appearances:`；改喜剧标签：`video_script.types:`。
-- 质感/安全条款：`style_lock:` / `safety_lock:` 两处（combo_image 与 video_script）同改。
+- 质感/安全条款：`style_lock:` / `safety_lock:` 两处（video_script 与 combo_image）同改。
 - 视频模型：`video_model.model:`（动物表现不满意 → 换即梦 Seedance 或 OpenRouter 目录其他模型；
   换了模型注意该模型的时长/分辨率枚举）。
 - 关检查点：对应步 `manual: false`（首帧崩了也会烧视频费，斟酌）。
@@ -65,6 +69,6 @@ python3 -m charvar.cli recipes run random_cat_video --continue # 提交视频作
 ## 已知风险
 
 - **heygen 对猫主体的表现力是首期最大未知**：先单条验证；不行换模型（`model:` 一行）。
-- 首帧是纯文生图（无参考图）：猫外观由外观描述控制，偶尔品种特征会被弱化——不满意
-  就是首帧检查点重掷（删运行重建）。
+- 脚本无图写稿时 0 秒拍点与首帧的贴合靠「起手段同源」（同一掷骰 + setup 锚）：首帧与
+  脚本对不上就重掷首帧或手改脚本（脚本已定稿，改脚本不影响已花成本）。
 - 道具类动作（跑步机/扫地机器人等）依赖场景步与生图模型把道具画对；首帧不对就重掷或改该条目措辞。

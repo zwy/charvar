@@ -2344,23 +2344,26 @@ def cat_env(absurd_env):
 
 
 def test_repo_cat_recipe_parses():
-    """仓库随机猫配方解析合法；猫主角字段、外观池与检查点布局锁进测试。"""
+    """仓库随机猫配方解析合法（v2 脚本先行重排）；猫主角字段、外观池与检查点布局锁进测试。"""
     recipe = recipes_service.load_recipe("random_cat_video")
     assert [s.kind for s in recipe.steps] == [
-        "pick", "scene_design", "combo_image", "video_script", "video_model",
+        "pick", "video_script", "scene_design", "combo_image", "video_model",
     ]
     assert [recipes_service.manual_default(s) for s in recipe.steps] == [
-        False, False, True, False, True,
+        False, False, True, True, True,
     ]
-    pick = recipe.steps[0]
+    pick, script, scene, combo, video = recipe.steps
     assert pick.face is None and pick.costume is None
     assert pick.pose["sources"] == ["studio"] and pick.pose["allow_text"] is True
     assert pick.pose["categories"] == ["荒诞猫挑战"]
-    combo, script, video = recipe.steps[2], recipe.steps[3], recipe.steps[4]
-    assert combo.subject_kind == "cat" and len(combo.appearances) >= 12
-    assert script.subject_kind == "cat" and script.frame_from == "首帧图"
+    assert script.subject_kind == "cat" and script.frame_from is None
     assert script.amplitude == "large" and script.duration == 8
+    assert script.crowd == "solo" and combo.crowd == "solo"
+    assert scene.script_from == "视频脚本" and scene.input == "随机选库"
+    assert combo.scene_from == "场景设计" and combo.action_anchor == "setup"
+    assert combo.subject_kind == "cat" and len(combo.appearances) >= 12
     assert combo.safety_lock == script.safety_lock and len(combo.safety_lock) >= 3
+    assert video.frame_from == "首帧图" and video.prompt_from == "视频脚本"
     assert video.duration == 8 and video.resolution == "768p"
 
 
@@ -2443,9 +2446,17 @@ def test_cat_static_validation(tmp_path, monkeypatch):
         "appearances",
     )
     load_fail(
-        "bad_cat_noframe.yaml",
-        _CAT_YAML.replace("  frame_from: 首帧图\n", "", 1),
-        "frame_from",
+        "bad_cat_nopool.yaml",
+        (  # 脚本先行的猫配方（无 frame_from）必须能找到带 appearances 池的猫首帧步
+            "name: bad_cat_nopool\ntype: recipe\nversion: 1\ntitle: 随机猫（测试）\nseed: 9\n"
+            "steps:\n"
+            "- kind: pick\n  label: 选库\n  manual: false\n"
+            "  pose: {sources: [studio], categories: [荒诞猫挑战], angle: 正面, allow_text: true}\n"
+            "- kind: video_script\n  label: 脚本\n  manual: false\n  input: 选库\n"
+            "  subject_kind: cat\n  amplitude: skit\n  duration: 8\n"
+            "- kind: video_model\n  label: 成片\n  prompt_from: 脚本\n  duration: 8\n"
+        ),
+        "外观池",
     )
     load_fail(
         "bad_cat_wrong_step.yaml",
@@ -2503,21 +2514,24 @@ def test_repo_skit_recipe_parses():
     """仓库随机贱猫小品配方解析合法；剧本池分类、skit 档与检查点布局锁进测试。"""
     recipe = recipes_service.load_recipe("random_cat_skit_video")
     assert [s.kind for s in recipe.steps] == [
-        "pick", "scene_design", "combo_image", "video_script", "video_model",
+        "pick", "video_script", "scene_design", "combo_image", "video_model",
     ]
     assert [recipes_service.manual_default(s) for s in recipe.steps] == [
-        False, False, True, False, True,
+        False, False, True, True, True,
     ]
-    pick = recipe.steps[0]
+    pick, script, scene, combo, video = recipe.steps
     assert pick.face is None and pick.costume is None
     assert pick.pose["sources"] == ["studio"] and pick.pose["allow_text"] is True
     assert pick.pose["categories"] == ["荒诞猫剧本"]
-    combo, script, video = recipe.steps[2], recipe.steps[3], recipe.steps[4]
-    assert combo.subject_kind == "cat" and len(combo.appearances) >= 12
-    assert script.subject_kind == "cat" and script.frame_from == "首帧图"
+    assert script.subject_kind == "cat" and script.frame_from is None
     assert script.amplitude == "skit" and script.duration == 8
+    assert scene.script_from == "视频脚本" and scene.input == "随机选库"
+    assert script.crowd == "backdrop" and combo.crowd == "backdrop"
     assert "拟人" in (combo.framing_extra or "")
+    assert combo.scene_from == "场景设计" and combo.action_anchor == "setup"
+    assert combo.subject_kind == "cat" and len(combo.appearances) >= 12
     assert combo.safety_lock == script.safety_lock and len(combo.safety_lock) >= 3
+    assert video.frame_from == "首帧图" and video.prompt_from == "视频脚本"
     assert video.duration == 8 and video.resolution == "768p"
 
 
@@ -2574,3 +2588,351 @@ def test_skit_static_validation(tmp_path, monkeypatch):
     )
     with pytest.raises(PresetError, match="只接猫版"):
         recipes_service.load_recipe("bad_skit_person")
+
+
+# ---------- ⑧b 随机贱猫捣乱配方（amplitude=naughty：真猫恶作剧三拍，只接猫） ----------
+
+
+def test_repo_naughty_recipe_parses():
+    """仓库随机贱猫捣乱配方解析合法；捣乱池分类、naughty 档与检查点布局锁进测试。"""
+    recipe = recipes_service.load_recipe("random_cat_naughty_video")
+    assert [s.kind for s in recipe.steps] == [
+        "pick", "video_script", "scene_design", "combo_image", "video_model",
+    ]
+    assert [recipes_service.manual_default(s) for s in recipe.steps] == [
+        False, False, True, True, True,
+    ]
+    pick, script, scene, combo, video = recipe.steps
+    assert pick.face is None and pick.costume is None
+    assert pick.pose["sources"] == ["studio"] and pick.pose["allow_text"] is True
+    assert pick.pose["categories"] == ["捣乱猫现场"]
+    assert script.subject_kind == "cat" and script.frame_from is None
+    assert script.amplitude == "naughty" and script.duration == 8
+    assert scene.script_from == "视频脚本" and scene.input == "随机选库"
+    assert "居家捣乱舞台" in (scene.hint or "") and "视频脚本" in (scene.hint or "")
+    assert combo.subject_kind == "cat" and len(combo.appearances) >= 12
+    assert combo.scene_from == "场景设计" and combo.action_anchor == "setup"
+    assert combo.safety_lock == script.safety_lock and len(combo.safety_lock) >= 3
+    assert video.frame_from == "首帧图" and video.prompt_from == "视频脚本"
+    assert video.duration == 8 and video.resolution == "768p"
+
+
+def test_video_script_naughty_brief(monkeypatch):
+    """naughty 档：brief 换恶作剧三拍规则（盯上/得手/装无辜）与四足措辞；拟人规则不串入；人版报错。"""
+    from charvar import video_script as script_service
+
+    seen = []
+
+    def fake_call_llm(messages, model=None, config=None):
+        seen.append(messages)
+        return _script_stub_text()
+
+    monkeypatch.setattr(script_service, "call_llm", fake_call_llm)
+    script_service.write_script(
+        pose_text="一只猫四足蹲在茶几边缘。", pose_title="推杯下桌",
+        clip_type="贱猫案发现场", duration=8, amplitude="naughty",
+        subject_kind="cat", appearance_text="一只橘色中华田园猫",
+        safety_text="被捣乱的物品一律软着陆",
+    )
+    brief = seen[0][0]["content"]
+    assert "视频的主角是一只猫" in brief
+    assert "恶作剧三拍" in brief and "盯上" in brief and "装无辜" in brief
+    assert "四足着地的真猫" in brief and "不拟人直立" in brief
+    assert "双腿直立是这只猫的常态" not in brief
+    assert "8. 安全红线" in brief and "被捣乱的物品一律软着陆" in brief
+
+    with pytest.raises(ValueError, match="只接猫版"):
+        script_service.write_script(
+            pose_text="正面站定。", pose_title="捣乱",
+            clip_type="贱猫案发现场", duration=8, amplitude="naughty",
+        )
+
+
+def test_naughty_static_validation(tmp_path, monkeypatch):
+    """amplitude=naughty 配人版 → 解析期报错（恶作剧三拍措辞只接猫版捣乱剧本）。"""
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CHARVAR_PRESETS_DIR", str(tmp_path / "presets"))
+    base = tmp_path / "presets" / "recipes"
+    base.mkdir(parents=True, exist_ok=True)
+
+    (base / "bad_naughty_person.yaml").write_text(
+        _ABSURD_YAML.replace("amplitude: large", "amplitude: naughty").replace(
+            "name: demo_absurd", "name: bad_naughty_person"
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(PresetError, match="只接猫版"):
+        recipes_service.load_recipe("bad_naughty_person")
+
+
+# ---------- ⑨ combo 步 action_anchor（猫首帧只锚起手段，剧本尾段归脚本步） ----------
+
+
+def test_combo_action_anchor_setup(cat_env, monkeypatch):
+    """action_anchor=setup：首帧提示词只含起手+机位（无「下一拍」尾段），脚本 brief 仍吃全文。"""
+    conn = cat_env
+    from charvar import video_script as script_service
+
+    script_calls = []
+
+    def fake_script_llm(messages, model=None, config=None):
+        script_calls.append(messages)
+        return _script_stub_text()
+
+    _stub_llms(monkeypatch)
+    monkeypatch.setattr(script_service, "call_llm", fake_script_llm)
+    adhoc_reqs = _stub_adhoc_generate(monkeypatch)
+    video_submit = _stub_adhoc_video(
+        monkeypatch,
+        [{"status": "ready", "job_id": "j1", "model": "heygen/heygen-video-1"}],
+    )
+
+    base = Path(os.environ["CHARVAR_DATA_DIR"]) / "presets" / "recipes"
+    (base / "demo_skit_setup.yaml").write_text(
+        _CAT_YAML.replace("name: demo_cat", "name: demo_skit_setup").replace(
+            "  framing_extra: 猫全身含尾完整入镜。\n",
+            "  framing_extra: 猫全身含尾完整入镜。\n  action_anchor: setup\n",
+        ),
+        encoding="utf-8",
+    )
+    state = recipes_service.start_run(conn, "demo_skit_setup")
+    state = recipes_service.advance_state(conn, state.recipe_run_id)
+    combo_req = adhoc_reqs[-1]
+    assert "下一拍" not in combo_req.prompt
+    assert "全身绷紧蓄势待发" in combo_req.prompt and "全身含尾完整入镜。" in combo_req.prompt
+    # 脚本步仍吃整段描述（尾段三拍是脚本的拍点材料）
+    brief = script_calls[0][0]["content"]
+    if isinstance(brief, list):
+        brief = brief[0]["text"]
+    assert "下一拍" in brief
+    state = recipes_service.advance_state(conn, state.recipe_run_id)
+    assert state.status == "done"
+    assert video_submit[0].prompt == _script_stub_text()
+
+
+def test_action_anchor_static_validation(tmp_path, monkeypatch):
+    """action_anchor：放错步类型 / 配人版 → 解析期报错。"""
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CHARVAR_PRESETS_DIR", str(tmp_path / "presets"))
+    base = tmp_path / "presets" / "recipes"
+    base.mkdir(parents=True, exist_ok=True)
+
+    (base / "bad_anchor_step.yaml").write_text(
+        _CAT_YAML.replace("  amplitude: large", "  amplitude: large\n  action_anchor: setup").replace(
+            "name: demo_cat", "name: bad_anchor_step"
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(PresetError, match="只进 combo_image"):
+        recipes_service.load_recipe("bad_anchor_step")
+
+    (base / "bad_anchor_person.yaml").write_text(
+        _CAT_YAML.replace("name: demo_cat", "name: bad_anchor_person").replace(
+            "framing_extra: 猫全身含尾完整入镜。",
+            "framing_extra: 猫全身含尾完整入镜。\n  action_anchor: setup",
+        ).replace("subject_kind: cat\n", "subject_kind: person\n", 1),
+        encoding="utf-8",
+    )
+    with pytest.raises(PresetError, match="只接猫首帧"):
+        recipes_service.load_recipe("bad_anchor_person")
+
+
+# ---------- ⑩ 脚本先行链（猫剧本配方 v2：脚本定稿 → 场景按脚本 → 首帧 setup 锚） ----------
+
+
+def test_skit_script_first_flow(cat_env, monkeypatch):
+    """脚本先行链：无图猫脚本（外观同 key 自掷）→ 场景吃脚本 → 首帧 setup 锚 → 成片。"""
+    conn = cat_env
+    from charvar import scene_design as scene_service
+    from charvar import video_script as script_service
+
+    seen_scene = []
+
+    def scene_stub(messages, model=None, config=None):
+        seen_scene.append(messages)
+        return {"scene": _SCENE_TEXT}
+
+    seen_script = []
+
+    def fake_script_llm(messages, model=None, config=None):
+        seen_script.append(messages)
+        return _script_stub_text()
+
+    monkeypatch.setattr(scene_service, "_call_llm", scene_stub)
+    monkeypatch.setattr(script_service, "call_llm", fake_script_llm)
+    adhoc_reqs = _stub_adhoc_generate(monkeypatch)
+    video_submit = _stub_adhoc_video(
+        monkeypatch,
+        [{"status": "ready", "job_id": "j1", "model": "heygen/heygen-video-1"}],
+    )
+
+    base = Path(os.environ["CHARVAR_DATA_DIR"]) / "presets" / "recipes"
+    (base / "demo_skit_first.yaml").write_text(
+        """
+name: demo_skit_first
+type: recipe
+version: 1
+title: 随机猫（脚本先行测试）
+seed: 11
+steps:
+- kind: pick
+  label: 选库
+  manual: false
+  pose: {sources: [studio], categories: [荒诞猫挑战], angle: 正面, allow_text: true}
+- kind: video_script
+  label: 脚本
+  manual: false
+  input: 选库
+  subject_kind: cat
+  amplitude: skit
+  duration: 8
+  types: [拟人猫咪喜剧小品]
+- kind: scene_design
+  label: 场景
+  manual: false
+  input: 选库
+  script_from: 脚本
+  hint: 场景逆推剧本。
+- kind: combo_image
+  label: 首帧图
+  input: 选库
+  scene_from: 场景
+  subject_kind: cat
+  appearances: [一只矮胖结实的英短蓝猫，炭灰色短绒毛，铜色圆眼, 一只橘色中华田园猫，短毛橘白相间]
+  action_anchor: setup
+  framing_extra: 猫全身含尾完整入镜。
+  backend: comfyui
+  aspect: "9:16"
+  style_lock: [cinematic live-action]
+  safety_lock: [猫的毛发全程自然完整、毫无受伤痕迹，动作写轻盈活泼的玩闹表演]
+- kind: video_model
+  label: 成片
+  prompt_from: 脚本
+  frame_from: 首帧图
+  duration: 8
+  aspect: "9:16"
+""",
+        encoding="utf-8",
+    )
+
+    state = recipes_service.start_run(conn, "demo_skit_first")
+    # pick + 脚本 + 场景一次跑完（全 auto），停在首帧检查点
+    assert state.status == "waiting"
+    script_out = state.steps[1].outputs
+    appearance = script_out["appearance"]
+    assert appearance in (_CAT_APPEARANCE, "一只橘色中华田园猫，短毛橘白相间")
+    assert script_out["script"] == _script_stub_text()
+    # 无图猫脚本：brief 是纯文本（无附图），带【主角·外观】与 skit 三拍规则
+    brief = seen_script[0][0]["content"]
+    assert isinstance(brief, str)
+    assert "视频的主角是一只猫" in brief and "主角·外观（与首帧是同一只猫）" in brief
+    assert appearance in brief and "按剧本三拍演" in brief
+    # 场景步以已定稿脚本为据
+    scene_brief = seen_scene[0][0]["content"]
+    assert "【视频脚本（已定稿，首帧画面从这些拍点开始）】" in scene_brief
+    assert _script_stub_text() in scene_brief and "场景逆推剧本。" in scene_brief
+
+    state = recipes_service.advance_state(conn, state.recipe_run_id)
+    combo_req = adhoc_reqs[-1]
+    combo_out = state.steps[3].outputs
+    assert combo_out["appearance"] == appearance  # 首帧滚的是同一把骰子
+    assert appearance in combo_req.prompt and "下一拍" not in combo_req.prompt
+    assert _SCENE_TEXT in combo_req.prompt
+
+    state = recipes_service.advance_state(conn, state.recipe_run_id)
+    assert state.status == "done"
+    assert video_submit[0].prompt == _script_stub_text()
+
+
+def test_script_from_static_validation(tmp_path, monkeypatch):
+    """script_from：只进 scene_design；target 须是本步之前的 video_script 步。"""
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CHARVAR_PRESETS_DIR", str(tmp_path / "presets"))
+    base = tmp_path / "presets" / "recipes"
+    base.mkdir(parents=True, exist_ok=True)
+
+    def load_fail(stem: str, text: str, match: str) -> None:
+        (base / stem).write_text(text, encoding="utf-8")
+        with pytest.raises(PresetError, match=match):
+            recipes_service.load_recipe(stem[:-5])
+
+    load_fail(
+        "bad_script_on_script.yaml",
+        _CAT_YAML.replace("  amplitude: large", "  amplitude: large\n  script_from: 脚本").replace(
+            "name: demo_cat", "name: bad_script_on_script"
+        ),
+        "只对 scene_design",
+    )
+    load_fail(
+        "bad_script_target.yaml",
+        _CAT_YAML.replace("  hint: 猫场景方向。", "  hint: 猫场景方向。\n  script_from: 选库").replace(
+            "name: demo_cat", "name: bad_script_target"
+        ),
+        "script_from",
+    )
+
+
+# ---------- ⑫ crowd 档（背景人物：solo 缺省 / backdrop 远景虚焦路人） ----------
+
+
+def test_crowd_static_validation(tmp_path, monkeypatch):
+    """crowd：只进 combo_image/video_script；首帧与脚本必须同档。"""
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CHARVAR_PRESETS_DIR", str(tmp_path / "presets"))
+    base = tmp_path / "presets" / "recipes"
+    base.mkdir(parents=True, exist_ok=True)
+
+    def load_fail(stem: str, text: str, match: str) -> None:
+        (base / stem).write_text(text, encoding="utf-8")
+        with pytest.raises(PresetError, match=match):
+            recipes_service.load_recipe(stem[:-5])
+
+    load_fail(
+        "bad_crowd_scene.yaml",
+        _CAT_YAML.replace("  hint: 猫场景方向。", "  hint: 猫场景方向。\n  crowd: backdrop").replace(
+            "name: demo_cat", "name: bad_crowd_scene"
+        ),
+        "只对 combo_image/video_script",
+    )
+    load_fail(
+        "bad_crowd_mismatch.yaml",
+        _CAT_YAML.replace("  amplitude: large", "  amplitude: large\n  crowd: backdrop").replace(
+            "name: demo_cat", "name: bad_crowd_mismatch"
+        ),
+        "crowd 不一致",
+    )
+
+
+def test_crowd_prompt_and_brief(monkeypatch):
+    """backdrop 档：首帧禁人句换成远景虚焦措辞；猫脚本硬规则同步放开；solo 维持旧措辞。"""
+    from charvar import pose_prompt as pp
+    from charvar import video_script as script_service
+
+    solo = pp.build_cat_prompt("一只橘猫", "一只猫蹲坐。", background_text=None, framing_extra=None)
+    back = pp.build_cat_prompt(
+        "一只橘猫", "一只猫蹲坐。", background_text=None, framing_extra=None, crowd="backdrop"
+    )
+    assert "不要出现人类" in solo
+    assert "不要出现人类" not in back and "唯一的清晰主角" in back and "远景并整体虚焦" in back
+
+    seen = []
+
+    def fake_call_llm(messages, model=None, config=None):
+        seen.append(messages)
+        return _script_stub_text()
+
+    monkeypatch.setattr(script_service, "call_llm", fake_call_llm)
+    script_service.write_script(
+        pose_text="一只猫四足蹲坐，远处背景有虚焦的路人剪影，与猫零互动。", pose_title="冲镜挑衅",
+        clip_type="贱猫整活独角戏", duration=8, amplitude="skit", subject_kind="cat", crowd="backdrop",
+    )
+    brief = seen[0][0]["content"]
+    assert isinstance(brief, str)
+    assert "远景并整体虚焦" in brief and "不走向猫" in brief and "不出现人类" not in brief
+
+    seen.clear()
+    script_service.write_script(
+        pose_text="一只猫蹲坐。", pose_title="站立贱舞",
+        clip_type="贱猫整活独角戏", duration=8, amplitude="skit", subject_kind="cat",
+    )
+    assert "不出现人类" in seen[0][0]["content"]

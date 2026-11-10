@@ -242,7 +242,7 @@ DB → 仓库对偶：`charvar subject export <id>` 快照成 `presets/subjects/
 - **状态**：`data/generated/recipe_runs/<recipe_id>/manifest.json`（recipe_id 白名单 `^recipe_[A-Za-z0-9_.-]+$` 且无 `..`，同 adhoc 严格度），**不建 DB 表**、不落 runs 表；配方定义改版（步数不一致）时 continue 拒绝，要求重建。
 - **入口三处同语义**：`charvar recipes list|run|status`（`--continue` 续最近一次）、`/recipes*` API、「配方」页签（`recipes.js`）。
 - 示例配方：`presets/recipes/stockings_showcase.yaml`（真出 27 张图，跑前想清楚）、`presets/recipes/model_clip_demo.yaml`（生成配方，真跑要 key）。
-- **随机三库配方**（舞蹈 `random_dance_video`：站姿池/去包帽；MV `random_mv_video`：多镜/伴舞；特写 `random_mv_video_up`：特写大字；荒诞 `random_absurd_video`：白名单池/安全锁；猫 `random_cat_video`：随机猫/猫池；贱剧 `random_cat_skit_video`：剧本池/三拍）：`pick` 随机选角（脸×动作×服饰）→ `scene_design` → `combo_image` → `video_script`（看首帧）→ `video_model`。种子含 run_id：每跑换批。
+- **随机三库配方**（舞蹈 `random_dance_video`：站姿池；MV `random_mv_video`：多镜/伴舞；`random_mv_video_up`：特写大字；荒诞 `random_absurd_video`：白名单池/安全锁；猫 `random_cat_video`：随机猫/猫池；贱剧 `random_cat_skit_video`：剧本池/三拍；捣乱 `random_cat_naughty_video`：捣乱池/装无辜）：`pick` 随机选角 → 脚本/场景/首帧（猫系脚本先行）→ `video_model`。种子含 run_id：每跑换批。
 
 ### 生成步与参考视频
 

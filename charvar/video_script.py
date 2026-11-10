@@ -12,6 +12,10 @@
 追加编排结构规则（起势 → 主段逐段升级 → 收尾定格），正文其余字节不变 —— 舞蹈变体
 配方即此用法；normal 档保持原 brief（向后兼容）。
 
+拟人贱剧档（``amplitude="skit"``，只接猫）：规则 5–7 换「起手—转折—收尾」剧本三拍版，
+双腿拟人身手 —— 贱猫小品配方即此用法。真猫捣乱档（``amplitude="naughty"``，只接猫）：
+规则 5–7 换「盯上—得手—装无辜」恶作剧三拍版，四足真猫身手 —— 贱猫捣乱配方即此用法。
+
 安全红线（``safety_text``）：【安全红线（全程一致）】材料段 + 输出要求追加「逐条落进
 『避免出现』节」的规则 —— 组合 random_absurd_video 配方即此用法；多镜模式不接（显式报错）。
 
@@ -75,6 +79,7 @@ def _brief(
     safety_text: str = "",
     subject_kind: str = "person",
     appearance_text: str = "",
+    crowd: str = "solo",
 ) -> str:
     is_cat = str(subject_kind or "person") == "cat"
     scene_line = f"【场景与光线（来自场景设计步，保持与首帧一致）】\n{scene_text}\n" if scene_text else ""
@@ -144,6 +149,23 @@ def _brief(
             "7. 编排结构：起手——0 秒从首帧姿态直接带出起手段；转折——中段严格按脚本描述"
             "完成假动作与反转；收尾——按脚本收在贱兮兮的对镜定格亮相，表情与尾巴留一点余韵。"
         )
+    elif amplitude == "naughty":
+        if not is_cat:
+            raise ValueError("amplitude=naughty 目前只接猫版捣乱剧本（subject_kind=cat）")
+        pose_rule = (
+            "5. 按起始姿态合理设计：这只猫是四足着地的真猫，一切动作按真实猫科动物的身手与"
+            "体型设计，不拟人直立、不说人话；首帧里的被捣乱物品（杯、碗、纸巾、袜子、玩具等）"
+            "全程按脚本轨迹流转，其余环境物件保持原位，不凭空换位。\n"
+        )
+        amp_rules = (
+            "6. 这是真实猫咪捣乱喜剧，按恶作剧三拍演：盯上——起手就带着明显的坏主意（眯眼"
+            "斜视、悄悄挪近、缓缓抬爪蓄势）；得手——捣乱动作干脆利落一次到位（拍、推、扒、"
+            "掀，不拖泥带水）；装无辜——得手后立刻切换无辜表情（扭头看镜头、舔爪、假装打"
+            "呵欠、若无其事甩尾），表情反差就是笑点，眼神戏贯穿全程。\n"
+            "7. 编排结构：盯上——0 秒从首帧姿态直接带出起手段；得手——中段按脚本完成捣乱"
+            "动作，被捣乱的物品按脚本软着陆；装无辜——收尾按脚本收在装无辜的对镜定格，表情"
+            "与尾巴留余韵。"
+        )
     elif amplitude == "large":
         if is_cat:
             pose_rule = (
@@ -193,7 +215,7 @@ def _brief(
             )
             amp_rules = "6. 动作幅度适中，四肢与手指结构连贯清楚，不做镜头前的怪异扭曲。"
     safety_rule = (
-        f"{8 if amplitude in ('large', 'skit') else 7}. 安全红线：把【安全红线】里的每一条写进「避免出现」"
+        f"{8 if amplitude in ('large', 'skit', 'naughty') else 7}. 安全红线：把【安全红线】里的每一条写进「避免出现」"
         + ("一节并贯穿动作、体态与表情的描写" if is_cat else "一节并贯穿动作、衣着、表情的描写")
         + "，脚本正文不得违反其中任何一条。\n"
     ) if safety_text else ""
@@ -215,10 +237,19 @@ def _brief(
         + ("身体、四肢与尾巴" if is_cat else "身体与四肢")
         + "的连续动作，前一段自然带出后一段。\n"
         + (
-            "3. 硬规则：全程同一只猫，同毛色同花纹；背景与光线全程与首帧一致；基本固定"
-            "机位一镜到底（最多轻微缓推）；猫始终留在画面内；结尾在自然的动作余韵中"
-            "收束，不要突然僵住；不出现人类、不出现第二只猫或其他动物、不切镜头、"
-            "不换背景、不出现文字水印。\n"
+            (
+                "3. 硬规则：全程同一只猫，同毛色同花纹；背景与光线全程与首帧一致；基本固定"
+                "机位一镜到底（最多轻微缓推）；猫始终留在画面内；结尾在自然的动作余韵中"
+                "收束，不要突然僵住；"
+                + (
+                    "不出现第二只猫或其他动物；如有场景人物只允许出现在远景并整体虚焦，"
+                    "与猫零互动（不走向猫、不触碰猫、不新增情节）、不切镜头、"
+                    "不换背景、不出现文字水印。\n"
+                    if (crowd or "solo").strip() == "backdrop"
+                    else "不出现人类、不出现第二只猫或其他动物、不切镜头、"
+                    "不换背景、不出现文字水印。\n"
+                )
+            )
             if is_cat
             else
             "3. 硬规则：全程同一名人物、同发型同服装；背景与光线全程与首帧一致；基本固定"
@@ -454,14 +485,17 @@ def write_script(
     safety_text: str = "",
     subject_kind: str = "person",
     appearance_text: str = "",
+    crowd: str = "solo",
 ) -> dict:
     """写视频脚本；返回 {"script", "clip_type"}。LLM 失败/输出不合法抛 LLMError/ValueError。
 
     image_path 非空 = 看图模式：messages 附上首帧图（PIL 压到长边 ≤1280 再 base64），
     brief 换「以附图实际姿态接续」措辞 —— 配方步传 combo_image 的真实产物进来。
     amplitude="large" = 大幅度档：规则 5–7 换大幅版并追加编排结构规则；amplitude="skit"
-    = 拟人贱剧档（只接猫）：规则 5–7 换「起手—转折—收尾」剧本三拍版；缺省 normal
+    = 拟人贱剧档（只接猫）：规则 5–7 换「起手—转折—收尾」剧本三拍版；amplitude="naughty"
+    = 真猫捣乱档（只接猫）：规则 5–7 换「盯上—得手—装无辜」恶作剧三拍版；缺省 normal
     保持原 brief 不变（向后兼容）。
+    crowd="backdrop" = 猫版硬规则允许远景虚焦的背景人物（与 crowd 步档同一开关）。
     multishot=True = 多镜头 MV 分镜：编号镜头+分秒切点+机位运镜，正文后附【实录声场】
     【配乐】两段；ensemble 配合 multishot 写伴舞条款；shots 给定镜头数（缺省按时长推）。
     opening="face"（须 multishot）= 特写开场：第 1 镜保持面部特写，第 2 镜起切全身。
@@ -508,6 +542,7 @@ def write_script(
             safety_text=str(safety_text or "").strip(),
             subject_kind=str(subject_kind or "person"),
             appearance_text=str(appearance_text or "").strip(),
+            crowd=str(crowd or "solo"),
         )
     if image_path:
         messages = [
