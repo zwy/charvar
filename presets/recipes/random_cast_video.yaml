@@ -1,7 +1,7 @@
 ---
 name: random_cast_video
 type: recipe
-version: 1
+version: 3
 title: 随机三库组合：人脸×单人动作×服饰 → 首帧 → 8 秒视频
 doc: random_cast_video.md
 seed: 0
@@ -13,7 +13,9 @@ steps:
     sources: [face-db-01, face-db-02-cn, face-db-03-cn]
     section: face
   pose:
-    sources: [pose-db-01, pose-db-02]
+    sources: [pose-db-02]
+    lines: [全身1人・セクシー系, 全身1人・標準系]
+    single: true
     angle: 正面
   costume:
     sources: [costume-db-01, studio]
@@ -22,6 +24,7 @@ steps:
   label: 场景设计
   manual: false
   input: 随机选库
+  hint: 这是单人人像短视频的画面场景：与服饰风格、动作气质相符的有信息量的真实场景（街头、咖啡馆、海边、庭院、和室、健身房、居家房间等），地面与纵深清晰、前景无遮挡；人物四周留出活动空间；自然光或贴合场景的人造光，光照方向与色调统一，不要纯摄影棚布景。
 
 - kind: combo_image
   label: 首帧图
@@ -30,6 +33,10 @@ steps:
   backend: comfyui
   resolution: 2k
   aspect: "9:16"
+  style_lock:
+  - cinematic live-action，真人实拍电影感画质
+  - high-key bright lighting，高调明亮打光（画面明亮通透、阴影浅、对比柔和，色彩清透粉嫩）
+  - 全片同一调色与光线风格，任何镜头不变暗、不变灰、不换画风
 
 - kind: video_script
   label: 视频脚本
@@ -38,12 +45,17 @@ steps:
   scene_from: 场景设计
   frame_from: 首帧图
   duration: 8
+  style_lock:
+  - cinematic live-action，真人实拍电影感画质
+  - high-key bright lighting，高调明亮打光（画面明亮通透、阴影浅、对比柔和，色彩清透粉嫩）
+  - 全片同一调色与光线风格，任何镜头不变暗、不变灰、不换画风
 
 - kind: video_model
   label: 成片
   prompt_from: 视频脚本
   frame_from: 首帧图
   frame_slot: first_frame
+  model: heygen/heygen-video-1
   duration: 8
   resolution: 768p
   aspect: "9:16"

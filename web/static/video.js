@@ -750,7 +750,7 @@ $("#btn-video-generate").addEventListener("click", async () => {
     const out = await api("/videos/generate", { method: "POST", body: JSON.stringify(body) });
     renderVideoResult(out); // pending 阶段先给出 run_id/manifest 信息，轮询起来后更新
     startVideoPolling(out.run_id, videoState.backend);
-    loadVideoRecent();
+    loadVideoRecent(0); // 新作业必然在最前，回到第一页看它
   } catch (err) {
     setStatus($("#video-status"), `提交失败：${err.message}`, true);
     btn.disabled = false;
@@ -862,20 +862,49 @@ function renderVideoResult(s) {
 
 /* ---------- 最近生成 ---------- */
 
-async function loadVideoRecent() {
+/* ---------- 最近生成（分页） ---------- */
+const VIDEO_RECENT_PAGE_SIZE = 24;
+const videoRecentState = { page: 0, seq: 0 };
+
+async function loadVideoRecent(page = videoRecentState.page) {
+  const seq = ++videoRecentState.seq; // 快速连点/并发的旧响应不回写新页
+  videoRecentState.page = Math.max(0, page);
   const box = $("#video-recent");
   try {
-    const records = await api("/videos?limit=24");
+    const offset = videoRecentState.page * VIDEO_RECENT_PAGE_SIZE;
+    const { items, total } = await apiPaged(
+      `/videos?limit=${VIDEO_RECENT_PAGE_SIZE}&offset=${offset}`
+    );
+    if (seq !== videoRecentState.seq) return;
     box.innerHTML = "";
-    if (!records.length) {
-      box.innerHTML = `<span class="hint">还没有视频记录</span>`;
+    if (!items.length) {
+      if (videoRecentState.page > 0) {
+        // 过了末页（服务端记录被删过）：留在原页位，上一页可退回
+        box.innerHTML = `<span class="hint">这一页没有记录</span>`;
+        refreshPager(box, "video-recent-pager", {
+          page: videoRecentState.page,
+          pageSize: VIDEO_RECENT_PAGE_SIZE,
+          total,
+          goto: loadVideoRecent,
+        });
+      } else {
+        // 全库为空：老文案 + 不出分页条
+        box.innerHTML = `<span class="hint">还没有视频记录</span>`;
+        document.getElementById("video-recent-pager")?.remove();
+      }
       return;
     }
-    for (const rec of records) {
+    for (const rec of items) {
       box.appendChild(buildVideoRecentCard(rec));
     }
-    // 页面刷新后接着盯生成中的作业（跨刷新不断线）
-    const pending = records.find((r) => r.status === "pending" || r.status === "in_progress");
+    refreshPager(box, "video-recent-pager", {
+      page: videoRecentState.page,
+      pageSize: VIDEO_RECENT_PAGE_SIZE,
+      total,
+      goto: loadVideoRecent,
+    });
+    // 页面刷新后接着盯生成中的作业（跨刷新不断线）；只看当前页，翻走就不续盯（回页 0 会再接上）
+    const pending = items.find((r) => r.status === "pending" || r.status === "in_progress");
     if (pending && videoState.activeRun !== pending.run_id) {
       startVideoPolling(pending.run_id, pending.backend);
     }
@@ -969,7 +998,7 @@ function buildVideoRecentCard(rec) {
   return card;
 }
 
-$("#btn-video-recent-refresh").addEventListener("click", loadVideoRecent);
+$("#btn-video-recent-refresh").addEventListener("click", () => loadVideoRecent());
 
 /* ---------- 供应商切换（档位各记各的，切回不重置） ---------- */
 

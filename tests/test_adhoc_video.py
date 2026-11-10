@@ -450,3 +450,30 @@ def test_refresh_treats_cancelled_as_terminal(env, monkeypatch):
     summary = adhoc_video.refresh(pending.run_id)
     assert summary["status"] == "failed"
     assert "cancelled" in summary["error"].lower() or "cancel" in summary["error"].lower()
+
+
+# ---------- 最近生成翻页 ----------
+
+
+def test_list_recent_offset_paging(env):
+    root = adhoc_video.video_root()
+    ids = [f"video_20300101-0000{i:02d}_vv{i}" for i in range(1, 6)]
+    for i, run_id in enumerate(ids, 1):
+        d = root / run_id
+        d.mkdir(parents=True)
+        (d / "manifest.json").write_text(
+            json.dumps({"created_at": "", "status": "ready", "request": {"prompt": run_id}}),
+            encoding="utf-8",
+        )
+    assert adhoc_video.count_recent() == 5
+    # 名字倒序 = 时间倒序
+    page1 = adhoc_video.list_recent(limit=3)
+    assert [r["run_id"] for r in page1] == list(reversed(ids[2:]))
+    assert [r["run_id"] for r in adhoc_video.list_recent(limit=3, offset=3)] == [
+        "video_20300101-000002_vv2",
+        "video_20300101-000001_vv1",
+    ]
+    assert adhoc_video.list_recent(limit=3, offset=99) == []
+    # 没有 manifest 的目录不算记录
+    (root / "video_20300101-000099_zz").mkdir()
+    assert adhoc_video.count_recent() == 5

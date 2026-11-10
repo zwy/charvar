@@ -379,3 +379,27 @@ def test_adhoc_generate_dreamina_backend(client, monkeypatch):
     assert out["provider"] == "dreamina"
     assert out["prompt_id"] == "dm-1"
     assert out["image_url"].startswith("/adhoc/")
+
+
+def test_list_offset_and_total_header(client):
+    """列表本体保持裸数组（老调用方兼容），offset 翻页 + 总数走 X-Total-Count 响应头。"""
+    from charvar import paths
+
+    root = paths.data_dir() / "generated" / "adhoc"
+    for i in (1, 2, 3):
+        d = root / f"adhoc_20300101-0000{i:02d}_tt{i}"
+        d.mkdir(parents=True)
+        (d / "manifest.json").write_text(
+            json.dumps({"request": {"prompt": f"p{i}", "backend": "comfyui"}}),
+            encoding="utf-8",
+        )
+    resp = client.get("/adhoc?limit=2")
+    assert resp.headers["x-total-count"] == "3"
+    assert resp.json()[-1]["prompt"] == "p2"
+    resp2 = client.get("/adhoc?limit=2&offset=2")
+    assert resp2.headers["x-total-count"] == "3"
+    assert [r["prompt"] for r in resp2.json()] == ["p1"]
+    # 越界页为空数组但总数仍在
+    resp3 = client.get("/adhoc?limit=2&offset=9")
+    assert resp3.json() == []
+    assert resp3.headers["x-total-count"] == "3"

@@ -297,12 +297,22 @@ function renderStepOutputs(st, body) {
     for (const card of cards) {
       const fig = document.createElement("figure");
       fig.style.cssText = "margin:0;width:88px;";
-      const img = document.createElement("img");
-      img.src = card.url;
-      img.alt = card.title;
-      img.loading = "lazy";
-      img.style.cssText = "width:88px;height:116px;object-fit:cover;border-radius:6px;display:block;";
-      fig.appendChild(img);
+      if (card.url) {
+        const img = document.createElement("img");
+        img.src = card.url;
+        img.alt = card.title;
+        img.loading = "lazy";
+        img.style.cssText = "width:88px;height:116px;object-fit:cover;border-radius:6px;display:block;";
+        fig.appendChild(img);
+      } else {
+        // 无图条目（如文本动作）：不出破图，占位块照常给标题
+        const ph = document.createElement("div");
+        ph.textContent = "无图 · 文本";
+        ph.style.cssText =
+          "width:88px;height:116px;border:1px dashed var(--line,#ccc);border-radius:6px;" +
+          "display:flex;align-items:center;justify-content:center;font-size:11px;color:#888;";
+        fig.appendChild(ph);
+      }
       const cap = document.createElement("figcaption");
       cap.textContent = card.title;
       cap.style.cssText = "font-size:12px;margin-top:4px;word-break:break-all;";

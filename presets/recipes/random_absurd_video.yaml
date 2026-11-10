@@ -1,0 +1,79 @@
+---
+name: random_absurd_video
+type: recipe
+version: 1
+title: 随机荒诞动作：人脸×自建荒诞动作池×服饰 → 首帧 → 8 秒喜剧视频
+doc: random_absurd_video.md
+seed: 0
+steps:
+- kind: pick
+  label: 随机选库
+  manual: false
+  face:
+    sources: [face-db-01]
+    section: face
+  pose:
+    sources: [studio]
+    categories: [荒诞挑战]
+    angle: 正面
+    allow_text: true
+  costume:
+    sources: [costume-db-01]
+    categories: [春, 夏, 秋, 冬, パーティ]
+
+- kind: scene_design
+  label: 场景设计
+  manual: false
+  input: 随机选库
+  hint: 这是搞笑动作挑战短视频的首帧，场景是开阔、安全、地面干净平整的真实场地（公园草坪、
+    校园操场、室内木地板房间、小区空地广场等），人物前方留出充分的活动空间、无前景遮挡；
+    光照自然明亮（白天自然光或贴合场景的室内光）；整体氛围轻松欢乐。
+
+- kind: combo_image
+  label: 首帧图
+  input: 随机选库
+  scene_from: 场景设计
+  strip_accessories: true
+  framing_extra: 这是搞笑动作挑战的首帧图：全身入镜（头顶到脚完整），头顶与画面四周留出充分余白，
+    让后续视频的大幅度荒诞动作（跳跃/爬行/翻滚/旋转）始终保持在画面内；地面完整可见；
+    人物双手不持物、头上不戴帽、身上不挎包。
+  backend: comfyui
+  resolution: 2k
+  aspect: "9:16"
+  style_lock:
+  - cinematic live-action，真人实拍电影感画质
+  - high-key bright lighting，高调明亮打光（画面明亮通透、阴影浅、对比柔和，色彩清透粉嫩）
+  - 全片同一调色与光线风格，任何镜头不变暗、不变灰、不换画风
+  safety_lock:
+  - 人物衣着全程完整覆盖：无裸露、无透视、无性暗示姿势，服装不得滑落走光
+  - 动作语境是无害的搞笑挑战或动物模仿秀：表情夸张欢乐，不含疼痛、惊恐、暴力与低俗元素
+  - 跌倒、翻滚、倒地一律写成轻盈笨拙的喜剧动作，人物毫发无损、落地稳当
+
+- kind: video_script
+  label: 视频脚本
+  manual: false
+  input: 随机选库
+  scene_from: 场景设计
+  frame_from: 首帧图
+  amplitude: large
+  duration: 8
+  types: [荒诞搞笑动作挑战, 动物模仿趣味挑战赛, 失控喜剧运动会, 无厘头肢体喜剧]
+  style_lock:
+  - cinematic live-action，真人实拍电影感画质
+  - high-key bright lighting，高调明亮打光（画面明亮通透、阴影浅、对比柔和，色彩清透粉嫩）
+  - 全片同一调色与光线风格，任何镜头不变暗、不变灰、不换画风
+  safety_lock:
+  - 人物衣着全程完整覆盖：无裸露、无透视、无性暗示姿势，服装不得滑落走光
+  - 动作语境是无害的搞笑挑战或动物模仿秀：表情夸张欢乐，不含疼痛、惊恐、暴力与低俗元素
+  - 跌倒、翻滚、倒地一律写成轻盈笨拙的喜剧动作，人物毫发无损、落地稳当
+
+- kind: video_model
+  label: 成片
+  prompt_from: 视频脚本
+  frame_from: 首帧图
+  frame_slot: first_frame
+  model: heygen/heygen-video-1
+  duration: 8
+  resolution: 768p
+  aspect: "9:16"
+  wait_s: 600

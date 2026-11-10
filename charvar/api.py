@@ -2069,9 +2069,17 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         return payload
 
     @app.get("/adhoc")
-    def api_adhoc_list(limit: int = Query(20, ge=1, le=100)) -> list[dict[str, Any]]:
-        """最近的 Playground 记录（读 manifest.json；不落 runs 表）。"""
-        return adhoc_service.list_recent(limit)
+    def api_adhoc_list(
+        response: Response,
+        limit: int = Query(20, ge=1, le=100),
+        offset: int = Query(0, ge=0),
+    ) -> list[dict[str, Any]]:
+        """最近的 Playground 记录（读 manifest.json；不落 runs 表）。
+
+        列表本体保持裸数组（老调用方不受影响）；总数走 X-Total-Count 响应头，给「最近生成」翻页。
+        """
+        response.headers["X-Total-Count"] = str(adhoc_service.count_recent())
+        return adhoc_service.list_recent(limit, offset)
 
     @app.get("/adhoc/{run_id}/image")
     def api_adhoc_image(run_id: str) -> FileResponse:
@@ -2301,9 +2309,17 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         return summary
 
     @app.get("/videos")
-    def api_video_list(limit: int = Query(20, ge=1, le=100)) -> list[dict[str, Any]]:
-        """最近的 Playground 视频记录（读 manifest.json；不落 runs 表）。"""
-        return adhoc_video_service.list_recent(limit)
+    def api_video_list(
+        response: Response,
+        limit: int = Query(20, ge=1, le=100),
+        offset: int = Query(0, ge=0),
+    ) -> list[dict[str, Any]]:
+        """最近的 Playground 视频记录（读 manifest.json；不落 runs 表）。
+
+        列表本体保持裸数组（老调用方不受影响）；总数走 X-Total-Count 响应头，给「最近生成」翻页。
+        """
+        response.headers["X-Total-Count"] = str(adhoc_video_service.count_recent())
+        return adhoc_video_service.list_recent(limit, offset)
 
     @app.get("/videos/{run_id}/video")
     def api_video_file(run_id: str) -> FileResponse:
@@ -2397,9 +2413,17 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         return payload
 
     @app.get("/tts")
-    def api_tts_list(limit: int = Query(20, ge=1, le=100)) -> list[dict[str, Any]]:
-        """最近的 Playground 语音记录（读 manifest.json；不落 runs 表）。"""
-        return adhoc_tts_service.list_recent(limit)
+    def api_tts_list(
+        response: Response,
+        limit: int = Query(20, ge=1, le=100),
+        offset: int = Query(0, ge=0),
+    ) -> list[dict[str, Any]]:
+        """最近的 Playground 语音记录（读 manifest.json；不落 runs 表）。
+
+        列表本体保持裸数组（老调用方不受影响）；总数走 X-Total-Count 响应头，给「最近生成」翻页。
+        """
+        response.headers["X-Total-Count"] = str(adhoc_tts_service.count_recent())
+        return adhoc_tts_service.list_recent(limit, offset)
 
     @app.get("/tts/{run_id}/audio")
     def api_tts_audio(run_id: str) -> FileResponse:

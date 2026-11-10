@@ -12,6 +12,9 @@
 追加编排结构规则（起势 → 主段逐段升级 → 收尾定格），正文其余字节不变 —— 舞蹈变体
 配方即此用法；normal 档保持原 brief（向后兼容）。
 
+安全红线（``safety_text``）：【安全红线（全程一致）】材料段 + 输出要求追加「逐条落进
+『避免出现』节」的规则 —— 组合 random_absurd_video 配方即此用法；多镜模式不接（显式报错）。
+
 多镜头 MV 模式（``write_script(multishot=True)``）：编号镜头 + 每镜起始秒切点 + 机位
 运镜的分镜结构，正文后附【实录声场】【配乐】两段（支持音频生成的模型照此出声，
 不支持的作氛围描述读取）；``ensemble`` = 伴舞从第 2 镜入画、``shots`` = 镜头数
@@ -69,9 +72,11 @@ def _brief(
     amplitude: str = "normal",
     image_attached: bool = False,
     style_text: str = "",
+    safety_text: str = "",
 ) -> str:
     scene_line = f"【场景与光线（来自场景设计步，保持与首帧一致）】\n{scene_text}\n" if scene_text else ""
     style_line = f"【全局质感（全程一致）】\n{style_text}\n" if style_text else ""
+    safety_line = f"【安全红线（全程一致）】\n{safety_text}\n" if safety_text else ""
     if image_attached:
         header = (
             f"你是短视频动作编剧。写一段 {duration} 秒 AI 生成视频的「直出视频提示词」。"
@@ -96,9 +101,10 @@ def _brief(
     if amplitude == "large":
         pose_rule = (
             "5. 按起始姿态合理设计：站姿类可以做该类型相关的节奏动作，跳跃、跨步、转体都是"
-            "从站姿自然可达的大位移；坐/卧/俯身/倚靠类只做该姿态下自然可达的连贯动态"
-            "（缓慢伸展、转头、重心挪动、手部局部动作），"
-            "不要编排起立、落地之类脱离起始姿态的动作。\n"
+            "从站姿自然可达的大位移；蹲姿、俯身这类蓄力姿势可以由该姿势直接发力衔接大动作"
+            "（起跳、前冲、爬行、翻滚），动作从起势延续、不要先归位再重新开始；躺/卧/倚靠类"
+            "只做该姿态下可达的连贯动态（缓慢伸展、转头、重心挪动、手部局部、小幅翻滚挪动），"
+            "不要编排先站起来、归位摆好再开始的动作。\n"
         )
         amp_rules = (
             "6. 动作幅度大：允许并鼓励跳跃、转体、甩头、跨步与大幅挥臂，躯干与四肢全程"
@@ -115,6 +121,10 @@ def _brief(
             "不要编排站起来、跳跃之类脱离起始姿态的大位移。\n"
         )
         amp_rules = "6. 动作幅度适中，四肢与手指结构连贯清楚，不做镜头前的怪异扭曲。"
+    safety_rule = (
+        f"{8 if amplitude == 'large' else 7}. 安全红线：把【安全红线】里的每一条写进「避免出现」"
+        + "一节并贯穿动作、衣着、表情的描写，脚本正文不得违反其中任何一条。\n"
+    ) if safety_text else ""
     return (
         header
         + f"【首帧内容·动作描述】\n{pose_text}\n"
@@ -122,6 +132,7 @@ def _brief(
         + (f"【人物服饰要点】\n{costume_text}\n" if costume_text else "")
         + scene_line
         + style_line
+        + safety_line
         + f"【本段视频类型】{clip_type}\n"
         + "\n输出要求（直接输出提示词正文，中文，不要标题、不要任何解释）：\n"
         + f"1. 开头一句：以输入首帧为唯一视觉依据，生成一段约{duration}秒的单人{clip_type}视频。\n"
@@ -134,6 +145,7 @@ def _brief(
         + connect_rule
         + pose_rule
         + amp_rules
+        + safety_rule
     )
 
 
@@ -356,6 +368,7 @@ def write_script(
     opening: str = "body",
     text_words: list[str] | None = None,
     style_text: str = "",
+    safety_text: str = "",
 ) -> dict:
     """写视频脚本；返回 {"script", "clip_type"}。LLM 失败/输出不合法抛 LLMError/ValueError。
 
@@ -368,7 +381,11 @@ def write_script(
     opening="face"（须 multishot）= 特写开场：第 1 镜保持面部特写，第 2 镜起切全身。
     text_words（掷骰词对）= 两处背景大字逐词编进脚本并锁进校验。
     style_text（配方 style_lock）= 全局质感句，写成【全局质感（全程一致）】材料段铆进 brief。
+    safety_text（配方 safety_lock）= 安全红线句，写成【安全红线（全程一致）】材料段 +
+    要求逐条落进「避免出现」节 —— 仅单镜脚本生效（多镜显式报错）。
     """
+    if multishot and safety_text:
+        raise ValueError("safety_lock 暂只支持单镜脚本（多镜 MV 分镜模式不接）")
     if multishot:
         brief = _brief_multishot(
             str(pose_text or "").strip(),
@@ -398,6 +415,7 @@ def write_script(
             amplitude=amplitude,
             image_attached=bool(image_path),
             style_text=str(style_text or "").strip(),
+            safety_text=str(safety_text or "").strip(),
         )
     if image_path:
         messages = [

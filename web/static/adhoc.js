@@ -547,7 +547,7 @@ $("#btn-adhoc-generate").addEventListener("click", async () => {
       $("#adhoc-status"),
       `完成：${out.width} × ${out.height}px，用时 ${(out.duration_ms / 1000).toFixed(1)}s`
     );
-    loadAdhocRecent();
+    loadAdhocRecent(0); // 新图必然在最前，回到第一页看它
   } catch (err) {
     setStatus($("#adhoc-status"), `失败：${err.message}`, true);
   } finally {
@@ -601,16 +601,39 @@ async function downloadAdhocRecentImage(rec) {
   }
 }
 
-async function loadAdhocRecent() {
+/* ---------- 最近生成（分页） ---------- */
+const ADHOC_RECENT_PAGE_SIZE = 24;
+const adhocRecentState = { page: 0, seq: 0 };
+
+async function loadAdhocRecent(page = adhocRecentState.page) {
+  const seq = ++adhocRecentState.seq; // 快速连点/并发的旧响应不回写新页
+  adhocRecentState.page = Math.max(0, page);
   const box = $("#adhoc-recent");
   try {
-    const records = await api("/adhoc?limit=24");
+    const offset = adhocRecentState.page * ADHOC_RECENT_PAGE_SIZE;
+    const { items, total } = await apiPaged(
+      `/adhoc?limit=${ADHOC_RECENT_PAGE_SIZE}&offset=${offset}`
+    );
+    if (seq !== adhocRecentState.seq) return;
     box.innerHTML = "";
-    if (!records.length) {
-      box.innerHTML = `<span class="hint">还没有 Playground 记录</span>`;
+    if (!items.length) {
+      if (adhocRecentState.page > 0) {
+        // 过了末页（服务端记录被删过）：留在原页位，上一页可退回
+        box.innerHTML = `<span class="hint">这一页没有记录</span>`;
+        refreshPager(box, "adhoc-recent-pager", {
+          page: adhocRecentState.page,
+          pageSize: ADHOC_RECENT_PAGE_SIZE,
+          total,
+          goto: loadAdhocRecent,
+        });
+      } else {
+        // 全库为空：老文案 + 不出分页条
+        box.innerHTML = `<span class="hint">还没有 Playground 记录</span>`;
+        document.getElementById("adhoc-recent-pager")?.remove();
+      }
       return;
     }
-    for (const rec of records) {
+    for (const rec of items) {
       const card = document.createElement("div");
       card.className = "image-card";
       // 只有真落了产物才有图；入队未完成与失败画占位，不取不存在的图
@@ -666,12 +689,18 @@ async function loadAdhocRecent() {
       card.appendChild(actions);
       box.appendChild(card);
     }
+    refreshPager(box, "adhoc-recent-pager", {
+      page: adhocRecentState.page,
+      pageSize: ADHOC_RECENT_PAGE_SIZE,
+      total,
+      goto: loadAdhocRecent,
+    });
   } catch (err) {
     box.innerHTML = `<span class="hint">加载失败：${escapeHtml(err.message)}</span>`;
   }
 }
 
-$("#btn-adhoc-recent-refresh").addEventListener("click", loadAdhocRecent);
+$("#btn-adhoc-recent-refresh").addEventListener("click", () => loadAdhocRecent());
 
 /* ---------- 初始化 ---------- */
 function initAdhoc() {

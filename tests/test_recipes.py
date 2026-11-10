@@ -2020,3 +2020,250 @@ def test_pick_ref_resolution_and_gate(monkeypatch, tmp_path):
     resolved = recipes_service._resolve_ref_image(None, recipe, "脸部参考", state)
     assert resolved.read_bytes() == b"jpeg"
     assert calls == [("f009267e478", "face-db-01")]
+
+
+# ---------- ⑥ 随机荒诞动作配方（studio 文本动作池 + safety_lock） ----------
+
+_ABSURD_YAML = """
+name: demo_absurd
+type: recipe
+version: 1
+title: 随机荒诞（测试）
+seed: 5
+steps:
+- kind: pick
+  label: 选库
+  manual: false
+  face: {sources: [face-db-01], section: face}
+  pose: {sources: [studio], categories: [荒诞挑战], angle: 正面, allow_text: true}
+  costume: {sources: [costume-db-01], categories: [春, 夏, 秋, 冬, パーティ]}
+- kind: scene_design
+  label: 场景
+  manual: false
+  input: 选库
+  hint: 荒诞场景方向。
+- kind: combo_image
+  label: 首帧图
+  input: 选库
+  scene_from: 场景
+  strip_accessories: true
+  framing_extra: 全身入镜，四周留余白。
+  backend: comfyui
+  aspect: "9:16"
+  style_lock: [cinematic live-action]
+  safety_lock: [人物衣着全程完整覆盖，无裸露与性暗示, 摔倒翻滚写成轻盈滑稽的喜剧，人物毫发无损]
+- kind: video_script
+  label: 脚本
+  manual: false
+  input: 选库
+  scene_from: 场景
+  frame_from: 首帧图
+  amplitude: large
+  duration: 8
+  types: [荒诞搞笑动作挑战, 动物模仿趣味挑战赛]
+  style_lock: [cinematic live-action]
+  safety_lock: [人物衣着全程完整覆盖，无裸露与性暗示, 摔倒翻滚写成轻盈滑稽的喜剧，人物毫发无损]
+- kind: video_model
+  label: 成片
+  prompt_from: 脚本
+  frame_from: 首帧图
+  duration: 8
+  aspect: "9:16"
+"""
+
+_ABSURD_SAFETY = "人物衣着全程完整覆盖，无裸露与性暗示"
+
+_STUDIO_ENTRY = (
+    "人物双手双膝四点撑地正面朝向镜头，双手掌心朝下贴地，双膝着地，背部放平，双腿并拢，双脚脚背贴地。"
+    "头部抬起，视线朝向镜头。接近正面的全身视角，全身完整入镜。全身绷紧蓄势待发，"
+    "下一拍将开始模仿小狗的四肢并用爬行冲刺。"
+)
+
+
+def _write_studio_mirror() -> None:
+    """测试用自建文本动作镜像：一条爬行测试条目（import_studio 灌库）。"""
+    base = Path(os.environ["CHARVAR_PRESETS_DIR"]) / "poses" / "studio"
+    base.mkdir(parents=True, exist_ok=True)
+    base.joinpath("fu_test_crawl.yaml").write_text(
+        "pose_id: fu_test_crawl\nsource_id: studio\nnumber: S-90\ntitle: 四足爬行冲刺（测试）\n"
+        "category: 荒诞挑战\nangle: 正面\nline: 自建动作\naspect: '9:16'\n"
+        f"action_text: {_STUDIO_ENTRY}\n",
+        encoding="utf-8",
+    )
+
+
+@pytest.fixture()
+def absurd_env(cast_env):
+    conn = cast_env
+    _write_studio_mirror()
+    from charvar import poses as poses_service
+
+    poses_service.import_studio(conn)
+    (Path(os.environ["CHARVAR_DATA_DIR"]) / "presets" / "recipes" / "demo_absurd.yaml").write_text(
+        _ABSURD_YAML, encoding="utf-8"
+    )
+    return conn
+
+
+def test_repo_absurd_recipe_parses():
+    """仓库随机荒诞配方解析合法；安全锁两处一致、服饰池剔敏感类、检查点布局锁进测试。"""
+    recipe = recipes_service.load_recipe("random_absurd_video")
+    assert [s.kind for s in recipe.steps] == [
+        "pick", "scene_design", "combo_image", "video_script", "video_model",
+    ]
+    assert [recipes_service.manual_default(s) for s in recipe.steps] == [
+        False, False, True, False, True,
+    ]
+    pick = recipe.steps[0]
+    assert pick.face["sources"] == ["face-db-01"] and pick.face["section"] == "face"
+    assert pick.pose["sources"] == ["studio"] and pick.pose["allow_text"] is True
+    assert pick.pose["categories"] == ["荒诞挑战"]
+    assert "水着" not in pick.costume["categories"] and "セクシー" not in pick.costume["categories"]
+    combo, script, video = recipe.steps[2], recipe.steps[3], recipe.steps[4]
+    assert combo.safety_lock == script.safety_lock and len(combo.safety_lock) >= 3
+    assert combo.style_lock == script.style_lock and len(combo.style_lock) >= 3
+    assert script.amplitude == "large" and script.frame_from == "首帧图" and script.duration == 8
+    assert len(script.types) == 4 and video.duration == 8 and video.resolution == "768p"
+    assert video.aspect == "9:16" and "heygen" in (video.model or "")
+
+
+def test_casting_allow_text_validation():
+    """allow_text 只收布尔；非布尔解析期报错。"""
+    from charvar import casting
+
+    with pytest.raises(casting.CastingError, match="allow_text"):
+        casting.normalize_filters("pose", {"allow_text": "yes"})
+
+
+def test_casting_pick_text_pose_requires_description(absurd_env):
+    """文本动作入池要求描述齐备：清掉描述即退出池；缺省（无 allow_text）文本动作不进池。"""
+    conn = absurd_env
+    from charvar import casting, wildcard
+    from charvar import poses as poses_service
+
+    filters = casting.normalize_filters(
+        "pose", {"sources": ["studio"], "angle": "正面", "allow_text": True}
+    )
+    picked = casting.pick_pose(conn, filters, wildcard.rng_for(1, "test"))
+    assert picked["pose_id"] == "fu_test_crawl"
+    assert picked["display_type"] == "text" and picked["thumb_url"] == ""
+
+    poses_service.set_pose_action(
+        conn, "fu_test_crawl", "正面", "", source="manual", source_id="studio"
+    )
+    with pytest.raises(casting.CastingError, match="被过滤空"):
+        casting.pick_pose(conn, filters, wildcard.rng_for(1, "test"))
+    with pytest.raises(casting.CastingError, match="被过滤空"):
+        casting.pick_pose(
+            conn,
+            casting.normalize_filters("pose", {"sources": ["studio"], "angle": "正面"}),
+            wildcard.rng_for(1, "test"),
+        )
+
+
+def test_absurd_full_flow(absurd_env, monkeypatch):
+    """荒诞全链：文本动作选池 → 文本锚首帧（无姿势图 refs）→ 看图脚本带安全红线 → 成片。"""
+    conn = absurd_env
+    from charvar import video_script as script_service
+
+    script_calls = []
+
+    def fake_script_llm(messages, model=None, config=None):
+        script_calls.append(messages)
+        return _script_stub_text()
+
+    _stub_llms(monkeypatch)
+    monkeypatch.setattr(script_service, "call_llm", fake_script_llm)
+    adhoc_reqs = _stub_adhoc_generate(monkeypatch)
+    video_submit = _stub_adhoc_video(
+        monkeypatch,
+        [{"status": "ready", "job_id": "j1", "model": "heygen/heygen-video-1"}],
+    )
+
+    state = recipes_service.start_run(conn, "demo_absurd")
+    assert state.status == "waiting"
+    pose_out = state.steps[0].outputs["pose"]
+    assert pose_out["source"] == "studio" and pose_out["display_type"] == "text"
+    assert pose_out["thumb_url"] == "" and pose_out["pose_id"] == "fu_test_crawl"
+    assert pose_out["action_text"] == _STUDIO_ENTRY  # 文本库存量描述直接当 existing
+    assert pose_out["action_origin"] == "existing"
+
+    state = recipes_service.advance_state(conn, state.recipe_run_id)
+    assert state.status == "waiting"
+    combo_req = adhoc_reqs[0]
+    assert len(combo_req.reference_paths) == 2  # 人脸 + 服饰；文本动作没有姿势参考图
+    assert "做出下面的动作" in combo_req.prompt  # 文本锚 lead（mannequin 段被去掉）
+    assert "<image3>" in combo_req.prompt  # 服饰槽位仍是 image3
+    assert "<image2>" not in combo_req.prompt  # 文本动作没有姿势参考图槽位
+    assert "【安全红线（全程一致）】" in combo_req.prompt and _ABSURD_SAFETY in combo_req.prompt
+    content = script_calls[0][0]["content"]
+    assert isinstance(content, list)
+    assert content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+    brief = content[0]["text"]
+    assert "【安全红线（全程一致）】" in brief and _ABSURD_SAFETY in brief
+    assert "8. 安全红线" in brief  # 大幅档下安全红线规则排在 8（7 = 编排结构）
+
+    state = recipes_service.advance_state(conn, state.recipe_run_id)
+    assert state.status == "done"
+    assert video_submit[0].prompt == _script_stub_text()  # 脚本原样当视频 prompt
+
+
+def test_video_script_safety_brief(monkeypatch):
+    """safety_text 注入 brief 材料段 + 规则 8；空 safety 不注入（旧 brief 字节不变）；多镜报错。"""
+    from charvar import video_script as script_service
+
+    seen = []
+
+    def fake_call_llm(messages, model=None, config=None):
+        seen.append(messages)
+        return _script_stub_text()
+
+    monkeypatch.setattr(script_service, "call_llm", fake_call_llm)
+
+    script_service.write_script(
+        pose_text="正面站立。", pose_title="叉腰", clip_type="荒诞搞笑动作挑战",
+        duration=8, amplitude="large", safety_text="无裸露与性暗示",
+    )
+    brief = seen[0][0]["content"]
+    assert "【安全红线（全程一致）】\n无裸露与性暗示" in brief
+    assert "8. 安全红线" in brief
+
+    seen.clear()
+    script_service.write_script(
+        pose_text="正面站立。", pose_title="叉腰", clip_type="荒诞搞笑动作挑战",
+        duration=8, amplitude="large",
+    )
+    assert "安全红线" not in seen[0][0]["content"]
+
+    with pytest.raises(ValueError, match="单镜"):
+        script_service.write_script(
+            pose_text="正面站立。", pose_title="叉腰", clip_type="荒诞搞笑动作挑战",
+            duration=15, multishot=True, safety_text="无裸露与性暗示",
+        )
+
+
+def test_safety_lock_static_validation(tmp_path, monkeypatch):
+    """safety_lock 空白条目 / multishot 同给 → 解析期报错。"""
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CHARVAR_PRESETS_DIR", str(tmp_path / "presets"))
+    base = tmp_path / "presets" / "recipes"
+    base.mkdir(parents=True, exist_ok=True)
+
+    (base / "bad_absurd_multi.yaml").write_text(
+        _ABSURD_YAML.replace(
+            "amplitude: large", "amplitude: large\n  multishot: true"
+        ).replace("name: demo_absurd", "name: bad_absurd_multi"),
+        encoding="utf-8",
+    )
+    with pytest.raises(PresetError, match="单镜"):
+        recipes_service.load_recipe("bad_absurd_multi")
+
+    (base / "bad_absurd_blank.yaml").write_text(
+        _ABSURD_YAML.replace(
+            "safety_lock: [人物衣着全程完整覆盖，无裸露与性暗示, 摔倒翻滚写成轻盈滑稽的喜剧，人物毫发无损]",
+            'safety_lock: [人物衣着全程完整覆盖，无裸露与性暗示, ""]',
+        ).replace("name: demo_absurd", "name: bad_absurd_blank"),
+        encoding="utf-8",
+    )
+    with pytest.raises(PresetError, match="safety_lock 条目不能是空白"):
+        recipes_service.load_recipe("bad_absurd_blank")

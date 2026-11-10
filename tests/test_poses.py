@@ -10,6 +10,8 @@ import json
 import pathlib
 import re
 
+import yaml
+
 import httpx
 import pytest
 from fastapi.testclient import TestClient
@@ -1055,7 +1057,15 @@ def test_studio_aspect_field(data_dir, monkeypatch):
         info = poses_service.import_studio(conn)
         assert info["added"] == info["poses"]
         rows = conn.execute("SELECT pose_id, aspect_ratio FROM pose_images WHERE source='studio'").fetchall()
-        assert rows and all(r["aspect_ratio"] == "2:3" for r in rows)
+        # 每行画幅 = 镜像声明（荒诞池条目是 9:16，不再是清一色 2:3 —— 按条目对表）
+        mirror_aspect = {}
+        for path in sorted(
+            (pathlib.Path(__file__).resolve().parent.parent / "presets" / "poses" / "studio").glob("*.yaml")
+        ):
+            doc = yaml.safe_load(path.read_text(encoding="utf-8"))
+            mirror_aspect[str(doc["pose_id"])] = str(doc.get("aspect") or "")
+        assert rows and all(r["aspect_ratio"] == mirror_aspect.get(r["pose_id"], "") for r in rows)
+        assert any(v == "9:16" for v in mirror_aspect.values())
         # 网页改画幅：改值 + 清空，全部视角行一起生效
         data = poses_service.list_poses(conn, q="yoga_tree")
         assert [p["aspect_ratio"] for p in data["poses"] if p["source"] == "studio"] == ["2:3"]

@@ -29,7 +29,7 @@ class CastingError(ValueError):
 # pick 步过滤器键白名单（目标库 → 允许的键）
 FILTER_KEYS: dict[str, frozenset[str]] = {
     "face": frozenset({"sources", "section", "hair"}),
-    "pose": frozenset({"sources", "lines", "categories", "angle", "single"}),
+    "pose": frozenset({"sources", "lines", "categories", "angle", "single", "allow_text"}),
     "costume": frozenset({"sources", "categories", "media"}),
 }
 
@@ -100,12 +100,16 @@ def normalize_filters(target: str, filters: dict | None) -> dict:
         single = value.get("single", True)
         if not isinstance(single, bool):
             raise CastingError("pose.single 要是布尔值（缺省 true = 排除 2人絡み 双人）")
+        allow_text = value.get("allow_text", False)
+        if not isinstance(allow_text, bool):
+            raise CastingError("pose.allow_text 要是布尔值（缺省 false = 只选有姿势参考图的动作）")
         value.update(
             sources=sources,
             lines=_as_list(value.get("lines"), "pose.lines"),
             categories=_as_list(value.get("categories"), "pose.categories"),
             angle=angle,
             single=single,
+            allow_text=allow_text,
         )
         return value
     from charvar import costumes as costumes_service
@@ -167,14 +171,26 @@ def pick_pose(conn: sqlite3.Connection, filters: dict, rng: Any) -> dict:
     """动作库随机选一个动作（固定 angle；single=true 默认排除 2人絡み）。
 
     只选动作（pose_id），视角随 angle 固定 —— 描述级补齐在该视角上做。
+    ``allow_text: true`` = 无图文本动作（自建库 studio）也入池 —— 文本条目必须
+    已写好该视角的动作描述（组合首帧与脚本全锚在描述上，没描述的条目不可用）；
+    缺省 false 维持旧行为（只有姿势参考图的动作）。
     """
     where: list[str] = ["angle = ?"]
     params: list[str] = [filters["angle"]]
     if filters["single"]:
         where.append("line <> ?")
         params.append("2人絡み")
-    # 无图纯文本动作（自建文本库）天然排除 —— 组合首帧要姿势参考图，LLM 起稿也要看图
-    where.append("(TRIM(COALESCE(file_path, '')) <> '')")
+    # 缺省（allow_text=false）：无图纯文本动作（自建文本库）天然排除 —— 组合首帧要
+    # 姿势参考图，LLM 起稿也要看图。放开时也只收「描述已写好」的文本条目。
+    if filters["allow_text"]:
+        where.append(
+            "((TRIM(COALESCE(file_path, '')) <> '') OR (display_type = 'text' AND EXISTS ("
+            "SELECT 1 FROM pose_actions pa WHERE pa.source_id = pose_images.source"
+            " AND pa.pose_id = pose_images.pose_id AND pa.angle = pose_images.angle"
+            " AND TRIM(COALESCE(pa.action_text, '')) <> '')))"
+        )
+    else:
+        where.append("(TRIM(COALESCE(file_path, '')) <> '')")
     if filters["sources"]:
         _in_clause("source", filters["sources"], where, params)
     if filters["lines"]:
@@ -188,12 +204,13 @@ def pick_pose(conn: sqlite3.Connection, filters: dict, rng: Any) -> dict:
         params,
     ).fetchall()
     if not rows:
-        raise CastingError("动作池被过滤空了：先确认库已导入，或放宽过滤器（单人系統缺省排除 2人絡み）")
+        raise CastingError("动作池被过滤空了：先确认库已导入，或放宽过滤器（单人系統缺省排除 2人絡み；文本动作要 allow_text 且描述已写）")
     row = rng.choice(rows)
     from charvar import poses as poses_service
     from charvar.pose_translations import POSE_TITLE_ZH
 
     title = str(row["title"] or "")
+    is_text = str((poses_service.POSE_SOURCES.get(row["source"]) or {}).get("display_type") or "line") == "text"
     return {
         "source": row["source"],
         "pose_id": row["pose_id"],
@@ -204,8 +221,9 @@ def pick_pose(conn: sqlite3.Connection, filters: dict, rng: Any) -> dict:
         "category": row["category"],
         "category_zh": poses_service.category_zh(row["category"]),
         "display_type": str((poses_service.POSE_SOURCES.get(row["source"]) or {}).get("display_type") or "line"),
-        # 缩略 URL 与 list_poses 同式 —— 角度原文直接拼，浏览器自动编码（服务端从 DB 行定文件）
-        "thumb_url": f"/poses/image/{row['source']}/{row['pose_id']}/{filters['angle']}/thumb",
+        # 缩略 URL 与 list_poses 同式 —— 角度原文直接拼，浏览器自动编码（服务端从 DB 行定文件）；
+        # 文本动作无图 → 空串（前端渲染「无图 · 纯文本」占位，同 list API 语义）
+        "thumb_url": "" if is_text else f"/poses/image/{row['source']}/{row['pose_id']}/{filters['angle']}/thumb",
         "action_text": "",
         "action_origin": "",
     }

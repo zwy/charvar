@@ -199,3 +199,28 @@ def test_mp3_duration_fallback_none(env):
     tmp = env / "broken.mp3"
     tmp.write_bytes(b"not really mp3")
     assert adhoc_tts._audio_duration(tmp, "mp3") is None
+
+# ---------- list_recent 翻页 ----------
+
+
+def test_list_recent_offset_paging(env):
+    root = adhoc_tts.tts_root()
+    ids = [f"tts_20300101-0000{i:02d}_tt{i}" for i in range(1, 6)]
+    for run_id in ids:
+        d = root / run_id
+        d.mkdir(parents=True)
+        (d / "manifest.json").write_text(
+            json.dumps({"created_at": "", "status": "ready", "request": {"text": run_id}}),
+            encoding="utf-8",
+        )
+    assert adhoc_tts.count_recent() == 5
+    page1 = adhoc_tts.list_recent(limit=3)
+    assert [r["run_id"] for r in page1] == list(reversed(ids[2:]))
+    assert [r["run_id"] for r in adhoc_tts.list_recent(limit=3, offset=3)] == [
+        "tts_20300101-000002_tt2",
+        "tts_20300101-000001_tt1",
+    ]
+    assert adhoc_tts.list_recent(limit=3, offset=99) == []
+    # 没有 manifest 的目录不算记录
+    (root / "tts_20300101-000099_zz").mkdir()
+    assert adhoc_tts.count_recent() == 5

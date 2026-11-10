@@ -23,6 +23,55 @@ async function api(path, options = {}) {
   return resp.json();
 }
 
+/* 「最近生成」分页用：列表端点返回裸数组（老调用方兼容），总数在 X-Total-Count 响应头。 */
+async function apiPaged(path, options = {}) {
+  const resp = await fetch(path, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  if (!resp.ok) {
+    let detail = resp.statusText;
+    try {
+      const data = await resp.json();
+      detail = data.detail || JSON.stringify(data);
+    } catch {}
+    throw new Error(`${resp.status}: ${detail}`);
+  }
+  return { items: await resp.json(), total: Number(resp.headers.get("X-Total-Count") || 0) };
+}
+
+/* 「最近生成」分页条（Playground / 视频 / 语音三页共用）。page 从 0 起，goto(newPage) 翻页，
+   返回值插到产物 grid 之后（.card > * + * 的间距规则自动生效）。 */
+function buildRecentPager({ page, pageSize, total, goto }) {
+  const row = document.createElement("div");
+  row.className = "pager-row";
+  const pages = Math.ceil(total / pageSize) || 1;
+  const prev = document.createElement("button");
+  prev.type = "button";
+  prev.textContent = "上一页";
+  prev.disabled = page <= 0;
+  const info = document.createElement("span");
+  info.className = "pager-info";
+  info.textContent = `第 ${page + 1} / ${pages} 页 · 共 ${total} 条`;
+  const next = document.createElement("button");
+  next.type = "button";
+  next.textContent = "下一页";
+  next.disabled = page + 1 >= pages;
+  prev.addEventListener("click", () => goto(page - 1));
+  next.addEventListener("click", () => goto(page + 1));
+  row.append(prev, info, next);
+  return row;
+}
+
+/* 分页条替换式刷新：老条不在就插到 grid 之后（保持它在 card 里的最后一位）。 */
+function refreshPager(grid, pagerId, payload) {
+  const pager = buildRecentPager(payload);
+  pager.id = pagerId;
+  const old = document.getElementById(pagerId);
+  if (old) old.replaceWith(pager);
+  else grid.after(pager);
+}
+
 async function apiUpload(path, file) {
   const form = new FormData();
   form.append("file", file);

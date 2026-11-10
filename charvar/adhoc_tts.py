@@ -131,23 +131,41 @@ def audio_file(run_id: str) -> Path:
 # ---------- 记录列表与 manifest ----------
 
 
-def list_recent(limit: int = 20) -> list[dict[str, Any]]:
+def _recent_run_names() -> list[str]:
+    """manifest 留痕的 run 目录名,时间倒序(run_id 自带时间前缀,倒序即时间倒序)。"""
+    root = tts_root()
+    if not root.is_dir():
+        return []
+    names = sorted(
+        d.name
+        for d in root.iterdir()
+        if d.is_dir() and not d.name.startswith("_") and (d / "manifest.json").exists()
+    )
+    names.reverse()
+    return names
+
+
+def count_recent() -> int:
+    """manifest 留痕的 run 总数(「最近生成」翻页用)。"""
+    return len(_recent_run_names())
+
+
+def list_recent(limit: int = 20, offset: int = 0) -> list[dict[str, Any]]:
     """最近的 Playground 语音记录(读 manifest.json,按时间倒序)。
 
-    manifest 是唯一留痕(不落 runs 表),所以这里就是扫目录。
+    manifest 是唯一留痕(不落 runs 表),所以这里就是扫目录;
+    offset 是翻页起点(run_id 自带时间前缀,倒序即时间倒序),只对窗口内的目录读 manifest。
     """
     root = tts_root()
     if not root.is_dir():
         return []
+    start = max(0, int(offset))
+    window = _recent_run_names()[start : start + max(1, int(limit))]
     records: list[dict[str, Any]] = []
-    for directory in root.iterdir():
-        if not directory.is_dir() or directory.name.startswith("_"):
-            continue
-        manifest_path = directory / "manifest.json"
-        if not manifest_path.exists():
-            continue
+    for name in window:
+        directory = root / name
         try:
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
         request = manifest.get("request") or {}
@@ -173,8 +191,7 @@ def list_recent(limit: int = 20) -> list[dict[str, Any]]:
                 "has_audio": has_audio,
             }
         )
-    records.sort(key=lambda r: r["run_id"], reverse=True)
-    return records[: max(1, int(limit))]
+    return records
 
 
 def read_manifest(run_id: str) -> dict[str, Any]:

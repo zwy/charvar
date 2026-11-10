@@ -108,7 +108,7 @@ $("#btn-tts-generate").addEventListener("click", async () => {
   try {
     const out = await api("/tts/generate", { method: "POST", body: JSON.stringify(body) });
     renderTtsResult(out);
-    loadTtsRecent();
+    loadTtsRecent(0); // 新音频必然在最前，回到第一页看它
     setStatus($("#tts-status"),
       `完成：${out.duration_s != null ? out.duration_s.toFixed(1) + "s 音频，" : ""}用时 ${(out.duration_ms / 1000).toFixed(0)}s` +
       (out.cost != null ? `，预计 $${Number(out.cost).toFixed(4)}` : ""));
@@ -150,18 +150,47 @@ $("#tts-model").addEventListener("change", applyTtsEnums);
 
 /* ---------- 最近生成 ---------- */
 
-async function loadTtsRecent() {
+/* ---------- 最近生成（分页） ---------- */
+const TTS_RECENT_PAGE_SIZE = 24;
+const ttsRecentState = { page: 0, seq: 0 };
+
+async function loadTtsRecent(page = ttsRecentState.page) {
+  const seq = ++ttsRecentState.seq; // 快速连点/并发的旧响应不回写新页
+  ttsRecentState.page = Math.max(0, page);
   const box = $("#tts-recent");
   try {
-    const records = await api("/tts?limit=24");
+    const offset = ttsRecentState.page * TTS_RECENT_PAGE_SIZE;
+    const { items, total } = await apiPaged(
+      `/tts?limit=${TTS_RECENT_PAGE_SIZE}&offset=${offset}`
+    );
+    if (seq !== ttsRecentState.seq) return;
     box.innerHTML = "";
-    if (!records.length) {
-      box.innerHTML = `<span class="hint">还没有语音记录</span>`;
+    if (!items.length) {
+      if (ttsRecentState.page > 0) {
+        // 过了末页（服务端记录被删过）：留在原页位，上一页可退回
+        box.innerHTML = `<span class="hint">这一页没有记录</span>`;
+        refreshPager(box, "tts-recent-pager", {
+          page: ttsRecentState.page,
+          pageSize: TTS_RECENT_PAGE_SIZE,
+          total,
+          goto: loadTtsRecent,
+        });
+      } else {
+        // 全库为空：老文案 + 不出分页条
+        box.innerHTML = `<span class="hint">还没有语音记录</span>`;
+        document.getElementById("tts-recent-pager")?.remove();
+      }
       return;
     }
-    for (const rec of records) {
+    for (const rec of items) {
       box.appendChild(buildTtsRecentCard(rec));
     }
+    refreshPager(box, "tts-recent-pager", {
+      page: ttsRecentState.page,
+      pageSize: TTS_RECENT_PAGE_SIZE,
+      total,
+      goto: loadTtsRecent,
+    });
   } catch (err) {
     box.innerHTML = `<span class="hint">加载失败：${escapeHtml(err.message)}</span>`;
   }
@@ -250,7 +279,7 @@ function buildTtsRecentCard(rec) {
   return card;
 }
 
-$("#btn-tts-recent-refresh").addEventListener("click", loadTtsRecent);
+$("#btn-tts-recent-refresh").addEventListener("click", () => loadTtsRecent());
 
 /* ---------- 初始化 ---------- */
 

@@ -644,3 +644,42 @@ def test_openrouter_solid_frame_fails_without_retry(env, monkeypatch):
     with pytest.raises(adhoc.AdhocError, match="纯色帧"):
         adhoc.generate(adhoc.AdhocRequest(prompt="x", backend="openrouter"))
     assert len(calls) == 1
+
+
+# ---------- 最近生成翻页 ----------
+
+
+def _touch_recent_run(env, run_id, manifest=None):
+    """手造一个只带 manifest.json 的 run 目录（列表只扫 manifest 留痕）。"""
+    d = adhoc.run_dir(run_id)
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "manifest.json").write_text(
+        json.dumps(manifest or {"created_at": "", "request": {"prompt": run_id}}),
+        encoding="utf-8",
+    )
+
+
+def test_list_recent_offset_paging(env):
+    for i in range(1, 6):
+        _touch_recent_run(env, f"adhoc_20300101-0000{i:02d}_aa{i}")
+    assert adhoc.count_recent() == 5
+    # 名字倒序 = 时间倒序：第一页拿最新 3 条
+    page1 = adhoc.list_recent(limit=3)
+    assert [r["run_id"] for r in page1] == [
+        "adhoc_20300101-000005_aa5",
+        "adhoc_20300101-000004_aa4",
+        "adhoc_20300101-000003_aa3",
+    ]
+    assert [r["run_id"] for r in adhoc.list_recent(limit=3, offset=3)] == [
+        "adhoc_20300101-000002_aa2",
+        "adhoc_20300101-000001_aa1",
+    ]
+    # 越界返回空页；负 offset 钳到 0
+    assert adhoc.list_recent(limit=3, offset=99) == []
+    assert [r["run_id"] for r in adhoc.list_recent(limit=3, offset=-5)] == [
+        r["run_id"] for r in page1
+    ]
+    # 只有目录没有 manifest 的不进列表也不进总数（_ 开头的暂存目录同理）
+    (adhoc.adhoc_root() / "adhoc_20300101-000099_zz").mkdir()
+    assert adhoc.count_recent() == 5
+    assert len(adhoc.list_recent(limit=20, offset=99)) == 0

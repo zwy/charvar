@@ -528,6 +528,11 @@ td .caption { color: var(--muted); }
   overflow: hidden;
 }
 
+/* 「最近生成」分页条（Playground/视频/语音三页共用）：上一页 / 页码 / 下一页。
+   作为 .card 的直接子元素，间距走 .card > * + * 的规则，不手写 margin。 */
+.pager-row { display: flex; align-items: center; justify-content: center; gap: var(--sp-2); }
+.pager-info { font-size: 12px; color: var(--muted); min-width: 10em; text-align: center; }
+
 /* 两级/两态切换一律 segmented（灰槽白键）：Playground 的后端×模式、生成页「生成模式」、
    结果区「图片墙|表格」。多选筛选（画幅比、轮次徽标）才用胶囊 chip。 */
 .adhoc-switch {
