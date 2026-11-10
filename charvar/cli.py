@@ -993,7 +993,12 @@ def recipes_run(
     with storage.connect() as conn:
         try:
             if continue_run:
-                runs = [r for r in recipes_service.list_recipe_runs() if r["recipe"] == name]
+                # 「最近一次未完成」按字面语义：跳过已完成的跑（时间倒序里最新的一条
+                # 可能已经跑完 —— 多跑并行时应落到下一个 waiting 的跑上）。
+                runs = [
+                    r for r in recipes_service.list_recipe_runs()
+                    if r["recipe"] == name and r["status"] != "done"
+                ]
                 if not runs:
                     _die(f"配方 {name} 没有可继续的运行（先不带 --continue 跑一次）")
                 state = recipes_service.advance_state(conn, runs[0]["recipe_run_id"])
