@@ -29,7 +29,7 @@ class CastingError(ValueError):
 # pick 步过滤器键白名单（目标库 → 允许的键）
 FILTER_KEYS: dict[str, frozenset[str]] = {
     "face": frozenset({"sources", "section", "hair"}),
-    "pose": frozenset({"sources", "lines", "categories", "angle", "single", "allow_text"}),
+    "pose": frozenset({"sources", "lines", "categories", "angle", "single", "allow_text", "pose_ids"}),
     "costume": frozenset({"sources", "categories", "media"}),
 }
 
@@ -107,6 +107,7 @@ def normalize_filters(target: str, filters: dict | None) -> dict:
             sources=sources,
             lines=_as_list(value.get("lines"), "pose.lines"),
             categories=_as_list(value.get("categories"), "pose.categories"),
+            pose_ids=_as_list(value.get("pose_ids"), "pose.pose_ids"),
             angle=angle,
             single=single,
             allow_text=allow_text,
@@ -197,6 +198,9 @@ def pick_pose(conn: sqlite3.Connection, filters: dict, rng: Any) -> dict:
         _in_clause("line", filters["lines"], where, params)
     if filters["categories"]:
         _in_clause("category", filters["categories"], where, params)
+    if filters["pose_ids"]:
+        # 精选白名单：池子钉死到指定动作（单测某条 / 精选子池用）
+        _in_clause("pose_id", filters["pose_ids"], where, params)
     rows = conn.execute(
         "SELECT DISTINCT source, pose_id, line, category, title FROM pose_images"
         " WHERE " + " AND ".join(where)

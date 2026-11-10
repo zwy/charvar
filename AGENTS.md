@@ -235,20 +235,20 @@ DB → 仓库对偶：`charvar subject export <id>` 快照成 `presets/subjects/
 
 配方系统的 YAML 字段、步类型、素材声明详见 `docs/配方系统.md`。
 
-- **配方定义** = `presets/recipes/<slug>.yaml` + `<slug>.md` 成对（`charvar/recipes.py`；文档 `doc:` 相对 recipes/ 目录，读不到不阻塞）。大类由末步推导（`video_synth`=合成 / `video_model`=生成）。YAML 严格模式：未知根/步字段显式报错。
+- **配方定义** = `presets/recipes/<slug>.yaml` + `<slug>.md` 成对（`charvar/recipes.py`；文档 `doc:` 相对 recipes/ 目录，读不到不阻塞）。大类由末步推导（末步 video_synth=合成、video_model=生成）。YAML 严格模式：未知根/步字段显式报错。
 - **线性步骤**：`images`（主体+预设建 run；`mode: llm`/`push: comfyui`/`run_id` 绑定/`fixed_background`+`fixed_lighting` 等字段级细节见 `docs/配方系统.md`）→ `overlay`（贴字，`input` 缺省最近一个）→ `video_synth`（本地合成，`use_labeled: true` 吃同源贴字产物）。消耗步统一 gate：来源 run 成品没齐停在 waiting，不算失败。
-- **检查点**：step.manual 缺省 images=False、overlay/video_synth=True。执行到 pending 的 manual 步停（status=waiting）；`--continue` / `POST /recipe-runs/{id}/continue` 批准当前 manual 步推进，之后的 manual 步再停；failed 步 continue 直接重试。
+- **检查点**：step.manual 缺省 images=False、overlay/video_synth=True。执行到 pending 的 manual 步后停转 waiting；`--continue` / `POST /recipe-runs/{id}/continue` 批准当前 manual 步推进，之后的 manual 步再停；failed 步 continue 直接重试。
   **`--continue` 是「续跑已有运行」——首次必须不带它**（`charvar recipes run <名>` 建运行并停在首个检查点），否则报「没有可继续的运行」。
 - **状态**：`data/generated/recipe_runs/<recipe_id>/manifest.json`（recipe_id 白名单 `^recipe_[A-Za-z0-9_.-]+$` 且无 `..`，同 adhoc 严格度），**不建 DB 表**、不落 runs 表；配方定义改版（步数不一致）时 continue 拒绝，要求重建。
 - **入口三处同语义**：`charvar recipes list|run|status`（`--continue` 续最近一次）、`/recipes*` API、「配方」页签（`recipes.js`）。
 - 示例配方：`presets/recipes/stockings_showcase.yaml`（真出 27 张图，跑前想清楚）、`presets/recipes/model_clip_demo.yaml`（生成配方，真跑要 key）。
-- **随机三库配方**（舞蹈 `random_dance_video`：站姿池/去包帽；MV `random_mv_video`：多镜/伴舞；特写 `random_mv_video_up`：特写+大字；荒诞 `random_absurd_video`：白名单动作池/防封安全锁）：`pick` 随机选角（人脸×动作×服饰；描述补齐）→ `scene_design` 场景 → `combo_image` 首帧 → `video_script` 脚本（看首帧） → `video_model`。种子含 run_id：每跑换批。
+- **随机三库配方**（舞蹈 `random_dance_video`：站姿池/去包帽；MV `random_mv_video`：多镜/伴舞；特写 `random_mv_video_up`：特写+大字；荒诞 `random_absurd_video`：白名单动作池/安全锁；猫版 `random_cat_video`：随机猫/猫池）：`pick` 随机选角（人脸×动作×服饰；描述补齐）→ `scene_design` 场景 → `combo_image` 首帧 → `video_script` 脚本（看首帧） → `video_model`。种子含 run_id：每跑换批。
 
 ### 生成步与参考视频
 
 两类**生成步**：`adhoc_image`（单图，Playground 通路）与 `video_model`（OpenRouter 视频异步作业）。字段表见 `docs/配方系统.md`：
 
-- **`video_model` 异步语义**：提交 → 轮询到 ready/failed 或 `wait_s` 超时转 waiting（续查不重复提交，作业在 OpenRouter 继续跑）；作业 failed → 步 failed，continue **清掉死作业重新提交**（重新计费）；提交被拒（枚举/key 错）= PresetError → failed，先修配置再 continue。
+- **`video_model` 异步语义**：提交 → 轮询到 ready/failed 或 `wait_s` 超时转 waiting（续查不重复提交）；作业 failed → 步 failed，continue **清掉死作业重新提交**（重新计费）；提交被拒（枚举/key 错）= PresetError → failed，先修配置再 continue。
 - 两类生成步都 **retry 幂等**：产物在就复用，不重复生成。
 - **参考视频不做图像预处理**（没有压缩逻辑，原样发），提交前 existence + 魔数双校验。暂存视频池 `data/generated/adhoc_video/_vrefs/` 与 `_refs` 图池分开，互不误删（24h 兜底）。
 - 参考视频官方只收 mp4/mpeg/mov/webm（按 ftyp/EBML 魔数嗅探、原文件 base64 上限 48MB）；`input_references` 合计 ≤4 项；`last_frame_path` 要求模型声明 supported_frame_images 含 last_frame，否则 ParamError。

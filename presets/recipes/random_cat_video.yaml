@@ -1,0 +1,89 @@
+---
+name: random_cat_video
+type: recipe
+version: 1
+title: 随机荒诞猫：随机猫×猫动作池 → 首帧 → 8 秒喜剧视频
+doc: random_cat_video.md
+seed: 0
+steps:
+- kind: pick
+  label: 随机选库
+  manual: false
+  pose:
+    sources: [studio]
+    categories: [荒诞猫挑战]
+    angle: 正面
+    allow_text: true
+
+- kind: scene_design
+  label: 场景设计
+  manual: false
+  input: 随机选库
+  hint: 这是搞笑猫咪挑战短视频的首帧，场景是猫日常可及的真实室内/户外场地（客厅木地板、
+    窗边、厨房台面、社区小广场、公园草坪等），空间开阔、地面干净、光照自然明亮，
+    猫的活动方向无遮挡；氛围轻松欢乐。
+
+- kind: combo_image
+  label: 首帧图
+  input: 随机选库
+  scene_from: 场景设计
+  subject_kind: cat
+  appearances:
+  - 一只矮胖结实的英短蓝猫，炭灰色短绒毛，铜色圆眼，脸颊圆宽
+  - 一只金渐层英短，暖金色短绒毛带深色虎斑尖，绿色圆眼，体型圆润
+  - 一只橘色中华田园猫，短毛橘白相间，白色口鼻与胸口，眼睛金黄，体格偏胖
+  - 一只三花母猫，白底黑橙三色斑块短毛，粉色鼻子，体型纤细
+  - 一只黑白奶牛猫，白身黑斑，面部一半黑一半白，眼神清亮，体态利落
+  - 一只纯黑短毛猫，毛色乌黑发亮，一双绿眼睛，体态修长
+  - 一只棕色虎斑狸花猫，条纹清晰利落，绿色杏眼，身形矫健
+  - 一只蓝重点色暹罗猫，米白身体配深灰脸耳四肢，蓝宝石色眼，体型瘦长
+  - 一只长毛布偶猫，奶油色底毛配深棕面具与蓝眼，毛量蓬松，体格大
+  - 一只白色长毛狮子猫，纯白蓬松，一只蓝一只黄的异瞳，脸盘圆润
+  - 一只银渐层短毛猫，银白底毛配黑毛尖，翡翠绿眼，体型中型偏圆
+  - 一只玳瑁色母猫，黑橙杂花短毛，色块斑驳，金棕色眼，苗条精干
+  framing_extra: 这是搞笑猫咪挑战的首帧图：猫全身入镜（从猫头顶、耳朵到尾巴尖完整），
+    头顶与画面四周留出充分余白，让后续视频的大幅度荒诞动作（跳跃/扑跳/翻滚）始终保持在画面内；
+    地面完整可见；猫身上不戴项圈、衣物等配饰。
+  backend: comfyui
+  resolution: 2k
+  aspect: "9:16"
+  style_lock:
+  - cinematic live-action，真人实拍电影感画质
+  - high-key bright lighting，高调明亮打光（画面明亮通透、阴影浅、对比柔和，色彩清透粉嫩）
+  - 全片同一调色与光线风格，任何镜头不变暗、不变灰、不换画风
+  safety_lock:
+  - 猫的毛发全程自然完整、身体毫无受伤痕迹，动作写轻盈活泼的玩闹表演，不含疼痛、惊恐、
+    危险或虐待元素
+  - 动作语境是无害的宠物搞笑挑战或宠物运动会：猫的状态是玩闹与好奇，表情动作夸张但不低俗猎奇
+  - 跳跃、翻滚、摔落一律写成猫科动物天生敏捷的轻盈动作，落地稳当、毫发无损
+
+- kind: video_script
+  label: 视频脚本
+  manual: false
+  input: 随机选库
+  scene_from: 场景设计
+  frame_from: 首帧图
+  subject_kind: cat
+  amplitude: large
+  duration: 8
+  types: [荒诞宠物挑战赛, 动物模仿搞笑秀, 失控宠物运动会, 无厘头猫咪喜剧]
+  style_lock:
+  - cinematic live-action，真人实拍电影感画质
+  - high-key bright lighting，高调明亮打光（画面明亮通透、阴影浅、对比柔和，色彩清透粉嫩）
+  - 全片同一调色与光线风格，任何镜头不变暗、不变灰、不换画风
+  safety_lock:
+  - 猫的毛发全程自然完整、身体毫无受伤痕迹，动作写轻盈活泼的玩闹表演，不含疼痛、惊恐、
+    危险或虐待元素
+  - 动作语境是无害的宠物搞笑挑战或宠物运动会：猫的状态是玩闹与好奇，表情动作夸张但不低俗猎奇
+  - 跳跃、翻滚、摔落一律写成猫科动物天生敏捷的轻盈动作，落地稳当、毫发无损
+
+- kind: video_model
+  label: 成片
+  prompt_from: 视频脚本
+  frame_from: 首帧图
+  frame_slot: first_frame
+  model: heygen/heygen-video-1
+  duration: 8
+  resolution: 768p
+  aspect: "9:16"
+  wait_s: 600

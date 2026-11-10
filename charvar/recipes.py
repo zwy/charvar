@@ -85,6 +85,8 @@ _STEP_ROOT_KEYS = frozenset(
         "text_pool",                # video_script（text_fx）：大字词池覆盖
         "style_lock",               # combo_image/video_script：全局质感句（首帧+脚本两头注入）
         "safety_lock",              # combo_image/video_script：安全红线（防低俗/防危险动作，同两头注入）
+        "subject_kind",             # combo_image/video_script：主角物种（person 缺省 / cat=猫主角，无库随机）
+        "appearances",              # combo_image（cat）：猫外观描述池（掷骰选一，首帧与脚本同一只）
     }
 )
 
@@ -193,6 +195,8 @@ class RecipeStep(BaseModel):
     text_pool: list[str] = Field(default_factory=list)  # 大字词池覆盖（缺省 DEFAULT_TEXT_POOL）
     style_lock: list[str] = Field(default_factory=list)  # 全局质感锁（铆进首帧提示词与脚本 brief）
     safety_lock: list[str] = Field(default_factory=list)  # 安全红线锁（衣着完整/无害喜剧语境，同两头注入；仅单镜脚本）
+    subject_kind: Literal["person", "cat"] = "person"  # 主角物种；cat = 猫主角（外观池掷骰、无参考图首帧）
+    appearances: list[str] = Field(default_factory=list)  # 猫外观描述池（subject_kind=cat 的 combo_image 必填）
 
 
 class Recipe(BaseModel):
@@ -367,6 +371,12 @@ def _validate_recipe(recipe: Recipe, path: Path) -> None:
                         f"配方 {path.name} 的 {label}：prompt_from 不能指向 {step.prompt_from!r}"
                         "（必须指向本步之前的 video_script 步）"
                     )
+        if step.subject_kind != "person" and step.kind not in ("combo_image", "video_script"):
+            raise PresetError(
+                f"配方 {path.name} 的 {label}：subject_kind 只对 combo_image/video_script 步生效（当前 {step.kind}）"
+            )
+        if step.appearances and step.kind != "combo_image":
+            raise PresetError(f"配方 {path.name} 的 {label}：appearances 外观池只进 combo_image 步（掷骰产物由脚本步继承）")
         if step.kind == "combo_image":
             if step.close_up and (step.strip_accessories or (step.framing_extra or "").strip()):
                 raise PresetError(
@@ -377,7 +387,18 @@ def _validate_recipe(recipe: Recipe, path: Path) -> None:
                 raise PresetError(f"配方 {path.name} 的 {label}：style_lock 条目不能是空白")
             if any(not str(w or "").strip() for w in step.safety_lock):
                 raise PresetError(f"配方 {path.name} 的 {label}：safety_lock 条目不能是空白")
+            if step.subject_kind == "cat":
+                if step.close_up:
+                    raise PresetError(f"配方 {path.name} 的 {label}：subject_kind=cat 与 close_up 不相干（猫首帧不是面部特写）")
+                if step.strip_accessories:
+                    raise PresetError(f"配方 {path.name} 的 {label}：subject_kind=cat 不吃服饰锚，strip_accessories 无效")
+                if not step.appearances:
+                    raise PresetError(f"配方 {path.name} 的 {label}：subject_kind=cat 需要 appearances 外观池（至少 1 条非空描述）")
         if step.kind == "video_script":
+            if step.subject_kind == "cat" and (step.multishot or step.ensemble or step.close_up):
+                raise PresetError(f"配方 {path.name} 的 {label}：subject_kind=cat 暂只支持单镜脚本（多镜/伴舞不接）")
+            if step.subject_kind == "cat" and not step.frame_from:
+                raise PresetError(f"配方 {path.name} 的 {label}：subject_kind=cat 需要看图脚本（frame_from 指向猫首帧步）——脚本措辞按真实首帧接续")
             if any(not str(w or "").strip() for w in step.style_lock):
                 raise PresetError(f"配方 {path.name} 的 {label}：style_lock 条目不能是空白")
             if any(not str(w or "").strip() for w in step.safety_lock):
@@ -1419,12 +1440,19 @@ def _run_combo_image_step(conn, recipe: Recipe, state: RecipeRunState, step: Rec
     if run_id:
         try:
             adhoc_service.original_file(run_id)
-            return {"image_run_id": run_id, "image_url": f"/adhoc/{run_id}/image",
-                    "note": "复用已有单图（要重出请删配方运行重建）"}
+            reuse: dict[str, Any] = {
+                "image_run_id": run_id, "image_url": f"/adhoc/{run_id}/image",
+                "note": "复用已有单图（要重出请删配方运行重建）",
+            }
+            if st.outputs.get("appearance"):
+                reuse["appearance"] = str(st.outputs["appearance"])
+            return reuse
         except (FileNotFoundError, adhoc_service.AdhocError):
             pass  # 产物被清了（或 run_id 脏）：走重新生成
 
     picks = _prior_step_state(state, str(step.input or ""), ("pick",), "input").outputs
+    if step.subject_kind == "cat":
+        return _run_combo_image_step_cat(conn, recipe, state, step, st, picks)
     if step.close_up:
         # 特写首帧：纯脸参考 + 面部大特写构图（随机 MV 升级版）——不进动作/服饰段，
         # 服饰与编舞由脚本步的切镜后镜头展开；pose 缺席不影响本步。
@@ -1583,6 +1611,80 @@ def _run_combo_image_step(conn, recipe: Recipe, state: RecipeRunState, step: Rec
     }
 
 
+def _run_combo_image_step_cat(conn, recipe: Recipe, state: RecipeRunState, step: RecipeStep, st: StepState, picks: dict[str, Any]) -> dict[str, Any]:
+    """猫主角首帧（random_cat_video）：无参考图 —— 外观池掷骰出一只随机猫 + 文本动作锚。
+
+    外观是**运行级随机**（掷骰 key 固定 ``{run_id}:appearance``）：首帧提示词与
+    脚本步 outputs 继承拿同一只猫；retry 幂等同常规分支（image_run_id + appearance
+    都在就复用）。face/costume 锚不存在 —— 文生图通路（无参考图 = 纯文生图）。
+    """
+    from charvar import adhoc as adhoc_service
+    from charvar import pose_prompt as pose_prompt_service
+    from charvar import poses as poses_service
+    from charvar import wildcard
+
+    pose = picks.get("pose")
+    if not pose:
+        raise PresetError(f"{step.label}：随机选库里缺 pose（猫首帧以猫动作文本为动作锚）")
+    try:
+        action = poses_service.pose_action(conn, pose["pose_id"], pose["angle"], source=pose["source"])
+        action_text = str(action["action_text"] or "").strip()
+        if not action_text:
+            raise PresetError(
+                f"{step.label}：该动作视角的动作描述是空的（{pose['source']}/{pose['pose_id']}）"
+                "——先到动作库写描述或重跑 pick 步"
+            )
+    except poses_service.PoseError as exc:
+        raise PresetError(f"{step.label}：{exc}") from exc
+    appearance = str(st.outputs.get("appearance") or "").strip()
+    if not appearance:
+        pool = [str(w or "").strip() for w in step.appearances if str(w or "").strip()]
+        appearance = wildcard.rng_for(
+            int(state.seed), f"{state.recipe_run_id}:appearance"
+        ).choice(pool)
+    prompt = pose_prompt_service.build_cat_prompt(
+        appearance,
+        action_text,
+        background_text=_scene_text_from(state, step) or None,
+        framing_extra=step.framing_extra or None,
+    )
+    if _style_text_of(step):
+        prompt = prompt + "\n\n【全局质感（全程一致）】\n" + _style_text_of(step)
+    if _safety_text_of(step):
+        prompt = prompt + "\n\n【安全红线（全程一致）】\n" + _safety_text_of(step)
+    req = adhoc_service.AdhocRequest(
+        prompt=prompt,
+        backend=step.backend,
+        model=step.model,
+        negative_prompt=step.negative_prompt,
+        quality=step.quality,
+        reference_paths=[],
+        aspect_ratio=str(step.aspect or "3:4"),
+        resolution=step.resolution or "",
+        seed=int(step.seed) if step.seed is not None else int(recipe.seed),
+        workflow=step.workflow,
+        wait=True,
+    )
+    try:
+        result = adhoc_service.generate(req, _conn_db_path(conn))
+    except adhoc_service.AdhocError as exc:
+        raise PresetError(f"{step.label}：{exc}") from exc
+    except Exception as exc:  # noqa: BLE001 - 后端出图失败统一 502（与网页 /adhoc/generate 同策略）
+        raise PresetError(f"{step.label}：出图失败：{exc}", status=502) from exc
+    new_run_id = Path(result.manifest_path).parent.name
+    return {
+        "image_run_id": new_run_id,
+        "image_url": f"/adhoc/{new_run_id}/image",
+        "thumb_url": f"/adhoc/{new_run_id}/thumb",
+        "width": result.width,
+        "height": result.height,
+        "model": result.model,
+        "cost": result.cost,
+        "prompt": prompt,
+        "appearance": appearance,
+    }
+
+
 def _run_video_script_step(conn, recipe: Recipe, state: RecipeRunState, step: RecipeStep, st: StepState) -> dict[str, Any]:
     """视频脚本步：LLM 按动作描述+服饰+场景写直出视频提示词（类型池子种子抽取）。"""
     from charvar import llm, settings_service
@@ -1603,6 +1705,13 @@ def _run_video_script_step(conn, recipe: Recipe, state: RecipeRunState, step: Re
         # 看图脚本模式：把真实首帧（combo_image 等产物图）随消息带给视觉 LLM；
         # 帧步未完成 → _GateStop 等待（与成片帧同语义）
         frame_path = _produce_frame(conn, state, str(step.frame_from), 0)
+    appearance_text = ""
+    if step.subject_kind == "cat" and step.frame_from:
+        # 猫主角：外观池掷骰产物由首帧步（combo_image）outputs 继承 —— 同一只猫
+        target = _prior_step_state(
+            state, str(step.frame_from), ("images", "adhoc_image", "combo_image", "overlay"), "frame_from"
+        )
+        appearance_text = str(target.outputs.get("appearance") or "").strip()
     text_words = (
         script_service.pick_text_words(
             int(state.seed), f"{state.recipe_run_id}:textfx:{step.label}", list(step.text_pool) or None
@@ -1630,6 +1739,8 @@ def _run_video_script_step(conn, recipe: Recipe, state: RecipeRunState, step: Re
             text_words=text_words,
             style_text=_style_text_of(step),
             safety_text=_safety_text_of(step),
+            subject_kind=str(step.subject_kind or "person"),
+            appearance_text=appearance_text,
         )
     except (llm.LLMError, ValueError) as exc:
         raise PresetError(f"{step.label}：{exc}", status=502) from exc

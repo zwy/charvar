@@ -2073,6 +2073,14 @@ steps:
 
 _ABSURD_SAFETY = "人物衣着全程完整覆盖，无裸露与性暗示"
 
+_CAT_APPEARANCE = "一只矮胖结实的英短蓝猫，炭灰色短绒毛，铜色圆眼"
+
+_CAT_ENTRY = (
+    "一只猫正面朝向镜头，身体拧转向后，后背弓起侧对镜头，正用两只前爪扑向自己上扬甩到面前的尾巴尖，"
+    "后腿蹬地拧身，耳朵竖立。正面平视的全身视角，全身含尾完整入镜。全身绷紧蓄势待发，"
+    "下一拍将开始原地的疯狂追尾转圈，越转越快连转好几圈。"
+)
+
 _STUDIO_ENTRY = (
     "人物双手双膝四点撑地正面朝向镜头，双手掌心朝下贴地，双膝着地，背部放平，双腿并拢，双脚脚背贴地。"
     "头部抬起，视线朝向镜头。接近正面的全身视角，全身完整入镜。全身绷紧蓄势待发，"
@@ -2088,6 +2096,12 @@ def _write_studio_mirror() -> None:
         "pose_id: fu_test_crawl\nsource_id: studio\nnumber: S-90\ntitle: 四足爬行冲刺（测试）\n"
         "category: 荒诞挑战\nangle: 正面\nline: 自建动作\naspect: '9:16'\n"
         f"action_text: {_STUDIO_ENTRY}\n",
+        encoding="utf-8",
+    )
+    base.joinpath("cat_test_chase.yaml").write_text(
+        "pose_id: cat_test_chase\nsource_id: studio\nnumber: S-91\ntitle: 追尾转圈（测试）\n"
+        "category: 荒诞猫挑战\nangle: 正面\nline: 自建动作\naspect: '9:16'\n"
+        f"action_text: {_CAT_ENTRY}\n",
         encoding="utf-8",
     )
 
@@ -2142,7 +2156,7 @@ def test_casting_pick_text_pose_requires_description(absurd_env):
     from charvar import poses as poses_service
 
     filters = casting.normalize_filters(
-        "pose", {"sources": ["studio"], "angle": "正面", "allow_text": True}
+        "pose", {"sources": ["studio"], "categories": ["荒诞挑战"], "angle": "正面", "allow_text": True}
     )
     picked = casting.pick_pose(conn, filters, wildcard.rng_for(1, "test"))
     assert picked["pose_id"] == "fu_test_crawl"
@@ -2156,7 +2170,9 @@ def test_casting_pick_text_pose_requires_description(absurd_env):
     with pytest.raises(casting.CastingError, match="被过滤空"):
         casting.pick_pose(
             conn,
-            casting.normalize_filters("pose", {"sources": ["studio"], "angle": "正面"}),
+            casting.normalize_filters(
+                "pose", {"sources": ["studio"], "categories": ["荒诞挑战"], "angle": "正面"}
+            ),
             wildcard.rng_for(1, "test"),
         )
 
@@ -2267,3 +2283,214 @@ def test_safety_lock_static_validation(tmp_path, monkeypatch):
     )
     with pytest.raises(PresetError, match="safety_lock 条目不能是空白"):
         recipes_service.load_recipe("bad_absurd_blank")
+
+
+# ---------- ⑦ 随机荒诞猫配方（无库随机猫：subject_kind=cat + appearances 掷骰） ----------
+
+_CAT_YAML = """
+name: demo_cat
+type: recipe
+version: 1
+title: 随机猫（测试）
+seed: 9
+steps:
+- kind: pick
+  label: 选库
+  manual: false
+  pose: {sources: [studio], categories: [荒诞猫挑战], angle: 正面, allow_text: true}
+- kind: scene_design
+  label: 场景
+  manual: false
+  input: 选库
+  hint: 猫场景方向。
+- kind: combo_image
+  label: 首帧图
+  input: 选库
+  scene_from: 场景
+  subject_kind: cat
+  appearances: [一只矮胖结实的英短蓝猫，炭灰色短绒毛，铜色圆眼, 一只橘色中华田园猫，短毛橘白相间]
+  framing_extra: 猫全身含尾完整入镜。
+  backend: comfyui
+  aspect: "9:16"
+  style_lock: [cinematic live-action]
+  safety_lock: [猫的毛发全程自然完整、毫无受伤痕迹，动作写轻盈活泼的玩闹表演]
+- kind: video_script
+  label: 脚本
+  manual: false
+  input: 选库
+  scene_from: 场景
+  frame_from: 首帧图
+  subject_kind: cat
+  amplitude: large
+  duration: 8
+  types: [荒诞宠物挑战赛]
+  style_lock: [cinematic live-action]
+  safety_lock: [猫的毛发全程自然完整、毫无受伤痕迹，动作写轻盈活泼的玩闹表演]
+- kind: video_model
+  label: 成片
+  prompt_from: 脚本
+  frame_from: 首帧图
+  duration: 8
+  aspect: "9:16"
+"""
+
+
+@pytest.fixture()
+def cat_env(absurd_env):
+    (Path(os.environ["CHARVAR_DATA_DIR"]) / "presets" / "recipes" / "demo_cat.yaml").write_text(
+        _CAT_YAML, encoding="utf-8"
+    )
+    return absurd_env
+
+
+def test_repo_cat_recipe_parses():
+    """仓库随机猫配方解析合法；猫主角字段、外观池与检查点布局锁进测试。"""
+    recipe = recipes_service.load_recipe("random_cat_video")
+    assert [s.kind for s in recipe.steps] == [
+        "pick", "scene_design", "combo_image", "video_script", "video_model",
+    ]
+    assert [recipes_service.manual_default(s) for s in recipe.steps] == [
+        False, False, True, False, True,
+    ]
+    pick = recipe.steps[0]
+    assert pick.face is None and pick.costume is None
+    assert pick.pose["sources"] == ["studio"] and pick.pose["allow_text"] is True
+    assert pick.pose["categories"] == ["荒诞猫挑战"]
+    combo, script, video = recipe.steps[2], recipe.steps[3], recipe.steps[4]
+    assert combo.subject_kind == "cat" and len(combo.appearances) >= 12
+    assert script.subject_kind == "cat" and script.frame_from == "首帧图"
+    assert script.amplitude == "large" and script.duration == 8
+    assert combo.safety_lock == script.safety_lock and len(combo.safety_lock) >= 3
+    assert video.duration == 8 and video.resolution == "768p"
+
+
+def test_cat_full_flow(cat_env, monkeypatch):
+    """猫全链：无参考图首帧（外观掷骰）→ 看图脚本猫版措辞（外观继承）→ 成片。"""
+    conn = cat_env
+    from charvar import video_script as script_service
+
+    script_calls = []
+
+    def fake_script_llm(messages, model=None, config=None):
+        script_calls.append(messages)
+        return _script_stub_text()
+
+    _stub_llms(monkeypatch)
+    monkeypatch.setattr(script_service, "call_llm", fake_script_llm)
+    adhoc_reqs = _stub_adhoc_generate(monkeypatch)
+    video_submit = _stub_adhoc_video(
+        monkeypatch,
+        [{"status": "ready", "job_id": "j1", "model": "heygen/heygen-video-1"}],
+    )
+
+    state = recipes_service.start_run(conn, "demo_cat")
+    assert state.status == "waiting"
+    pose_out = state.steps[0].outputs["pose"]
+    assert pose_out["pose_id"] == "cat_test_chase" and pose_out["action_origin"] == "existing"
+    combo_state = state.steps[2]
+
+    state = recipes_service.advance_state(conn, state.recipe_run_id)
+    assert state.status == "waiting"
+    combo_out = state.steps[2].outputs
+    appearance = combo_out["appearance"]
+    assert appearance in (_CAT_APPEARANCE, "一只橘色中华田园猫，短毛橘白相间")
+    combo_req = adhoc_reqs[-1]
+    assert combo_req.reference_paths == []  # 猫首帧无任何参考图（纯文生图）
+    assert appearance in combo_req.prompt    # 外观段承担身份锚
+    assert "让主角猫做出下面的动作" in combo_req.prompt
+    assert "<image" not in combo_req.prompt      # 猫版构建没有任何 imageN 槽位
+    assert "【安全红线（全程一致）】" in combo_req.prompt
+    content = script_calls[0][0]["content"]
+    assert isinstance(content, list)
+    assert content[1]["image_url"]["url"].startswith("data:image/jpeg;base64,")
+    brief = content[0]["text"]
+    assert "视频的主角是一只猫" in brief
+    assert "【主角·外观（与首帧是同一只猫）】" in brief and appearance in brief
+    assert "全程同一只猫" in brief and "不出现人类" in brief
+    assert "尾巴全程参与" in brief
+
+    state = recipes_service.advance_state(conn, state.recipe_run_id)
+    assert state.status == "done"
+    assert video_submit[0].prompt == _script_stub_text()
+
+
+def test_cat_static_validation(tmp_path, monkeypatch):
+    """猫配方解析期红线：字段位置/互斥/池空逐条拦。"""
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("CHARVAR_PRESETS_DIR", str(tmp_path / "presets"))
+    base = tmp_path / "presets" / "recipes"
+    base.mkdir(parents=True, exist_ok=True)
+
+    def load_fail(stem: str, text: str, match: str) -> None:
+        (base / stem).write_text(text, encoding="utf-8")
+        with pytest.raises(PresetError, match=match):
+            recipes_service.load_recipe(stem[:-5])
+
+    load_fail(
+        "bad_cat_multi.yaml",
+        _CAT_YAML.replace("amplitude: large", "amplitude: large\n  multishot: true"),
+        "单镜",
+    )
+    load_fail(
+        "bad_cat_strip.yaml",
+        _CAT_YAML.replace("framing_extra: 猫全身含尾完整入镜。",
+                          "framing_extra: 猫全身含尾完整入镜。\n  strip_accessories: true"),
+        "strip_accessories 无效",
+    )
+    load_fail(
+        "bad_cat_nopool.yaml",
+        _CAT_YAML.replace("  appearances: [一只矮胖结实的英短蓝猫，炭灰色短绒毛，铜色圆眼, 一只橘色中华田园猫，短毛橘白相间]\n", ""),
+        "appearances",
+    )
+    load_fail(
+        "bad_cat_noframe.yaml",
+        _CAT_YAML.replace("  frame_from: 首帧图\n", "", 1),
+        "frame_from",
+    )
+    load_fail(
+        "bad_cat_wrong_step.yaml",
+        _CAT_YAML.replace("subject_kind: cat\n", "subject_kind: cat\n", 1).replace(
+            "  duration: 8\n  aspect: \"9:16\"\n", "  duration: 8\n  aspect: \"9:16\"\n  subject_kind: cat\n", 1),
+        "subject_kind 只对",
+    )
+
+
+def test_build_cat_prompt_guard():
+    """猫首帧构建：外观/动作空串显式报错；齐全时无 imageN 槽位。"""
+    from charvar import pose_prompt as pp
+
+    with pytest.raises(ValueError, match="外观"):
+        pp.build_cat_prompt("", "蓄力", background_text=None, framing_extra=None)
+    prompt = pp.build_cat_prompt(
+        "一只橘猫", "一只猫四足伏地蓄力。",
+        background_text="晴天草坪", framing_extra="全身含尾入镜。",
+    )
+    assert "<image" not in prompt and "一只橘猫" in prompt and "晴天草坪" in prompt
+
+
+def test_casting_pick_pose_ids_pin(absurd_env):
+    """pose_ids 精选白名单：钉死指定动作；拼其他目标取交；钉错 id 池空报错。"""
+    conn = absurd_env
+    from charvar import casting, wildcard
+
+    pinned = casting.normalize_filters(
+        "pose",
+        {"sources": ["studio"], "categories": ["荒诞猫挑战"], "angle": "正面",
+         "allow_text": True, "pose_ids": ["cat_test_chase"]},
+    )
+    assert casting.pick_pose(conn, pinned, wildcard.rng_for(3, "pin"))["pose_id"] == "cat_test_chase"
+
+    cross = casting.normalize_filters(
+        "pose",
+        {"sources": ["studio"], "categories": ["荒诞挑战"], "angle": "正面",
+         "allow_text": True, "pose_ids": ["cat_test_chase"]},
+    )
+    with pytest.raises(casting.CastingError, match="被过滤空"):
+        casting.pick_pose(conn, cross, wildcard.rng_for(3, "cross"))
+
+    missing = casting.normalize_filters(
+        "pose",
+        {"sources": ["studio"], "angle": "正面", "allow_text": True, "pose_ids": ["no_such_one"]},
+    )
+    with pytest.raises(casting.CastingError, match="被过滤空"):
+        casting.pick_pose(conn, missing, wildcard.rng_for(3, "missing"))
