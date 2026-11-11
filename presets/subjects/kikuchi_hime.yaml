@@ -1,0 +1,32 @@
+# 菊地姬奈主体档案。
+# 本文件由角色开发目录的生成脚本与交付文档同源产出（final/kikuchi_hime/全场景通用提示词模板.md）。
+# 体形锚点从 identity_lock 移到 body_lock（锁定项只留脸/发/肤色），
+# body_lock 拆成 2 条英文短句、每条 ≤400 字符（换装场景用，写长了稀释动作段）。
+id: kikuchi_hime
+name: 菊地姬奈
+subject_noun: woman
+trigger_word: kikuchi_hime
+reference_tag: <image1>
+style_lock:
+- 真人写实摄影，日系写真风格，柔和均匀的影棚漫射光，色彩明亮柔和
+- 保留细微皮肤纹理与真实发丝，锐化与磨皮克制，保留毛孔与细小绒毛的细节。
+identity_lock:
+- 族裔与年龄感：东亚，二十多岁，成熟感而非幼态。
+- 脸型是柔和的偏鹅蛋轮廓，额头饱满，颧骨平滑，下颌线圆润收窄，下巴圆润不过尖。
+- 眉毛细而平直，眉峰不明显，保留真实毛流。
+- 眼睛是深棕色的杏眼，眼型圆润，上眼睑略有弧度，双眼皮褶皱清晰，眼尾略微下垂，眼神清澈，睫毛自然上翘，眼球有明确的高光点。
+- 鼻梁细直但不过高，鼻头小巧。
+- 嘴唇饱满，上唇薄、下唇略厚，保留细微唇纹，唇色是自然淡粉。
+- 皮肤白皙偏暖，质感干净真实，面颊有淡粉色腮红，妆容轻薄干净，面部保留自然的成年感。
+- 深棕近黑的直发，在脑后扎成高马尾，额前有一层薄湿的碎刘海，两侧留几缕散发，发根蓬松。
+outfit_lock:
+- 上身穿一件深藏青色连体泳衣，贴身穿着。领口是深V形，V尖落在胸线以下，沿领口边缘有一道奶油白色滚边。肩带是细的奶油白色肩带，从肩头向后延伸。衣身正面有纵向的省道，哑光质感的泳衣布面。
+- 泳衣下摆与上身连成一体，胯部两侧的奶油白色滚边从腰侧斜切到大腿根上缘，腿口开得极高，露出完整的臀线。
+- 腿上套一双白色过膝长袜，袜口停在大腿中段偏下、膝上，袜身是细密罗纹针织，脚背与脚趾从长袜前端露出，双脚赤裸，没有鞋。
+- 仅胸部一段的面料被撑起绷紧，腰侧与臀部保持泳衣贴身的自然垂坠。
+- 泳衣背面是细肩带从肩头向后交叉，在两肩胛之间打成一个奶油白色小结，从肩胛到腰窝之间大面积露出后背肌肤，泳衣背缘有一道奶油白色滚边，下摆是一圈平整的收口。
+- 无随身配饰。默认造型不含帽子、首饰、包袋、手表。
+body_lock:
+- 'her figure is a full and softly curvy adult woman: narrow relaxed shoulders, a very large bust whose widest span clearly exceeds the width across her outer shoulders, rounded and markedly swelling to both sides, forming its own forward volume with a flared lower contour, the bust narrowing sharply toward the waist'
+- 'a fine supple waist tucked in below the ribs, full rounded hips markedly pushed backward with hip width close to shoulder width, visible flesh on the thighs, slender upper arms and calves, each thigh under two-thirds the overall hip width and tapering to the knee'
+extra: Keep the same face, facial features, hairstyle, skin tone, body proportions and figure in every pose and every new scene.
