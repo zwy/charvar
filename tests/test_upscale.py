@@ -5,6 +5,7 @@ import json
 import pathlib
 import shutil
 import subprocess
+import time
 
 import pytest
 
@@ -190,6 +191,63 @@ def test_list_recent_shows_ready_record(env):
     assert rec["status"] == "ready"
     assert rec["backend"] == "ffmpeg"
     assert rec["target"] == "720p"
+
+
+# ---------- 网页来源：Playground 最近生成视频（video_run_id → 服务端解析路径） ----------
+
+
+def test_api_upscale_video_run_id_source(tmp_path, monkeypatch):
+    """video_run_id 来源：run_id 过严格正则、产物从落盘布局解析（浏览器不给路径）。"""
+    from fastapi.testclient import TestClient
+    from charvar.api import build_app
+
+    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
+    app = build_app(static_dir=None, db_path=tmp_path / "test.db")
+    client = TestClient(app)
+
+    # 手工造一个 Playground 视频 run（original/ 里放一段真视频，manifest 供查询）
+    from charvar import adhoc_video
+
+    run_id = "video_20260101-000000_feedface"
+    run = adhoc_video.video_root() / run_id
+    (run / "original").mkdir(parents=True)
+    _make_video(run / "original" / "000000.mp4", 480, 320, seconds=0.4)
+    (run / "manifest.json").write_text("{}", encoding="utf-8")
+
+    # 两个来源同给 / 同缺 → 400
+    r = client.post("/upscales/generate", json={"staged_id": "x", "video_run_id": "y",
+                                                "backend": "ffmpeg", "target": "720p"})
+    assert r.status_code == 400 and "二选一" in r.json()["detail"]
+    r = client.post("/upscales/generate", json={"backend": "ffmpeg", "target": "720p"})
+    assert r.status_code == 400 and "二选一" in r.json()["detail"]
+    # run_id 不合法 → 400（严格正则，防路径穿越）
+    r = client.post("/upscales/generate", json={"video_run_id": "../evil", "backend": "ffmpeg",
+                                                "target": "720p"})
+    assert r.status_code == 400
+    # 存在但没有成片 → 404
+    empty = adhoc_video.video_root() / "video_20260101-000000_deadbeef"
+    empty.mkdir(parents=True)
+    r = client.post("/upscales/generate", json={"video_run_id": "video_20260101-000000_deadbeef",
+                                                "backend": "ffmpeg", "target": "720p"})
+    assert r.status_code == 404
+    # 正常路径：pending 返回 + input_label 记 run_id + refresh 到 ready
+    r = client.post("/upscales/generate", json={"video_run_id": run_id, "backend": "ffmpeg",
+                                                "target": "720p"})
+    assert r.status_code == 200, r.text
+    payload = r.json()
+    run_dir = adhoc_upscale.run_dir(payload["run_id"])
+    manifest = adhoc_upscale.read_manifest(payload["run_id"])
+    assert manifest["request"]["input_label"] == run_id
+    for _ in range(100):
+        status = client.get(f"/upscales/{payload['run_id']}/status").json()
+        if status["status"] in ("ready", "failed"):
+            break
+        time.sleep(0.1)
+    assert status["status"] == "ready", status
+    assert status["passthrough"] is False
+    # 「最近放大」列表显示 label（视频 run_id）
+    rec = adhoc_upscale.list_recent()[0]
+    assert rec["input_name"] == run_id
 
 
 # ---------- 设置（放大页默认组回读） ----------

@@ -460,12 +460,16 @@ class VideoGenerateRequest(BaseModel):
 class UpscaleGenerateRequest(BaseModel):
     """网页「放大」页的请求（与 CLI ``charvar upscale`` 同一套参数；SeedVR2 / ffmpeg 两路）。
 
-    输入视频只认上传暂存（``POST /upscales/upload`` 的 id）—— 浏览器永远不给路径。
-    异步作业：本端点只提交（源已达标时同步返回原样复制结果），前端按
-    /upscales/{run_id}/status 轮询。backend/target 空串 = 设置页「放大」默认。
+    输入视频两个来源、**只认 id 不认路径**（和参考图同一条纪律）：
+    - ``staged_id``：``POST /upscales/upload`` 的上传暂存 id；
+    - ``video_run_id``：Playground 视频 run（``GET /videos`` 榜单里的 run_id，产物在
+      落盘布局里，服务端从 ``adhoc_video.video_file`` 取真实路径 —— 浏览器永远不给路径）。
+    两者只能给一个。异步作业：本端点只提交（源已达标时同步返回原样复制结果），
+    前端按 /upscales/{run_id}/status 轮询。backend/target 空串 = 设置页「放大」默认。
     """
 
-    staged_id: str
+    staged_id: str = ""
+    video_run_id: str = ""
     backend: str = ""  # 空 = 设置页；显式值 comfyui(SeedVR2) / ffmpeg
     target: str = ""  # 空 = 设置页；720p/1080p/4k
 
@@ -2426,10 +2430,25 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
 
         走的是 CLI ``charvar upscale`` 同一套（``charvar.adhoc_upscale``），不落 runs 表。
         """
-        try:
-            input_path = adhoc_upscale_service.staged_input(req.staged_id)
-        except adhoc_upscale_service.UpscaleError as exc:
-            raise HTTPException(400, str(exc)) from exc
+        if bool(req.staged_id) == bool(req.video_run_id):
+            raise HTTPException(400, "staged_id 与 video_run_id 必须二选一")
+        if req.staged_id:
+            try:
+                input_path = adhoc_upscale_service.staged_input(req.staged_id)
+            except adhoc_upscale_service.UpscaleError as exc:
+                raise HTTPException(400, str(exc)) from exc
+            input_label = ""
+        else:
+            # 来源是 Playground 视频产片：run_id 过严格正则后从落盘布局取真实路径
+            try:
+                adhoc_video_service.run_dir(req.video_run_id)
+            except adhoc_video_service.AdhocVideoError as exc:
+                raise HTTPException(400, str(exc)) from exc
+            try:
+                input_path = adhoc_video_service.video_file(req.video_run_id)
+            except FileNotFoundError as exc:
+                raise HTTPException(404, str(exc)) from exc
+            input_label = req.video_run_id
         with _db() as conn:
             defaults = settings_service.get_settings(conn).upscale
         backend = (req.backend or "").strip().lower() or defaults.backend
@@ -2437,6 +2456,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         upscale_req = adhoc_upscale_service.UpscaleRequest(
             backend=backend,  # type: ignore[arg-type]
             input_path=input_path,
+            input_label=input_label,
             target=target,
             wait=False,
             staged_input_id=req.staged_id,

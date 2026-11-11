@@ -357,6 +357,49 @@ const Media = {
     });
   },
 
+  /* 「从最近生成」选视频：列 Playground 最近的视频记录（只列有成片的），点卡片即选定。
+     与 pickRecentImage 同构 —— onPick(rec) 收到 /videos 列表记录（含 run_id），
+     由调用方决定装进哪里；产物是 run 的落盘成片，run_id 由服务端解析回真实路径。 */
+  pickRecentVideo(onPick, { title = "从最近生成选择" } = {}) {
+    this.showPanelModal(title, (body, close) => {
+      body.innerHTML = `<span class="hint">加载中…</span>`;
+      api("/videos?limit=24")
+        .then((all) => {
+          const records = (all || []).filter((r) => r.has_video);
+          const grid = document.createElement("div");
+          grid.className = "image-grid ref-picker-grid";
+          if (!records.length) {
+            grid.innerHTML = `<span class="hint">还没有可用的视频 —— 先在「视频」页出几段片子</span>`;
+          }
+          for (const rec of records) {
+            const card = document.createElement("div");
+            card.className = "image-card video-card";
+            const vid = document.createElement("video");
+            vid.controls = true;
+            vid.preload = "metadata";
+            vid.poster = `/videos/${encodeURIComponent(rec.run_id)}/poster`;
+            vid.src = `/videos/${encodeURIComponent(rec.run_id)}/video`;
+            card.appendChild(vid);
+            const meta = document.createElement("div");
+            meta.className = "image-meta";
+            meta.innerHTML = `<span>${escapeHtml(rec.backend === "dreamina" ? "即梦" : "OpenRouter")}</span>` +
+              `<span>${escapeHtml((rec.created_at || "").slice(5, 16))}</span>`;
+            card.appendChild(meta);
+            card.title = rec.prompt || rec.run_id;
+            card.addEventListener("click", () => {
+              close();
+              onPick(rec);
+            });
+            grid.appendChild(card);
+          }
+          body.replaceChildren(grid);
+        })
+        .catch((err) => {
+          body.innerHTML = `<span class="hint">加载失败：${escapeHtml(err.message)}</span>`;
+        });
+    });
+  },
+
   setView(view) {
     this.view = view;
     const grid = $("#result-images");

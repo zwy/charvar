@@ -18,7 +18,7 @@ const UP_STATUS_LABELS = {
 const upsState = {
   backend: "comfyui",
   target: "1080p",
-  input: null, // { id, name, localUrl }（暂存输入视频）
+  input: null, // {type:"staged", id, name, localUrl} 或 {type:"recent", run_id, name}
   activeRun: null,
   pollTimer: null,
   pollSince: null,
@@ -56,7 +56,12 @@ function renderUpsInput() {
   const preview = document.createElement("video");
   preview.muted = true;
   preview.preload = "metadata";
-  preview.src = `/upscales/upload/${encodeURIComponent(upsState.input.id)}`;
+  if (upsState.input.type === "recent") {
+    preview.poster = `/videos/${encodeURIComponent(upsState.input.run_id)}/poster`;
+    preview.src = `/videos/${encodeURIComponent(upsState.input.run_id)}/video`;
+  } else {
+    preview.src = `/upscales/upload/${encodeURIComponent(upsState.input.id)}`;
+  }
   const name = document.createElement("span");
   name.className = "ref-name";
   name.textContent = upsState.input.name || "输入视频";
@@ -81,7 +86,7 @@ $("#ups-input-file").addEventListener("change", async (ev) => {
 
 $("#btn-ups-input-clear").addEventListener("click", async () => {
   const ref = upsState.input;
-  if (ref && ref.id) {
+  if (ref && ref.type !== "recent" && ref.id) {
     try {
       await api(`/upscales/upload/${encodeURIComponent(ref.id)}`, { method: "DELETE" });
     } catch { /* 暂存可能已被清理，忽略 */ }
@@ -91,17 +96,35 @@ $("#btn-ups-input-clear").addEventListener("click", async () => {
   renderUpsInput();
 });
 
+/* 从最近生成加入：Media.pickRecentVideo 列 Playground 视频成片（只列有片的）。
+   选中的是 run 的落盘产物，提交时发 video_run_id，服务端把 id 解析回真实路径。 */
+$("#btn-ups-input-recent").addEventListener("click", () => {
+  Media.pickRecentVideo((rec) => {
+    upsState.input = {
+      type: "recent",
+      run_id: rec.run_id,
+      name: rec.run_id,
+    };
+    renderUpsInput();
+    setStatus($("#ups-status"), "已加入最近生成的视频");
+  }, { title: "放大 · 从最近生成选择输入视频" });
+});
+
 /* ---------- 提交与轮询（异步作业，同 video.js 的节奏） ---------- */
 
 $("#btn-ups-generate").addEventListener("click", async () => {
   if (!upsState.input) {
-    return setStatus($("#ups-status"), "先上传要放大的视频（≤200MB，mp4/webm/mov）", true);
+    return setStatus($("#ups-status"), "先上传一段视频，或从「最近生成」选一段成片", true);
   }
   const body = {
-    staged_id: upsState.input.id,
     backend: upsState.backend, // 分段控件恒有显式值
     target: $("#ups-target").value || upsState.target,
   };
+  if (upsState.input.type === "recent") {
+    body.video_run_id = upsState.input.run_id;
+  } else {
+    body.staged_id = upsState.input.id;
+  }
   const btn = $("#btn-ups-generate");
   btn.disabled = true;
   const costNote = upsState.backend === "comfyui"
@@ -169,9 +192,10 @@ function stopUpsPolling() {
   upsState.pollSince = null;
 }
 
-/* ready 时后端已清暂存输入：前端同步摘掉本地条目（objectURL 记得放掉） */
+/* ready 时后端已清**暂存**输入（最近生成来源不是暂存，没什么可清）：前端同步摘条目 */
 function dropUpsInputSent() {
-  if (upsState.input && upsState.input.localUrl) URL.revokeObjectURL(upsState.input.localUrl);
+  const ref = upsState.input;
+  if (ref && ref.type !== "recent" && ref.localUrl) URL.revokeObjectURL(ref.localUrl);
   upsState.input = null;
   renderUpsInput();
 }

@@ -75,7 +75,8 @@ class UpscaleRequest(BaseModel):
     """一次视频放大的请求。"""
 
     backend: Backend = "comfyui"
-    input_path: Path  # 放大源视频；web 层由暂存 id 解析出路径
+    input_path: Path  # 放大源视频；web 层由暂存 id / Playground 视频 run_id 解析出路径
+    input_label: str = ""  # 展示名（最近生成的视频来源显示 run_id）；空 = input_path 文件名
     target: str = "1080p"  # 档位 = 输出短边：720p/1080p/4k
     workflow: str | None = None  # 仅 comfyui；空 = 设置页/兜底 workflow
     wait: bool = True  # CLI 默认阻塞到终态；web 恒传 False 走轮询
@@ -282,7 +283,7 @@ def list_recent(limit: int = 20, offset: int = 0) -> list[dict[str, Any]]:
                 "created_at": manifest.get("created_at") or "",
                 "backend": request.get("backend") or "",
                 "target": request.get("target") or "",
-                "input_name": Path(str(request.get("input_path") or "")).name,
+                "input_name": str(request.get("input_label") or "") or Path(str(request.get("input_path") or "")).name,
                 "status": status or "failed",
                 "error": manifest.get("error") or "",
                 "has_video": has_video,
@@ -315,6 +316,7 @@ def _new_manifest(req: UpscaleRequest, run_id: str, *, job_id: str = "") -> dict
         "request": {
             "backend": req.backend,
             "input_path": str(req.input_path),
+            "input_label": req.input_label,
             "target": req.target,
             "workflow": req.workflow,
             "wait": req.wait,
