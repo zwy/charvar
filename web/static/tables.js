@@ -28,7 +28,7 @@ const DREAMINA_VIDEO_MODELS = {
   "seedance_2.0_vip":      { label: "即梦 Seedance 2.0 VIP",      resolutions: ["720p", "1080p", "4k"],      durations: [4, 15], ratios: ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"], modes: ["t2v", "m2v", "first_last_frame"], m2vRef: { image: 9, video: 3, total: 12 } },
   "seedance_2.5":          { label: "即梦 Seedance 2.5",          resolutions: ["480p", "720p", "1080p"],    durations: [4, 30], ratios: ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"], modes: ["t2v", "m2v", "first_last_frame"], m2vRef: { image: 30, video: 10, total: 50 } },
   "happyhorse_1.1":        { label: "HappyHorse 1.1",            resolutions: ["720P", "1080P"],            durations: [4, 15], ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "4:5", "5:4", "9:21", "21:9"], modes: ["t2v", "m2v", "first_last_frame"], m2vRef: { image: 9, video: 0, total: 9 } },
-  "wan_3.0":               { label: "Wan 3.0",                   resolutions: ["720P", "1080P"],            durations: [4, 15], ratios: ["16:9", "9:16", "1:1", "4:3", "3:4", "4:5", "5:4", "9:21", "21:9"], modes: ["t2v", "m2v", "first_last_frame"], m2vRef: { image: 10, video: 5, total: 20 } },
+  "wan_3.0":               { label: "Wan 3.0",                   resolutions: ["720P", "1080P"],            durations: [4, 15], ratios: ["16:9", "4:3", "1:1", "3:4", "9:16"], modes: ["t2v", "m2v", "first_last_frame"], m2vRef: { image: 10, video: 5, total: 20 } },
   "seedance_pro_fast":     { label: "即梦 Seedance 1.0 Fast",    resolutions: ["720p", "1080p"],            durations: [5, 10], ratios: ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"], modes: ["t2v", "first_last_frame"], m2vRef: { image: 0, video: 0, total: 0 } },
 };
 

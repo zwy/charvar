@@ -188,6 +188,8 @@ _RATIOS_MJ82 = (
 )
 _RATIOS_VIDEO_9 = ("16:9", "9:16", "1:1", "4:3", "3:4", "4:5", "5:4", "9:21", "21:9")
 _RATIOS_VIDEO_6 = ("21:9", "16:9", "4:3", "1:1", "3:4", "9:16")
+# wan_3.0 只收 5 档（1.3.0 实测 model list；其余视频模型是 6/9 档，别混用）
+_RATIOS_VIDEO_5 = ("16:9", "4:3", "1:1", "3:4", "9:16")
 
 # 图片条目：label / prompt_limit / resolutions / ratios / ratio_required /
 # count_min / count_max / ref_max {"t2i","i2i"}（0 = 该模式不收参考图）
@@ -237,7 +239,7 @@ _VIDEO_MODELS: dict[str, dict[str, Any]] = {
     ),
     "wan_3.0": dict(
         label="Wan 3.0", resolutions=("720P", "1080P"), durations=(4, 15),
-        ratios=_RATIOS_VIDEO_9, count_max=4, modes=("t2v", "m2v", "first_last_frame"),
+        ratios=_RATIOS_VIDEO_5, count_max=4, modes=("t2v", "m2v", "first_last_frame"),
         m2v_ref=dict(total=20, image=10, video=5),
     ),
     "seedance_pro_fast": dict(
