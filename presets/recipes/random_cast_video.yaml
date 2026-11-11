@@ -1,8 +1,8 @@
 ---
 name: random_cast_video
 type: recipe
-version: 3
-title: 随机三库组合：人脸×单人动作×服饰 → 首帧 → 8 秒视频
+version: 4
+title: 随机三库组合：人脸×单人动作×服饰 → 脚本定稿 → 场景 → 首帧 → 8 秒视频
 doc: random_cast_video.md
 seed: 0
 steps:
@@ -15,16 +15,33 @@ steps:
   pose:
     sources: [pose-db-02]
     lines: [全身1人・セクシー系, 全身1人・標準系]
+    categories: [立ち, 座り, しゃがみ, ひねり, 前かがみ, のけぞり・反り, 横座り・女の子座り]
     single: true
     angle: 正面
   costume:
     sources: [costume-db-01, studio]
+    categories: [春, 夏, 秋, 冬, パーティ, セクシー, 水着, idol_stage, glamorous_gala_dresses]
+
+- kind: video_script
+  label: 视频脚本
+  manual: false
+  input: 随机选库
+  duration: 8
+  style_lock:
+  - cinematic live-action，真人实拍电影感画质
+  - high-key bright lighting，高调明亮打光（画面明亮通透、阴影浅、对比柔和，色彩清透粉嫩）
+  - 全片同一调色与光线风格，任何镜头不变暗、不变灰、不换画风
+  safety_lock:
+  - 人物衣着全程完整覆盖：无裸露、无透视、无性暗示姿势，服装不得滑落走光、不得刻意强调身体部位
+  - 动作语境是自然悦目的日常人像短片：表情自然愉悦，不含疼痛、惊恐、暴力与低俗元素
+  - 画面只有主角一人：动作写成自然流畅的日常动态，肢体正常无变形、无多余肢体
 
 - kind: scene_design
   label: 场景设计
-  manual: false
+  manual: true
   input: 随机选库
-  hint: 这是单人人像短视频的画面场景：与服饰风格、动作气质相符的有信息量的真实场景（街头、咖啡馆、海边、庭院、和室、健身房、居家房间等），地面与纵深清晰、前景无遮挡；人物四周留出活动空间；自然光或贴合场景的人造光，光照方向与色调统一，不要纯摄影棚布景。
+  script_from: 视频脚本
+  hint: 这是单人人像短视频的画面场景：与服饰风格、动作气质相符的有信息量的真实场景（街头、咖啡馆、海边、庭院、和室、健身房、居家房间等），地面与纵深清晰、前景无遮挡；人物四周留出活动空间；自然光或贴合场景的人造光，光照方向与色调统一，不要纯摄影棚布景。以【视频脚本】为最高依据：脚本拍点用到的舞台、道具与方位都要装得下，别引入脚本之外的元素。
 
 - kind: combo_image
   label: 首帧图
@@ -37,18 +54,10 @@ steps:
   - cinematic live-action，真人实拍电影感画质
   - high-key bright lighting，高调明亮打光（画面明亮通透、阴影浅、对比柔和，色彩清透粉嫩）
   - 全片同一调色与光线风格，任何镜头不变暗、不变灰、不换画风
-
-- kind: video_script
-  label: 视频脚本
-  manual: false
-  input: 随机选库
-  scene_from: 场景设计
-  frame_from: 首帧图
-  duration: 8
-  style_lock:
-  - cinematic live-action，真人实拍电影感画质
-  - high-key bright lighting，高调明亮打光（画面明亮通透、阴影浅、对比柔和，色彩清透粉嫩）
-  - 全片同一调色与光线风格，任何镜头不变暗、不变灰、不换画风
+  safety_lock:
+  - 人物衣着全程完整覆盖：无裸露、无透视、无性暗示姿势，服装不得滑落走光、不得刻意强调身体部位
+  - 动作语境是自然悦目的日常人像短片：表情自然愉悦，不含疼痛、惊恐、暴力与低俗元素
+  - 画面只有主角一人：动作写成自然流畅的日常动态，肢体正常无变形、无多余肢体
 
 - kind: video_model
   label: 成片

@@ -140,8 +140,6 @@ def test_parse_repo_recipe():
     """仓库自带配方解析合法；文档能读。"""
     recipe = recipes_service.load_recipe("stockings_showcase")
     assert recipe.name == "stockings_showcase"
-    demo = recipes_service.load_recipe("model_clip_demo")
-    assert [s.kind for s in demo.steps] == ["adhoc_image", "video_model"]
     assert [s.kind for s in recipe.steps] == ["images", "images", "overlay", "video_synth"]
     assert recipes_service.category_of(recipe) == "synthesis"
     doc = recipes_service.read_doc("stockings_showcase")
@@ -562,9 +560,6 @@ def _write_model_fixtures(tmp_path: Path) -> None:
     _write_fixtures(tmp_path)
     base = recipes_service.recipes_dir()
     (base / "demo_model_clip.yaml").write_text(_MODEL_YAML, encoding="utf-8")
-    # 仓库的 ⑤ 示例配方抄进 tmp：顺带校验真实文件在干净环境下可解析
-    repo_demo = Path(__file__).parent.parent / "presets" / "recipes" / "model_clip_demo.yaml"
-    (base / "model_clip_demo.yaml").write_text(repo_demo.read_text(encoding="utf-8"), encoding="utf-8")
     # 主体 front 槽位图（refs source=subject 的消费前提）
     slot = subject_images.subject_dir("demo_witch")
     slot.mkdir(parents=True, exist_ok=True)
@@ -627,12 +622,10 @@ def _stub_adhoc_video(monkeypatch, refresh_seq, *, run_id="video_fake0001"):
 
 
 def test_parse_model_recipe_category_and_defaults(model_env):
-    # 仓库的 ⑤ 示例配方不在 tmp 预设里 —— 真实文件的解析另测（test_parse_repo_recipe 补充）
+    # 仓库的自带生成配方不在 tmp 预设里 —— 真实文件的解析另测（test_parse_repo_recipe 补充）
     recipe = recipes_service.load_recipe("demo_model_clip")
     assert recipes_service.category_of(recipe) == "model"
     assert [recipes_service.manual_default(s) for s in recipe.steps] == [False, True, True]
-    demo = recipes_service.load_recipe("model_clip_demo")
-    assert recipes_service.category_of(demo) == "model"
 
 
 def test_model_recipe_static_validation_errors(model_env):
@@ -990,18 +983,20 @@ def _stub_llms(monkeypatch, *, scene_text=_SCENE_TEXT, script_text=None):
 
 
 def test_repo_random_cast_recipe_parses():
-    """仓库自带随机三库配方解析合法；检查点布局 = 选库/场景自动 + 首帧/成片停。"""
+    """仓库自带随机三库配方解析合法；v4 脚本先行：选库/脚本自动，场景/首帧/成片停。"""
     recipe = recipes_service.load_recipe("random_cast_video")
+    assert recipes_service.category_of(recipe) == "model"
     assert [s.kind for s in recipe.steps] == [
-        "pick", "scene_design", "combo_image", "video_script", "video_model",
+        "pick", "video_script", "scene_design", "combo_image", "video_model",
     ]
     assert [recipes_service.manual_default(s) for s in recipe.steps] == [
-        False, False, True, False, True,
+        False, False, True, True, True,
     ]
-    script, video = recipe.steps[3], recipe.steps[4]
-    assert script.duration == 8 and script.frame_from == "首帧图"
+    script, video = recipe.steps[1], recipe.steps[4]
+    assert script.duration == 8 and script.frame_from is None  # 脚本先行：无图文本模式写稿
     assert video.duration == 8 and video.resolution == "768p"
     assert recipe.steps[0].face["sources"] == ["face-db-01", "face-db-02-cn", "face-db-03-cn"]
+    assert recipe.steps[2].script_from == "视频脚本"
 
 
 def test_cast_static_validation_errors(model_env):

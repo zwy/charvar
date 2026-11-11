@@ -47,10 +47,9 @@
 </div>
 <div class="card"><div class="row-head"><h2>即梦 Dreamina 生图</h2><span id="dreamina-cli-status" class="hint"></span></div>
 <div class="settings-grid">
-<label>model 版本<input type="text" id="set-dreamina-model" placeholder="留空 = DREAMINA_IMAGE_MODEL（默认 seedream_4.7，旧名自动映射）"></label>
-<label>分辨率档<select id="set-dreamina-resolution">
-<option value="">（跟随 env 默认）</option><option value="1K">1K</option><option value="1.5K">1.5K</option><option value="2K">2K</option><option value="4K">4K</option></select></label>
-<p class="form-note">走本机 <code>dreamina-canvas</code> CLI 画布工作流，没有 API Key，不暴露 seed；提示词上限按模型（seedream 4.x 2000 / 5.x 与智能图片 5000 / 美学 V8.2 1024，超限硬失败），生成消耗即梦积分。</p>
+<label>默认模型<select id="set-dreamina-model"></select></label>
+<label>默认分辨率档<select id="set-dreamina-resolution"></select></label>
+<p class="form-note">走本机 <code>dreamina-canvas</code> CLI 画布工作流，没有 API Key，不暴露 seed；提示词上限按模型（seedream 4.x 2000 / 5.x 与智能图片 5000 / 美学 V8.2 1024，超限硬失败），生成消耗即梦积分。分辨率档按所选模型配对，选「跟随默认」就按默认模型的档位。</p>
 </div></div>
 <div class="card"><h2>OpenRouter 视频</h2><div class="settings-grid">
 <label>默认模型<select id="set-or-video-model"></select></label>

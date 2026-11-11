@@ -159,11 +159,32 @@ async function loadSettings() {
     }
     tSel.innerHTML = tOptions.join("");
     tSel.value = ort.model || "";
-    // 即梦：model 自由文本（空 = env/CLI 默认）；分辨率档固定 2K/4K 枚举
+    // 即梦：model 下拉（画布目录，tables.js 与后端 _IMAGE_MODELS 同源）+ 分辨率档按模型配对；
+    // 已存值不在清单/档位时补一项（存旧值不丢）。空 = env/默认链（seedream_4.7 · 2K）。
     const dm = settings.dreamina || {};
-    $("#set-dreamina-model").value = dm.model || "";
-    const dmRes = $("#set-dreamina-resolution");
-    dmRes.value = Array.from(dmRes.options).some((o) => o.value === dm.resolution) ? dm.resolution : "";
+    const dmModelSel = $("#set-dreamina-model");
+    const dmResSel = $("#set-dreamina-resolution");
+    const dmEntries = Object.entries(DREAMINA_IMAGE_MODELS);
+    const dmOptions = [`<option value="">跟随默认（${escapeHtml(DREAMINA_DEFAULT_IMAGE_MODEL)}）</option>`]
+      .concat(dmEntries.map(([id, e]) => `<option value="${escapeHtml(id)}">${escapeHtml(e.label)}</option>`));
+    if (dm.model && !dmEntries.some(([id]) => id === dm.model)) {
+      dmOptions.push(`<option value="${escapeHtml(dm.model)}">${escapeHtml(dm.model)}（不在当前清单）</option>`);
+    }
+    dmModelSel.innerHTML = dmOptions.join("");
+    dmModelSel.value = dm.model || "";
+    const dreaminaResolutionOptions = (modelId, current, keepUnknown) => {
+      const entry = DREAMINA_IMAGE_MODELS[modelId] || DREAMINA_IMAGE_MODELS[DREAMINA_DEFAULT_IMAGE_MODEL];
+      const tiers = entry.resolutions;
+      const opts = [`<option value="">（跟随 env 默认）</option>`]
+        .concat(tiers.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`));
+      if (keepUnknown && current && !tiers.includes(current)) {
+        opts.push(`<option value="${escapeHtml(current)}">${escapeHtml(current)}（不在档位里）</option>`);
+      }
+      dmResSel.innerHTML = opts.join("");
+      dmResSel.value = tiers.includes(current) || (keepUnknown && current) ? current : "";
+    };
+    dreaminaResolutionOptions(dm.model || "", dm.resolution || "", true);
+    dmModelSel.onchange = () => dreaminaResolutionOptions(dmModelSel.value, dmResSel.value, false);
     // 即梦视频：模型下拉来自 tables.js 静态枚举表；已存值不在清单里时补一项
     const dv = settings.dreamina_video || {};
     const dvTable = typeof DREAMINA_VIDEO_MODELS === 'undefined' ? {} : DREAMINA_VIDEO_MODELS;
