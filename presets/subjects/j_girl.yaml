@@ -1,0 +1,32 @@
+# J-Girl 主体档案。
+# 本文件由角色开发目录的生成脚本与交付文档同源产出（final/j_girl/全场景通用提示词模板.md）。
+# 体形锚点从 identity_lock 移到 body_lock（锁定项只留脸/发/肤色），
+# body_lock 拆成 2 条英文短句、每条 ≤400 字符（换装场景用，写长了稀释动作段）。
+id: j_girl
+name: J-Girl
+subject_noun: woman
+trigger_word: j_girl
+reference_tag: <image1>
+style_lock:
+- 真人写实摄影，日系写真风格，柔和均匀的影棚漫射光，色彩明亮柔和
+- 保留细微皮肤纹理与真实发丝，锐化与磨皮克制，保留毛孔与细小绒毛的细节。
+identity_lock:
+- 族裔与年龄感：东亚，二十多岁，成熟感而非幼态。
+- 脸型是柔和的鹅蛋形轮廓，额头饱满，颧骨平滑，下颌线圆润收窄，下巴圆润不过尖。
+- 眉毛细而平直，眉峰不明显，保留真实毛流。
+- 眼睛是深棕色的杏眼，眼型圆润，上眼睑略有弧度，双眼皮褶皱清晰，眼尾略微下垂，眼神清澈，睫毛自然上翘，眼球有明确的高光点。
+- 鼻梁细直但不过高，鼻头小巧。
+- 嘴唇饱满，上唇薄、下唇略厚，保留细微唇纹，唇色是自然淡粉。
+- 皮肤白皙偏暖，质感干净真实，面颊有淡粉色腮红，妆容轻薄干净，面部保留自然的成年感。
+- 深棕近黑的浓密长直发，自然披散在肩前，发尾垂到胸下缘附近。额前是偏中分的轻薄刘海，几缕发丝斜落到额头与眉眼附近，两侧发丝顺贴脸颊，发根蓬松，发丝有真实的层次与光泽。
+outfit_lock:
+- 上身穿一件白色比基尼上衣。罩杯是三角形的，罩杯的上缘是一道细的白色肩带，肩带从罩杯上角沿肩头向上延伸，在颈后打成一个白色小蝴蝶结，两条带尾从蝴蝶结垂到肩胛之间。罩杯下缘是一道细的白色横带，横带在肋侧与背部的细带相连。布面是哑光质感的泳衣面料，略有细密织纹，边缘是一道卷边。
+- 下身穿一件白色比基尼下装。前面是一块白色的三角布面，布面从腰线斜向下收成一个三角，三角的底边横向穿过胯部，两侧的腰侧各有一根系带在髋部打结后垂下，带尾从髋部外侧垂到大腿中段。布面是哑光质感的泳衣面料，略有细密织纹，边缘是一道卷边。
+- 双脚赤裸，没有鞋。脚背纤细，脚踝细，双脚脚跟并拢、脚尖略微分开，脚趾自然并拢。
+- 仅胸部一段的面料被撑起绷紧，肩带、腰部与下装保持泳衣贴身的自然垂坠。
+- 上装背面是肩带在颈后打成白色小蝴蝶结、两条带尾垂到肩胛之间，肩胛到腰窝之间大面积露出后背肌肤；下装背面有一根细白色系带水平环绕过腰背，髋部系带打结后垂到大腿中段。
+- 无随身配饰。默认造型不含帽子、首饰、包袋、手表。
+body_lock:
+- 'her figure is a slim and even adult woman: small frame, narrow straight shoulders, a medium bust whose fullest span stays close to the width across her outer shoulders, the cups filled and rounded upward and inward without flaring out to the sides'
+- 'a fine clearly defined waist tucked in below the ribs, a flat abdomen, rounded hips close to shoulder width, slender upper arms and forearms, long even thighs under two-thirds the overall hip width tapering to the knee, and narrow calves'
+extra: Keep the same face, facial features, hairstyle, skin tone, body proportions and figure in every pose and every new scene.
