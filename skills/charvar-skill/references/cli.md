@@ -49,35 +49,33 @@ API Key 取值顺序：显式参数 > 设置页 > `OP_IMAGE_API_KEY` > `LLM_API_
 
 ## charvar image dreamina
 
-用即梦（Dreamina）官方 `dreamina` CLI 出图。前置：本机装好官方 CLI（`curl -s
-https://jimeng.jianying.com/cli | bash`）并完成 `dreamina login`（登录态存在
-`~/.dreamina_cli/`，`dreamina user_credit` 能返回积分即就绪；**授权要让用户手动
-在浏览器完成**，agent 代登录可能拿到错误 URL）。
+用即梦官方画布 CLI `dreamina-canvas` 出图（每个请求一张新画布，节点工作流）。
+前置：本机装好 CLI（`curl -fsSL https://jimeng.jianying.com/canvas-cli/install.sh
+| bash`）并完成 `dreamina-canvas auth login`（**授权要在浏览器手动完成**）。
 
-带参考图自动走 `image2image`，不带走 `text2image`（即梦的模型都有编辑能力，
-不区分 t2i/i2i 配置组）。
+带参考图自动走 `i2i`，不带走 `t2i`；seedream 4.6/4.7/5.x 支持 t2i 兼收参考
+（上限更高），超 i2i 上限且 t2i 兼收的模型会自动降档到 t2i。
 
 | 参数 | 类型 | 默认 | 说明 |
 |---|---|---|---|
 | `--prompt` | str | — | 图片提示词 |
 | `--prompt-file` | str | — | 提示词文件路径；`-` 表示读 stdin |
 | `--ref` | list | — | 参考图路径，可重复，最多 4 张 |
-| `--aspect` | str | `3:4` | 同上（即梦原生 8 档比例，与该列表一致） |
-| `--resolution` | str | 空 | `2k` `4k`（5.0Pro 另有 `1.5k`）；空 = 设置页/env 默认 2k |
-| `--model` | str | — | 即梦 model_version（`3.0` `3.1` `4.0` `4.1` `4.5` `4.6` `4.7` `5.0` `5.0Pro`）；默认 5.0 |
+| `--aspect` | str | `3:4` | 画幅；合法值按所选模型（多数 8 档、5.0 Pro 9 档、美学 V8.2 15 档） |
+| `--resolution` | str | 空 | 按模型目录：`1K`/`2K`/`4K`/`1.5K` 大小写字面值透传；空 = 设置页/env 默认 2K |
+| `--model` | str | — | 即梦画布模型 id：`seedream_4.0`–`4.7`、`seedream_5.0_lite/pro`、`seedream_5.5`、`jimeng_smart_image_v1` 等；默认 `seedream_4.7`（旧名 `3.0`–`5.0Pro` 自动映射） |
 | `--out` / `-o` | path | — | 另外落一份到这个路径 |
 | `--json` | flag | — | 结果以 JSON 输出 |
 
-**没有 `--seed`**：即梦不暴露 seed，同提示词每次出图都不同；`prompt_id` 字段
-存的是即梦 submit_id（`dreamina query_result --submit_id=<id>` 可追溯）。
+**没有 `--seed`**：即梦不暴露 seed，同提示词每次出图都不同；`prompt_id`
+存画布运行的 submitId，manifest 里另存 `canvas.project_id`（画布续查键）。
 
-- 提示词硬上限：text2image 约 1600 字符、image2image 约 2000 字符（超限上游
-  硬失败）；charvar 会在提交前报错，别浪费积分。
-- model_version 与分辨率档配对（CLI 1.4.20）：3.0/3.1 → 1k/2k（且只能
-  text2image）；4.0–5.0 → 2k/4k；5.0Pro → 1.5k/2k/4k。配错在提交前报错。
-- 每张消耗即梦积分/会员权益（仅限会员可用），出图前先确认用户额度。
-- 生成是异步的：submit → 轮询 → 下载，单张约 40–90 秒；等待总预算默认 300s
-  （`DREAMINA_IMAGE_TIMEOUT` 可调）。
+- 提示词硬上限按模型（画布目录）：seedream 4.x=2000、5.x 与智能图片=5000、
+  美学 V8.2=1024；超限提交前报错，别浪费积分。
+- 活动目录真源 `dreamina-canvas model list --type image`；charvar 静态表在
+  `charvar/dreamina_canvas.py` `_IMAGE_MODELS`，CLI 升级后要同步。
+- 每张消耗即梦积分（自动过报价→批准闸门，用户点生成即授权扣费）。
+- 单张约 10–60 秒；等待总预算默认 300s（`DREAMINA_IMAGE_TIMEOUT` 可调）。
 
 ## charvar image models
 
@@ -128,29 +126,31 @@ charvar 已统一换算成美元/秒。
 
 ## charvar video dreamina
 
-用即梦（Dreamina）官方 CLI 出一段视频。前置同 `charvar image dreamina`：
-官方 CLI 已装 + `dreamina login` 已登录（`dreamina user_credit` 能返回积分即就绪）。
-**没有 `--seed`（即梦视频不暴露 seed）；按即梦积分/会员权益计费，没有逐条预估。**
+用即梦官方画布 CLI `dreamina-canvas` 出一段视频（每个请求一张新画布）。
+前置同 `charvar image dreamina`：CLI 已装 + `dreamina-canvas auth login` 已登录
+（`dreamina-canvas auth account` 能返回积分即就绪）。
+**没有 `--seed`（即梦视频不暴露 seed）；按即梦积分计费，报价只有上界口径。**
 
-子命令按输入自动分派（charvar 内部处理，调的人不用选）：
+mode 按输入自动分派（charvar 内部处理，调的人不用选）：
 
-| charvar 输入 | 即梦子命令 |
+| charvar 输入 | mode |
 |---|---|
-| 只给提示词 | `text2video` |
-| `--first-frame`（1 张） | `image2video` |
-| `--ref`（≤4）/ `--video-ref`（≤2） | `multimodal2video`（全能参考） |
+| 只给提示词 | `t2v` |
+| `--first-frame`（1 张） | `first_last_frame`（首帧；画幅缺省按首帧推断） |
+| `--first-frame` + `--last-frame`（各 1） | `first_last_frame`（首尾成对，引用按 [首, 尾] 顺序） |
+| `--ref`（≤4）/ `--video-ref`（≤2） | `m2v`（全能参考） |
 
 | 参数 | 类型 | 默认 | 说明 |
 |---|---|---|---|
 | `--prompt` | str | — | 视频提示词 |
 | `--prompt-file` | str | — | 提示词文件路径；`-` 表示读 stdin |
 | `--first-frame` | path | — | 首帧图（1 张；与 `--ref`/`--video-ref` 不可同给） |
-| `--ref` | list | — | 参考图路径，可重复，≤4 张（全能参考 image≤9，charvar 收 4） |
-| `--video-ref` | list | — | 参考视频路径，可重复，≤2 条 mp4/mov/mpeg/webm（单条时长须 2–15s） |
-| `--aspect` | str | `9:16` | 即梦视频仅 6 档：1:1/3:4/16:9/4:3/9:16/21:9（**没有 2:3/3:2**）；传空 = image2video 按首帧推断 / 其它子命令走即梦默认 16:9 |
-| `--duration` | int | `5` | 时长秒数（2.0 系 4–15s；1.0fast 5–10、1.5pro 5–12） |
-| `--resolution` | str | `720p` | **必填档**：恒 720p；1080p/4k 仅 seedance2.0_vip；480p 仅 seedance2.5 |
-| `--model` | str | 设置页/`DREAMINA_VIDEO_MODEL`/兜底 `seedance2.0fast_vip` | seedance 枚举照 `dreamina <子命令> -h`（1.4.21） |
+| `--ref` | list | — | 参考图路径，可重复，≤4 张（m2v 上限图≤9，charvar 收 4） |
+| `--video-ref` | list | — | 参考视频路径，可重复，≤2 条 mp4/mov/mpeg/webm |
+| `--aspect` | str | `9:16` | 画幅按模型（seedance 系 6 档、happyhorse/wan 9 档）；传空 = 首帧模式按首帧推断 / 其它走 16:9 |
+| `--duration` | int | `5` | 时长秒数（2.0 系 4–15s；seedance_2.5 是 4–30s；seedance_pro_fast 5–10s） |
+| `--resolution` | str | `720p` | **必填档**、字面值按模型透传（seedance 系小写 `720p`/`1080p`/`4k`、happyhorse/wan 大写 `720P`/`1080P`） |
+| `--model` | str | 设置页/`DREAMINA_VIDEO_MODEL`/兜底 `seedance_2.0_fast_vip` | 画布模型 id（`seedance_2.0_*`、`happyhorse_1.1`、`wan_3.0`；旧名自动映射） |
 | `--timeout` | float | `900` | 轮询超时秒数；超时作业仍在跑（网页「视频」页可续查，manifest 记 submit_id） |
 | `--poll-interval` | float | `5` | 轮询间隔秒数 |
 | `--out` / `-o` | path | — | 另外落一份到这个路径 |
@@ -158,23 +158,23 @@ charvar 已统一换算成美元/秒。
 
 ```bash
 ~/.local/bin/charvar video dreamina --prompt "the woman performs a smooth dance" --aspect 9:16 --duration 5
-~/.local/bin/charvar video models --provider dreamina   # 即梦静态枚举表
+~/.local/bin/charvar video models --provider dreamina   # 即梦画布静态枚举表
 ```
 
-- 每模型的画幅配对：**2.5 图生视频拒收显式 `--ratio`**（跟首帧走，网页把画幅锁「自动」）；**老模型（1.0fast/1.5pro）显式 ratio 须与首帧一致**（charvar 按 ±2% 预检）；2.0 系可独立设。
-- 默认模型 `seedance2.0fast_vip`（720p / 4–15s，最低价档）。**CLI 各子命令默认模型
-  互不相同**，charvar 每次都显式传 `--model_version`，别依赖 CLI 默认。
-- 枚举表两处同源（`charvar/dreamina_video.py` `_VIDEO_MODELS` 与
-  `web/static/tables.js` `DREAMINA_VIDEO_MODELS`），CLI 升级后要同步。
-- 首帧+参考图同给会被提交前拦下（即梦图生视频只收 1 张首帧）；带尾帧
-  （`frames2video`）与多图故事（`multiframe2video`）未接入。
-- 部分模型首次使用需先在即梦 Web 端用该模型完成一次生成（提交报
-  `AigcComplianceConfirmationRequired`），charvar 报错里带网页端指引，重试救不回来。
-- 提示词长度上限视频侧无 CLI 文档，charvar 不做提交前长度拦截；上游报超长会
-  连 fail_reason 一起透传。
-- 成片落 `data/generated/adhoc_video/{id}/`（与 openrouter 同布局）；
-  `job_id` 字段存即梦 submit_id，manifest 可追溯。
-
+- 默认模型 `seedance_2.0_fast_vip`（720p / 4–15s，最低价档）。全模型 ratio 必填
+  ——首帧画幅留空时 charvar 从首帧图挑最接近档。
+- m2v 参考上限按模型：2.0 系 图≤9/视频≤3/合计≤12、`seedance_2.5` ≤50 分
+  类更宽、`happyhorse_1.1` 只收图 ≤9、`wan_3.0` ≤20；首帧+参考同给提交前拦。
+- 枚举表两处同源（`charvar/dreamina_canvas.py` `_VIDEO_MODELS` 与
+  `web/static/tables.js`），目录真源 `dreamina-canvas model list --type video`；
+  CLI 升级后要同步。
+- 首用合规确认（`AigcComplianceConfirmationRequired`）：去即梦网页端用同一
+  账号手动跑一次该模型，再重试；charvar 报错里带指引。
+- 作业异步：node run 拿 submitId → `operation status` 轮询 → `resource
+  download` 收片；manifest.canvas 里存画布 id（refresh/CLI 都靠它续查）。
+- 成片落 `data/generated/adhoc_video/{id}/`（与 openrouter 同布局）；扩展名
+  按魔数嗅探，CLI 落盘名不信任。
+- 画布不自动清理（canvas CLI 无 delete）；堆积多了在即梦网页端手动删。
 ## charvar tts openrouter
 
 用 OpenRouter 出一段语音（文本 → 音频）。**同步**：命令块到音频返回为止，

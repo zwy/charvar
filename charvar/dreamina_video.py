@@ -1,144 +1,113 @@
-"""即梦（Dreamina）视频客户端：封装官方 ``dreamina`` CLI 的视频子命令（子进程）。
+"""即梦（Dreamina）视频客户端：底层是官方 ``dreamina-canvas`` 画布 CLI。
 
-与生图（``charvar.dreamina_image``）的共用与差异：
+与生图（``charvar.dreamina_image``）共用画布基座（``charvar.dreamina_canvas``
+的子进程 / 异常族 / 静态模型目录）。一次视频 = 一张画布：参考图/首帧/
+参考视频先 ``resource upload`` 登记，``node create video`` 按 mode 分派：
+纯文生 ``t2v``、首帧（±尾帧）``first_last_frame``（按顺序 [首帧, 尾帧]），
+参考图/视频 ``m2v``（全能参考）。建节点后走 报价 → 批准 → 运行，submitId
+即作业 id（web 续查键）。
 
-- 直接复用生图通路的基础件：``resolve_binary`` / ``_run_cli``（含鉴权标记判型）/
-  ``parse_task_output`` / ``query``（``query_result`` 与子命令无关，视频共用）/
-  ``_task_status`` / 整套异常族（基类 ``DreaminaImageError``，此处按
-  ``DreaminaVideoError`` 别名引用）—— 不写第二套子进程逻辑；
-- 子命令按输入映射：纯文生 ``text2video``；首帧单图 ``image2video``（缺省
-  ``--ratio`` 由首帧图推断，Seedance 2.0 系也可显式设）；参考图/参考视频走
-  ``multimodal2video``（全能参考，原 ref2video；2.0 系图≤9/视频≤3，至少一条图
-  或视频）。首尾帧（``frames2video``）与多图故事（``multiframe2video``）不接
-  —— 现有网页/CLI 没有尾帧入口，请求带了尾帧直接提交前报错；
-- 与生图的枚举差异（CLI -h 1.4.21 实测，CLI 升级后要同步 _VIDEO_MODELS 表）：
-  ``--video_resolution`` **必填**且按模型配对（``seedance2.0fast_vip`` 恒 720p、
-  ``seedance2.0_vip`` 720p/1080p/4k、``seedance2.5`` 480p/720p/1080p 且
-  VIP-only）；时长按模型（2.0 系 4-15s、``seedance1.0fast`` 5-10、
-  ``seedance1.5pro`` 5-12、``seedance2.5`` 4-30s）；ratio 只有 6 档
-  （**没有**生图侧的 2:3/3:2）；上游对时长/分辨率/显式 ratio 严格校验、
-  拒收不静默调整 —— 所以提交前必须用静态表拦；
-- CLI 各子命令自己的默认模型不同（text2video 默认 seedance2.0fast、其余默认
-  seedance2.0_vip）且都不符合 charvar 约定 —— charvar 必须**每次显式传**
-  ``--model_version``：默认链最后一档是 ``seedance2.0fast_vip``（用户指定的
-  最低价档）；
+与旧 ``dreamina`` CLI 差异（canvas 目录 1.3.0 实测）：
+- 分辨率档每模型独立且**大小写不一**（seedance 系小写 ``720p``、happyhorse/
+  wan 大写 ``720P``）—— 提交前按目录大小写不敏感匹配、透传目录字面值；
+- ratio 全模型必填（缺省 16:9），2.0 系 6 档、happyhorse/wan 9 档；
+- 旧 2.5 的「图生模式拒收显式 ratio」「legacy 模型 ratio 与首帧一致」约束
+  在 canvas 目录里已不存在 —— 不再做提交前拦截，交上游裁决；
+- m2v 参考上限按模型（2.0 系 图≤9/视频≤3 合计≤12，2.5 ≤50，wan ≤20，
+  happyhorse 只收图 ≤9）；
 - 无 seed：请求里的 seed 只记 manifest，绝不进命令行；
-- 无价格 API / 无 usage：成片的 ``cost`` 显示不了逐条预估（按即梦积分与
-  会员权益计），``query_result`` 的任务 JSON 里只有 ``commerce_info`` 权益标签；
-- 提示词长度上限视频侧无 CLI 文档（别抄生图的 1592/1992）—— 不做提交前长度
-  拦截（只拦空串），上游 fail_reason 报超长后再按实测校准；
-- 首用合规确认：部分模型首次使用需先在即梦 Web 端用该模型完成一次生成，提交会
-  返回 ``AigcComplianceConfirmationRequired`` —— 按话式识别并给用户指引，
-  重试救不回来。
+- 视频 prompt 无目录级长度上限（不预检，上游报错后再校准）。
 """
 from __future__ import annotations
 
 import json
 import logging
+import math
 import time
 from pathlib import Path
 from typing import Any
 
-from charvar import dreamina_image
-from charvar.dreamina_image import (
+from charvar import dreamina_canvas
+from charvar.dreamina_canvas import (
+    CanvasRunner,
+    DreaminaAuthError,
     DreaminaCliError,
     DreaminaImageError,
     DreaminaParamError,
     DreaminaTaskError,
     DreaminaTimeoutError,
-    parse_task_output,
+    normalize_video_model,
+    normalize_resolution as _canonical_resolution,
 )
+from charvar.dreamina_image import _env, query as _image_query
 
 logger = logging.getLogger(__name__)
 
-# 视频通路的别名：基类与各子类直接沿用 dreamina_image 的异常族（同一套 CLI 基础件）
+# 视频通路别名：与生图同一套画布异常族
 DreaminaVideoError = DreaminaImageError
 
-# ratio：视频只有 6 档（CLI 1.4.21；**没有**生图通路的 2:3 / 3:2）
-_VIDEO_RATIOS = ("1:1", "3:4", "16:9", "4:3", "9:16", "21:9")
-
-_DEFAULT_MODEL = "seedance2.0fast_vip"
-_DEFAULT_RESOLUTION = "720p"
+_VIDEO_DEFAULT_RESOLUTION = "720p"  # 缺省档（各模型枚举大小写以目录为准）
+_DEFAULT_VIDEO_MODEL = dreamina_canvas._DEFAULT_VIDEO_MODEL  # seedance_2.0_fast_vip
 _DEFAULT_DURATION = 5
 _DEFAULT_TIMEOUT_S = 900.0
+_POLL_INTERVAL_S = 8.0  # web 每 8s 打一次 refresh（见 /videos/{id}/status 约定）
 
-# 2.0 全系共用的子命令面（text2video/image2video/frames2video/multimodal2video）
-_SEEDANCE2 = ("text2video", "image2video", "frames2video", "multimodal2video")
+# ratio 兼容集（旧调用面的全局 6 档集合；per-model 枚举在 _VIDEO_MODELS）
+_VIDEO_RATIOS = ("21:9", "16:9", "4:3", "1:1", "3:4", "9:16")
 
-# model_version → 档位表（CLI -h 1.4.21；CLI 升级后同步，别只改一处）
-_VIDEO_MODELS: dict[str, dict[str, Any]] = {
-    "seedance2.0": {"resolutions": ("720p",), "durations": (4, 15), "subcommands": _SEEDANCE2},
-    "seedance2.0fast": {"resolutions": ("720p",), "durations": (4, 15), "subcommands": _SEEDANCE2},
-    "seedance2.0_vip": {
-        "resolutions": ("720p", "1080p", "4k"), "durations": (4, 15), "subcommands": _SEEDANCE2,
-    },
-    "seedance2.0fast_vip": {"resolutions": ("720p",), "durations": (4, 15), "subcommands": _SEEDANCE2},
-    "seedance2.0mini": {"resolutions": ("720p",), "durations": (4, 15), "subcommands": _SEEDANCE2},
-    "seedance2.5": {
-        "resolutions": ("480p", "720p", "1080p"),
-        "durations": (4, 30),
-        "subcommands": _SEEDANCE2,
-        "vip_only": True,
-        # 2.5 的参考帧模式拒收显式 --ratio（输出跟首帧走；CLI -h 明文）
-        "i2v_ratio_locked": True,
-        # 全能参考的输入媒体时长 2-30s（2.0 系是 2-15s，见下方缺省）
-        "input_media_durations": (2, 30),
-    },
-    "seedance1.0fast": {
-        "resolutions": ("720p",), "durations": (5, 10), "subcommands": ("image2video",),
-        # legacy 模型：显式 ratio 必须与首帧一致（CLI -h 明文），按首帧推断最稳
-        "ratio_match_frame": True,
-    },
-    "seedance1.5pro": {
-        "resolutions": ("720p",), "durations": (5, 12), "subcommands": ("image2video", "frames2video"),
-        "ratio_match_frame": True,
-    },
-}
-
-# 首次使用需在即梦 Web 端完成一次生成的上游报错（各 -h Notes 原文词根）
-_COMPLIANCE_MARKER = "AigcComplianceConfirmationRequired"
+__all__ = [
+    "DreaminaAuthError", "DreaminaCliError", "DreaminaImageError", "DreaminaParamError",
+    "DreaminaTaskError", "DreaminaTimeoutError", "DreaminaVideoError",
+    "resolve_model", "resolve_resolution", "resolve_duration", "resolve_timeout",
+    "validate_ratio", "validate_video", "explain_fail", "dispatch_mode",
+    "submit", "query", "task_status", "poll", "wait_for_video",
+    "extract_video_paths", "video_file_ext", "model_list", "submit_id_of",
+]
 
 
 # ---------- 配置 ----------
 
 
-def resolve_model(model: str | None = None) -> str:
-    """生效的 model_version：显式传入 > env ``DREAMINA_VIDEO_MODEL`` > seedance2.0fast_vip。
+def video_entry(model: str) -> dict[str, Any]:
+    resolved = normalize_video_model(model)
+    entry = dreamina_canvas._VIDEO_MODELS.get(resolved)
+    if entry is None:
+        raise DreaminaParamError(f"即梦画布没有视频模型 {model}")
+    return entry
 
-    设置页的 DB 值由上层（settings_service.dreamina_video_config）先合并进
-    ``model`` 再调这里。与生图不同：视频不回落 CLI 默认 —— CLI 各子命令的
-    默认模型互不相同，charvar 必须显式传。
+
+def resolve_model(model: str | None = None) -> str:
+    """生效模型 id：显式传入 > env ``DREAMINA_VIDEO_MODEL`` > 默认档。
+
+    旧 CLI 名（seedance2.0fast_vip…）经 LEGACY_ALIAS 映射；与生图不同点不在：
+    charvar 约定视频模型必须显式可解析（映射不到回落默认并告警由调用方处理）。
     """
-    for candidate in (model, dreamina_image._env("DREAMINA_VIDEO_MODEL")):
-        candidate = str(candidate or "").strip()
-        if candidate:
-            return candidate
-    return _DEFAULT_MODEL
+    return normalize_video_model(model if model else _env("DREAMINA_VIDEO_MODEL") or None)
 
 
 def resolve_resolution(resolution: str | None = None) -> str:
-    """生效的 ``--video_resolution``：显式传入 > 720p（必填参数，没有「不发」路径）。
-
-    统一小写归一（CLI 枚举写法 480p/720p/1080p/4k）。
-    """
+    """生效分辨率档：显式传入 > env > 720p（大小写校验在 validate_video 按模型）。"""
     candidate = str(resolution or "").strip()
     if candidate:
-        return candidate.lower()
-    return _DEFAULT_RESOLUTION
+        return candidate
+    return _env("DREAMINA_VIDEO_RESOLUTION") or _VIDEO_DEFAULT_RESOLUTION
 
 
 def resolve_duration(duration: int | None = None) -> int:
-    """生效的 ``--duration``：显式传入 > 5（CLI 默认同值，但显式发避免依赖 CLI 默认）。"""
     if duration is not None:
         return int(duration)
-    return _DEFAULT_DURATION
+    raw = _env("DREAMINA_VIDEO_DURATION")
+    try:
+        return int(float(raw)) if raw else _DEFAULT_DURATION
+    except ValueError:
+        return _DEFAULT_DURATION
 
 
 def resolve_timeout(timeout_s: float | None = None) -> float:
-    """总等待预算：env ``DREAMINA_VIDEO_TIMEOUT`` 或 900s（视频分钟级，比生图长）。"""
+    """总等待预算：env ``DREAMINA_VIDEO_TIMEOUT`` 或 900s（视频分钟级）。"""
     if timeout_s is not None:
         return float(timeout_s)
-    raw = dreamina_image._env("DREAMINA_VIDEO_TIMEOUT")
+    raw = _env("DREAMINA_VIDEO_TIMEOUT")
     try:
         return float(raw) if raw else _DEFAULT_TIMEOUT_S
     except ValueError:
@@ -148,62 +117,60 @@ def resolve_timeout(timeout_s: float | None = None) -> float:
 # ---------- 提交前校验 ----------
 
 
-def validate_ratio(ratio: str | None) -> str:
-    """比例校验：视频只有 6 档（没有生图侧的 2:3/3:2），超出在提交前报错。"""
+def validate_ratio(ratio: str | None, *, model: str | None = None) -> str:
+    """比例校验：per-model 枚举（2.0 系 6 档 / happyhorse/wan 9 档）。"""
     value = str(ratio or "").strip()
-    if value and value not in _VIDEO_RATIOS:
+    if not value:
+        return value
+    allowed = _VIDEO_RATIOS
+    if model:
+        allowed = video_entry(model)["ratios"]
+    if value not in allowed:
         raise DreaminaParamError(
-            f"即梦视频画幅只支持 {'/'.join(_VIDEO_RATIOS)}，当前：{value}"
+            f"即梦视频画幅只支持 {'/'.join(allowed)}，当前：{value}"
         )
     return value
 
 
 def validate_video(
-    model: str, resolution: str, duration: int | None, subcommand: str, *, ratio: str = ""
+    model: str, resolution: str, duration: int | None, mode: str, *, ratio: str = ""
 ) -> str:
-    """model_version × video_resolution × duration × 子命令 组合校验（CLI -h 1.4.21）。
+    """模型 × 分辨率 × 时长 × 模式 组合校验（canvas 静态目录）。
 
-    --video_resolution 是即梦必填参数（缺失/空串直接拦）；表外模型（CLI 升级
-    新增）不拦，交给 CLI 裁决。
+    分辨率大小写不敏感匹配目录字面值（seedance 小写 720p、happyhorse/wan
+    大写 720P）；显式给了目录外的档直接报错。
     """
     if not resolution:
-        raise DreaminaParamError(
-            "resolution 不能为空（--video_resolution 是即梦视频必填参数）"
-        )
+        raise DreaminaParamError("resolution 不能为空（即梦视频每档模型必填分辨率）")
     if duration is not None:
         if isinstance(duration, bool) or not isinstance(duration, int) or duration <= 0:
             raise DreaminaParamError(f"时长必须是正整数秒，当前：{duration!r}")
-    entry = _VIDEO_MODELS.get(model.lower())
-    if entry is None:
-        return resolution
-    allowed_res = tuple(entry["resolutions"])
-    if resolution not in allowed_res:
+    entry = video_entry(model)
+    resolution = _canonical_resolution(resolution, entry)
+    if resolution not in entry["resolutions"]:
         raise DreaminaParamError(
-            f"模型 {model} 的分辨率档只支持 {'/'.join(allowed_res)}，当前：{resolution}"
+            f"模型 {entry['label']} 的分辨率档只支持 {'/'.join(entry['resolutions'])}，当前：{resolution}"
         )
     if duration is not None:
         lo, hi = entry["durations"]
         if not (lo <= duration <= hi):
-            raise DreaminaParamError(
-                f"模型 {model} 支持时长 {lo}-{hi}s，当前：{duration}s"
-            )
-    accepted = tuple(entry["subcommands"])
-    if subcommand not in accepted:
+            raise DreaminaParamError(f"模型 {entry['label']} 支持时长 {lo}-{hi}s，当前：{duration}s")
+    allowed_modes = tuple(entry["modes"])
+    if mode not in allowed_modes:
         raise DreaminaParamError(
-            f"模型 {model} 不支持 {subcommand}（支持：{'/'.join(accepted)}）"
+            f"模型 {entry['label']} 不支持 {mode} 模式（支持：{'/'.join(allowed_modes)}）"
         )
-    if subcommand == "image2video" and entry.get("i2v_ratio_locked") and str(ratio or "").strip():
+    if ratio and ratio not in entry["ratios"]:
         raise DreaminaParamError(
-            f"模型 {model} 的图生视频拒收显式画幅（输出跟首帧走）："
-            "把画幅留「自动（按首帧推断）」或换非 2.5 模型"
+            f"模型 {entry['label']} 的画幅只支持 {'/'.join(entry['ratios'])}，当前：{ratio}"
         )
     return resolution
 
 
 def explain_fail(reason: str) -> str:
-    """fail_reason 翻译：首用合规确认给网页端指引；其余原样返回。"""
+    """失败原因翻译：首用合规确认提示网页端先行；其余原样返回。"""
     text = str(reason or "").strip()
-    if _COMPLIANCE_MARKER in text:
+    if "AigcComplianceConfirmationRequired" in text:
         return (
             f"{text} —— 该模型首次使用需先在即梦 Web 端完成一次生成（合规确认）："
             "请用同一账号在 jimeng.jianying.com 网页端手动用一次该模型，再回来重试"
@@ -211,41 +178,93 @@ def explain_fail(reason: str) -> str:
     return text
 
 
-# ---------- 子命令分派 ----------
-
-
-def dispatch_subcommand(
+def dispatch_mode(
     *,
     first_frame: Path | None = None,
     last_frame: Path | None = None,
     reference_paths: list[Path] | None = None,
     reference_video_paths: list[Path] | None = None,
 ) -> str:
-    """按输入选即梦视频子命令。
+    """按输入选 mode：首帧（±尾帧）→ first_last_frame；参考图/视频 → m2v；都没有 → t2v。
 
-    - 首帧（±尾帧）→ ``image2video``：即梦的图生视频只收 1 张首帧，带尾帧或
-      附加参考图/参考视频直接报错（不静默丢弃 —— 与 OpenRouter 的 frame 优先
-      语义不同，这里用户没有「自动不送」的选项，宁可拦下）；
-    - 尾帧单独给 → 报错（frames2video 未接入）；
-    - 参考图/参考视频 → ``multimodal2video``（全能参考）；
-    - 都没有 → ``text2video``。
+    首帧与参考图/参考视频互斥（即梦 i2v 语义只收一帧，宁可拦下不静默丢弃）；
+    尾帧单独给（无首帧）也报错 —— first_last_frame 按顺序 [首, 尾]。
     """
     if first_frame is not None or last_frame is not None:
-        if last_frame is not None:
+        if last_frame is not None and first_frame is None:
             raise DreaminaParamError(
-                "即梦通路暂不支持尾帧图（首尾帧 frames2video 未接入）；请去掉尾帧或改用 openrouter 通路"
+                "即梦首尾帧模式必须同时给首帧（按顺序 首帧→尾帧）；只有尾帧请去掉或带上首帧"
             )
         if reference_paths or reference_video_paths:
             raise DreaminaParamError(
-                "即梦图生视频只收 1 张首帧：参考图/参考视频请留空，或去掉首帧单发（走全能参考）"
+                "即梦首帧与参考图/参考视频互斥：参考素材请留空，或去掉首帧改走全能参考"
             )
-        return "image2video"
+        return "first_last_frame"
     if reference_paths or reference_video_paths:
-        return "multimodal2video"
-    return "text2video"
+        return "m2v"
+    return "t2v"
 
 
 # ---------- 提交与查询 ----------
+
+
+def _resource_timeout() -> float:
+    raw = _env("DREAMINA_RESOURCE_TIMEOUT")
+    try:
+        return float(raw) if raw else 120.0
+    except ValueError:
+        return 120.0
+
+
+def _ref_ids_for(runner: CanvasRunner, paths: list[Path], human: str) -> list[str]:
+    ref_ids = []
+    for path in paths:
+        resolved = Path(path).expanduser()
+        if not resolved.is_file():
+            raise DreaminaParamError(f"{human}不存在：{resolved}")
+        rid = runner.upload(resolved)
+        runner.wait_resource(rid, timeout_s=_resource_timeout())
+        ref_ids.append(rid)
+    return ref_ids
+
+
+def _validate_m2v_refs(
+    model: str, *,
+    reference_paths: list[Path] | None,
+    reference_video_paths: list[Path] | None,
+) -> None:
+    entry = video_entry(model)
+    caps = entry["m2v_ref"]
+    n_image = len(reference_paths or [])
+    n_video = len(reference_video_paths or [])
+    total = n_image + n_video
+    if total == 0:
+        raise DreaminaParamError(f"模型 {entry['label']} 的 m2v 模式至少要 1 张参考图或 1 段参考视频")
+    if n_image > caps["image"] or n_video > caps["video"] or total > caps["total"]:
+        raise DreaminaParamError(
+            f"模型 {entry['label']} 的全能参考上限：图 ≤{caps['image']}、视频 ≤{caps['video']}、"
+            f"合计 ≤{caps['total']}；当前图 {n_image} 张、视频 {n_video} 段"
+        )
+
+
+def _infer_ratio_from_frame(first_frame: Path, ratios: tuple[str, ...]) -> str:
+    """首帧模式缺省画幅 → 从首帧图挑最接近的档（旧 CLI 的「按首帧推断」语义）。"""
+    try:
+        from PIL import Image
+
+        width, height = Image.open(Path(first_frame).expanduser()).size
+    except Exception:  # noqa: BLE001 - 打不开就交缺省，别拦合法请求
+        return "16:9"
+    if width <= 0 or height <= 0:
+        return "16:9"
+    target = width / height
+
+    def gap(candidate: str) -> float:
+        w, h = str(candidate).split(":")
+        value = float(w) / float(h)
+        return abs(math.log(target / value))
+
+    return min(ratios, key=gap)
 
 
 def submit(
@@ -260,89 +279,106 @@ def submit(
     reference_paths: list[Path] | None = None,
     reference_video_paths: list[Path] | None = None,
     poll_s: float = 0,
+    runner: CanvasRunner | None = None,
+    canvas_name: str | None = None,
 ) -> dict:
-    """提交一次视频任务，返回任务 JSON（submit_id / gen_status / result_json）。
+    """提交视频作业（画布全链到 node run），返回任务 dict。
 
-    ``--poll=0`` 只提交不等待：web 提交是「提交即返回 pending」，等待节奏由
-    调用方（adhoc_video 的 wait 路径 / refresh 轮询）控制，不在子进程里睡。
-    任务状态是异步的：``gen_status=querying`` 只代表提交被受理，终态只有
-    success / fail。
-
-    Raises:
-        DreaminaParamError: 提示词为空 / 比例·分辨率·时长·模型组合不合法 /
-            首尾帧组合不支持 / 输入文件缺失。
-        DreaminaAuthError: 登录态无效（提示先 dreamina login）。
-        DreaminaCliError: CLI 缺失 / 非零退出 / 输出解析失败。
+    返回形态与旧通路同形：``submit_id`` / ``gen_status``（querying=已受理），
+    另加 ``canvas``={project_id, web_url, node_id}（caller 落 manifest，
+    续查/下载的必要键）。``--poll=0`` 语义照旧：只提交不等待，节奏由
+    adhoc_video 的 wait/refresh 控制。
     """
     text = str(prompt or "").strip()
     if not text:
-        raise DreaminaParamError("prompt 不能为空（即梦视频无提示词长度预检上限，上游报错后再校准）")
-    subcommand = dispatch_subcommand(
-        first_frame=first_frame,
-        last_frame=last_frame,
-        reference_paths=reference_paths,
-        reference_video_paths=reference_video_paths,
+        raise DreaminaParamError("prompt 不能为空（即梦视频无目录级长度上限，上游报错后再校准）")
+    mode = dispatch_mode(
+        first_frame=first_frame, last_frame=last_frame,
+        reference_paths=reference_paths, reference_video_paths=reference_video_paths,
     )
-    if not str(model or "").strip():
-        raise DreaminaParamError("model 不能为空（charvar 显式传 --model_version，别依赖 CLI 默认）")
-    resolution = resolve_resolution(resolution)
-    resolution = validate_video(model, resolution, duration, subcommand, ratio=ratio)
-    ratio = validate_ratio(ratio)
-    entry_ = _VIDEO_MODELS.get(str(model).strip().lower()) or {}
-    if entry_.get("ratio_match_frame") and ratio and first_frame is not None:
-        _validate_ratio_matches_frame(first_frame, ratio)
-    args = [subcommand, "--prompt", text]
-    # CLI 各子命令默认模型不同：charvar 约定必须显式传
-    args.extend(["--model_version", str(model).strip()])
-    args.extend(["--video_resolution", resolution])
-    if duration is not None:
-        args.extend(["--duration", str(int(duration))])
-    if ratio:
-        args.extend(["--ratio", ratio])
-    args.extend(["--poll", str(int(poll_s))])
-    if subcommand == "multimodal2video":
-        lo, hi = entry_.get("input_media_durations") or (2, 15)
-        for path in list(reference_video_paths or []):
-            seconds = probe_media_seconds(Path(path).expanduser())
-            if seconds is not None and not (lo <= seconds <= hi):
-                raise DreaminaParamError(
-                    f"参考视频时长须 {lo}-{hi}s（实测约 {seconds:.1f}s）：{Path(path).name}"
-                )
-    for flag, human, paths in (
-        ("--image", "参考图", reference_paths),
-        ("--video", "参考视频", reference_video_paths),
-    ):
-        for path in paths or []:
-            resolved = Path(path).expanduser()
-            if not resolved.is_file():
-                raise DreaminaParamError(f"{human}不存在：{resolved}")
-            args.extend([flag, str(resolved)])
-    if first_frame is not None:
-        resolved = Path(first_frame).expanduser()
-        if not resolved.is_file():
-            raise DreaminaParamError(f"首帧图不存在：{resolved}")
-        args.extend(["--image", str(resolved)])
-    proc = dreamina_image._run_cli(args, timeout_s=max(60.0, poll_s + 60.0))
-    task = parse_task_output(proc.stdout)
-    gen_status, reason = task_status(task)
-    if gen_status == "fail":
-        raise DreaminaTaskError(f"即梦视频提交被拒：{explain_fail(reason)}", submit_id=str(task.get("submit_id") or ""))
-    return task
+    model = resolve_model(model)
+    resolution = validate_video(
+        model, resolve_resolution(resolution), resolve_duration(duration) if duration is not None else None, mode
+    )
+    duration = resolve_duration(duration) if duration is not None else None
+    ratios = video_entry(model)["ratios"]
+    ratio = validate_ratio(ratio, model=model)
+    if not ratio and mode == "first_last_frame" and first_frame is not None:
+        ratio = _infer_ratio_from_frame(first_frame, ratios)  # 图生语义：画幅跟首帧走
+    ratio = ratio or "16:9"
+    if mode == "m2v":
+        _validate_m2v_refs(model, reference_paths=reference_paths, reference_video_paths=reference_video_paths)
 
+    runner = runner or CanvasRunner(canvas_name or f"charvar-video-{time.strftime('%Y%m%d')}-{time.time_ns() % 10**8}")
+    project_id = runner.ensure_canvas()
 
-def query(submit_id: str, *, download_dir: Path | None = None, timeout_s: float = 120.0) -> dict:
-    """查一次任务状态（``query_result`` 与子命令无关，直接复用生图通路）。"""
-    return dreamina_image.query(submit_id, download_dir=download_dir, timeout_s=timeout_s)
+    ref_ids: list[str] = []
+    if mode == "first_last_frame":
+        ref_ids = _ref_ids_for(runner, [first_frame], "首帧图")
+        if last_frame is not None:
+            last_ids = _ref_ids_for(runner, [last_frame], "尾帧图")
+            ref_ids.extend(last_ids)
+    elif mode == "m2v":
+        ref_ids.extend(_ref_ids_for(runner, list(reference_paths or []), "参考图"))
+        ref_ids.extend(_ref_ids_for(runner, list(reference_video_paths or []), "参考视频"))
+
+    node_id, submit_id = runner.create_and_run(
+        kind="video", model=model, mode=mode, prompt=text,
+        title=f"charvar-video-{time.strftime('%H%M%S')}",
+        ratio=ratio, resolution=resolution,
+        ref_ids=ref_ids, duration=duration, count=1,
+    )
+    return {
+        "submit_id": submit_id,
+        "gen_status": "querying",
+        "result_json": {},
+        "canvas": {
+            "project_id": project_id,
+            "web_url": runner.web_url,
+            "node_id": node_id,
+            "mode": mode,
+        },
+    }
 
 
 def task_status(task: dict) -> tuple[str, str]:
     """(gen_status, fail_reason) 元组；querying 只是受理不算终态。"""
-    return dreamina_image._task_status(task)
+    status = str(task.get("gen_status") or "").strip()
+    reason = str(task.get("fail_reason") or "").strip()
+    return status, reason
 
 
-def poll(submit_id: str, *, timeout_s: float = 120.0) -> dict:
+def query(
+    submit_id: str,
+    *,
+    download_dir: Path | None = None,
+    timeout_s: float = 120.0,
+    project_id: str = "",
+) -> dict:
+    """查一次视频作业状态；成功且给 download_dir 时把产物下载进那个目录。
+
+    状态映射 running→querying、succeeded→success、其余（failed/canceled/
+    expired）→fail。project_id 必给（manifest.canvas.project_id）。
+    """
+    if not project_id:
+        raise DreaminaParamError("画布查询需要 project_id（manifest.canvas.project_id）")
+    data = _image_query(
+        submit_id, download_dir=download_dir,
+        timeout_s=timeout_s, project_id=project_id,
+    )
+    result_json = data.get("result_json") or {}
+    # operation status 的 resources 是视频产物；把它挪进 videos[]（旧契约）
+    videos = result_json.get("images") or []
+    return {
+        "submit_id": submit_id,
+        "gen_status": data.get("gen_status") or "",
+        "result_json": {"videos": videos},
+    }
+
+
+def poll(submit_id: str, *, timeout_s: float = 120.0, project_id: str = "") -> dict:
     """轮询一次作业状态（不给 download_dir：成片等到终态再单独下载）。"""
-    return query(submit_id, timeout_s=timeout_s)
+    return query(submit_id, timeout_s=timeout_s, project_id=project_id)
 
 
 def wait_for_video(
@@ -353,41 +389,40 @@ def wait_for_video(
     timeout_s: float = 900.0,
     sleep: Any = time.sleep,
     timeout_error: type[Exception] | None = None,
+    project_id: str = "",
 ) -> dict:
     """阻塞轮询到终态（success/fail）返回最终任务 JSON。
 
     ``sleep`` 给测试替换；``timeout_error`` 给调用方（adhoc_video）换成自己的
-    异常类型（AdhocVideoTimeout，作业还在跑、refresh 可续）。默认超时抛
-    DreaminaTimeoutError（带 submit_id，可 ``dreamina query_result`` 续追）。
+    类型（AdhocVideoTimeout，作业还在跑、refresh 可续）。project_id 为续查键。
     """
     if not str(submit_id or "").strip():
         raise DreaminaCliError("submit_id 不能为空")
+    if not project_id:
+        raise DreaminaParamError("画布轮询需要 project_id（manifest.canvas.project_id）")
     deadline = time.monotonic() + max(1.0, timeout_s)
-    task = first_result if isinstance(first_result, dict) else poll(submit_id)
+    task = first_result if isinstance(first_result, dict) else poll(submit_id, project_id=project_id)
     while True:
-        status, reason = task_status(task)
+        status, _reason = task_status(task)
         if status in ("success", "fail"):
             return task
-        if not str(task.get("submit_id") or "").strip():
-            raise DreaminaCliError(f"即梦任务没有 submit_id：{json.dumps(task, ensure_ascii=False)[:300]}")
         if time.monotonic() >= deadline:
             message = (
                 f"即梦视频作业超时未完成（>{int(timeout_s)}s，gen_status={status or 'querying'}）。"
-                f"可稍后用 `dreamina query_result --submit_id={submit_id}` 追结果"
+                f"画布作业稍后仍可续查（submit_id={submit_id}）"
             )
             if timeout_error is not None:
                 raise timeout_error(message)
-            raise DreaminaTimeoutError(message, submit_id=submit_id)
+            raise DreaminaTimeoutError(message, submit_id=submit_id, project_id=project_id)
         sleep(max(0.5, poll_interval))
-        task = poll(submit_id, timeout_s=min(120.0, max(15.0, deadline - time.monotonic())))
+        task = poll(submit_id, project_id=project_id,
+                    timeout_s=min(60.0, max(15.0, deadline - time.monotonic())))
 
 
 def extract_video_paths(payload: dict) -> list[Path]:
-    """从 ``query_result --download_dir`` 的输出里取本地产物路径（视频优先）。
+    """从查询任务 dict 里取本地产物路径（``result_json.videos[]`` 优先兜底 images）。
 
-    本地 tasks.db 里的 result_json 不含 path —— path 只出现在 stdout 的 JSON
-    里，由 CLI 落盘后回填（``<submit_id>_video_1.mp4`` 之类）。视频任务扫
-    ``videos[]``；videos 里没有就兜底扫 ``images[]``；逐个 is_file() 校验。
+    调用方拿到的 path 由 ``query/download`` 落盘返回；逐个 is_file() 校验。
     """
     payload_json = payload.get("result_json") if isinstance(payload.get("result_json"), dict) else {}
     items: list[dict] = []
@@ -398,7 +433,7 @@ def extract_video_paths(payload: dict) -> list[Path]:
             break
     if not items:
         raise DreaminaCliError(
-            f"即梦任务成功但未落盘视频文件：{json.dumps(payload, ensure_ascii=False)[:300]}"
+            f"即梦作业成功但未落盘视频文件：{json.dumps(payload, ensure_ascii=False)[:300]}"
         )
     paths = [Path(str(item["path"])).expanduser() for item in items]
     for path in paths:
@@ -408,80 +443,31 @@ def extract_video_paths(payload: dict) -> list[Path]:
 
 
 def video_file_ext(path: Path) -> str:
-    """即梦产物文件 → 扩展名（按魔数嗅探，不信任 CLI 落盘名）。"""
+    """即梦产物文件 → 扩展名（按魔数嗅探，不信任落盘名）。"""
     from charvar import openrouter_video
 
     head = Path(path).expanduser().read_bytes()[:64]
     return openrouter_video.sniff_video_ext(head)
 
 
-def _validate_ratio_matches_frame(first_frame: Path, ratio: str) -> None:
-    """legacy 模型（1.0fast/1.5pro）：显式 ratio 必须与首帧一致（±2%），否则上游拒。
-
-    解析不了（PIL 打不开 / ratio 不是 w:h）就放行，交给上游裁决 —— 别用错误
-    的预检拦掉合法请求。
-    """
-    try:
-        from PIL import Image
-
-        width, height = Image.open(Path(first_frame).expanduser()).size
-        parts = str(ratio).strip().split(":")
-        rw, rh = float(parts[0]), float(parts[1])
-    except Exception:  # noqa: BLE001
-        return
-    if width <= 0 or height <= 0 or rw <= 0 or rh <= 0:
-        return
-    if abs((width / height) - (rw / rh)) > 0.02 * (rw / rh):
-        raise DreaminaParamError(
-            f"模型该档要求显式画幅与首帧一致：首帧 {width}x{height} 与 ratio {ratio} 不匹配；"
-            "建议把画幅留「自动（按首帧推断）」"
-        )
-
-
-def probe_media_seconds(path: Path) -> float | None:
-    """ffprobe 读媒体时长（秒）；ffprobe 不在/读不出来 → None（**不拦**，交上游）。
-
-    只用于参考视频的提交前预检（multimodal2video 的输入媒体时长 2-15s / 2.5: 2-30s）。
-    """
-    import shutil as _shutil
-    import subprocess as _sp
-
-    try:
-        from charvar.video import _ffmpeg_bin
-
-        candidate = Path(_ffmpeg_bin()).with_name("ffprobe")
-        ffprobe = str(candidate) if candidate.is_file() else (_shutil.which("ffprobe") or "")
-    except Exception:  # noqa: BLE001
-        ffprobe = _shutil.which("ffprobe") or ""
-    if not ffprobe:
-        return None
-    try:
-        proc = _sp.run(
-            [ffprobe, "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
-             str(Path(path).expanduser())],
-            capture_output=True, text=True, timeout=30,
-        )
-        value = float(proc.stdout.strip().splitlines()[-1])
-    except Exception:  # noqa: BLE001
-        return None
-    return value if value > 0 else None
-
-
 # ---------- CLI `charvar video models --provider dreamina` 用 ----------
 
 
 def model_list() -> list[dict[str, Any]]:
-    """静态模型档位表 → CLI 列表输出形态（与生图先例一致：枚举随 CLI -h 同步）。"""
+    """静态模型档位表 → CLI 列表输出形态（保留 id/resolutions/durations/ratios/vip_only 键）。"""
     out: list[dict[str, Any]] = []
-    for model, entry in _VIDEO_MODELS.items():
+    for model, entry in dreamina_canvas._VIDEO_MODELS.items():
         out.append(
             {
                 "id": model,
+                "label": entry["label"],
                 "resolutions": list(entry["resolutions"]),
                 "durations": list(entry["durations"]),
-                "ratios": list(_VIDEO_RATIOS),
-                "subcommands": list(entry["subcommands"]),
-                "vip_only": bool(entry.get("vip_only")),
+                "ratios": list(entry["ratios"]),
+                "modes": list(entry["modes"]),
+                "m2v_ref": entry["m2v_ref"],
+                "count_max": entry["count_max"],
+                "vip_only": False,  # canvas 目录不回 VIP 标记（账号可用性以服务端准入为准）
             }
         )
     return out
@@ -489,7 +475,7 @@ def model_list() -> list[dict[str, Any]]:
 
 def submit_id_of(task: dict) -> str:
     """任务 JSON → submit_id（缺了报错：它是 web 续查与 CLI 追查的唯一凭据）。"""
-    value = str(task.get("submit_id") or "").strip()
+    value = str((task.get("items") or [{}])[0].get("submitId") or task.get("submit_id") or "").strip()
     if not value:
         raise DreaminaCliError(
             f"即梦任务没有 submit_id：{json.dumps(task, ensure_ascii=False)[:300]}"

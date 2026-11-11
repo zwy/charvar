@@ -508,10 +508,10 @@ def test_dreamina_uses_settings_defaults(env, monkeypatch):
         storage.set_setting(conn, "dreamina", {"model": "4.7", "resolution": "4K"})
     calls = _fake_dreamina(monkeypatch)
     result = adhoc.generate(adhoc.AdhocRequest(prompt="p", backend="dreamina"))
-    assert calls[0]["model"] == "4.7"
-    assert calls[0]["resolution"] == "4k"  # 模块内归一小写
+    assert calls[0]["model"] == "seedream_4.7"
+    assert calls[0]["resolution"] == "4K"
     assert result.provider == "dreamina"
-    assert result.model == "4.7"
+    assert result.model == "seedream_4.7"
     assert result.prompt_id == "dm-sid-1"  # 即梦 submit_id 存 prompt_id 字段
     assert pathlib.Path(result.image_path).suffix == ".png"
 
@@ -521,16 +521,16 @@ def test_dreamina_falls_back_to_cli_defaults(env, monkeypatch):
     monkeypatch.delenv("DREAMINA_IMAGE_RESOLUTION", raising=False)
     calls = _fake_dreamina(monkeypatch)
     result = adhoc.generate(adhoc.AdhocRequest(prompt="p", backend="dreamina"))
-    assert calls[0]["model"] == ""   # 空 = CLI 默认 5.0
-    assert calls[0]["resolution"] == "2k"
-    assert result.model == ""
+    assert calls[0]["model"] == "seedream_4.7"  # canvas 默认链：DB/env 都空也是显式默认档
+    assert calls[0]["resolution"] == "2K"
+    assert result.model == "seedream_4.7"
 
 
 def test_dreamina_env_beats_cli_default_but_request_beats_all(env, monkeypatch):
     monkeypatch.setenv("DREAMINA_IMAGE_RESOLUTION", "4K")
     calls = _fake_dreamina(monkeypatch)
     adhoc.generate(adhoc.AdhocRequest(prompt="p", backend="dreamina"))
-    assert calls[0]["resolution"] == "4k"  # 模块内归一小写
+    assert calls[0]["resolution"] == "4K"
 
     calls.clear()
     adhoc.generate(adhoc.AdhocRequest(prompt="p", backend="dreamina", model="5.0Pro", resolution="1.5K"))

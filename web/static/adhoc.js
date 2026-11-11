@@ -9,7 +9,7 @@
    - ComfyUI：分辨率 1k/2k 默认 2k、负向词、种子；地址/workflow 跟随 .env 与设置页；
    - OpenRouter：模型跟随设置页 t2i/i2i 组（只显示说明行）；
      分辨率/质量 = 该模式模型的清单枚举（有才显示，含 2K 默认 2K）；
-   - 即梦：模型版本下拉（空=跟随设置页默认 5.0；i2i 不列 3.0/3.1），
+   - 即梦：模型版本下拉（空=跟随设置页默认 seedream_4.7；i2i 不列不收参考图的模型），
      分辨率随所选模型配对，默认 2K。
    参考图预处理在后端统一做；种子留空 = 前端随机 0–100000（随机源在调用方这一侧，
    adhoc.py 仍只收显式 seed，不引入自己的随机源），填数值 = 固定复现；即梦不暴露 seed。 */
@@ -18,7 +18,7 @@ const ADHOC_ASPECTS = ["3:4", "1:1", "16:9", "4:3", "9:16", "2:3", "3:2", "21:9"
 const ADHOC_MAX_REFS = 4;
 
 /* 即梦 model_version -> 分辨率枚举在共享文件 tables.js（预设页也用同一张表）。 */
-/* DREAMINA_T2I_ONLY_MODELS（仅文生图模型）同样在 tables.js。 */
+/* DREAMINA_IMAGE_MODELS（画布生图目录）在 tables.js，本页与后端 _IMAGE_MODELS 同源。 */
 
 const adhocState = {
   flow: "free", // 生图模式：自由生图 / 单主体动作 / 双主体动作 / 人脸动作 / 换装（引擎在 adhocflow.js）
@@ -221,23 +221,23 @@ function applyAdhocTierOptions() {
   $("#adhoc-quality-field").hidden = true;
 }
 
-/* 即梦：分辨率选项随所选模型版本配对（_MODEL_RESOLUTIONS）
-   模型空（跟随设置）就真跟随 —— 档位按设置页的默认模型列出来，但选中「跟随设置默认」。 */
+/* 即梦：分辨率选项随所选模型版本配对（tables.js 画布目录，与后端同源）
+   模型空（跟随设置）就真跟随 —— 档位按设置页的默认模型列出来，但选中「跟随设置默认」。
+   字面值按目录原样（大小写有语义：seedance 小写 720p 等）。 */
 function applyDreaminaResolutionOptions() {
   const modelValue = $("#adhoc-model-select").value;
   const def = adhocState.dreaminaDefaults || {};
   const sel = $("#adhoc-resolution");
-  const base = modelValue || def.model || "5.0";
-  const tiers = DREAMINA_MODEL_RESOLUTIONS[base] || DREAMINA_MODEL_RESOLUTIONS["5.0"];
-  const display = tiers.map((t) => String(t).toUpperCase());
+  const base = modelValue || def.model || DREAMINA_DEFAULT_IMAGE_MODEL;
+  const tiers = (DREAMINA_IMAGE_MODELS[base] || DREAMINA_IMAGE_MODELS[DREAMINA_DEFAULT_IMAGE_MODEL]).resolutions;
   sel.innerHTML = [`<option value="">跟随设置默认（${def.resolution || "2K"}）</option>`]
-    .concat(display.map((t) => `<option value="${t}">${t}</option>`))
+    .concat(tiers.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`))
     .join("");
-  sel.value = modelValue ? (display.includes("2K") ? "2K" : display[0]) : "";
+  sel.value = modelValue ? (tiers.includes("2K") ? "2K" : tiers[0]) : "";
   $("#adhoc-resolution-field").hidden = false;
 }
 
-/* 即梦：模型版本下拉；图片编辑页签不列仅文生图的 3.0/3.1 */
+/* 即梦：模型版本下拉；图片编辑页签不列连 t2i 兼收参考都没开的模型 */
 async function applyAdhocDreaminaOptions() {
   if (adhocState.dreaminaCliOk === undefined) {
     try {
@@ -250,18 +250,18 @@ async function applyAdhocDreaminaOptions() {
     }
   }
   const i2i = adhocState.mode === "i2i";
-  const models = Object.keys(DREAMINA_MODEL_RESOLUTIONS).filter(
-    (m) => !i2i || !DREAMINA_T2I_ONLY_MODELS.has(m)
+  const models = Object.entries(DREAMINA_IMAGE_MODELS).filter(
+    ([, e]) => !i2i || e.refMax.i2i > 0 || e.refMax.t2i > 0
   );
   const def = adhocState.dreaminaDefaults || {};
-  const defLabel = `跟随设置默认（${def.model || "5.0"} · ${def.resolution || "2K"}）`;
+  const defLabel = `跟随设置默认（${def.model || DREAMINA_DEFAULT_IMAGE_MODEL} · ${def.resolution || "2K"}）`;
   const sel = $("#adhoc-model-select");
   const keep = sel.value;
   sel.innerHTML = [`<option value="">${defLabel}</option>`]
-    .concat(models.map((m) => `<option value="${m}">${m}</option>`))
+    .concat(models.map(([id, e]) => `<option value="${escapeHtml(id)}">${escapeHtml(e.label)}</option>`))
     .join("");
   // 记住上次选的模型版本（切走再切回来别重置）
-  sel.value = models.includes(keep) ? keep : "";
+  sel.value = models.some(([id]) => id === keep) ? keep : "";
   $("#adhoc-model-select-field").hidden = false;
   applyDreaminaResolutionOptions();
   renderAdhocModelInfo();

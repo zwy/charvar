@@ -699,7 +699,7 @@ def test_generate_dreamina_slots_two_step_flow(client, tmp_path, monkeypatch):
     assert slot["status"] == "ready" and slot["provider"] == "dreamina"
     assert calls[0]["reference_paths"] is None
     assert calls[0]["ratio"] == "3:4"       # character_sheet 槽位默认画幅
-    assert calls[0]["resolution"] == "2k"   # 设置/env 默认链的缺省档
+    assert calls[0]["resolution"] == "2K"   # 设置/env 默认链的缺省档
     assert calls[0]["prompt"] == "a character sheet of the same character"  # 无标签句 → 原样
     assert (paths.subjects_dir() / "demo_witch" / "character_sheet.png").exists()
     assert (paths.subjects_dir() / "demo_witch" / "thumbs" / "character_sheet.webp").exists()

@@ -1,7 +1,7 @@
 {
   "name": "charvar-skill",
-  "version": "1.7.0",
-  "updated": "2026-11-04",
+  "version": "1.8.0",
+  "updated": "2026-11-11",
   "description": "按提示词实际出图/出视频的 Claude Code skill：ComfyUI、OpenRouter、即梦三条通路 + OpenRouter 语音（TTS）+ 主体档案 CLI。",
   "entrypoint": "SKILL.md",
   "files": {
@@ -16,6 +16,11 @@
     "note": "本 skill 无自带脚本；由仓库级 tests/test_skills.py 校验 frontmatter、版本同步与文件清单。"
   },
   "history": [
+    {
+      "version": "1.8.0",
+      "updated": "2026-11-11",
+      "note": "即梦通路底层整体换到官方画布 CLI dreamina-canvas（旧 dreamina 直发下线）：每请求一张新画布，节点→报价→自动批准→运行→下载；prompt_id/作业 id 是画布 submitId，manifest 新增 canvas 续查键。提示词上限改按模型 2000/5000/1024（旧 1592/1992 废止）；模型目录换新（seedream 4.6–5.5、happyhorse/wan 等），旧名自动映射；视频 mode = t2v/first_last_frame/m2v（尾帧支持）；登录口令改为 dreamina-canvas auth login。"
+    },
     {
       "version": "1.7.0",
       "updated": "2026-11-04",

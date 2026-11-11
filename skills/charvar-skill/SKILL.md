@@ -5,11 +5,11 @@ description: Generate images with the charvar project's ComfyUI, OpenRouter, or 
 
 # charvar 生图
 
-版本：1.7.0  
-更新：2026-11-04
+版本：1.8.0  
+更新：2026-11-11
 
 通过 charvar 项目的 CLI 出图。三条后端：**comfyui**（本机/局域网 ComfyUI）、
-**openrouter**（OpenRouter 在线生图）和 **dreamina**（即梦官方 CLI，消耗即梦积分）。
+**openrouter**（OpenRouter 在线生图）和 **dreamina**（即梦官方画布 CLI `dreamina-canvas`，消耗即梦积分）。
 用户会明确说用哪条 —— 别自己猜。
 
 ## 何时用
@@ -42,7 +42,7 @@ CLI 由 `scripts/install_cli.sh` 装到 `~/.local/bin/charvar`。
 ~/.local/bin/charvar image openrouter --prompt "a red apple on a wooden table" --aspect 1:1 --out out.png
 ```
 
-**即梦 Dreamina**（官方 CLI；需本机已 `dreamina login`，每张消耗即梦积分/权益）：
+**即梦 Dreamina**（官方画布 CLI；需本机已 `dreamina-canvas auth login`，每张消耗即梦积分）：
 
 ```bash
 ~/.local/bin/charvar image dreamina --prompt "a red apple on a wooden table" --aspect 1:1 --out out.png
@@ -76,13 +76,13 @@ cat prompt.md | ~/.local/bin/charvar image comfyui --prompt-file - --out out.png
 | `--prompt` / `--prompt-file` | 提示词，二选一；`--prompt-file -` 读 stdin |
 | `--ref` | 参考图路径，可重复，最多 4 张 |
 | `--aspect` | `1:1` `3:4` `16:9` `4:3` `9:16` `2:3` `3:2` `21:9`（默认 `3:4`） |
-| `--resolution` | `1k` `2k`（默认 `1k`）或模型声明枚举值（512/1K/1.5K/2K/4K…；OpenRouter 通路）。即梦通路收 `1k`（仅 3.0/3.1 文生图）`2k` `4k` `1.5k`（5.0Pro），空 = 设置页/env 默认 2k。**2K 的像素表只对 ComfyUI 成立**（Qwen-Image-2.1 官方像素，面积恒定 ~4.2MP）；OpenRouter 通路走通用长边归一，别拿 Qwen 像素表去推算 |
+| `--resolution` | `1k` `2k`（默认 `1k`）或模型声明枚举值（512/1K/1.5K/2K/4K…；OpenRouter 通路）。即梦画布通路收 `1K`/`1.5K`/`2K`/`4K`，按所选模型档位（字面值按目录透传），空 = 设置页/env 默认 2K。**2K 的像素表只对 ComfyUI 成立**（Qwen-Image-2.1 官方像素，面积恒定 ~4.2MP）；OpenRouter 通路走通用长边归一，别拿 Qwen 像素表去推算 |
 | `--seed` | 采样种子，默认 `0`（固定复现）；要新图就换种子。**即梦通路没有 `--seed`**（即梦不暴露 seed） |
 | `--out` | 产物路径 |
 | `--json` | 结果以 JSON 输出（给脚本消费时用） |
 | `--negative` | 负向提示词（仅 ComfyUI 支持） |
 | `--workflow` | 指定 ComfyUI workflow 名或 JSON 路径 |
-| `--model` | OpenRouter 模型 slug（默认按模式取 `OP_IMAGE_T2I_MODEL` / `OP_IMAGE_I2I_MODEL`）；即梦通路填 model_version（`3.0`–`5.0Pro`，默认 5.0，即 `DREAMINA_IMAGE_MODEL`） |
+| `--model` | OpenRouter 模型 slug（默认按模式取 `OP_IMAGE_T2I_MODEL` / `OP_IMAGE_I2I_MODEL`）；即梦通路填画布模型 id（`seedream_4.7`/`seedream_5.5` 等，默认 `seedream_4.7`，旧名 `3.0`–`5.0Pro` 自动映射，即 `DREAMINA_IMAGE_MODEL`） |
 | `--quality` | OpenRouter 质量档（模型声明支持才生效） |
 
 完整参数见 `references/cli.md`。
@@ -113,9 +113,9 @@ charvar 的网页顶栏也有「Playground」页签（`http://127.0.0.1:8710`）
 - 生成要 1–3 分钟，命令阻塞轮询（`--timeout` 默认 900s）；`--json` 给脚本消费。
 - 网页顶栏「视频」页签是同一条通路（`http://127.0.0.1:8710`）。
 
-即梦（Dreamina）走官方 CLI，子命令按输入自动分派：纯文生 `text2video`、首帧
-`image2video`、`--ref`/`--video-ref`（≤4/≤2）走全能参考 `multimodal2video`；
-默认模型 `seedance2.0fast_vip`（最低价档：720p / 4–15s / 6 档画幅）；**没有 `--seed`**：
+即梦（Dreamina）走官方画布 CLI，输入按画布 mode 自动分派：纯文生 `t2v`、首帧
+`first_last_frame`、`--ref`/`--video-ref`（≤4/≤2）走 `m2v`（全能参考）；
+默认模型 `seedance_2.0_fast_vip`（最低价档：720p / 4–15s）；**没有 `--seed`**：
 
 ```bash
 ~/.local/bin/charvar video dreamina --prompt "the woman performs a smooth dance" --aspect 9:16 --duration 5
@@ -297,13 +297,14 @@ PY
 | ComfyUI 连不上 | 检查 `COMFYUI_HOST` / `COMFYUI_PORT`（`.env`）与 ComfyUI 是否在跑 |
 | OpenRouter 报 key 缺失 | 设 `OP_IMAGE_API_KEY` 或 `LLM_API_KEY` |
 | 即梦报登录态无效 | 让用户手动跑 `dreamina login`（授权 URL 手动在浏览器打开），别由 agent 代登 |
-| 即梦报找不到 dreamina CLI | 跑 `curl -s https://jimeng.jianying.com/cli \| bash` 安装，或设 `DREAMINA_CLI` 指向可执行文件 |
-| 即梦报提示词超限 | text2image 1592 / image2image 1992 字符（上游硬上限是 1600 / 2000，charvar 留了余量），先压缩提示词 |
+| 即梦报找不到 dreamina-canvas CLI | 跑 `curl -fsSL https://jimeng.jianying.com/canvas-cli/install.sh \| bash` 安装，或设 `DREAMINA_CLI` 指向可执行文件 |
+| 即梦报提示词超限 | 画布生图按模型限长（2000/5000/1024，见 `charvar image dreamina --help`），先压缩提示词 |
 | 参考图超 4 张 | ComfyUI edit workflow 只有 4 个参考图槽位 |
 | workflow 找不到 | `data/workflows/` 里没有该名字；用 `--workflow` 给 JSON 路径 |
 
 ## 版本记录
 
+- **1.8.0**（2026-11-11）即梦底层整体换到官方画布 CLI `dreamina-canvas`：生图/视频每请求一张新画布（节点→报价→批准→运行→下载），旧 `dreamina` CLI 直发通路下线；模型目录换新（seedream_4.6/4.7/5.0/5.5、happyhorse/wan 等），旧模型名自动映射；视频 mode 分派 `t2v/first_last_frame/m2v`（尾帧首获支持）；manifest 新增 `canvas` 续查键。
 - **1.7.0**（2026-11-04）视频接入即梦（Dreamina CLI）：`charvar video dreamina`（子命令按输入分派，默认 seedance2.0fast_vip）；`video models --provider dreamina`；网页视频页供应商切换；设置页「即梦视频」组。
 
 1.6.0（2026-10-28）：**新增语音生成通路（OpenRouter TTS）**：`charvar tts openrouter`（文本 → wav/mp3，同步）与 `charvar tts models`（模型/voice 清单）。默认模型免费档 `heygen/heygen-voice-1-turbo:free`（`OP_TTS_MODEL` 可换），网页顶栏新增「语音」页签同一条通路。要点：voice 目录枚举非空时实测必填（空值自动取第一项兜底）；HeyGen 系 5000 字符单次上限提交前拦截；裸 PCM 按响应头采样率封装成 wav，MiniMax 只出 mp3（格式给错自动换档重试并记探测缓存）。声音克隆（参考音频）第二期再接。

@@ -153,28 +153,28 @@ def test_dreamina_config_chain(tmp_path, monkeypatch):
     from charvar.settings_service import dreamina_config
 
     conn = storage.connect(pathlib.Path(tmp_path) / "t.db")
-    # env > 缺省
+    # env > 缺省（model 缺省链最终落到 canvas 默认档 seedream_4.7）
     monkeypatch.setenv("DREAMINA_IMAGE_RESOLUTION", "4K")
     cfg = dreamina_config(conn)
-    assert cfg == {"model": "", "resolution": "4k"}
+    assert cfg == {"model": "seedream_4.7", "resolution": "4K"}
     monkeypatch.delenv("DREAMINA_IMAGE_RESOLUTION", raising=False)
-    # DB > env
+    # DB > env（旧 CLI 模型名经 LEGACY_ALIAS 映射）
     monkeypatch.setenv("DREAMINA_IMAGE_RESOLUTION", "4K")
     storage.set_setting(conn, "dreamina", {"model": "4.7", "resolution": "2K"})
     cfg = dreamina_config(conn)
-    assert cfg == {"model": "4.7", "resolution": "2k"}
+    assert cfg == {"model": "seedream_4.7", "resolution": "2K"}
 
 
 def test_dreamina_video_group(client, tmp_path):
-    """即梦视频组：默认链占位（seedance2.0fast_vip）+ 保存白名单 + 落库回读。"""
+    """即梦视频组：默认链占位（seedance_2.0_fast_vip）+ 保存白名单 + 落库回读。"""
     data = client.get("/settings").json()
-    assert data["dreamina_video_default_model"] == "seedance2.0fast_vip"
+    assert data["dreamina_video_default_model"] == "seedance_2.0_fast_vip"
     put = client.put("/settings", json={"dreamina_video": {"model": "seedance2.0_vip"}}).json()
     assert put["dreamina_video"]["model"] == "seedance2.0_vip"
-    assert put["dreamina_video_default_model"] == "seedance2.0_vip"
+    assert put["dreamina_video_default_model"] == "seedance_2.0_vip"
     got = client.get("/settings").json()
     assert got["dreamina_video"]["model"] == "seedance2.0_vip"
     # 空串落库 = 回默认链
     client.put("/settings", json={"dreamina_video": {"model": ""}})
     got = client.get("/settings").json()
-    assert got["dreamina_video_default_model"] == "seedance2.0fast_vip"
+    assert got["dreamina_video_default_model"] == "seedance_2.0_fast_vip"

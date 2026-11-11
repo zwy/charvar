@@ -19,7 +19,7 @@ manifest 记完整请求与结果，便于复现；产物不落 runs 表（临�
 - OpenRouter 画幅走显式像素（provider 的 aspect_ratio 枚举不含 21:9），seed 由
   ``build_generate_body`` 内部收敛到 2^53-1；
 - 即梦（Dreamina）走官方 ``dreamina`` CLI（``charvar.dreamina_image``）：
-  带参考图 = image2image，不带 = text2image（同一组设置，不分组）；
+  带参考图 = i2i，不带 = t2i（同一组设置，不分组）；
   画幅用 --ratio（charvar 8 档与 CLI 枚举一致）；**不暴露 seed**，
   请求里的 seed 只记 manifest；提示词长度在提交前预检（t2i/i2i 上限不同）；
 - 不引入随机源：seed 一律由调用方显式给定。
@@ -572,11 +572,11 @@ def _generate_openrouter(
 def _generate_dreamina(
     req: AdhocRequest, run_id: str, run_dir: Path, db_path: Path | None = None
 ) -> AdhocResult:
-    """即梦通路：带参考图 = image2image，不带 = text2image（同一组配置）。
+    """即梦通路：带参考图 = i2i，不带 = t2i（同一组配置）。
 
     即梦不暴露 seed（req.seed 只记 manifest）、没有负向词、没有质量档。
     提示词处理与 OpenRouter 通路相同：``<image1>`` 有参考图换序数词、
-    无参考图整段摘掉 —— image2image 的参考图也是按 --images 顺序对应，
+    无参考图整段摘掉 —— i2i 的参考图也是按 --ref 顺序对应，
     没有「标签→图片」绑定语义。提示词长度由 dreamina_image 提交前预检
     （t2i 1600 / i2i 2000 字符，超限是上游硬失败，白扣一次提交）。
     """
@@ -623,7 +623,7 @@ def _generate_dreamina(
         height=actual_h or dm_result.height or 0,
         seed=req.seed,  # 即梦不暴露 seed：请求值原样记录，不参与生成
         model=dm_result.model,
-        prompt_id=dm_result.submit_id,  # 凭此可在 CLI 侧 dreamina query_result 追踪
+        prompt_id=dm_result.submit_id,  # 画布运行 id，可凭 manifest.canvas.project_id 在画布续查
     )
 
 

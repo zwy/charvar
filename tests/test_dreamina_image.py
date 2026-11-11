@@ -1,287 +1,233 @@
-"""即梦（Dreamina）CLI 客户端：命令拼装 / 输出解析 / 等待与终态（假 CLI，不发真网）。
+"""即梦生图（画布通路）测试：流程与校验打桩，不调真 CLI。
 
-用 monkeypatch 替换 `charvar.dreamina_image.subprocess.run`，按假想 CLI 行为
-回 stdout（含 "download image N URL:" 进度行混排的解析），不发真实请求、
-不消耗积分。
+分层：``charvar.dreamina_canvas`` 的子进程层在 ``test_dreamina_canvas.py``
+单测；本文件用假 ``CanvasRunner`` 打桩画布编排，锁「generate 的流程语义」
+——mode 选择、参考图上限、默认链、轮询到终态、产物落盘、异常判型。
 """
 from __future__ import annotations
 
-import json
-import pathlib
+import time
+from pathlib import Path
+from typing import Any
 
 import pytest
-from PIL import Image
 
-from charvar import dreamina_image
-
-TASK_SUCCESS_NO_PATH = {
-    "submit_id": "sid-1",
-    "prompt": "p",
-    "gen_status": "success",
-    "result_json": {"images": [{"item_id": "1", "width": 1664, "height": 2496}], "videos": []},
-}
-TASK_QUERYING = {
-    "submit_id": "sid-1",
-    "gen_status": "querying",
-    "result_json": {"images": [], "videos": []},
-}
+from charvar import dreamina_canvas, dreamina_image
 
 
-class FakeCli:
-    """替身 dreamina CLI：记录每次命令行，按脚本回 stdout / 创建下载文件。"""
+class FakeRunner:
+    """替身 CanvasRunner：记录调用序列，可配置运行终态。"""
 
-    def __init__(self, *, download_root: pathlib.Path, responses: list[dict] | None = None):
-        self.calls: list[list[str]] = []
-        self.download_root = download_root
-        self.responses = responses or []
-        self._serial = 0
+    def __init__(self, name: str, *, project_id: str | None = None) -> None:
+        self.name = name
+        self.created_with = name
+        self.project_id = project_id or "proj-0000"
+        self.web_url = "https://jimeng.test/canvas/proj-0000"
+        self.calls: list[tuple[str, ...]] = []
+        self.terminal_states: list[str] = ["running", "succeeded"]
+        self.node_state = "succeeded"
+        self.rid_seq = 0
 
-    def __call__(self, cmd, **kwargs):
-        self.calls.append(cmd)
-        # _run_cli 拼的是 [binary, *args]：子命令在 cmd[1]
-        subcommand = cmd[1] if len(cmd) > 1 else ""
-        if subcommand == "query_result" and "--download_dir" in cmd:
-            directory = pathlib.Path(cmd[cmd.index("--download_dir") + 1])
-            directory.mkdir(parents=True, exist_ok=True)
-            self._serial += 1
-            image = directory / f"{cmd[cmd.index('--submit_id') + 1]}_image_1.png"
-            Image.new("RGB", (16, 24), (30, 60, 90)).save(image, format="PNG")
-            payload = {
-                **TASK_SUCCESS_NO_PATH,
-                "result_json": {
-                    "images": [{"item_id": "1", "path": str(image), "width": 1664, "height": 2496}],
-                    "videos": [],
-                },
-            }
-            # 与真实 CLI 一致：下载动作先打一行进度，JSON 在后面
-            stdout = f"download image 1 URL: https://example.com/{self._serial}\n" + json.dumps(
-                payload, ensure_ascii=False
-            )
-            import subprocess
+    def ensure_canvas(self) -> str:
+        self.calls.append(("ensure_canvas",))
+        return self.project_id
 
-            return subprocess.CompletedProcess(cmd, 0, stdout=stdout, stderr="")
-        if self.responses:
-            payload = self.responses.pop(0)
-        else:
-            payload = TASK_SUCCESS_NO_PATH
-        import subprocess
+    def upload(self, path: Path) -> str:
+        self.rid_seq += 1
+        self.calls.append(("upload", str(path)))
+        return f"res-{self.rid_seq:04d}"
 
-        return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(payload, ensure_ascii=False), stderr="")
+    def resource_get(self, resource_id: str) -> dict[str, Any]:
+        self.calls.append(("resource_get", resource_id))
+        return dict(resourceId=resource_id, status="success")
+
+    def wait_resource(self, resource_id: str, **kwargs: Any) -> dict[str, Any]:
+        self.calls.append(("wait_resource", resource_id))
+        return dict(resourceId=resource_id, status="success")
+
+    def create_node(self, *, kind, model, mode, prompt, title, ratio, resolution, ref_ids, duration=None, count=None):
+        self.calls.append(("create_node", kind, model, mode, resolution, ratio, tuple(ref_ids)))
+        self.node_id = f"node_{len(self.calls)}"
+        return self.node_id
+
+    def quote(self, node_ids: list[str]) -> dict[str, Any]:
+        self.calls.append(("quote", tuple(node_ids)))
+        return dict(totalMaxCredits=2, confirmationRequired=False)
+
+    def confirm(self, node_ids: list[str], *, credit_ceiling: int) -> str:
+        self.calls.append(("confirm", tuple(node_ids), credit_ceiling))
+        assert credit_ceiling >= 2
+        return "tok-1"
+
+    def run(self, node_ids: list[str], submit_ids: list[str], credit_token: str) -> list[str]:
+        self.calls.append(("run", tuple(node_ids), tuple(submit_ids), credit_token))
+        return list(submit_ids)
+
+    def create_and_run(self, **kwargs: Any):
+        assert kwargs.get("submit_id") is None
+        node_id = self.create_node(
+            kind=kwargs["kind"], model=kwargs["model"], mode=kwargs["mode"],
+            prompt=kwargs["prompt"], title=kwargs["title"], ratio=kwargs["ratio"],
+            resolution=kwargs["resolution"], ref_ids=list(kwargs["ref_ids"]),
+            duration=kwargs.get("duration"), count=kwargs.get("count"),
+        )
+        self.quote([node_id])
+        token = self.confirm([node_id], credit_ceiling=3)
+        submit_id = "sid-1"
+        self.run([node_id], [submit_id], token)
+        return node_id, submit_id
+
+    def status(self, submit_id: str) -> dict[str, Any]:
+        self.calls.append(("status", submit_id))
+        state = self.terminal_states.pop(0) if len(self.terminal_states) > 1 or self.terminal_states[0] != "running" else self.terminal_states[0]
+        if len(self.terminal_states) == 1 and self.terminal_states[0] == "running" and state == "running":
+            self.terminal_states[0] = "running"  # 恒 running（超时用例改写）
+        return dict(operationRef=submit_id, state=state,
+                    resources=[dict(resourceId="out-0001", state=state)])
+
+    def node_outputs(self, node_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+        self.calls.append(("node_outputs", tuple(node_ids)))
+        return {self.node_id: [dict(
+            type="image", status="success", resourceId="out-0001", submitId="sid-1",
+            image=dict(width=2048, height=2048, format="jpeg"),
+        )]}
+
+    def download(self, resource_id: str, dest_dir: Path) -> dict[str, Any]:
+        self.calls.append(("download", resource_id, str(dest_dir)))
+        dest = Path(dest_dir) / f"dreamina-{resource_id}.png"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(b"\x89PNG fake")
+        return dict(resourceId=resource_id, path=str(dest), size=10)
 
 
-@pytest.fixture()
-def fake_env(tmp_path, monkeypatch):
-    """隔离：数据目录 + 假 CLI 替身 + 固定 sleep（不真等）。"""
-    monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
-    for key in (
-        "DREAMINA_CLI",
-        "DREAMINA_IMAGE_MODEL",
-        "DREAMINA_IMAGE_RESOLUTION",
-        "DREAMINA_IMAGE_TIMEOUT",
-        "DREAMINA_POLL",
-        "DREAMINA_CONCURRENCY",
-    ):
+@pytest.fixture(autouse=True)
+def clean_dreamina_env(monkeypatch):
+    for key in ("DREAMINA_IMAGE_MODEL", "DREAMINA_IMAGE_RESOLUTION", "DREAMINA_IMAGE_TIMEOUT", "DREAMINA_POLL"):
         monkeypatch.delenv(key, raising=False)
-    # 命令拼装/输出解析与本机是否装了 dreamina 无关：打桩掉解释器解析，
-    # 免得没装 CLI 的机器整组用例红（真实解析另有 test_binary_env_override 覆盖）。
-    monkeypatch.setattr(dreamina_image, "resolve_binary", lambda: "dreamina-fake")
-    fake = FakeCli(download_root=tmp_path)
-    monkeypatch.setattr(dreamina_image.subprocess, "run", fake)
+
+
+@pytest.fixture
+def fake_runner(monkeypatch):
+    runner = FakeRunner("charvar-image-test")
+    monkeypatch.setattr(dreamina_image, "CanvasRunner", lambda name, **kw: runner)
     monkeypatch.setattr(dreamina_image.time, "sleep", lambda _s: None)
-    return fake
+    return runner
 
 
-# ---------- 参数拼装 ----------
-
-def test_t2i_submit_command(fake_env):
-    dreamina_image.generate(prompt="a cat", download_dir=fake_env.download_root / "dl", resolution="2k")
-    submit = fake_env.calls[0][1:]  # [0] 是 binary[1:]  # [0] 是 binary
-    assert submit[0] == "text2image"
-    assert submit[submit.index("--prompt") + 1] == "a cat"
-    assert submit[submit.index("--resolution_type") + 1] == "2k"
-    assert submit[submit.index("--poll") + 1].isdigit()
-    assert "--ratio" not in submit           # ratio 为空时不传（CLI 默认 16:9）
-    assert "--model_version" not in submit    # model 为空时不传（CLI 默认 5.0）
-    assert "--images" not in submit
-
-
-def test_i2i_submit_carries_refs_and_ratio(fake_env, tmp_path):
-    ref = tmp_path / "ref.png"
-    Image.new("RGB", (8, 8), (1, 2, 3)).save(ref, format="PNG")
-    dreamina_image.generate(
-        prompt="keep <image1>", download_dir=fake_env.download_root / "dl",
-        resolution="4k", model="5.0Pro", ratio="2:3", reference_paths=[ref],
-    )
-    submit = fake_env.calls[0][1:]  # [0] 是 binary[1:]  # [0] 是 binary
-    assert submit[0] == "image2image"
-    assert submit[submit.index("--model_version") + 1] == "5.0Pro"
-    assert submit[submit.index("--ratio") + 1] == "2:3"
-    assert submit[submit.index("--resolution_type") + 1] == "4k"
-    assert submit.count("--images") >= 1
-
-
-def test_env_defaults_fill_in(fake_env, monkeypatch):
-    monkeypatch.setenv("DREAMINA_IMAGE_MODEL", "4.7")
-    monkeypatch.setenv("DREAMINA_IMAGE_RESOLUTION", "4K")
-    dreamina_image.generate(prompt="p", download_dir=fake_env.download_root / "dl")
-    submit = fake_env.calls[0][1:]  # [0] 是 binary[1:]  # [0] 是 binary
-    assert submit[submit.index("--model_version") + 1] == "4.7"
-    assert submit[submit.index("--resolution_type") + 1] == "4k"  # 归一小写
-
-
-def test_default_resolution_is_2k(fake_env):
-    dreamina_image.generate(prompt="p", download_dir=fake_env.download_root / "dl")
-    submit = fake_env.calls[0][1:]  # [0] 是 binary
-    assert submit[submit.index("--resolution_type") + 1] == "2k"
-
-
-# ---------- 等待与终态 ----------
-
-def test_success_within_poll_downloads_once(fake_env):
+def test_generate_happy_path(tmp_path, fake_runner):
+    ref1 = tmp_path / "ref1.png"; ref1.write_bytes(b"x")
+    ref2 = tmp_path / "ref2.png"; ref2.write_bytes(b"x")
     result = dreamina_image.generate(
-        prompt="p", download_dir=fake_env.download_root / "dl", resolution="2k",
+        prompt="a red car", download_dir=tmp_path / "dl", ratio="1:1",
+        reference_paths=[ref1, ref2],
     )
-    # submit（poll 内 success）→ 直接下载一次
-    assert fake_env.calls[0][1] == "text2image"
-    assert fake_env.calls[1][1] == "query_result"
-    assert len(fake_env.calls) == 2
-    assert result.submit_id == "sid-1"
     assert result.gen_status == "success"
+    assert result.submit_id == "sid-1"
+    assert result.model == "seedream_4.7"
+    assert result.resolution == "2K"
+    assert result.width == 2048 and result.height == 2048
+    assert result.project_id == "proj-0000"
+    assert result.web_url.endswith("/proj-0000")
     assert len(result.images) == 1 and result.images[0].is_file()
-    assert result.width == 1664 and result.height == 2496
+    # 参考图上传成资源、节点 mode=i2i、闸门走 quote→confirm→run
+    kinds = [c[0] if isinstance(c, tuple) else c for c in fake_runner.calls]
+    assert "upload" in kinds and "wait" in str(kinds)
+    node_call = next(c for c in fake_runner.calls if c[0] == "create_node")
+    assert node_call[1] == "image" and node_call[3] == "i2i" and node_call[4] == "2K"
 
 
-def test_querying_then_success(fake_env):
-    fake_env.responses = [TASK_QUERYING, TASK_SUCCESS_NO_PATH]
-    result = dreamina_image.generate(
-        prompt="p", download_dir=fake_env.download_root / "dl", timeout_s=60, poll_s=0,
-    )
-    kinds = [c[1] for c in fake_env.calls]
-    # submit(querying) → query 拿到 success → 下载查询，共 2 次 query_result
-    assert kinds == ["text2image", "query_result", "query_result"]
-    assert result.images and result.images[0].is_file()
+def test_generate_t2i_without_refs(tmp_path, fake_runner):
+    dreamina_image.generate(prompt="a cat", download_dir=tmp_path / "dl")
+    node_call = next(c for c in fake_runner.calls if c[0] == "create_node")
+    assert node_call[1] == "image" and node_call[3] == "t2i"
+    assert not any(c[0] == "upload" for c in fake_runner.calls)
 
 
-def test_fail_status_raises_with_reason(fake_env):
-    fake_env.responses = [{
-        **TASK_QUERYING,
-        "gen_status": "fail",
-        "fail_reason": "prompt len is larger than limited len",
-    }]
-    with pytest.raises(dreamina_image.DreaminaTaskError) as exc:
-        dreamina_image.generate(
-            prompt="p", download_dir=fake_env.download_root / "dl", timeout_s=30, poll_s=0,
-        )
-    assert "prompt len" in str(exc.value)
-    assert exc.value.submit_id == "sid-1"
+def test_generate_t2i_ref_fallback(tmp_path, fake_runner):
+    # seedream_4.7 i2i 上限 6，8 张走 t2i 兼收参考（t2i 上限 14）
+    refs = []
+    for i in range(8):
+        ref = tmp_path / f"r{i}.png"; ref.write_bytes(b"x"); refs.append(ref)
+    dreamina_image.generate(prompt="p", download_dir=tmp_path / "dl", model="seedream_4.7", reference_paths=refs)
+    node_call = next(c for c in fake_runner.calls if c[0] == "create_node")
+    assert node_call[3] == "t2i"
+    upload_calls = [c for c in fake_runner.calls if c[0] == "upload"]
+    assert len(upload_calls) == 8
 
 
-def test_timeout_carries_submit_id(fake_env):
-    fake_env.responses = [TASK_QUERYING]
+def test_generate_ref_over_limit(tmp_path, fake_runner):
+    refs = []
+    for i in range(8):
+        ref = tmp_path / f"r{i}.png"; ref.write_bytes(b"x"); refs.append(ref)
+    with pytest.raises(dreamina_image.DreaminaParamError):
+        dreamina_image.generate(prompt="p", download_dir=tmp_path / "dl", model="seedream_4.5", reference_paths=refs)
+
+
+def test_generate_prompt_over_limit(tmp_path, fake_runner):
+    with pytest.raises(dreamina_image.DreaminaParamError):
+        dreamina_image.generate(prompt="x" * 2001, download_dir=tmp_path / "dl")
+    # 5.0Pro 上限 5000
+    dreamina_image.validate_prompt("x" * 2000, has_reference=False, model="seedream_5.0_pro")
+
+
+def test_generate_ratio_and_model_validation(tmp_path, fake_runner):
+    with pytest.raises(dreamina_image.DreaminaParamError):
+        dreamina_image.generate(prompt="p", download_dir=tmp_path / "dl", ratio="2:5")
+    with pytest.raises(dreamina_image.DreaminaParamError):
+        dreamina_image.generate(prompt="p", download_dir=tmp_path / "dl", resolution="3K")
+
+
+def test_generate_timeout(tmp_path, monkeypatch):
+    runner = FakeRunner("charvar-image-test")
+    runner.terminal_states = ["running", "running"]
+    monkeypatch.setattr(dreamina_image, "CanvasRunner", lambda name, **kw: runner)
+    monkeypatch.setattr(dreamina_image.time, "sleep", lambda _s: None)
+
+    real_monotonic = time.monotonic
+    clock = [0.0]
+    monkeypatch.setattr(dreamina_image.time, "monotonic", lambda: clock[0])
+    orig_sleep = dreamina_image.time.sleep
+    monkeypatch.setattr(dreamina_image.time, "sleep", lambda s: clock.__setitem__(0, clock[0] + s))
+
     with pytest.raises(dreamina_image.DreaminaTimeoutError) as exc:
-        dreamina_image.generate(
-            prompt="p", download_dir=fake_env.download_root / "dl", timeout_s=0, poll_s=0,
-        )
+        dreamina_image.generate(prompt="p", download_dir=tmp_path / "dl", timeout_s=10)
+    assert exc.value.submit_id == "sid-1"
+    assert exc.value.project_id == "proj-0000"
+
+
+def test_generate_failed_state(tmp_path, monkeypatch):
+    runner = FakeRunner("charvar-image-test")
+    monkeypatch.setattr(dreamina_image, "CanvasRunner", lambda name, **kw: runner)
+    monkeypatch.setattr(dreamina_image.time, "sleep", lambda _s: None)
+
+    def failed_status(submit_id):
+        return dict(operationRef=submit_id, state="failed", resources=[])
+    monkeypatch.setattr(runner, "status", failed_status)
+
+    with pytest.raises(dreamina_image.DreaminaTaskError) as exc:
+        dreamina_image.generate(prompt="p", download_dir=tmp_path / "dl")
     assert exc.value.submit_id == "sid-1"
 
 
-# ---------- 提交前校验（防白扣积分） ----------
+def test_default_chain_via_env(monkeypatch, tmp_path, fake_runner):
+    monkeypatch.setenv("DREAMINA_IMAGE_MODEL", "5.0Pro")
+    monkeypatch.setenv("DREAMINA_IMAGE_RESOLUTION", "1.5k")
+    result = dreamina_image.generate(prompt="p", download_dir=tmp_path / "dl")
+    assert result.model == "seedream_5.0_pro"
+    assert result.resolution == "1.5K"
+    node_call = next(c for c in fake_runner.calls if c[0] == "create_node")
+    assert node_call[4] == "1.5K"
 
-def test_prompt_limit(fake_env):
+
+def test_resolve_and_validate_surface(monkeypatch):
+    monkeypatch.delenv("DREAMINA_IMAGE_MODEL", raising=False)
+    assert dreamina_image.resolve_model(None) == "seedream_4.7"
+    assert dreamina_image.resolve_model("5.0Pro") == "seedream_5.0_pro"
+    assert dreamina_image.resolve_model("3.0") == "seedream_4.7"
+    assert dreamina_image.validate_model_resolution("seedream_4.7", "1K", has_reference=True) == "1K"
     with pytest.raises(dreamina_image.DreaminaParamError):
-        dreamina_image.validate_prompt("x" * 1600, has_reference=False)
-    with pytest.raises(dreamina_image.DreaminaParamError):
-        dreamina_image.validate_prompt("x" * 2001, has_reference=True)
-    # 上限内不报错
-    dreamina_image.validate_prompt("x" * 1200, has_reference=False)
-
-
-def test_prompt_too_long_never_submits(fake_env):
-    with pytest.raises(dreamina_image.DreaminaParamError):
-        dreamina_image.generate(prompt="x" * 2500, download_dir=fake_env.download_root / "dl")
-    assert fake_env.calls == []  # 没白提交一次
-
-
-def test_bad_ratio_rejected(fake_env):
-    with pytest.raises(dreamina_image.DreaminaParamError):
-        dreamina_image.validate_ratio("2:5")
-
-
-def test_model_resolution_mismatch_rejected(fake_env):
-    # 5.0 只收 2k/4k
-    with pytest.raises(dreamina_image.DreaminaParamError):
-        dreamina_image.validate_model_resolution("5.0", "1k", has_reference=False)
-    # 3.0/3.1 不支持 image2image
-    with pytest.raises(dreamina_image.DreaminaParamError):
-        dreamina_image.validate_model_resolution("3.0", "2k", has_reference=True)
-    # 5.0Pro 的 1.5k 放行；表外模型不拦
-    assert dreamina_image.validate_model_resolution("5.0Pro", "1.5k", has_reference=False) == "1.5k"
-    assert dreamina_image.validate_model_resolution("9.9", "7k", has_reference=False) == "7k"
-    # 请求带大写档位会被归一：generate 里 resolve_resolution 先小写化
-    dreamina_image.generate(
-        prompt="p", download_dir=fake_env.download_root / "dl", resolution="4K", model="5.0",
-    )
-    submit = fake_env.calls[0][1:]  # [0] 是 binary[1:]  # [0] 是 binary
-    assert submit[submit.index("--resolution_type") + 1] == "4k"
-
-
-# ---------- 输出解析 ----------
-
-def test_parse_skips_progress_lines():
-    text = (
-        "download image 1 URL: https://p.example.com/x?signature=1\n"
-        "download image 2 URL: https://p.example.com/y?signature=2\n"
-        + json.dumps({"submit_id": "sid-2", "gen_status": "success"})
-    )
-    assert dreamina_image.parse_task_output(text)["submit_id"] == "sid-2"
-
-
-def test_parse_accepts_list_task_format():
-    text = json.dumps([{"submit_id": "sid-3", "gen_status": "success"}])
-    assert dreamina_image.parse_task_output(text)["submit_id"] == "sid-3"
-
-
-def test_parse_without_json_raises():
-    with pytest.raises(dreamina_image.DreaminaCliError):
-        dreamina_image.parse_task_output("download image 1 URL: ok\nno json at all")
-
-
-# ---------- CLI 缺失 / 鉴权 ----------
-
-def test_binary_env_override(tmp_path, monkeypatch):
-    fake = tmp_path / "dreamina-fake"
-    fake.write_text("#!/bin/sh\n", encoding="utf-8")
-    monkeypatch.setenv("DREAMINA_CLI", str(fake))
-    assert dreamina_image.resolve_binary() == str(fake)
-
-
-def test_nonzero_exit_maps_auth_error(fake_env, monkeypatch):
-    import subprocess
-
-    def fail(cmd, **kwargs):
-        return subprocess.CompletedProcess(cmd, 3, stdout="", stderr="错误：您尚未登录，请先登录")
-
-    monkeypatch.setattr(dreamina_image.subprocess, "run", fail)
-    with pytest.raises(dreamina_image.DreaminaAuthError) as exc:
-        dreamina_image.query("sid-1")
-    assert "dreamina login" in str(exc.value)
-
-
-def test_nonzero_exit_generic_error(fake_env, monkeypatch):
-    import subprocess
-
-    def fail(cmd, **kwargs):
-        return subprocess.CompletedProcess(cmd, 2, stdout="", stderr="boom: something else")
-
-    monkeypatch.setattr(dreamina_image.subprocess, "run", fail)
-    with pytest.raises(dreamina_image.DreaminaCliError):
-        dreamina_image.query("sid-1")
-
-
-def test_missing_reference_rejected(fake_env, tmp_path):
-    with pytest.raises(dreamina_image.DreaminaParamError):
-        dreamina_image.generate(
-            prompt="p", download_dir=fake_env.download_root / "dl",
-            reference_paths=[tmp_path / "nope.png"],
-        )
-    assert fake_env.calls == []
+        dreamina_image.validate_model_resolution("seedream_4.7", "7K", has_reference=True)
+    # 参考图数量按模式校验：i2i 6 张上限内直通
+    assert dreamina_image.validate_references(6, model="seedream_4.5", mode="i2i") == "i2i"
+    # prompt 校验：默认模型 2000
+    assert dreamina_image.validate_prompt("x" * 2000, has_reference=False) == "x" * 2000

@@ -47,12 +47,12 @@ styling=锚脸+发型+服装（section 随条目存，锚定分句 `face`/`face_
 `charvar/adhoc_video.py` 是「给一段提示词出一段视频」的同构通路，双供应商：OpenRouter
 （`charvar/openrouter_video.py`）与即梦（`charvar/dreamina_video.py`，细则见 `docs/即梦视频.md`）。
 
-- CLI：`charvar video openrouter|dreamina`（`--prompt`/`--first-frame`/`--ref`/`--video-ref`/`--aspect`/`--duration`/`--resolution`/`--model`/`--out`/`--json`；`--seed` 仅 openrouter）与 `charvar video models --provider openrouter|dreamina`（列枚举/价目）；产物落 `data/generated/adhoc_video/{id}/`，不落 runs 表。即梦子命令按输入分派：文生 `text2video` / 首帧 `image2video` / 参考图·视频 = `multimodal2video`（全能参考）；默认 `seedance2.0fast_vip`（720p 恒定、4–15s、6 档 ratio 无 2:3/3:2）。
+- CLI：`charvar video openrouter|dreamina`（`--prompt`/`--first-frame`/`--ref`/`--video-ref`/`--aspect`/`--duration`/`--resolution`/`--model`/`--out`/`--json`；`--seed` 仅 openrouter）与 `charvar video models --provider openrouter|dreamina`（列枚举/价目）；产物落 `data/generated/adhoc_video/{id}/`，不落 runs 表。即梦按输入分派画布 mode：文生 `t2v` / 首帧 `first_last_frame`（尾帧首获支持，按 [首,尾] 顺序）/ 参考图·视频 = `m2v`（全能参考）；默认 `seedance_2.0_fast_vip`（720p、4–15s，旧名自动映射）。
 - **网页入口**：顶栏「视频」页签（`web/static/video.js`），后端 `/videos/*`（`charvar/api.py`），同一套 `charvar/adhoc_video.py`；改参数名/输出格式时 CLI、网页、skill 三处同步。
 - 视频是**异步作业**：web 提交即返回 pending，前端每 8s 打 `GET /videos/{run_id}/status`（引擎 `adhoc_video.refresh`，幂等，终态后不打上游）；CLI `--timeout`（默认 900s）阻塞轮询，超时作业仍在跑（manifest 保持 in_progress，网页可续查）；作业 id/收片按供应商（docs 详情）。
-- 参数枚举**提交前校验**（超档 400 白扣提交费）：OpenRouter 按 `GET /api/v1/videos/models` 目录（缓存 `data/openrouter/video-models.json`；目录标 `seed: false` 不发；拒参自动降级重试）；即梦按 `_VIDEO_MODELS` 静态表拦（`--video_resolution` 必填、上游严格校验硬拒；与 tables.js 两处同源，CLI 升级同步）。
+- 参数枚举**提交前校验**（超档 400 白扣提交费）：OpenRouter 按 `GET /api/v1/videos/models` 目录（缓存 `data/openrouter/video-models.json`；目录标 `seed: false` 不发；拒参自动降级重试）；即梦按 `_VIDEO_MODELS` 静态表拦（分辨率/时长/ratio 必填、字面值按模型目录透传；`dreamina_canvas.py` 与 tables.js 两处同源，CLI 升级同步）。
 - 首帧图 = 图生视频（主体一致性靠它；**别用 character_sheet，四视图拼图会出多人**——用单人全身正面/front 槽位）；参考图 = `input_references`（≤4）；首帧与参考图同给首帧优先（i2v 页签不并送参考图；即梦该组合提交前拦）。
-- 默认链两边 = 请求显式 > 设置页（DB） > env > 兜底：OpenRouter `OP_VIDEO_MODEL`/heygen-video-1（key 与生图同链路）；即梦 `DREAMINA_VIDEO_MODEL`/seedance2.0fast_vip（无 key=本机登录态；无 seed 不发送；按积分计费；首用合规需网页端先过一次；详见 docs/即梦视频.md）。
+- 默认链两边 = 请求显式 > 设置页（DB） > env > 兜底：OpenRouter `OP_VIDEO_MODEL`/heygen-video-1（key 与生图同链路）；即梦 `DREAMINA_VIDEO_MODEL`/`seedance_2.0_fast_vip`（无 key=本机 `dreamina-canvas auth login`；无 seed 不发送；按积分计费；首用合规需网页端先过一次；详见 docs/即梦视频.md）。
 
 ### Playground 语音（OpenRouter TTS 通路）
 
@@ -108,18 +108,18 @@ styling=锚脸+发型+服装（section 随条目存，锚定分句 `face`/`face_
 2. **② 生成提示词**：预设（可叠发型/服饰预设）+ 生成模式（经典模板 / LLM 优化）+ 模板参数（条数 / 采样 / 分隔符 / 背景光照）。
 3. **③ 生成结果**：「推送生图」**单一**按钮，随后是结果表 + 导出。卡标题行给当前批的只读摘要（主体 · 预设 · 种子 · 条数）。
 
-- **不保留文生图 / 图片编辑切换**：有参考图 = 图片编辑（ComfyUI 走图片编辑 workflow / OpenRouter 走 `i2i` 组 / 即梦走 `image2image`），无参考图 = 纯文生图，后端按「有没有参考图」自动分流。
+- **不保留文生图 / 图片编辑切换**：有参考图 = 图片编辑（ComfyUI 走图片编辑 workflow / OpenRouter 走 `i2i` 组 / 即梦走 `i2i`），无参考图 = 纯文生图，后端按「有没有参考图」自动分流。
 - **主体档案只有一个选择器（在①）**：提示词主体与参考图主体必须一致（锁定项说红发、参考图是黑发就出戏）。「从主体档案加入」复用①的主体 + 槽位下拉；**换主体时旧主体的档案参考图自动清掉**（`GenRefs.dropSubjectRefs()`，上传暂存 / 最近生成的不受主体约束，保留）。
 - **参考图来源与 Playground 同源**（`ReferenceSpec`）：`staged_id`（上传暂存）/ `subject_id`+`kind`（主体档案槽位）/ `run_id`（+`index`，最近生成原图；`adhoc_*` 取唯一原图，charvar run 按 index 取第 N 张）。**只认 id 不认路径**。
 - **role（分工）**：每张参考图一个 role（`front`/`headshot`/`side`/`behind`/`character_sheet`，缺省 `front`），决定 LLM 锚定句里这张图管哪一摊；主体档案来源自动取槽位 kind 当 role。
 - references 随 `/generate` 存进 run（`GenerateResult.references`），推送生图与单条「重新生成」都按它取图；`regenerate` 优先重放快照里的 references。
 - `reference_kinds` 参数与 CLI 调用路径**仍受支持**（向后兼容），CLI `charvar gen --outfit` 同一套修复生效。
-- OpenRouter 参数档位按 `data/openrouter/api-response.json` 的 `supported_parameters` 动态加载（同 Playground）；即梦分辨率表放 `web/static/tables.js`（gen.js 与 adhoc.js 共用，别再各写一份）。
+- OpenRouter 参数档位按 `data/openrouter/api-response.json` 的 `supported_parameters` 动态加载（同 Playground）；即梦模型目录两表放 `web/static/tables.js`（gen.js 与 adhoc.js 共用，别再各写一份）。
 - **supported parameters 的几条约定**（两边页面一致）：
   - ComfyUI 没有 provider 枚举，档位固定 charvar 的 `1k`/`2k`（2k = Qwen 官方 ~4.2MP 像素）。
   - OpenRouter 的模型**不在面板里选**，跟设置页的 `t2i`/`i2i` 组默认（带参考图 = i2i 组）；分辨率 / 质量取该模型清单的枚举，没有就不显示。
   - 即梦：模型版本下拉空值 = 跟随设置页（`DREAMINA_IMAGE_MODEL`）；**「跟随设置默认」要真跟随**（空值发出去，后端才用设置页/env），不能名义上跟随、实际发硬编码的 2K。
-  - 即梦 **3.0/3.1 只有 text2image**：带参考图（即 image2image）时从模型下拉里去掉（`DREAMINA_T2I_ONLY_MODELS`，放 `tables.js` 共享）。
+  - 即梦带参考图时从模型下拉去掉不收参考图的档（`DREAMINA_IMAGE_MODELS` 的 `refMax`，放 `tables.js` 共享）。
   - 档位选择要记住：切供应商再切回来别重置（`state.comfyTier` / `adhocState.comfyTier` / `state.orResolution`）。
 ### 前端是真多页
 
@@ -165,11 +165,10 @@ styling=锚脸+发型+服装（section 随条目存，锚定分句 `face`/`face_
 - OpenRouter 生图的参数以 `data/openrouter/api-response.json` 里每个模型的 `supported_parameters` 为准（`resolution` / `quality` / `aspect_ratio` 的枚举值都从那里取，模型没声明就不发）。清单是目录级声明、未必准（muse-image 声明为空但实际接受 `size`；grok 声明 `quality` 但 provider 拒收），所以 provider 拒收参数时自动降级重试并把结果记进 `data/openrouter/capabilities.json`。
   OpenRouter 通路的面板档位可用 provider 枚举值（512/1K/1.5K/2K/4K…，1K=1024 长边）—— 这不是开 4K 档：主体图的 charvar 档位仍只有 1k/2k。
 - 参考图统一走 `charvar/reference_images.py` 预处理（长边 1536 / JPEG q88 / 透明白底合成），ComfyUI 上传与 OpenRouter 发送共用同一份缓存 —— 别再写新的压缩逻辑。
-- 即梦生图（`charvar/dreamina_image.py`）走本机官方 `dreamina` CLI（子进程，不是 HTTP）：鉴权是本机 `dreamina login` 的登录态（`~/.dreamina_cli/`），**没有 API Key 可配；CLI 找不到用 `DREAMINA_CLI` 指路径**。授权必须用户手动在浏览器完成（agent 代登可能拿到错误 URL，官方文档有「非法应用」案例）。
-  - 不区分文生图 / 图片编辑配置组（即梦模型都有编辑能力）：带参考图 = `image2image`（`--images`，最多 10 张但 charvar 上限 4），不带 = `text2image`；设置页/env 共用一组：`DREAMINA_IMAGE_MODEL`（默认 5.0，值 `3.0`–`5.0Pro`）+ `DREAMINA_IMAGE_RESOLUTION`（2K|4K，5.0Pro 另有 1.5K），同样走 请求显式 > 设置页 > env > 缺省 的默认链（settings_service.dreamina_config）。
-  - 即梦不暴露 seed：AdhocRequest.seed 等请求值只记 manifest，**绝不发送**。
-  - 提示词硬上限**先于提交校验**（`dreamina_image.validate_prompt`）：**text2image 1592 字符、image2image 1992 字符**（上游硬上限 1600/2000，charvar 留 8 字符余量）—— 按 1592 / 1992 写，别按 1600 / 2000。`--resolution_type` 必填且 model_version 与档位配对（3.0/3.1→1k/2k 仅文生图；4.0–5.0→2k/4k；5.0Pro→1.5k/2k/4k），配错提交前报错。规格（模型/比例/分辨率枚举）以 `dreamina <subcommand> -h` 为准，CLI 升级后要同步 `_MODEL_RESOLUTIONS` 表。
-  - 画幅用 `--ratio`（charvar 8 档与即梦枚举一致）；生成是异步 submit+query，stdout 混着「download image N URL:」进度行，解析要从首个 `{`/`[` 行起（`parse_task_output`），产物路径读 `result_json.images[].path`。
+- 即梦生图/生视频（`dreamina_image.py`/`dreamina_video.py`）走本机官方 **`dreamina-canvas`** 画布 CLI（旧 `dreamina` 直发已下线）：一次请求一张新画布，参考图/首帧先 `resource upload` 登记，节点走 报价→自动批准→运行（用户点生成=授权扣费），`resource download` 收片；manifest 落 `manifest.canvas.project_id` 作续查键，画布 CLI 无删除命令、堆积在网页手动删。鉴权 = `dreamina-canvas auth login`（无 API key；CLI 找不到用 `DREAMINA_CLI` 指路径）；**子进程必须剥代理变量**（上传被劫持会卡死资源 id）。
+  - 带参考图 = `i2i`（上限按模型），不带 = `t2i`（4.6/4.7/5.x 兼收参考图）；设置页/env 一组：`DREAMINA_IMAGE_MODEL`（默认 `seedream_4.7`，旧名 `3.0`–`5.0Pro` 自动映射）+ `DREAMINA_IMAGE_RESOLUTION`（1K/1.5K/2K/4K 按模型档位），同走 请求显式 > 设置页 > env > 缺省。
+  - 即梦不暴露 seed：请求值只记 manifest，**绝不发送**。提示词上限按模型（2000/5000/1024，`validate_prompt` 提交前拦）；分辨率档大小写按模型目录字面值透传，别归一。
+  - 目录真源 `dreamina-canvas model list`；CLI 升级后同步 `dreamina_canvas.py` 两张静态表 + `tables.js`（细见 docs/即梦视频.md）。
 - 档案图片有三条生图通路：ComfyUI（`subject_images.generate_subject_image`）、OpenRouter（`generate_subject_image_openrouter`）与即梦（`generate_subject_image_dreamina`）。三者同语义：两步流程（character_sheet 先出，其余 4 种以它为参考图）、同槽位状态机、同落盘位置（`data/subjects/{id}/{kind}.{ext}`）。产出哪个后端记在 `subject_images.provider` 列（`comfyui` / `openrouter` / `dreamina` / 空=上传）。
 - `web/static/style.css` 里 `label { display: flex }` 会盖掉浏览器默认的 `[hidden] { display: none }`，所以有 `[hidden] { display: none !important }` 这条兜底。新增按条件显隐的控件时，`<select>` 自身带 `hidden` 的话，JS 要同时清掉 select 和它外层 label 上的 `hidden`（`applyOpenRouterCapabilities` 就是这么做的）。
 - `.env`（COMFYUI_HOST/PORT 等）不进 git；改 .env 后要重启 web 服务。
@@ -178,7 +177,7 @@ styling=锚脸+发型+服装（section 随条目存，锚定分句 `face`/`face_
 - 主体档案的 Markdown 模板上限 24,000 字符（`charvar.llm_prompts._TEMPLATE_MAX_CHARS`），超出尾部被静默截掉；交付文档按 ≤ 10,000 字符写（见「预设存储」）。
 - **LLM 改写的输出语言**（`GenerateRequest.llm_language`，网页「生成参数 → LLM 优化 → 提示词语言」）：`zh`=强制中文 / `en`=强制英文 / `any`=**不做强制性限制（缺省）**。措辞差异集中在 `charvar/llm_prompts.py` 的 `_LANG_PHRASES`（锚定句/视角规范/全身句/framing_guard/背景光照）。**`en` 分支的系统提示词是冻结文本，不得改写**——改 `_LANG_PHRASES["en"]` 或 `_prompt_string_rule` 时要用旧文件做字节级对比（有快照回归测试；快照锁的是**无服饰组合**那一版，服饰组合另有分支）。
   - 改写管线注入的材料**全是英文**（视角规范句、背景/光照池、参考图锚定句），所以 `zh` 不是"禁止英文"而是"把这些英文材料译写成中文再采用"；`any` 不写语言规定，多数仍出英文（跟随注入材料）。
-  - **即梦字数**：英文改写实测 1656–2538 字符，**超即梦 text2image 上限 1592**（`dreamina_image.validate_prompt` 提交前就拒，白扣一次提交费）；中文改写实测 527–636 字符，稳过。推即梦时选 `zh`。
+  - **即梦字数**：英文改写实测 1656–2538 字符，超即梦多数模型 2000 上限（5.x 是 5000）；中文改写实测 527–636 稳过。推即梦时选 `zh`。
   - **带字表情包预设强制英文**（`text_policy=required_label`）：中文文案由程序按 display_text 原文追加，LLM 段出中文会被 sticker 禁字规则判为不合格（补调也救不回来）。此时选「中文」会被忽略并在 run 的 `warnings` 声明——`api.py` 的 warnings 是**合并**不是覆盖。
 - Playground（`charvar/adhoc.py`）的红线：参考图槽位名从 mapping 读（`image`/`image2`/…），不许写死节点 id；ComfyUI 上传的 remote_name 必须带唯一前缀（`upload_image` 发 `overwrite: true`，同名会互相覆盖 → 队列里的旧 prompt 取到新图）；`--out` 指定的文件后缀与内容必须一致（不一致时转格式，别让后缀骗人）；adhoc 不读 `settings.image_sizes`（那是主体档案槽位的尺寸）；不引入随机源（seed 由调用方显式给）。
 - Playground 的 run_id 直接拼进文件路径（`/adhoc/{run_id}/image` 直接 serve 磁盘文件）：`charvar.adhoc.run_dir()` 用自己的正则校验（`^adhoc_[A-Za-z0-9_.-]+$` 且不含 `..`），比 `assets.safe_run_id` 严 —— 后者放行 `..`。**别退回用 safe_run_id**。

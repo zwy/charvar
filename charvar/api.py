@@ -228,30 +228,30 @@ class SubjectImageOpenRouterRequest(BaseModel):
 class SubjectImageDreaminaRequest(BaseModel):
     """档案图片走即梦（dreamina CLI）出图（与 OpenRouter 通路同语义）。
 
-    即梦不区分文生图/图片编辑配置组（带参考图自动走 image2image）；
+    即梦不区分文生图/图片编辑配置组（带参考图自动走 i2i）；
     不暴露 seed（仅存档）；画幅用 --ratio。
     """
 
     prompt: str | None = None
     seed: int = 0
     aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
-    resolution: str | None = Field(default=None, description="2k/4k（5.0Pro 另有 1.5k）；空 = 设置页/env（DREAMINA_IMAGE_RESOLUTION）默认")
-    model: str | None = Field(default=None, description="即梦 model_version；空 = 设置页/env（DREAMINA_IMAGE_MODEL）默认 5.0")
+    resolution: str | None = Field(default=None, description="1K/1.5K/2K/4K 按模型档位；空 = 设置页/env（DREAMINA_IMAGE_RESOLUTION）默认")
+    model: str | None = Field(default=None, description="即梦画布模型 id；空 = 设置页/env（DREAMINA_IMAGE_MODEL）默认 seedream_4.7")
 
 
 class DreaminaQueueRequest(BaseModel):
     """推送即梦在线生图（与 OpenRouter 入队同一套语义）。
 
-    即梦不区分 t2i/i2i 配置组：带参考图走 image2image、不带走 text2image，
+    即梦不区分 t2i/i2i 配置组：带参考图走 i2i、不带走 t2i，
     配置共用一组（设置页「即梦 Dreamina 生图」/ env DREAMINA_IMAGE_*）。
     画幅用 --ratio（charvar 8 档与即梦原生枚举一致）；不暴露 seed。
     """
 
     aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
-    resolution: str | None = Field(default=None, description="2k/4k（5.0Pro 另有 1.5k）；空 = 用设置页/env 默认")
-    reference_kinds: list[str] = Field(default_factory=list, description="主体图参考（兼容旧调用）：带 = image2image，不带 = text2image")
+    resolution: str | None = Field(default=None, description="1K/1.5K/2K/4K 按模型档位；空 = 用设置页/env 默认")
+    reference_kinds: list[str] = Field(default_factory=list, description="主体图参考（兼容旧调用）：带 = i2i，不带 = t2i")
     references: list[ReferenceSpec] = Field(default_factory=list, description="参考图（Playground 式来源 + role 分工）；给了它就不看 reference_kinds")
-    model: str | None = Field(default=None, description="即梦 model_version；空 = 设置页/env（DREAMINA_IMAGE_MODEL）默认 5.0")
+    model: str | None = Field(default=None, description="即梦画布模型 id；空 = 设置页/env（DREAMINA_IMAGE_MODEL）默认 seedream_4.7")
     seed: int | None = Field(default=None, description="仅存档；即梦不暴露 seed")
 
 
@@ -444,7 +444,7 @@ class VideoGenerateRequest(BaseModel):
 
     prompt: str
     backend: Literal["openrouter", "dreamina"] = "openrouter"
-    model: str | None = None  # 空 = 设置页/env 默认（OpenRouter heygen 系 / 即梦 seedance2.0fast_vip）
+    model: str | None = None  # 空 = 设置页/env 默认（OpenRouter heygen 系 / 即梦 seedance_2.0_fast_vip）
     duration: int | None = None  # 秒；None = OpenRouter 不发（跟随 provider），即梦解析成 5s
     resolution: str | None = None  # 档位；None = OpenRouter 不发，即梦必填解析成 720p
     aspect_ratio: str = "9:16"
@@ -744,8 +744,8 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     ) -> dict[str, Any]:
         """档案图片走即梦出图（与 OpenRouter 通路同语义：两步流程 + 同槽位状态机）。
 
-        即梦不分组：character_sheet 走 text2image，其余 4 槽以它为参考自动走
-        image2image；不暴露 seed（仅存档）。
+        即梦不分组：character_sheet 走 t2i，其余 4 槽以它为参考自动走
+        i2i；不暴露 seed（仅存档）。
         """
         subject = _require_subject(subject_id)
         with _db() as conn:
@@ -1160,11 +1160,11 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         data["openrouter_video_default_model"] = openrouter_video.resolve_model(
             settings.openrouter_video.model
         )
-        # 即梦视频：默认链 DB > DREAMINA_VIDEO_MODEL > seedance2.0fast_vip
+        # 即梦视频：默认链 DB > DREAMINA_VIDEO_MODEL > seedance_2.0_fast_vip
         data["dreamina_video_default_model"] = dreamina_video.resolve_model(
             settings.dreamina_video.model
         )
-        # 即梦：CLI 是否可用（登录态在 dreamina login 侧查，这里只探文件在不在）
+        # 即梦：CLI 是否可用（登录态在 dreamina-canvas auth login 侧查，这里只探文件在不在）
         try:
             dreamina_image.resolve_binary()
             data["dreamina_cli_available"] = True

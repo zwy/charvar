@@ -5,8 +5,9 @@
 
 供应商两路，按 ``backend`` 分派（manifest 层已经供应商无关）：
 - ``openrouter``：在线 API 异步作业（``charvar.openrouter_video``）；
-- ``dreamina``：即梦官方 CLI 子进程（``charvar.dreamina_video``），同一套
-  submit → 轮询 → 下载语义，作业 id 是即梦 ``submit_id``。
+- ``dreamina``：即梦官方画布 CLI（``charvar.dreamina_video``，走
+  ``dreamina-canvas`` 节点工作流），同一套 submit → 轮询 → 下载语义，
+  作业 id 是画布运行的 submitId（manifest 里另存 ``canvas.project_id`` 作续查键）。
 
 与出图的关键差异（视频 API 是**异步作业**）：
 - 提交只拿作业 id（OpenRouter job id / 即梦 submit_id），要轮询到终态再下载
@@ -27,7 +28,7 @@ manifest.json）。manifest 记完整请求与作业 id，便于复现与续查�
 红线（同 AGENTS.md / adhoc）：
 - OpenRouter 请求一律走 ``charvar.openrouter_video`` 的客户端（``trust_env=False``，绕 shell 代理）；
 - OpenRouter 的 API key 与生图同链路（``OP_IMAGE_API_KEY`` / ``LLM_API_KEY``）；
-- 即梦通路无鉴权配置（本机 ``dreamina login`` 登录态），**无 seed 参数**：请求
+- 即梦通路无鉴权配置（本机 ``dreamina-canvas auth login`` 登录态），**无 seed 参数**：请求
   里的 seed 只记 manifest，绝不发送（``dreamina_video`` 负责枚举与组合校验）；
 - 参考图/首帧统一走 ``charvar.reference_images`` 预处理（长边 1536 / JPEG q88），
   data URL 编码复用 ``openrouter_image.encode_reference``；
@@ -631,22 +632,24 @@ def _submit(req: VideoRequest, run_id: str, db_path: Path | None) -> dict[str, A
 
 
 def _submit_dreamina(req: VideoRequest, run_id: str, db_path: Path | None) -> dict[str, Any]:
-    """即梦分支的提交：本地路径直接交给 dreamina CLI 子进程（submit_id 落 job.id）。
+    """即梦分支的提交：走 dreamina-canvas 画布工作流（submit_id 落 job.id）。
 
     与 OpenRouter 分支的差异：
-    - 没有 API key 与目录校验 —— 枚举校验在 ``dreamina_video.submit`` 的静态表里
-      （``--video_resolution`` 是必填参数，没有「不发」这个路径）；
+    - 没有 API key 与目录校验 —— 枚举校验在 ``dreamina_video.submit`` 的
+      静态表里（分辨率/时长/画幅按模型必填，没有「不发」路径）；
     - 模型默认链：请求显式 > 设置页「即梦视频」组（DB） > env
-      ``DREAMINA_VIDEO_MODEL`` > ``seedance2.0fast_vip``；
-    - 时长/分辨率缺省：5s / 720p（即梦必填，没有「跟随 provider 不发」）；
-    - 画幅：请求显式发；image2video 的空值 = 从首帧图推断（即梦原生行为）；
-    - ``--poll=0``：子进程只提交不等待，web 提交即返回，CLI 的等待在本模块循环；
+      ``DREAMINA_VIDEO_MODEL`` > ``seedance_2.0_fast_vip``（旧名自动映射）；
+    - 时长/分辨率缺省：5s / 720p；画幅缺省 16:9（首帧模式按首帧图推断）；
+    - 画布信息（project_id/web_url/node_id）落 ``manifest["canvas"]`` ——
+      refresh 轮询与收片都要画布 id 作续查键；
     - 提交被拒（含首用合规确认）当场抛，generate 的失败留痕逻辑收尾。
     """
     run_dir = _run_dir(run_id)
     with _conn(db_path) as conn:
         cfg = settings_service.dreamina_video_config(conn)
-    model = (req.request_model() or "").strip() or str(cfg["model"]).strip()
+    model = dreamina_video.resolve_model(
+        (req.request_model() or "").strip() or str(cfg["model"]).strip() or None
+    )
     resolution = dreamina_video.resolve_resolution(req.resolution)
     duration = dreamina_video.resolve_duration(req.duration)
     # 首帧/参考图统一走预处理（与 OpenRouter 同一份缓存）；参考视频原样本地路径直传
@@ -672,6 +675,7 @@ def _submit_dreamina(req: VideoRequest, run_id: str, db_path: Path | None) -> di
     manifest = _new_manifest(req, run_id, job_id=submit_id, model=model)
     manifest["status"] = "in_progress"
     manifest["job"]["status"] = str(task.get("gen_status") or "")
+    manifest["canvas"] = dict(task.get("canvas") or {})
     # 即梦必填参数的解析结果（result 展示层用：请求可能给的是 None = 缺省）
     manifest["job"]["resolution"] = resolution
     manifest["job"]["duration"] = duration
@@ -691,8 +695,8 @@ def _finalize(
     """拿终态 payload 收尾：completed 下载成片 + 海报 + 清暂存；failed 记错误。
 
     按供应商分流：OpenRouter 的终态 payload 就是 poll 的响应（带 unsigned_urls /
-    usage.cost）；即梦的 payload 只带 gen_status，成片要再用 ``query_result
-    --download_dir`` 单独下。
+    usage.cost）；即梦的 payload 只带 gen_status，成片要再用 ``dreamina_video.query``
+    （带画布 project_id）单独下。
     """
     backend = str((manifest.get("request") or {}).get("backend") or "openrouter")
     if backend == "dreamina":
@@ -766,9 +770,10 @@ def _finalize(
 def _finalize_dreamina(
     run_id: str, manifest: dict[str, Any], submitted_at: float
 ) -> dict[str, Any]:
-    """即梦分支收尾：query_result --download_dir 落盘成片 → 转存 original/ + 海报。
+    """即梦分支收尾：画布收片落盘 → 转存 original/ + 海报。
 
-    下载是终态后的**另一次** ``query_result``（产物 URL 会过期，成功后立刻要）。
+    下载是终态后的**另一次**查询（``dreamina_video.query`` 带 project_id +
+    download_dir，按节点产物 resourceId 逐个下载）。
     并发兜底：CLI 与 web 可能同时盯同一个作业、各自轮询各自收片 ——
     ``original/`` 里已有成片就直接复用，不再重复收（实测冒烟踩过：
     一路刚 rmtree 掉 download 目录，另一路的产物校验就报「文件不存在」）。
@@ -778,8 +783,9 @@ def _finalize_dreamina(
     job = manifest.get("job") or {}
     request = manifest.get("request") or {}
     submit_id = str(job.get("id") or "")
-    if not submit_id:
-        return _mark(run_dir, manifest, status="failed", error="即梦作业缺 submit_id，无法收片")
+    project_id = str((manifest.get("canvas") or {}).get("project_id") or "")
+    if not submit_id or not project_id:
+        return _mark(run_dir, manifest, status="failed", error="即梦作业缺 submit_id/画布 id，无法收片")
 
     original_dir = run_dir / "original"
 
@@ -800,7 +806,9 @@ def _finalize_dreamina(
         # 并发两次下载互相截断半成品（实测踩过）
         download_dir = run_dir / f"download_{uuid.uuid4().hex[:8]}"
         try:
-            task = dreamina_video.query(submit_id, download_dir=download_dir, timeout_s=180.0)
+            task = dreamina_video.query(
+                submit_id, download_dir=download_dir, timeout_s=180.0, project_id=project_id
+            )
         except dreamina_video.DreaminaVideoError as exc:
             source = existing_video()  # 另一路可能刚好收好片
             if source is None:
@@ -867,7 +875,7 @@ def refresh(run_id: str, db_path: Path | None = None) -> dict[str, Any]:
 
     - 终态（ready/failed）或没有 job 的记录：直接读 manifest 返回摘要，不再打上游；
     - 其余：轮询一次；OpenRouter completed → 下载成片，即梦 success → 单独下成片
-      （query_result --download_dir），终态失败 → 记错误；still running → 更新状态。
+      （画布 resourceId 下载），终态失败 → 记错误；still running → 更新状态。
     """
     manifest = read_manifest(run_id)
     status = str(manifest.get("status") or "")
@@ -880,10 +888,18 @@ def refresh(run_id: str, db_path: Path | None = None) -> dict[str, Any]:
         return _summary(manifest)
     backend = str((manifest.get("request") or {}).get("backend") or "openrouter")
     if backend == "dreamina":
-        # 即梦分支：job.id 是 submit_id，每次轮询是一发 query_result 子进程 ——
-        # 保持「每次轻查询」，子进程里不再 --poll 等待（别把 web 轮询线程挂住）
+        # 即梦分支：job.id 是画布运行的 submitId，轮询走 canvas CLI 的
+        # `operation status` 单发查询（别把 web 轮询线程挂住）；画布 id 是续查键
+        project_id = str((manifest.get("canvas") or {}).get("project_id") or "")
+        if not project_id:
+            summary = _summary(manifest)
+            summary["poll_error"] = (
+                f"即梦作业缺画布信息（submit_id={job_id}）：无法续查。"
+                "作业可能产自旧的 dreamina CLI 通路（已下线），请重新生成。"
+            )
+            return summary
         try:
-            task = dreamina_video.poll(job_id)
+            task = dreamina_video.poll(job_id, project_id=project_id)
         except dreamina_video.DreaminaVideoError as exc:
             # 网络抖动/CLI 偶发失败不该打断轮询节奏：状态不变，摘要带 poll_error
             summary = _summary(manifest)
@@ -893,7 +909,7 @@ def refresh(run_id: str, db_path: Path | None = None) -> dict[str, Any]:
         if not gen_status:
             # 响应缺 gen_status（上游改字段名 / 本地任务记录被清）——
             # 别静默当中间态：以 poll_error 暴露（前端照常重试，但错误可见），
-            # 否则 web 会每 8s 一发 query_result 永远不停、还零提示
+            # 否则 web 会每 8s 一发轮询永远不停、还零提示
             summary = _summary(manifest)
             summary["poll_error"] = (
                 f"即梦任务响应缺 gen_status（submit_id={job_id}）："
@@ -1014,6 +1030,7 @@ def generate(
                 poll_interval=poll_interval,
                 timeout_s=timeout_s,
                 timeout_error=AdhocVideoTimeout,
+                project_id=str((manifest.get("canvas") or {}).get("project_id") or ""),
             )
         else:
             payload = openrouter_video.wait_for_job(

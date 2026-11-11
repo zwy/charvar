@@ -1156,14 +1156,14 @@ def image_dreamina(
         None, "--prompt-file", help="提示词文件（- 表示读 stdin）"
     ),
     ref: Optional[list[str]] = typer.Option(
-        None, "--ref", help="参考图路径，可重复（最多 4 张，走 image2image）"
+        None, "--ref", help="参考图路径，可重复（最多 4 张，走 i2i）"
     ),
     aspect: str = typer.Option("3:4", "--aspect", help="画幅：1:1/3:4/16:9/4:3/9:16/2:3/3:2/21:9（即梦原生 8 档，同列表）"),
     resolution: str = typer.Option(
-        "", "--resolution", help="分辨率档 2k/4k（5.0Pro 另有 1.5k）；空 = 设置页/env（DREAMINA_IMAGE_RESOLUTION）默认 2k"
+        "", "--resolution", help="分辨率档 1K/1.5K/2K/4K 按模型；空 = 设置页/env（DREAMINA_IMAGE_RESOLUTION）默认 2K"
     ),
     model: Optional[str] = typer.Option(
-        None, "--model", help="即梦 model_version（3.0/3.1/4.0/4.1/4.5/4.6/4.7/5.0/5.0Pro）；空 = 设置页/env（DREAMINA_IMAGE_MODEL）默认 5.0"
+        None, "--model", help="即梦画布模型 id（seedream_4.x/5.x 等，`charvar image models` 查）；空 = 设置页/env（DREAMINA_IMAGE_MODEL）默认 seedream_4.7"
     ),
     out: Optional[Path] = typer.Option(None, "--out", "-o", help="另外落一份到这个路径"),
     json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出到终端"),
@@ -1311,10 +1311,10 @@ def video_dreamina(
         None, "--duration", help="时长秒数（整数；空 = 5s；2.0 系 4–15s）"
     ),
     resolution: Optional[str] = typer.Option(
-        None, "--resolution", help="分辨率档（恒 720p；1080p/4k 仅 seedance2.0_vip，480p 仅 seedance2.5）；空 = 720p"
+        None, "--resolution", help="分辨率档（字面值按模型目录，如 seedance 系 720p/1080p/4k）；空 = 720p"
     ),
     model: Optional[str] = typer.Option(
-        None, "--model", help="即梦 model_version；空 = 设置页/env（DREAMINA_VIDEO_MODEL）默认 seedance2.0fast_vip"
+        None, "--model", help="即梦画布模型 id（seedance_2.x/happyhorse/wan，`charvar video models` 查）；空 = 设置页/env 默认 seedance_2.0_fast_vip"
     ),
     timeout: float = typer.Option(900.0, "--timeout", help="轮询超时秒数（默认 900）"),
     poll_interval: float = typer.Option(5.0, "--poll-interval", help="轮询间隔秒数（默认 5）"),
@@ -1323,7 +1323,7 @@ def video_dreamina(
 ) -> None:
     """用即梦（Dreamina）官方 CLI 出一段视频（需已 dreamina login；不暴露 seed，消耗即梦积分）。
 
-    默认模型 seedance2.0fast_vip（720p / 4–15s / 6 档画幅，最低价档）。
+    默认模型 seedance_2.0_fast_vip（720p / 4–15s，最低价档）。
     子命令按输入自动分派：纯文生 = text2video，首帧 = image2video，
     参考图/参考视频 = multimodal2video（全能参考）。
     """

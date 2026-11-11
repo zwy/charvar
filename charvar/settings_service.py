@@ -74,7 +74,7 @@ class DreaminaSettings(BaseModel):
     带不带参考图由调用方决定（带 = image2image，不带 = text2image），
     配置共用一组。
 
-    - model 空串 = 用 env ``DREAMINA_IMAGE_MODEL``（再缺省 CLI 默认 5.0）；
+    - model 空串 = 用 env ``DREAMINA_IMAGE_MODEL``（再缺省画布默认 seedream_4.7）；
     - resolution 空串 = 用 env ``DREAMINA_IMAGE_RESOLUTION``（再缺省 2k）。
       值按设置页口径（2K/4K）存，调 CLI 时归一小写（``charvar.dreamina_image`` 做）；
     - 鉴权走本机 ``dreamina login`` 的登录态，这里没有 key 可配；
@@ -101,7 +101,7 @@ class OpenRouterVideoSettings(BaseModel):
 class DreaminaVideoSettings(BaseModel):
     """即梦（Dreamina）视频生成配置（Playground 视频，``charvar.dreamina_video``）。
 
-    - model 空串 = 用 env ``DREAMINA_VIDEO_MODEL``（再缺省 seedance2.0fast_vip
+    - model 空串 = 用 env ``DREAMINA_VIDEO_MODEL``（再缺省 seedance_2.0_fast_vip
       —— 用户指定的最低价档；CLI 各子命令自己的默认模型互不相同，charvar 必须
       显式传 --model_version，不能靠 CLI 默认）；
     - 鉴权走本机 ``dreamina login`` 的登录态，这里没有 key 可配；
@@ -281,8 +281,8 @@ def dreamina_config(conn: sqlite3.Connection) -> dict[str, str]:
     """即梦生图的生效配置：DB > env > 缺省。
 
     - model 走 dreamina_image.resolve_model 的完整链路（DB 值 > env >
-      空 = CLI 默认 5.0）；
-    - resolution 同链路（DB > env DREAMINA_IMAGE_RESOLUTION > 2k，归一小写）；
+      空 = 画布默认 seedream_4.7）；
+    - resolution 同链路（DB > env DREAMINA_IMAGE_RESOLUTION > 2K，档位字面值按画布目录透传）；
     - 模型-分辨率枚举校验与提示词长度预检在 charvar.dreamina_image 调用时做。
     """
     from charvar import dreamina_image
@@ -309,7 +309,7 @@ def openrouter_video_config(conn: sqlite3.Connection) -> dict[str, str]:
 
 
 def dreamina_video_config(conn: sqlite3.Connection) -> dict[str, str]:
-    """即梦视频（Playground 视频）的生效配置：DB > env > 缺省（seedance2.0fast_vip）。
+    """即梦视频（Playground 视频）的生效配置：DB > env > 缺省（seedance_2.0_fast_vip）。
 
     - model 走 dreamina_video.resolve_model 的完整链路（DB 值 > env > 默认）；
     - resolution / duration / aspect_ratio 不进配置 —— resolution 是即梦必填档

@@ -1,115 +1,111 @@
-"""即梦（Dreamina）视频通路：客户端命令拼装/枚举校验/收片解析 + adhoc_video 管线分派。
+"""即梦视频（画布通路）测试：CanvasRunner 打桩，流程与校验不调真 CLI。
 
-全部打桩（monkeypatch ``dreamina_image.subprocess.run`` —— dreamina_video 与生图
-共用同一个子进程出口），不发真网、不扣积分。真实视频任务历史上一条都没有
-（首个真任务时若上游解析形状与预期不符，先看这份测试的假设再改代码）。
+分层：``dreamina_canvas`` 子进程层在 ``test_dreamina_canvas.py`` 单测；
+本文件用假 ``CanvasRunner``（同时替换 dreamina_video / dreamina_image 里
+的引用）锁「dispatch_mode 分派组合校验」「submit→闸门→manifest.canvas」
+「refresh 轮询映射」「finalize 收片与并发兜底」。
 """
 from __future__ import annotations
 
 import json
 import pathlib
 import time
+from typing import Any
 
 import pytest
-from PIL import Image
 
-from charvar import adhoc_video, dreamina_image, dreamina_video, openrouter_video, storage
+from charvar import adhoc_video, dreamina_image, dreamina_video
+from charvar.dreamina_canvas import DreaminaParamError, DreaminaTaskError, DreaminaTimeoutError
 
-TASK_QUERYING = {
-    "submit_id": "v-submit-1",
-    "gen_status": "querying",
-    "result_json": {"images": [], "videos": []},
-}
-TASK_SUCCESS = {
-    "submit_id": "v-submit-1",
-    "gen_status": "success",
-    "result_json": {"images": [], "videos": [{"item_id": "v1", "width": 1280, "height": 720}]},
-}
-# 上游 fail_reason 的首用合规确认话式
-FAIL_COMPLIANCE = {
-    "submit_id": "v-submit-2",
-    "gen_status": "fail",
-    "fail_reason": "AigcComplianceConfirmationRequired",
-    "result_json": {"images": [], "videos": []},
-}
+MP4_MAGIC = b"\x00\x00\x00\x20ftypisom\x00\x00" + b"\x00" * 24
 
 
-def _mp4_bytes():
-    return b"\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2\x00" + b"\x00" * 32
+def _mp4_bytes() -> bytes:
+    return MP4_MAGIC
 
 
-def _png_file(path, size=(64, 48)):
-    """真 PNG（_prepare_images 会过 PIL）：不是只写字节头的假货。"""
-    Image.new("RGB", size, (10, 20, 30)).save(path, format="PNG")
-    return path
+class FakeCanvas:
+    """替身 CanvasRunner：记录调用、恒成功、产物是真 mp4 文件。"""
+
+    def __init__(self, name: str, *, project_id: str | None = None) -> None:
+        self.name = name
+        self.project_id = project_id or "proj-0001"
+        self.web_url = "https://jimeng.test/canvas/proj-0001"
+        self.calls: list[tuple[str, ...]] = []
+        self.rid_seq = 0
+        self.run_should_fail = False
+
+    def ensure_canvas(self) -> str:
+        self.calls.append(("ensure_canvas", self.name))
+        return self.project_id
+
+    def upload(self, path: pathlib.Path) -> str:
+        self.rid_seq += 1
+        self.calls.append(("upload", str(path)))
+        return f"res-{self.rid_seq:04d}"
+
+    def wait_resource(self, rid: str, **kw: Any) -> dict:
+        self.calls.append(("wait_resource", rid))
+        return dict(resourceId=rid, status="success")
+
+    def create_node(self, **kw: Any) -> str:
+        self.calls.append(("create_node", kw["kind"], kw["model"], kw["mode"],
+                           kw.get("ratio"), kw.get("resolution"), kw.get("duration"),
+                           kw.get("count"), tuple(kw.get("ref_ids") or [])))
+        return f"node-{len(self.calls):03d}"
+
+    def quote(self, node_ids: list[str]) -> dict:
+        self.calls.append(("quote", tuple(node_ids)))
+        return dict(totalMaxCredits=5, confirmationRequired=False)
+
+    def confirm(self, node_ids: list[str], *, credit_ceiling: int) -> str:
+        self.calls.append(("confirm", tuple(node_ids), credit_ceiling))
+        return "tok-1"
+
+    def run(self, node_ids: list[str], submit_ids: list[str], credit_token: str) -> list[str]:
+        self.calls.append(("run", tuple(node_ids), tuple(submit_ids)))
+        if self.run_should_fail:
+            raise DreaminaTaskError("服务端拒绝（测试桩）")
+        return list(submit_ids)
+
+    def create_and_run(self, **kw: Any) -> tuple[str, str]:
+        nid = self.create_node(**kw)
+        self.quote([nid])
+        tok = self.confirm([nid], credit_ceiling=9)
+        sids = self.run([nid], [f"sid-{len(self.calls):03d}"], tok)
+        return nid, sids[0]
+
+    def status(self, submit_id: str) -> dict:
+        self.calls.append(("status", submit_id))
+        return dict(operationRef=submit_id, state="succeeded",
+                    resources=[dict(resourceId="vid-0001", state="succeeded")])
+
+    def node_outputs(self, node_ids: list[str]) -> dict[str, list[dict]]:
+        self.calls.append(("node_outputs", tuple(node_ids)))
+        return {node_ids[0]: [dict(
+            type="video", status="success", resourceId="vid-0001",
+            submitId="sid-1", video=dict(width=1280, height=720),
+        )]}
+
+    def download(self, rid: str, dest_dir: pathlib.Path) -> dict:
+        self.calls.append(("download", rid, str(dest_dir)))
+        dest = pathlib.Path(dest_dir) / f"dreamina-{rid}.mp4"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(_mp4_bytes())
+        return dict(resourceId=rid, path=str(dest), size=len(MP4_MAGIC))
 
 
-class FakeVideoCli:
-    """替身 dreamina CLI：记录命令行；下载调用按 ``<submit_id>_video_1.mp4`` 落文件。"""
-
-    def __init__(self, *, download_root: pathlib.Path, responses: list[dict] | None = None,
-                 download_responses: list[dict] | None = None):
-        self.calls: list[list[str]] = []
-        self.download_root = download_root
-        self.responses = responses or []
-        self.download_responses = download_responses or []
-        self.simulate_race = False  # 开着时：下载后立刻删文件，模拟并发收片清目录
-
-    def __call__(self, cmd, **kwargs):
-        import os
-        import subprocess
-
-        # patch 的是全局 subprocess.run：ffprobe 之类借道的调用别当 dreamina 命令记
-        if "dreamina" not in os.path.basename(str(cmd[0])):
-            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="not-fake-cli")
-        self.calls.append(cmd)
-        subcommand = cmd[1] if len(cmd) > 1 else ""
-        if subcommand == "query_result" and "--download_dir" in cmd:
-            if self.download_responses:
-                payload = self.download_responses.pop(0)
-                if payload["gen_status"] != "success":
-                    return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(payload, ensure_ascii=False), stderr="")
-            directory = pathlib.Path(cmd[cmd.index("--download_dir") + 1])
-            directory.mkdir(parents=True, exist_ok=True)
-            sid = cmd[cmd.index("--submit_id") + 1]
-            video = directory / f"{sid}_video_1.mp4"
-            video.write_bytes(_mp4_bytes())
-            if self.simulate_race:
-                video.unlink()  # 另一路收片后清掉了 download 目录
-            payload = {
-                **TASK_SUCCESS,
-                "result_json": {
-                    "images": [],
-                    "videos": [{"item_id": "v1", "path": str(video), "width": 1280, "height": 720}],
-                },
-            }
-            stdout = f"download video 1 URL: https://example.com/v/{self._n()}\n" + json.dumps(
-                payload, ensure_ascii=False
-            )
-            return subprocess.CompletedProcess(cmd, 0, stdout=stdout, stderr="")
-        payload = self.responses.pop(0) if self.responses else dict(TASK_QUERYING)
-        return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(payload, ensure_ascii=False), stderr="")
-
-    def _n(self):
-        return str(len(self.calls))
-
-
-class _NoSleep:
-    def __call__(self, _seconds):
-        return None
-
-
-@pytest.fixture()
+@pytest.fixture(autouse=True)
 def env(tmp_path, monkeypatch):
-    """隔离数据目录 + 假 CLI + 不真等（dreamina_video.wait 的 sleep 也掐掉）。"""
     monkeypatch.setenv("CHARVAR_DATA_DIR", str(tmp_path))
-    for key in ("DREAMINA_CLI", "DREAMINA_VIDEO_MODEL", "DREAMINA_IMAGE_MODEL", "DREAMINA_POLL"):
+    for key in ("DREAMINA_CLI", "DREAMINA_VIDEO_MODEL", "DREAMINA_IMAGE_MODEL",
+                "DREAMINA_VIDEO_RESOLUTION", "DREAMINA_POLL"):
         monkeypatch.delenv(key, raising=False)
-    monkeypatch.setattr(dreamina_image, "resolve_binary", lambda: "dreamina-fake")
-    fake = FakeVideoCli(download_root=tmp_path)
-    monkeypatch.setattr(dreamina_image.subprocess, "run", fake)
+    fake = FakeCanvas("charvar-video-test")
+    monkeypatch.setattr(dreamina_video, "CanvasRunner", lambda name, **kw: FakeCanvas(name, **kw))
+    monkeypatch.setattr(dreamina_image, "CanvasRunner", lambda name, **kw: FakeCanvas(name, **kw))
     monkeypatch.setattr(time, "sleep", lambda _s: None)
-    # 海报用替身（ffmpeg 在假 mp4 上会失败；海报不是本组用例的关注点）
+
     def fake_poster(video_path, run_dir):
         target = pathlib.Path(run_dir) / "thumbs" / "000000.jpg"
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -126,467 +122,243 @@ def _req(**kw):
     return adhoc_video.VideoRequest(**base)
 
 
-# ---------- 命令拼装 ----------
+# ---------- dispatch / 校验 ----------
 
 
-def test_t2v_submit_command(env):
-    dreamina_video.submit(prompt="a cat running", model="seedance2.0fast_vip",
-                          resolution="720p", duration=5, poll_s=0)
-    args = env.calls[0][1:]
-    assert args[0] == "text2video"
-    assert args[args.index("--model_version") + 1] == "seedance2.0fast_vip"
-    assert args[args.index("--video_resolution") + 1] == "720p"
-    assert args[args.index("--duration") + 1] == "5"
-    assert args[args.index("--poll") + 1] == "0"
-    assert "--ratio" not in args and "--seed" not in args and "--image" not in args
+def test_dispatch_mode_matrix():
+    ff = pathlib.Path("/tmp/f.png")
+    lf = pathlib.Path("/tmp/l.png")
+    r = pathlib.Path("/tmp/r.png")
+    rv = pathlib.Path("/tmp/v.mp4")
+    assert dreamina_video.dispatch_mode() == "t2v"
+    assert dreamina_video.dispatch_mode(first_frame=ff) == "first_last_frame"
+    assert dreamina_video.dispatch_mode(first_frame=ff, last_frame=lf) == "first_last_frame"
+    assert dreamina_video.dispatch_mode(reference_paths=[r]) == "m2v"
+    assert dreamina_video.dispatch_mode(reference_video_paths=[rv]) == "m2v"
+    with pytest.raises(DreaminaParamError):
+        dreamina_video.dispatch_mode(last_frame=lf)  # 尾帧必须配首帧
+    with pytest.raises(DreaminaParamError):
+        dreamina_video.dispatch_mode(first_frame=ff, reference_paths=[r])  # 首帧与参考互斥
 
 
-def test_i2v_submit_omits_ratio_when_empty(env, tmp_path):
-    # 管线里首帧要先过 reference_images（PIL 真 PNG 才行）；此处直接过 is_file 校验
-    frame = tmp_path / "frame.png"
-    frame.write_bytes(b"0000")
-    dreamina_video.submit(prompt="push in", model="seedance2.0fast_vip", resolution="720p",
-                          duration=5, ratio="", first_frame=frame, poll_s=0)
-    args = env.calls[0][1:]
-    assert args[0] == "image2video"
-    assert args[args.index("--image") + 1] == str(frame)
-    assert "--ratio" not in args
+def test_model_resolution_duration_pairing():
+    # seedance 系小写枚举、大小写不敏感归一
+    assert dreamina_video.validate_video("seedance_2.0_fast_vip", "720P", 5, "t2v") == "720p"
+    assert dreamina_video.validate_video("seedance_2.0_vip", "4k", 15, "m2v") == "4k"
+    # happyhorse/wan 大写枚举
+    assert dreamina_video.validate_video("happyhorse_1.1", "720p", 4, "t2v") == "720P"
+    with pytest.raises(DreaminaParamError):
+        dreamina_video.validate_video("seedance_2.0_fast_vip", "1080p", 5, "t2v")  # 该档无 1080p
+    with pytest.raises(DreaminaParamError):
+        dreamina_video.validate_video("seedance_2.0_fast_vip", "720p", 31, "t2v")  # 超时长
+    with pytest.raises(DreaminaParamError):
+        dreamina_video.validate_video("seedance_pro_fast", "720p", 5, "m2v")  # 1.0fast 无 m2v
+    with pytest.raises(DreaminaParamError):
+        dreamina_video.validate_video("happyhorse_1.1", "720P", 5, "t2v", ratio="2:3")
 
 
-def test_i2v_submit_carries_explicit_ratio(env, tmp_path):
-    frame = tmp_path / "frame.png"
-    frame.write_bytes(b"0000")
-    dreamina_video.submit(prompt="push", model="seedance2.0fast", resolution="720p",
-                          duration=5, ratio="21:9", first_frame=frame, poll_s=0)
-    args = env.calls[0][1:]
-    assert args[0] == "image2video"
-    assert args[args.index("--ratio") + 1] == "21:9"
+def test_m2v_ref_caps():
+    dreamina_video._validate_m2v_refs(
+        "seedance_2.0_fast_vip",
+        reference_paths=[pathlib.Path("/tmp/a.png")] * 9,
+        reference_video_paths=[pathlib.Path("/tmp/b.mp4")] * 3,
+    )
+    with pytest.raises(DreaminaParamError):
+        dreamina_video._validate_m2v_refs("happyhorse_1.1", reference_paths=None,
+                                          reference_video_paths=[pathlib.Path("/tmp/b.mp4")])
+    with pytest.raises(DreaminaParamError):
+        dreamina_video._validate_m2v_refs("happyhorse_1.1",
+                                          reference_paths=[pathlib.Path("/tmp/a.png")] * 10,
+                                          reference_video_paths=None)
 
 
-def test_refs_dispatch_multimodal(env, tmp_path):
-    ref = tmp_path / "ref.png"
-    ref.write_bytes(b"0000")
-    dreamina_video.submit(prompt="keep <image1> pose", model="seedance2.0fast_vip",
-                          resolution="720p", duration=5, ratio="9:16",
-                          reference_paths=[ref], poll_s=0)
-    args = env.calls[0][1:]
-    assert args[0] == "multimodal2video"
-    assert args.count("--image") == 1
-    assert "--first" not in args and "--last" not in args
-
-
-def test_vref_only_dispatch_multimodal_video_flag(env, tmp_path):
-    vref = tmp_path / "ref.mp4"
-    vref.write_bytes(_mp4_bytes())
-    dreamina_video.submit(prompt="mimic this move", model="seedance2.0fast_vip",
-                          resolution="720p", duration=5, ratio="9:16",
-                          reference_video_paths=[vref], poll_s=0)
-    args = env.calls[0][1:]
-    assert args[0] == "multimodal2video"
-    assert args.count("--video") == 1
-    assert "--image" not in args
-
-
-# ---------- 提交前拦截（上游严格校验，白提交就是白扣积分） ----------
-
-
-def test_first_frame_with_refs_rejected(env, tmp_path):
-    ref = tmp_path / "ref.png"
-    ref.write_bytes(b"0000")
-    frame = tmp_path / "frame.png"
-    frame.write_bytes(b"0000")
-    with pytest.raises(dreamina_video.DreaminaParamError):
-        dreamina_video.submit(prompt="p", model="seedance2.0fast_vip", resolution="720p",
-                              duration=5, ratio="9:16", first_frame=frame,
-                              reference_paths=[ref], poll_s=0)
-    assert env.calls == []
-
-
-def test_last_frame_rejected(env, tmp_path):
-    first = tmp_path / "first.png"
-    first.write_bytes(b"0000")
-    last = tmp_path / "last.png"
-    last.write_bytes(b"0000")
-    with pytest.raises(dreamina_video.DreaminaParamError):
-        dreamina_video.submit(prompt="p", model="seedance2.0fast_vip", resolution="720p",
-                              duration=5, ratio="9:16",
-                              first_frame=first, last_frame=last, poll_s=0)
-    with pytest.raises(dreamina_video.DreaminaParamError):
-        dreamina_video.submit(prompt="p", model="seedance2.0fast_vip", resolution="720p",
-                              duration=5, ratio="9:16", last_frame=last, poll_s=0)
-    assert env.calls == []
-
-
-def test_ratio_six_tiers_only(env):
-    with pytest.raises(dreamina_video.DreaminaParamError):
-        dreamina_video.validate_ratio("2:3")
-    assert dreamina_video.validate_ratio("3:4") == "3:4"
-    assert dreamina_video.validate_ratio("") == ""
-
-
-def test_model_resolution_duration_pairing(env):
-    # fast_vip 恒 720p
-    with pytest.raises(dreamina_video.DreaminaParamError):
-        dreamina_video.validate_video("seedance2.0fast_vip", "1080p", 5, "text2video")
-    # 2.0_vip 是唯一 1080p/4k 档
-    assert dreamina_video.validate_video("seedance2.0_vip", "1080p", 5, "text2video") == "1080p"
-    # 时长越界：fast_vip 4-15
-    with pytest.raises(dreamina_video.DreaminaParamError):
-        dreamina_video.validate_video("seedance2.0fast_vip", "720p", 3, "text2video")
-    # 老模型只支持 image2video
-    with pytest.raises(dreamina_video.DreaminaParamError):
-        dreamina_video.validate_video("seedance1.0fast", "720p", 5, "text2video")
-    assert dreamina_video.validate_video("seedance1.0fast", "720p", 5, "image2video") == "720p"
-    # 表外模型放行（CLI 升级新增不拦）
-    assert dreamina_video.validate_video("seedance9.9", "7k", 5, "text2video") == "7k"
-    # resolution 必填
-    with pytest.raises(dreamina_video.DreaminaParamError):
-        dreamina_video.validate_video("seedance2.0fast_vip", "", 5, "text2video")
-
-
-# ---------- 默认链 ----------
-
-
-def test_resolve_model_chain(env, monkeypatch):
-    monkeypatch.setenv("DREAMINA_VIDEO_MODEL", "seedance2.0_vip")
-    assert dreamina_video.resolve_model(None) == "seedance2.0_vip"
-    assert dreamina_video.resolve_model("seedance2.0mini") == "seedance2.0mini"
-    monkeypatch.delenv("DREAMINA_VIDEO_MODEL")
-    assert dreamina_video.resolve_model(None) == "seedance2.0fast_vip"
-
-
-def test_resolve_duration_and_resolution_defaults():
+def test_resolve_chain(monkeypatch):
+    monkeypatch.delenv("DREAMINA_VIDEO_MODEL", raising=False)
+    monkeypatch.delenv("DREAMINA_VIDEO_TIMEOUT", raising=False)
+    assert dreamina_video.resolve_model(None) == "seedance_2.0_fast_vip"
+    assert dreamina_video.resolve_model("seedance2.0fast_vip") == "seedance_2.0_fast_vip"
+    assert dreamina_video.resolve_model("seedance1.5pro") == "seedance_2.0_fast_vip"
+    assert dreamina_video.resolve_resolution(None) == "720p"
     assert dreamina_video.resolve_duration(None) == 5
-    assert dreamina_video.resolve_resolution("1080P") == "1080p"  # 大写归一
-    assert dreamina_video.resolve_resolution("") == "720p"
-
-
-def test_resolve_timeout_default(env, monkeypatch):
     assert dreamina_video.resolve_timeout(None) == 900.0
-    monkeypatch.setenv("DREAMINA_VIDEO_TIMEOUT", "120")
-    assert dreamina_video.resolve_timeout(None) == 120.0
 
 
-# ---------- 等待与终态 ----------
+# ---------- submit（画布闸门全链 + manifest.canvas） ----------
 
 
-def test_wait_for_video_polls_to_success(env):
-    env.responses = [dict(TASK_QUERYING), dict(TASK_QUERYING), dict(TASK_SUCCESS)]
-    dreamina_video.submit(prompt="p", model="seedance2.0fast_vip", resolution="720p",
-                          duration=5, poll_s=0)
-    submit_id = dreamina_video.submit_id_of(dreamina_video.parse_task_output(
-        json.dumps(TASK_QUERYING, ensure_ascii=False)))
-    # submit 已走了一次（querying），wait 侧再补两次轮询
-    env.responses = [dict(TASK_QUERYING), dict(TASK_SUCCESS)]
-    task = dreamina_video.wait_for_video(submit_id, poll_interval=1, timeout_s=60,
-                                         sleep=lambda _s: None)
+def test_submit_t2v_flow(monkeypatch):
+    fake = FakeCanvas("charvar-video-test")
+    monkeypatch.setattr(dreamina_video, "CanvasRunner", lambda name, **kw: fake)
+    task = dreamina_video.submit(prompt="dance", model="seedance_2.0_fast_vip",
+                                 resolution="720p", duration=5, ratio=None)
+    assert task["gen_status"] == "querying"
+    assert task["submit_id"].startswith("sid-")
+    canvas = task["canvas"]
+    assert canvas["project_id"] == "proj-0001" and canvas["web_url"]
+    node_call = next(c for c in fake.calls if c[0] == "create_node")
+    assert node_call[1] == "video" and node_call[2] == "seedance_2.0_fast_vip"
+    assert node_call[3] == "t2v"
+    assert node_call[4] == "16:9"  # 缺省画幅 16:9
+    assert node_call[6] == 5 and node_call[7] == 1
+    sequence = [c[0] for c in fake.calls]
+    assert sequence.count("quote") == 1 and sequence.count("confirm") == 1 and sequence.count("run") == 1
+
+
+def test_submit_first_frame_ratio_inferred(monkeypatch, tmp_path):
+    from PIL import Image
+    fake = FakeCanvas("x")
+    monkeypatch.setattr(dreamina_video, "CanvasRunner", lambda name, **kw: fake)
+    portrait = tmp_path / "f.png"
+    Image.new("RGB", (360, 640)).save(portrait)  # 竖屏首帧 → 9:16
+    task = dreamina_video.submit(prompt="p", model="seedance_2.0_fast_vip",
+                                 resolution="720p", duration=5,
+                                 first_frame=portrait)
+    node_call = next(c for c in fake.calls if c[0] == "create_node")
+    assert node_call[3] == "first_last_frame"
+    assert node_call[4] == "9:16"
+    assert len(node_call[8]) == 1  # 只上传了首帧
+    uploads = [c for c in fake.calls if c[0] == "upload"]
+    assert len(uploads) == 1
+
+
+def test_submit_first_and_last_two_refs(monkeypatch, tmp_path):
+    from PIL import Image
+    fake = FakeCanvas("x")
+    monkeypatch.setattr(dreamina_video, "CanvasRunner", lambda name, **kw: fake)
+    first = tmp_path / "f.png"; Image.new("RGB", (640, 640)).save(first)
+    last = tmp_path / "l.png"; Image.new("RGB", (640, 640)).save(last)
+    dreamina_video.submit(prompt="p", model="seedance_2.0_fast_vip",
+                          resolution="720p", duration=5,
+                          first_frame=first, last_frame=last)
+    node_call = next(c for c in fake.calls if c[0] == "create_node")
+    assert len(node_call[8]) == 2  # 首帧 + 尾帧
+
+
+def test_submit_run_rejected(monkeypatch):
+    fake = FakeCanvas("x"); fake.run_should_fail = True
+    monkeypatch.setattr(dreamina_video, "CanvasRunner", lambda name, **kw: fake)
+    with pytest.raises(dreamina_video.DreaminaTaskError):
+        dreamina_video.submit(prompt="p", model="seedance_2.0_fast_vip",
+                              resolution="720p", duration=5)
+
+
+# ---------- 轮询 / 收片 ----------
+
+
+def test_query_mapping_and_download(monkeypatch, tmp_path):
+    fake = FakeCanvas("x")
+    monkeypatch.setattr(dreamina_image, "CanvasRunner", lambda name, **kw: fake)
+    task = dreamina_video.query("sid-1", project_id="proj-0001", download_dir=tmp_path / "dl")
     assert task["gen_status"] == "success"
-    kinds = [c[1] for c in env.calls]
-    assert kinds == ["text2video", "query_result", "query_result"]  # 提交 + 每间隔轮询一次
+    assert task["result_json"]["videos"][0]["path"].endswith(".mp4")
+    assert pathlib.Path(task["result_json"]["videos"][0]["path"]).is_file()
+    paths = dreamina_video.extract_video_paths(task)
+    assert len(paths) == 1
+    assert dreamina_video.video_file_ext(paths[0]) == "mp4"
 
 
-def test_wait_for_video_timeout_uses_custom_error(env):
-    env.responses = [dict(TASK_QUERYING)]
-    with pytest.raises(adhoc_video.AdhocVideoTimeout) as exc:
-        dreamina_video.wait_for_video("sid-x", poll_interval=1, timeout_s=0,
-                                      sleep=lambda _s: None,
-                                      timeout_error=adhoc_video.AdhocVideoTimeout)
-    assert "sid-x" in str(exc.value)
+def test_query_requires_project_id():
+    with pytest.raises(DreaminaParamError):
+        dreamina_video.query("sid-1")
 
 
-def test_submit_reports_compliance_fail(env):
-    env.responses = [dict(FAIL_COMPLIANCE)]
-    with pytest.raises(dreamina_video.DreaminaTaskError) as exc:
-        dreamina_video.submit(prompt="p", model="seedance2.0fast_vip", resolution="720p",
-                              duration=5, poll_s=0)
-    assert "AigcComplianceConfirmationRequired" in str(exc.value)
-    assert "jimeng.jianying.com" in str(exc.value)
+def test_wait_for_video_success_and_timeout(monkeypatch):
+    fake = FakeCanvas("x")
+    monkeypatch.setattr(dreamina_image, "CanvasRunner", lambda name, **kw: fake)
+    task = dreamina_video.wait_for_video("sid-1", project_id="proj-0001")
+    assert task["gen_status"] == "success"
+
+    class AlwaysPending(FakeCanvas):
+        def status(self, submit_id):
+            return dict(operationRef=submit_id, state="running", resources=[])
+
+    pending = AlwaysPending("x")
+    monkeypatch.setattr(dreamina_image, "CanvasRunner", lambda name, **kw: pending)
+    with pytest.raises(TimeoutError) as exc:
+        dreamina_video.wait_for_video("sid-1", project_id="proj-0001", timeout_s=0.5,
+                                      poll_interval=0.1, timeout_error=TimeoutError)
 
 
-# ---------- 收片解析 ----------
+# ---------- adhoc pipeline 端到端（stub 画布，走真 generate/refresh/finalize） ----------
 
 
-def test_extract_video_paths_prefers_videos(env):
-    sid = "abc"
-    download_dir = pathlib.Path(env.download_root) / "probe"
-    download_dir.mkdir(parents=True)
-    video = download_dir / f"{sid}_video_1.mp4"
-    video.write_bytes(_mp4_bytes())
-    payload = {"result_json": {"images": [{"item_id": "i1", "path": str(download_dir / "x.png")}],
-                               "videos": [{"item_id": "v1", "path": str(video)}]}}
-    paths = dreamina_video.extract_video_paths(payload)
-    assert paths == [video]
-
-
-def test_extract_video_paths_empty_raises(env):
-    with pytest.raises(dreamina_video.DreaminaCliError):
-        dreamina_video.extract_video_paths({"result_json": {"images": [], "videos": []}})
-
-
-def test_video_file_ext_sniffs_magic(env):
-    probe = pathlib.Path(env.download_root) / "probe2.mp4"
-    probe.write_bytes(_mp4_bytes())
-    assert dreamina_video.video_file_ext(probe) == "mp4"
-    probe.write_bytes(b"\x1a\x45\xdf\xa3" + b"\x00" * 20)
-    assert dreamina_video.video_file_ext(probe) == "webm"
-
-
-# ---------- adhoc_video 管线（dreamina 分派） ----------
-
-
-def test_pipeline_wait_flow_end_to_end(env):
-    # submit=1st（querying）、wait 轮询第 1 发就 success → 不进 sleep 分支
-    env.responses = [dict(TASK_QUERYING), dict(TASK_SUCCESS)]
-    result = adhoc_video.generate(_req())
+def test_pipeline_wait_flow_end_to_end():
+    result = adhoc_video.generate(_req(), poll_interval=0.01, timeout_s=30.0)
     assert result.status == "ready"
-    assert result.provider == "dreamina"
-    assert result.job_id == "v-submit-1"
-    assert result.cost is None
-    assert result.model == "seedance2.0fast_vip"  # 请求没给 → 设置页默认链（env 都为空）
-    assert result.duration == 5 and result.resolution == "720p"
-    vd = pathlib.Path(result.video_path)
-    assert vd.exists() and vd.parent.name == "original" and vd.suffix == ".mp4"
-    manifest = adhoc_video.read_manifest(result.run_id)
-    assert manifest["job"]["id"] == "v-submit-1"
-    assert manifest["job"]["model"] == "seedance2.0fast_vip"
-    assert manifest["job"]["resolution"] == "720p"
-    # 子进程调用顺序：text2video 提交 → query 轮询 → query+下载
-    kinds = [c[1] for c in env.calls]
-    assert kinds[0] == "text2video"
-    assert kinds.count("query_result") >= 2
+    assert pathlib.Path(result.video_path).read_bytes()[:8] == MP4_MAGIC[:8]
+    run_dir = adhoc_video._run_dir(result.run_id)
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+    assert manifest["status"] == "ready"
+    assert manifest["job"]["id"].startswith("sid-")
+    assert manifest["canvas"]["project_id"] == "proj-0001"
 
 
-def test_pipeline_web_refresh_flow(env):
-    env.responses = [dict(TASK_QUERYING)]  # submit
-    result = adhoc_video.generate(_req(wait=False))
-    assert result.status == "pending" and result.provider == "dreamina"
-    manifest = adhoc_video.read_manifest(result.run_id)
-    assert manifest["status"] == "in_progress"
-    # 第 1 次 refresh：仍是 querying → in_progress
-    env.responses = [dict(TASK_QUERYING)]
-    summary = adhoc_video.refresh(result.run_id)
-    assert summary["status"] == "in_progress"
-    assert summary["job_status"] == "querying"
-    # 第 2 次 refresh：success → 下载收片
-    env.responses = [dict(TASK_SUCCESS)]
-    summary = adhoc_video.refresh(result.run_id)
+def _make_run(run_id: str, **kw):
+    adhoc_video._run_dir(run_id).mkdir(parents=True, exist_ok=True)
+    return adhoc_video._submit(_req(**kw), run_id, None)
+
+
+def test_pipeline_web_refresh_flow(monkeypatch):
+    _make_run("video_canvas_web", wait=False)
+    summary = adhoc_video.refresh("video_canvas_web")
     assert summary["status"] == "ready"
-    assert summary["cost"] is None
-    # 终态幂等：第 3 次 refresh 不再打 CLI（calls 数不变）
-    calls_after_ready = len(env.calls)
-    adhoc_video.refresh(result.run_id)
-    assert len(env.calls) == calls_after_ready
 
 
-def test_pipeline_fail_persists_reason(env):
-    # submit=querying → wait 轮询到 fail → 收片查询也 fail（URL 还没过期也是 fail 终态）
-    env.responses = [dict(TASK_QUERYING), dict(FAIL_COMPLIANCE)]
-    env.download_responses = [dict(FAIL_COMPLIANCE)]
-    with pytest.raises(adhoc_video.AdhocVideoError) as exc:
-        adhoc_video.generate(_req())
-    run_ids = [d for d in (adhoc_video.video_root()).iterdir() if d.is_dir()]
-    assert run_ids  # 失败也留痕
-    m = adhoc_video.read_manifest(run_ids[0].name)
-    assert m["status"] == "failed"
-    assert "AigcComplianceConfirmationRequired" in m["error"]
-    assert "jimeng.jianying.com" in str(m["error"])
+def test_pipeline_legacy_manifest_poll_error(monkeypatch, tmp_path):
+    # 旧通路（直发 CLI）留下的 manifest 没有 canvas.project_id：不静默，poll_error 暴露
+    manifest = _make_run("video_legacy_canvas", wait=False)
+    del manifest["canvas"]
+    adhoc_video._write_manifest(adhoc_video._run_dir("video_legacy_canvas"), manifest)
+    summary = adhoc_video.refresh("video_legacy_canvas")
+    assert "画布" in summary["poll_error"]
 
 
-def test_pipeline_poll_error_keeps_state(env, monkeypatch):
-    env.responses = [dict(TASK_QUERYING)]  # submit
-    run_id = adhoc_video.generate(_req(wait=False)).run_id
-    # poll 阶段 CLI 报错（如网络抖动）→ poll_error 不改状态
-    def broken(cmd, **kwargs):
-        import subprocess
+def test_pipeline_fail_keeps_reason(monkeypatch):
+    fake = FakeCanvas("x")
+    fake.run_should_fail = True
 
-        return subprocess.CompletedProcess(cmd, 3, stdout="", stderr="boom: net broken")
-    monkeypatch.setattr(dreamina_image.subprocess, "run", broken)
-    summary = adhoc_video.refresh(run_id)
-    assert summary["status"] == "in_progress"
-    assert "net broken" in summary["poll_error"]
-    manifest = adhoc_video.read_manifest(run_id)
-    assert manifest["status"] == "in_progress"
-
-
-def test_pipeline_ref_and_vref_full_combo(env):
-    ref = _png_file(pathlib.Path(env.download_root) / "ref.png")
-    vref = pathlib.Path(env.download_root) / "refv.mp4"
-    vref.write_bytes(_mp4_bytes())
-    env.responses = [dict(TASK_QUERYING)]
-    result = adhoc_video.generate(_req(reference_paths=[ref],
-                                       reference_video_paths=[vref], wait=False))
-    args = env.calls[0][1:]
-    assert args[0] == "multimodal2video"
-    assert args.count("--image") == 1 and args.count("--video") == 1
-    # web 路径：pending 返回，job_id 是即梦 submit_id
-    assert result.job_id == "v-submit-1"
-    assert result.provider == "dreamina"
-
-
-def test_pipeline_first_frame_image2video(env):
-    frame = _png_file(pathlib.Path(env.download_root) / "frame.png")
-    env.responses = [dict(TASK_QUERYING)]
-    adhoc_video.generate(_req(first_frame=frame, aspect_ratio="", wait=False))
-    args = env.calls[0][1:]
-    assert args[0] == "image2video"
-    assert "--ratio" not in args  # 画幅空 = 从首帧推断
-
-
-def test_pipeline_last_frame_rejected_no_run(env):
-    first = _png_file(pathlib.Path(env.download_root) / "f0.png")
-    last = _png_file(pathlib.Path(env.download_root) / "fl.png")
+    def fake_factory(name, **kw):
+        return fake
+    monkeypatch.setattr(dreamina_video, "CanvasRunner", fake_factory)
+    monkeypatch.setattr(dreamina_image, "CanvasRunner", fake_factory)
     with pytest.raises(adhoc_video.AdhocVideoError):
-        adhoc_video.generate(_req(first_frame=first, last_frame=last))
-    # 提交前拦截（没打 CLI），但 generate 的失败留痕仍在：失败 manifest + 提示尾帧
-    runs = list(adhoc_video.video_root().iterdir())
-    assert len(runs) == 1
-    m = adhoc_video.read_manifest(runs[0].name)
-    assert m["status"] == "failed" and "尾帧" in str(m["error"])
-    assert all(c[1] != "image2video" for c in env.calls)
+        adhoc_video.generate(_req(), poll_interval=0.01, timeout_s=30.0)
+    run_dir = None
+    from charvar import paths as charvar_paths
+    runs = pathlib.Path(charvar_paths.data_dir() / "generated" / "adhoc_video").glob("*/manifest.json")
+    manifests = [json.loads(p.read_text()) for p in runs]
+    assert any(m["status"] == "failed" for m in manifests)
 
 
-def test_openrouter_backend_untouched(env, monkeypatch):
-    """OpenRouter 分支保持原行为（provider/落盘/作业 id 语义不回归）。"""
-    monkeypatch.setenv("OP_IMAGE_API_KEY", "sk-test")  # 缺 key 检查在提交前（conftest 已清真 .env）
-    catalog = {
-        "data": [{
-            "id": "heygen/heygen-video-1", "name": "HeyGen Video",
-            "supported_durations": [5, 6, 10], "supported_resolutions": ["480p", "768p", "2K"],
-            "supported_aspect_ratios": ["16:9", "9:16", "1:1"],
-            "supported_frame_images": ["first_frame"], "seed": True,
-            "pricing_skus": {"duration_seconds_480p": "0.02"},
-        }]
-    }
-    cache = pathlib.Path(env.download_root) / "openrouter" / "video-models.json"
-    cache.parent.mkdir(parents=True, exist_ok=True)
-    cache.write_text(json.dumps(catalog), encoding="utf-8")
-    calls = {"submit": [], "download": []}
-
-    def fake_submit(body, *, api_key=None, base_url=None, timeout_s=None):
-        calls["submit"].append(dict(body))
-        return openrouter_video.VideoJob("job-or-1", "pending")
-
-    def fake_wait(job_id, **kw):
-        return {"status": "completed", "unsigned_urls": ["https://x/0"], "usage": {"cost": 0.02}}
-
-    def fake_poll(job_id, **kw):
-        return {"status": "in_progress", "id": job_id}
-
-    def fake_download(job_id, *, url=None, api_key=None, base_url=None, timeout_s=None):
-        calls["download"].append(job_id)
-        return _mp4_bytes()
-
-    monkeypatch.setattr(openrouter_video, "submit", fake_submit)
-    monkeypatch.setattr(openrouter_video, "wait_for_job", fake_wait)
-    monkeypatch.setattr(openrouter_video, "poll", fake_poll)
-    monkeypatch.setattr(openrouter_video, "download", fake_download)
-    def fake_poster_or(video_path, run_dir):
-        target = pathlib.Path(run_dir) / "thumbs" / "000000.jpg"
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(b"\xff\xd8\xff\xe0" + b"\x00" * 8)
-        return target
-    monkeypatch.setattr(adhoc_video, "_make_poster", fake_poster_or)
-    result = adhoc_video.generate(_req(backend="openrouter",
-                                       model="heygen/heygen-video-1",
-                                       resolution="480p"))
-    assert result.provider == "openrouter" and result.cost == pytest.approx(0.02)
-    assert calls["submit"] and calls["download"] == ["job-or-1"]
-    # dreamina 侧完全没被碰
-    assert all(c[1] != "text2video" for c in env.calls)
-
-def test_finalize_race_guard_reuses_existing_video(env):
-    """并发收片竞态：另一路（CLI/web 同盯一个作业）把成片收进 original/ 并清掉
-    download 目录；本路的 query 结果里产物已不在 —— 兜底复用 original/ 照样 ready。"""
-    env.responses = [dict(TASK_QUERYING)]  # submit
-    result = adhoc_video.generate(_req(wait=False))
-    run_id = result.run_id
-    run_dir = adhoc_video.run_dir(run_id)
-    # 另一路已把成片收进 original/
-    destination = run_dir / "original" / "000000.mp4"
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_bytes(_mp4_bytes())
-    # download 分支：写文件 → 又被并发者清掉 → 回的 payload 里 path 已不存在
-    env.download_responses = []
-    env.simulate_race = True
-    manifest = adhoc_video.read_manifest(run_id)
-    manifest["status"] = "in_progress"
-    (run_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
-    env.responses = [dict(TASK_SUCCESS)]  # refresh 轮询到终态
-    summary = adhoc_video.refresh(run_id)
-    assert summary["status"] == "ready"
-    assert destination.is_file()
+# ---------- finalize 并发兜底 ----------
 
 
-# ---------- 提交前配对规则（CLI -h 明文的 2.5/legacy/媒体时长） ----------
+def test_finalize_race_guard_reuses_existing_video():
+    manifest = _make_run("video_race", wait=False)
+    run_dir = adhoc_video._run_dir("video_race")
+    original = run_dir / "original"
+    original.mkdir(parents=True, exist_ok=True)
+    ready = original / "000000.mp4"
+    ready.write_bytes(_mp4_bytes())
+    result = adhoc_video._finalize_dreamina("video_race", manifest, time.time())
+    assert result["status"] == "ready"
+    assert result["result"]["video_path"] == str(ready)
 
 
-def test_25_i2v_rejects_explicit_ratio(env, tmp_path):
-    frame = tmp_path / "f.png"
-    frame.write_bytes(b"0000")
-    with pytest.raises(dreamina_video.DreaminaParamError):
-        dreamina_video.submit(prompt="p", model="seedance2.5", resolution="720p", duration=5,
-                              ratio="9:16", first_frame=frame, poll_s=0)
-    assert env.calls == []
-    # 空画幅（= 跟首帧走）放行
-    dreamina_video.submit(prompt="p", model="seedance2.5", resolution="720p", duration=5,
-                          ratio="", first_frame=frame, poll_s=0)
-    args = env.calls[0][1:]
-    assert args[0] == "image2video" and "--ratio" not in args
+def test_finalize_fails_without_canvas():
+    manifest = _make_run("video_nocanvas", wait=False)
+    del manifest["canvas"]
+    result = adhoc_video._finalize_dreamina("video_nocanvas", manifest, time.time())
+    assert result["status"] == "failed"
 
 
-def test_legacy_ratio_must_match_first_frame(env, tmp_path):
-    wide = _png_file(tmp_path / "wide.png", (160, 90))  # 16:9
-    with pytest.raises(dreamina_video.DreaminaParamError):
-        dreamina_video.submit(prompt="p", model="seedance1.0fast", resolution="720p", duration=5,
-                              ratio="9:16", first_frame=wide, poll_s=0)
-    assert env.calls == []
-    # 一致的 16:9 → 过（2.0 系不拦，legacy 才拦）
-    dreamina_video.submit(prompt="p", model="seedance1.0fast", resolution="720p", duration=10,
-                          ratio="16:9", first_frame=wide, poll_s=0)
-    args = env.calls[0][1:]
-    assert args[0] == "image2video" and "--ratio" in args
+# ---------- CLI 枚举 ----------
 
 
-def test_multimodal_vref_duration_precheck(env, tmp_path, monkeypatch):
-    vref = tmp_path / "v.mp4"
-    vref.write_bytes(_mp4_bytes())
-    base = dict(prompt="p", model="seedance2.0fast_vip", resolution="720p", duration=5,
-                ratio="9:16", poll_s=0)
-    monkeypatch.setattr(dreamina_video, "probe_media_seconds", lambda _p: 20.0)
-    with pytest.raises(dreamina_video.DreaminaParamError):
-        dreamina_video.submit(reference_video_paths=[vref], **base)
-    assert env.calls == []
-    monkeypatch.setattr(dreamina_video, "probe_media_seconds", lambda _p: 10.0)
-    dreamina_video.submit(reference_video_paths=[vref], **base)
-    assert env.calls[0][1:] and env.calls[-1][1] == "multimodal2video"
-    # 探测不到（None）就不拦，交上游
-    env.calls.clear()
-    monkeypatch.setattr(dreamina_video, "probe_media_seconds", lambda _p: None)
-    dreamina_video.submit(reference_video_paths=[vref], **base)
-    assert len(env.calls) == 1
-
-
-def test_mark_if_open_never_clobbers_ready(env, tmp_path, monkeypatch):
-    """终态写入保护：盘上已是 ready/failed 时不要用旧 dict 覆写。"""
-    run_dir = tmp_path / "m"
-    run_dir.mkdir()
-    disk = {"status": "ready", "result": {"run_id": "r"}}
-    (run_dir / "manifest.json").write_text(json.dumps(disk, ensure_ascii=False), encoding="utf-8")
-    got = adhoc_video._mark_if_open(run_dir, {"status": "in_progress"},
-                                    status="failed", error="本路失败")
-    assert got["status"] == "ready" and got["result"]["run_id"] == "r"
-    # 盘上是中间态 → 可写
-    (run_dir / "manifest.json").write_text(json.dumps({"status": "in_progress"}, ensure_ascii=False), encoding="utf-8")
-    got = adhoc_video._mark_if_open(run_dir, {"status": "in_progress"},
-                                    status="failed", error="本路失败")
-    assert got["status"] == "failed"
-
-
-def test_finalize_uses_unique_download_dir(env):
-    """并发收片的两次下载不能共享同一目录（CLI 按确定性文件名写，会互相截断）。"""
-    env.responses = [dict(TASK_QUERYING), dict(TASK_SUCCESS)]
-    result = adhoc_video.generate(_req())
-    assert result.status == "ready"
-    dl_dirs = [d for d in adhoc_video.run_dir(result.run_id).iterdir()
-               if d.name.startswith("download")]
-    assert dl_dirs == []  # 用完即清
+def test_model_list_shape():
+    models = dreamina_video.model_list()
+    ids = {m["id"] for m in models}
+    assert "seedance_2.0_fast_vip" in ids and "wan_3.0" in ids
+    for m in models:
+        assert m["resolutions"] and m["durations"][0] <= m["durations"][1]
+        assert m["ratios"] and m["modes"]

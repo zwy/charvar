@@ -87,40 +87,38 @@ function applyGenTierOptions() {
   $("#gen-quality-field").hidden = true;
 }
 
-/* 即梦：模型版本下拉 + 分辨率随模型配对（与 Playground 同表）
-   3.0/3.1 只有 text2image —— 带参考图时（即 image2image）不列出来，
-   免得用户选到提交前才被后端拦（后端 validate_model_resolution 仍兜底）。 */
+/* 即梦：模型下拉（画布目录，tables.js 与后端 _IMAGE_MODELS 同源）+ 分辨率随模型配对。
+   带参考图时不列连文生图模式都不收参考的模型，免得选到提交前才被后端拦
+   （后端 validate_references / validate_model_resolution 仍兜底）。 */
 function applyGenDreaminaOptions() {
   const def = state.dreaminaDefaults || {};
-  const defLabel = `跟随设置默认（${def.model || "5.0"} · ${def.resolution || "2K"}）`;
+  const defLabel = `跟随设置默认（${def.model || DREAMINA_DEFAULT_IMAGE_MODEL} · ${def.resolution || "2K"}）`;
   const withRefs = GenRefs.count() > 0;
-  const models = Object.keys(DREAMINA_MODEL_RESOLUTIONS).filter(
-    (m) => !withRefs || !DREAMINA_T2I_ONLY_MODELS.has(m)
-  );
+  const models = Object.entries(DREAMINA_IMAGE_MODELS)
+    .filter(([, e]) => !withRefs || (e.refMax.i2i > 0 || e.refMax.t2i > 0));
   const sel = $("#gen-model-select");
   const keep = sel.value;
   sel.innerHTML = [`<option value="">${defLabel}</option>`]
-    .concat(models.map((m) => `<option value="${m}">${m}</option>`))
+    .concat(models.map(([id, e]) => `<option value="${escapeHtml(id)}">${escapeHtml(e.label)}</option>`))
     .join("");
-  sel.value = models.includes(keep) ? keep : "";
+  sel.value = models.some(([id]) => id === keep) ? keep : "";
   $("#gen-model-select-field").hidden = false;
   applyGenDreaminaResolutionOptions();
 }
 
 /* 即梦分辨率：模型空（跟随设置）就真跟随 —— 档位仍列出来（按设置页的默认模型配对），
    但选中的是「跟随设置默认」；显式选了模型才按那个模型列档。
-   后端会校验 model×resolution 组合（3.0/3.1 不能带参考图），前端先拦一道。 */
+   字面值按目录原样（大小写有语义），后端 validate_model_resolution 仍兜底。 */
 function applyGenDreaminaResolutionOptions() {
   const modelValue = $("#gen-model-select").value;
   const def = state.dreaminaDefaults || {};
   const sel = $("#gen-resolution");
-  const base = modelValue || def.model || "5.0";
-  const tiers = DREAMINA_MODEL_RESOLUTIONS[base] || DREAMINA_MODEL_RESOLUTIONS["5.0"];
-  const display = tiers.map((t) => String(t).toUpperCase());
+  const base = modelValue || def.model || DREAMINA_DEFAULT_IMAGE_MODEL;
+  const tiers = (DREAMINA_IMAGE_MODELS[base] || DREAMINA_IMAGE_MODELS[DREAMINA_DEFAULT_IMAGE_MODEL]).resolutions;
   sel.innerHTML = [`<option value="">跟随设置默认（${def.resolution || "2K"}）</option>`]
-    .concat(display.map((t) => `<option value="${t}">${t}</option>`))
+    .concat(tiers.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`))
     .join("");
-  sel.value = modelValue ? (display.includes("2K") ? "2K" : display[0]) : "";
+  sel.value = modelValue ? (tiers.includes("2K") ? "2K" : tiers[0]) : "";
   $("#gen-resolution-field").hidden = false;
   $("#gen-quality-field").hidden = true;
 }
@@ -222,7 +220,7 @@ function renderGenModelInfo() {
   const def = state.dreaminaDefaults || {};
   const model = $("#gen-model-select").value;
   const res = $("#gen-resolution").value;
-  const cliNote = state.dreaminaCliOk === false ? " · ⚠ 未找到 dreamina CLI" : "";
+  const cliNote = state.dreaminaCliOk === false ? " · ⚠ 未找到 dreamina-canvas CLI" : "";
   el.textContent =
     `即梦：${model || `跟随设置（${def.model || "5.0"}）`} · ${res || `跟随设置（${def.resolution || "2K"}）`}${cliNote}`;
 }

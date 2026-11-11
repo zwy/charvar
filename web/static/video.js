@@ -134,17 +134,19 @@ async function ensureDreaminaDefaults() {
   try {
     const s = await api("/settings");
     videoState.dreaminaDefaults = {
-      model: s.dreamina_video_default_model || "seedance2.0fast_vip",
+      model: s.dreamina_video_default_model || DREAMINA_DEFAULT_VIDEO_MODEL,
       cliOk: s.dreamina_cli_available !== false,
     };
   } catch {
-    videoState.dreaminaDefaults = { model: "seedance2.0fast_vip", cliOk: true };
+    videoState.dreaminaDefaults = { model: DREAMINA_DEFAULT_VIDEO_MODEL, cliOk: true };
   }
 }
 
-/* 模式过滤：t2v 只列支持文生/全能参考的 2.0 系与 2.5；i2v 全列（老 1.0fast/1.5pro 仅 i2v）。 */
+/* 模式过滤：t2v（文生视频页签，可带参考图走全能参考）只列支持 t2v 的模型；
+   i2v（首帧页签）找 first_last_frame 能力。 */
 function dreaminaModelOptions() {
-  return Object.entries(DREAMINA_VIDEO_MODELS).filter(([, e]) => e.modes.includes(videoState.mode));
+  const want = videoState.mode === "i2v" ? "first_last_frame" : "t2v";
+  return Object.entries(DREAMINA_VIDEO_MODELS).filter(([, e]) => e.modes.includes(want));
 }
 
 function applyDreaminaVideoModel() {
@@ -153,9 +155,9 @@ function applyDreaminaVideoModel() {
   const def = videoState.dreaminaDefaults || {};
   // 当前值优先（模式/模型切换不丢已选）；当前值不在新清单才回落 saved → 跟随默认
   const keep = sel.value || videoState.saved.dreamina.model || "";
-  sel.innerHTML = [`<option value="">跟随设置默认（${escapeHtml(def.model || "seedance2.0fast_vip")}）</option>`]
+  sel.innerHTML = [`<option value="">跟随设置默认（${escapeHtml(def.model || DREAMINA_DEFAULT_VIDEO_MODEL)}）</option>`]
     .concat(models.map(([id, e]) =>
-      `<option value="${escapeHtml(id)}">${escapeHtml(id)}${e.vipOnly ? "（VIP）" : ""}</option>`))
+      `<option value="${escapeHtml(id)}">${escapeHtml(e.label)}</option>`))
     .join("");
   sel.value = models.some(([id]) => id === keep) ? keep : "";
   $("#video-dreamina-model-field").hidden = false;
@@ -166,13 +168,12 @@ function dreaminaModelEntry() {
   return DREAMINA_VIDEO_MODELS[id] || null;
 }
 
-/* 即梦枚举：画幅 6 档（i2v 首行「自动 = 按首帧推断」发空串）、分辨率按模型
-   （fast_vip 恒 720p 单值）、时长按模型展开 lo..hi。
+/* 即梦枚举：画幅按模型（i2v 首行「自动 = 按首帧推断」发空串，后端从首帧归一）、
+   分辨率按模型（字面值大小写按目录透传）、时长按模型展开 lo..hi。
    restore=true（从另一供应商切回）→ 恢复 saved；restore=false（模式/模型切换）
-   → 以当前值为准（不丢已选），当前值不在新枚举里才落默认。
-   2.5 图生视频上游拒收显式 ratio → 画幅锁「自动」。 */
+   → 以当前值为准（不丢已选），当前值不在新枚举里才落默认。 */
 function applyDreaminaVideoEnums(restore = false) {
-  const entry = dreaminaModelEntry() || { resolutions: ["720p"], durations: [4, 15] };
+  const entry = dreaminaModelEntry() || { resolutions: ["720p"], durations: [4, 15], ratios: DREAMINA_VIDEO_RATIOS };
   const i2v = videoState.mode === "i2v";
   const saved = videoState.saved.dreamina;
   const keep = restore
@@ -182,11 +183,8 @@ function applyDreaminaVideoEnums(restore = false) {
         resolution: $("#video-resolution").value,
         duration: $("#video-duration").value,
       };
-  const locked = Boolean(entry.i2vRatioLocked) && i2v;
-  const aspectItems = locked
-    ? [["", "自动（2.5 图生视频跟首帧走）"]]
-    : (i2v ? [["", "自动（按首帧推断）"]] : [])
-        .concat(DREAMINA_VIDEO_RATIOS.map((a) => [a, a]));
+  const aspectItems = (i2v ? [["", "自动（按首帧推断）"]] : [])
+        .concat((entry.ratios || DREAMINA_VIDEO_RATIOS).map((a) => [a, a]));
   const aspectSel = $("#video-aspect");
   aspectSel.innerHTML = aspectItems.map(([v, label]) =>
     `<option value="${v}">${escapeHtml(label)}</option>`).join("");
@@ -216,14 +214,14 @@ function applyDreaminaVideoEnums(restore = false) {
 function renderDreaminaInfo(el) {
   const def = videoState.dreaminaDefaults || {};
   const modelValue = $("#video-dreamina-model").value || def.model || "";
-  const entry = dreaminaModelEntry() || { resolutions: ["720p"], durations: [4, 15] };
+  const entry = dreaminaModelEntry() || { resolutions: ["720p"], durations: [4, 15], ratios: DREAMINA_VIDEO_RATIOS };
   const parts = [
-    `即梦 ${modelValue}`,
+    `即梦 ${(DREAMINA_VIDEO_MODELS[modelValue] || {}).label || modelValue}`,
     `分辨率 ${(entry.resolutions || ["720p"]).join("/")}`,
     `时长 ${(entry.durations || [4, 15]).join("-")}s`,
-    "6 档画幅",
+    `${(entry.ratios || []).length} 档画幅`,
   ];
-  if (def.cliOk === false) parts.push("⚠ dreamina CLI 不可用（设置页有提示）");
+  if (def.cliOk === false) parts.push("⚠ dreamina-canvas CLI 不可用（设置页有提示）");
   el.textContent = parts.join(" · ");
 }
 function renderVideoModelInfo() {

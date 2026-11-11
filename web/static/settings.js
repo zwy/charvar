@@ -169,7 +169,7 @@ async function loadSettings() {
     const dvTable = typeof DREAMINA_VIDEO_MODELS === 'undefined' ? {} : DREAMINA_VIDEO_MODELS;
     const dvModels = Object.keys(dvTable);
     const dvSel = $("#set-dreamina-video-model");
-    const dvDefaultHtml = escapeHtml(settings.dreamina_video_default_model || "seedance2.0fast_vip");
+    const dvDefaultHtml = escapeHtml(settings.dreamina_video_default_model || DREAMINA_DEFAULT_VIDEO_MODEL);
     const dvOptions = [`<option value="">跟随默认（${dvDefaultHtml}）</option>`]
       .concat(dvModels.map((m) => `<option value="${m}">${m}</option>`));
     if (dv.model && !dvModels.includes(dv.model)) {
@@ -179,8 +179,8 @@ async function loadSettings() {
     dvSel.value = dv.model || "";
     // 放在卡片标题行右侧，长句塞不进标题行
     $("#dreamina-cli-status").textContent = settings.dreamina_cli_available === false
-      ? "⚠ 未找到 dreamina CLI：安装后 dreamina login 才能出图"
-      : "dreamina CLI 已就绪（积分用 dreamina user_credit 自查）";
+      ? "⚠ 未找到 dreamina-canvas CLI：安装并 dreamina-canvas auth login 后才能出图"
+      : "dreamina-canvas CLI 已就绪（积分余额用 `dreamina-canvas auth account` 自查）";
     const sizes = $("#settings-sizes");
     sizes.innerHTML = "";
     for (const [kind, size] of Object.entries(settings.image_sizes)) {
@@ -241,7 +241,7 @@ $("#btn-settings-save").addEventListener("click", async () => {
   patch.openrouter_video = {
     model: $("#set-or-video-model").value.trim(),
   };
-  // 即梦视频：model 空串 = 落库为空 = 回到 env / seedance2.0fast_vip 默认
+  // 即梦视频：model 空串 = 落库为空 = 回到 env / seedance_2.0_fast_vip 默认
   patch.dreamina_video = {
     model: $("#set-dreamina-video-model").value.trim(),
   };

@@ -306,7 +306,7 @@ def test_generate_dreamina_backend(client, tmp_path, monkeypatch):
     assert body["status"] == "pending"
     assert body["status_url"].startswith("/videos/")
     # 默认链落到 charvar 默认档：请求显式给了就走请求值
-    assert captured["model"] == "seedance2.0fast_vip"
+    assert captured["model"] == "seedance_2.0_fast_vip"
     assert captured["resolution"] == "720p" and captured["duration"] == 5
 
 
