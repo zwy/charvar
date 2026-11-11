@@ -47,8 +47,7 @@ steps:
   label: 首帧图
   input: 随机选库
   scene_from: 场景设计
-  backend: comfyui
-  resolution: 2k
+  backend: dreamina
   aspect: "9:16"
   style_lock:
   - cinematic live-action，真人实拍电影感画质
