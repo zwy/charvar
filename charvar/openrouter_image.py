@@ -515,6 +515,13 @@ def _rejected_parameter(message: str) -> str | None:
     match = re.search(r"not pixel dimensions", low)
     if match:
         return "size"
+    # "an explicit WIDTHxHEIGHT size cannot be combined with aspect_ratio or
+    # resolution"（MiniMax 系）：拒的是 size×resolution 组合。body 组装走
+    # 像素精确 size 时不发 resolution（见 build_generate_body），这里兜住
+    # 历史组合或缓存旧 body —— 摘 resolution，保住像素精确的画幅。
+    match = re.search(r"cannot be combined with aspect_ratio or resolution", low)
+    if match:
+        return "resolution"
     # "Image size '1024x448' is not supported" / "quality: not supported"
     match = re.search(r"\bsize\b[^.]*is not supported", low)
     if match:
@@ -685,7 +692,11 @@ def build_generate_body(
         body["aspect_ratio"] = aspect_ratio
 
     provider_resolution = _provider_resolution(resolution, caps)
-    if provider_resolution:
+    # 分辨率档与像素精确 size 是 provider 侧两套并发档型：多数模型（tencent）
+    # 两个都收，但 MiniMax 系声明了 size 却拒收 size×resolution 组合 ——
+    # 由 _post_generate 降级（摘 resolution）实测记案后按探测缓存闭嘴，
+    # 不预先全量不发，避免误伤真收该组合的模型。
+    if provider_resolution and not ("size" in body and "resolution" in caps.rejected):
         body["resolution"] = provider_resolution
     provider_quality = _provider_quality(quality, caps)
     if provider_quality:

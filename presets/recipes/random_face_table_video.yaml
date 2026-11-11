@@ -19,7 +19,6 @@ steps:
 
 - kind: adhoc_image
   label: 首帧图
-  backend: comfyui
   aspect: "3:4"
   reference_labels: [脸部参考]
   prompt: |

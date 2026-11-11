@@ -129,6 +129,41 @@ def test_rejected_parameter_matches_not_pixel_dimensions():
     assert openrouter_image._rejected_parameter(message) == "size"
 
 
+def test_body_resolution_dropped_on_size_path(tmp_path):
+    """MiniMax 系声明 size 却拒收 size×resolution 组合：探测记案后走 size 不再发 resolution。"""
+    ref = tmp_path / "a.png"
+    ref.write_bytes(_png_bytes())
+    base = dict(
+        prompt="p", model="minimax/minimax-h3-image", width=704, height=1024,
+        aspect_ratio="3:4", resolution="1K", reference_paths=[ref],
+    )
+    declared = openrouter_image.ModelCapabilities(
+        model_id="minimax/minimax-h3-image",
+        declared=frozenset({"size", "resolution", "aspect_ratio", "input_references"}),
+        aspect_ratios=("3:4", "16:9", "1:1"),
+        resolutions=("1K", "2K", "4K"),
+    )
+    body = openrouter_image.build_generate_body(capabilities=declared, **base)
+    assert body["size"] == "704x1024"
+    assert body["resolution"] == "1K"  # 还没实测拒过：照发，错了由降级兜底
+    probed = openrouter_image.ModelCapabilities(
+        model_id="minimax/minimax-h3-image",
+        declared=declared.declared, rejected=frozenset({"resolution"}),
+        aspect_ratios=declared.aspect_ratios, resolutions=declared.resolutions,
+    )
+    body2 = openrouter_image.build_generate_body(
+        capabilities=probed, **base,
+    )
+    assert body2["size"] == "704x1024"
+    assert "resolution" not in body2  # 探测记过案：同模型不再浪费 400
+
+
+def test_rejected_parameter_matches_combination_conflict():
+    """MiniMax 句式 "size cannot be combined with aspect_ratio or resolution" → 摘 resolution。"""
+    message = "MiniMax: an explicit WIDTHxHEIGHT size cannot be combined with aspect_ratio or resolution"
+    assert openrouter_image._rejected_parameter(message) == "resolution"
+
+
 def test_seed_sent_when_declared():
     """清单声明了 seed → 正常发送并收敛到安全范围。"""
     caps = openrouter_image.ModelCapabilities(
