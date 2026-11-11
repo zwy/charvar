@@ -14,6 +14,7 @@ PAGE_NEEDLE_IDS = {
     "gen": ["gen-subject", "gen-preset", "push-result", "btn-contact-sheet"],
     "adhoc": ["adhoc-prompt", "adhoc-ref-list"],
     "video": ["video-prompt", "video-frame-list"],
+    "upscale": ["ups-target", "ups-input-list"],
     "tts": ["tts-text", "tts-voice"],
     "recipes": ["recipes-table", "recipe-runs-table"],
     "subjects": ["s-id", "subject-image-slots"],

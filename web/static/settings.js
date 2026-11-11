@@ -95,17 +95,24 @@ async function loadSettings() {
   try {
     const [settings, comfy] = await Promise.all([api("/settings"), api("/comfy/workflows")]);
     const names = (comfy.workflows || []).filter((w) => w.has_workflow && w.has_mapping).map((w) => w.name);
-    for (const [sel, value] of [["#set-t2i", settings.comfy_t2i_workflow], ["#set-edit", settings.comfy_edit_workflow]]) {
+    for (const [sel, value] of [["#set-t2i", settings.comfy_t2i_workflow], ["#set-edit", settings.comfy_edit_workflow],
+        ["#set-ups-workflow", settings.upscale ? settings.upscale.workflow : ""]]) {
       const el = $(sel);
       el.innerHTML = names.map((n) => `<option value="${n}">${n}</option>`).join("") ||
         `<option value="">（data/workflows 没有成对 workflow）</option>`;
-      if (value && names.includes(value)) el.value = value;
+      const stored = value || "";
+      if (stored && names.includes(stored)) el.value = stored;
+      else el.value = "";
     }
     $("#set-llm-base").value = settings.llm.base_url || "";
     $("#set-llm-model").value = settings.llm.model || "";
     $("#set-llm-key").value = "";
     $("#set-llm-key").placeholder = settings.llm_configured ? "已配置（留空保持不变）" : "留空 = 环境变量 LLM_API_KEY";
     $("#set-negative").value = settings.default_negative_prompt || "";
+    // 「放大页默认」：后端/目标短边（workflow 下拉在上面已按成对名单填充）
+    const up = settings.upscale || {};
+    if ($("#set-ups-backend")) $("#set-ups-backend").value = up.backend || "comfyui";
+    if ($("#set-ups-target")) $("#set-ups-target").value = ["720p", "1080p", "4k"].includes(up.target) ? up.target : "1080p";
     try {
       const models = await api("/openrouter/models");
       OR_MODEL_OPTIONS = models.models || [];
@@ -269,6 +276,12 @@ $("#btn-settings-save").addEventListener("click", async () => {
   // OpenRouter 语音：model 空串 = 落库为空 = 回到 env（OP_TTS_MODEL）/ 免费默认
   patch.openrouter_tts = {
     model: $("#set-or-tts-model").value.trim(),
+  };
+  // 放大页默认：workflow 空串 = 落库为空 = adhoc_upscale 兜底 workflow
+  patch.upscale = {
+    backend: $("#set-ups-backend").value,
+    target: $("#set-ups-target").value,
+    workflow: $("#set-ups-workflow").value.trim(),
   };
   try {
     await api("/settings", { method: "PUT", body: JSON.stringify(patch) });

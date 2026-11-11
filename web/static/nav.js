@@ -4,8 +4,8 @@
    加新页面 = NAV_PAGES 加一项 + charvar/api.py _PAGE_ROUTES + web/static/<name>.html —— 三处同步。 */
 
 const NAV_PAGES = [
-  ["gen", "预设"], ["adhoc", "Playground"], ["video", "视频"],
-  ["tts", "语音"], ["recipes", "配方"], ["subjects", "主体"], ["faces", "人脸"], 
+  ["gen", "预设"], ["adhoc", "Playground"], ["video", "视频"], ["upscale", "放大"],
+  ["tts", "语音"], ["recipes", "配方"], ["subjects", "主体"], ["faces", "人脸"],
   ["poses", "动作"], ["costumes", "服饰"], ["runs", "历史"], ["settings", "设置"],
 ];
 

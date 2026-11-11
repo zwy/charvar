@@ -1,21 +1,26 @@
 {
   "name": "charvar-skill",
-  "version": "1.8.0",
+  "version": "1.9.0",
   "updated": "2026-11-11",
-  "description": "按提示词实际出图/出视频的 Claude Code skill：ComfyUI、OpenRouter、即梦三条通路 + OpenRouter 语音（TTS）+ 主体档案 CLI。",
+  "description": "按提示词实际出图/出视频的 Claude Code skill：ComfyUI、OpenRouter、即梦三条通路 + 视频放大（SeedVR2/FFmpeg）+ OpenRouter 语音（TTS）+ 主体档案 CLI。",
   "entrypoint": "SKILL.md",
   "files": {
     "manifest.json": "版本、文件清单与检查结果记录。",
-    "SKILL.md": "核心入口：三条生图通路、视频、语音、主体档案命令与排错表。",
+    "SKILL.md": "核心入口：三条生图通路、视频、放大、语音、主体档案命令与排错表。",
     "references/cli.md": "完整 CLI 参数参考。"
   },
   "checks": {
     "command": "python3 -m pytest tests/test_skills.py",
-    "last_run": "2026-11-04",
+    "last_run": "2026-11-11",
     "result": "passed",
     "note": "本 skill 无自带脚本；由仓库级 tests/test_skills.py 校验 frontmatter、版本同步与文件清单。"
   },
   "history": [
+    {
+      "version": "1.9.0",
+      "updated": "2026-11-11",
+      "note": "新增视频放大通路：charvar upscale comfyui|ffmpeg（短边放大到 720p/1080p/4k；SeedVR2 超分修复走 ComfyUI 队列，ffmpeg 本机插值秒级）；源短边已达标原样返回；网页新增「放大」页签 + 设置页「放大页默认」组。放大倍数按目标短边/源短边自动算并经 mapping 注入。"
+    },
     {
       "version": "1.8.0",
       "updated": "2026-11-11",

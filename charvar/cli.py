@@ -51,6 +51,8 @@ recipes_app = typer.Typer(help="视频配方：线性步骤执行器（出图批
 app.add_typer(recipes_app, name="recipes")
 app.add_typer(image_app, name="image")
 app.add_typer(video_app, name="video")
+upscale_app = typer.Typer(help="Playground 放大：把一段视频的短边放大到目标档位（SeedVR2 / FFmpeg）", no_args_is_help=True)
+app.add_typer(upscale_app, name="upscale")
 app.add_typer(tts_app, name="tts")
 pose_app = typer.Typer(help="姿势库（pose-db-01 人偶线稿参考图）", no_args_is_help=True)
 app.add_typer(pose_app, name="pose")
@@ -1439,6 +1441,98 @@ def video_models(
         if pricing:
             typer.echo(f"    价格：{'、'.join(pricing)}")
         typer.echo("")
+
+
+# ---------- upscale(Playground 放大：SeedVR2 / ffmpeg) ----------
+
+def _run_upscale(
+    req, json_out: bool, *, timeout_s: float, poll_interval: float
+) -> None:
+    """跑一次视频放大并输出结果（--json 时 stdout 只有 JSON）。"""
+    from charvar import adhoc_upscale as adhoc_upscale_service
+
+    try:
+        result = adhoc_upscale_service.generate(req, poll_interval=poll_interval, timeout_s=timeout_s)
+    except adhoc_upscale_service.UpscaleTimeout as exc:
+        _die(f"超时未完成（作业还在跑）：{exc}\n  可稍后用网页「放大」页续查，或重跑等待")
+        return
+    except adhoc_upscale_service.UpscaleError as exc:
+        _die(str(exc))
+        return
+    except Exception as exc:  # noqa: BLE001 - 网络/后端异常转友好提示
+        _die(f"{type(exc).__name__}: {exc}")
+        return
+    if json_out:
+        typer.echo(result.model_dump_json())
+        return
+    if result.status == "pending":
+        typer.echo(f"已提交（job_id={result.job_id}）")
+        typer.echo(f"  manifest → {result.manifest_path}")
+        return
+    typer.echo(f"完成：{result.video_path}")
+    if result.passthrough:
+        typer.echo(f"  源短边 {result.source_short} 已达目标 {result.target_short}，原样返回（未放大）")
+    else:
+        typer.echo(
+            f"  {result.source_short}p → {result.target_short}p（×{result.multiplier:.2f}）"
+            f"  输出 {result.width}×{result.height}"
+        )
+    typer.echo(f"  用时：{result.duration_ms / 1000:.1f}s  manifest → {result.manifest_path}")
+
+
+def _upscale_req(
+    backend: str, input_path: str, target: str, workflow: Optional[str], out: Optional[Path]
+):
+    from charvar import adhoc_upscale as adhoc_upscale_service
+
+    return adhoc_upscale_service.UpscaleRequest(
+        backend=backend,
+        input_path=Path(input_path).expanduser(),
+        target=target,
+        workflow=workflow,
+        wait=True,
+        out=out,
+    )
+
+
+@upscale_app.command("comfyui")
+def upscale_comfyui(
+    input_path: str = typer.Argument(..., help="输入视频路径"),
+    target: str = typer.Option("1080p", "--target", help="目标短边档位：720p/1080p/4k"),
+    workflow: Optional[str] = typer.Option(
+        None, "--workflow", help="SeedVR2 放大 workflow 名（data/workflows/ 里的名称；默认设置页/兜底）"
+    ),
+    timeout: float = typer.Option(1800.0, "--timeout", help="轮询超时秒数（默认 1800）"),
+    poll_interval: float = typer.Option(5.0, "--poll-interval", help="轮询间隔秒数（默认 5）"),
+    out: Optional[Path] = typer.Option(None, "--out", "-o", help="另外落一份到这个路径"),
+    json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出到终端"),
+) -> None:
+    """用 ComfyUI 的 SeedVR2 workflow 放大一段视频（画质修复；异步作业，阻塞到成片）。
+
+    放大倍数按「目标短边/源短边」自动算并注入 workflow；源视频短边已达目标时
+    原样复制返回、不入队。
+    """
+    from charvar import adhoc_upscale as adhoc_upscale_service
+
+    req = _upscale_req("comfyui", input_path, target, workflow, out)
+    _run_upscale(req, json_out, timeout_s=timeout, poll_interval=poll_interval)
+
+
+@upscale_app.command("ffmpeg")
+def upscale_ffmpeg(
+    input_path: str = typer.Argument(..., help="输入视频路径"),
+    target: str = typer.Option("1080p", "--target", help="目标短边档位：720p/1080p/4k"),
+    out: Optional[Path] = typer.Option(None, "--out", "-o", help="另外落一份到这个路径"),
+    json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出到终端"),
+) -> None:
+    """用本机 FFmpeg 快速放大一段视频（lanczos 插值重编码，秒级出片）。
+
+    源视频短边已达目标时原样复制返回。
+    """
+    from charvar import adhoc_upscale as adhoc_upscale_service
+
+    req = _upscale_req("ffmpeg", input_path, target, None, out)
+    _run_upscale(req, json_out, timeout_s=0.0, poll_interval=0.0)
 
 
 # ---------- tts（Playground 语音） ----------

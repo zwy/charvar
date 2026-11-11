@@ -1,11 +1,11 @@
 ---
 name: charvar-skill
-description: Generate images with the charvar project's ComfyUI, OpenRouter, or Dreamina backends from any project. This skill should be used when the user asks to "用 comfyui 生图", "用 openrouter 生图", "用即梦生图", "charvar 帮我出图", "用 charvar 出张图", "generate an image with comfyui", "generate an image with openrouter", "generate an image with dreamina", or otherwise asks to produce an image via the charvar CLI; also for generating short videos via OpenRouter or the Dreamina (即梦) CLI ("charvar 帮我出段视频", "用 openrouter 生视频", "用即梦生视频", "generate a video with charvar"), for text-to-speech via OpenRouter ("charvar 帮我出语音", "把这段文字变成语音", "用 openrouter 生语音", "generate speech / TTS with charvar"), and for charvar subject-profile tasks such as "导入角色档案", "从模板生成主体档案" or using the charvar subject CLI, and for drafting the five subject-image slot prompts (character_sheet/headshot/front/side/behind) without an existing profile via "charvar subject prompt" ("起草主体图提示词", "AI 起草定妆图提示词", "帮我起草设定图提示词").
+description: Generate images with the charvar project's ComfyUI, OpenRouter, or Dreamina backends from any project. This skill should be used when the user asks to "用 comfyui 生图", "用 openrouter 生图", "用即梦生图", "charvar 帮我出图", "generate an image with comfyui", or otherwise asks to produce an image via the charvar CLI; also for generating short videos via OpenRouter or the Dreamina (即梦) CLI ("charvar 帮我出段视频", "用 openrouter 生视频", "用即梦生视频", "generate a video with charvar"), for upscaling a video's short side to a target tier via SeedVR2 (ComfyUI) or FFmpeg ("帮我把这段视频放大", "upscale this video with charvar"), for text-to-speech via OpenRouter ("charvar 帮我出语音", "把这段文字变成语音", "用 openrouter 生语音", "generate speech / TTS with charvar"), and for charvar subject-profile tasks such as "导入角色档案", "从模板生成主体档案" or using the charvar subject CLI, and for drafting the five subject-image slot prompts (character_sheet/headshot/front/side/behind) without an existing profile via "charvar subject prompt" ("起草主体图提示词", "AI 起草定妆图提示词", "帮我起草设定图提示词").
 ---
 
 # charvar 生图
 
-版本：1.8.0  
+版本：1.9.0  
 更新：2026-11-11
 
 通过 charvar 项目的 CLI 出图。三条后端：**comfyui**（本机/局域网 ComfyUI）、
@@ -123,6 +123,23 @@ charvar 的网页顶栏也有「Playground」页签（`http://127.0.0.1:8710`）
 
 - 枚举两处同源（`_VIDEO_MODELS` / tables.js `DREAMINA_VIDEO_MODELS`），细节与坑见
   `references/cli.md`；首用合规确认（`AigcComplianceConfirmationRequired`）要去即梦网页端过一次。
+## 视频放大（SeedVR2 / FFmpeg 通路）
+
+给一段已存在的视频把**短边**放大到目标档位（默认 1080p）。后端两选一：
+`comfyui` = SeedVR2 超分修复（ComfyUI 队列作业，可能几分钟，画质好）；
+`ffmpeg` = 本机 lanczos 插值重编码（秒级出片）。**源视频短边已 ≥ 目标档位时
+原样复制返回，不跑放大** —— SeedVR2 是超分模型，别拿它做缩小或者无增益的重跑。
+
+```bash
+~/.local/bin/charvar upscale comfyui input.mp4 --target 1080p --out out/upscaled.mp4
+~/.local/bin/charvar upscale ffmpeg input.mp4 --target 1080p
+```
+
+- `--target`：720p / 1080p / 4k（4k = 短边 2160）；放大倍数按「目标短边/源短边」自动算。
+- SeedVR2 走 ComfyUI 队列：`--timeout` 默认 1800s，长视频耐心等；超时时作业还在跑，
+  网页「放大」页签可续查。
+- 网页顶栏「放大」页签是同一条通路；「设置」页有「放大页默认」组。
+
 ## 语音（OpenRouter TTS 通路）
 
 给一段文本出**一段音频**（同步：命令块到响应为止，一般几秒到几十秒）。
@@ -304,6 +321,7 @@ PY
 
 ## 版本记录
 
+- **1.9.0**（2026-11-11）**新增视频放大通路**：`charvar upscale comfyui|ffmpeg`（短边放大到 720p/1080p/4k；SeedVR2 超分走 ComfyUI 队列，ffmpeg 本机插值秒级）；源短边已达标原样返回；网页新增「放大」页签（同一条通路）与设置页「放大页默认」组。
 - **1.8.0**（2026-11-11）即梦底层整体换到官方画布 CLI `dreamina-canvas`：生图/视频每请求一张新画布（节点→报价→批准→运行→下载），旧 `dreamina` CLI 直发通路下线；模型目录换新（seedream_4.6/4.7/5.0/5.5、happyhorse/wan 等），旧模型名自动映射；视频 mode 分派 `t2v/first_last_frame/m2v`（尾帧首获支持）；manifest 新增 `canvas` 续查键。
 - **1.7.0**（2026-11-04）视频接入即梦（Dreamina CLI）：`charvar video dreamina`（子命令按输入分派，默认 seedance2.0fast_vip）；`video models --provider dreamina`；网页视频页供应商切换；设置页「即梦视频」组。
 

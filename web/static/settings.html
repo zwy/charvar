@@ -17,6 +17,12 @@
 <label>图片编辑 workflow（LLM 模式变体 / 档案单图）<select id="set-edit"></select></label>
 <p class="form-note">各槽位一律按「主体图默认尺寸」的画幅 × 分辨率出图，参考图只提供外观。</p>
 </div></div>
+<div class="card"><h2>放大页默认</h2><div class="settings-grid">
+<label>放大后端<select id="set-ups-backend"><option value="comfyui">SeedVR2（画质修复，ComfyUI）</option><option value="ffmpeg">FFmpeg（快速插值）</option></select></label>
+<label>目标短边<select id="set-ups-target"><option value="720p">720p</option><option value="1080p">1080p</option><option value="4k">4K（短边 2160）</option></select></label>
+<label>放大 workflow（SeedVR2）<select id="set-ups-workflow"></select></label>
+<p class="form-note">「放大」页签的默认后端与档位；放大用 workflow 只在 SeedVR2 后端生效。</p>
+</div></div>
 <div class="card"><h2>OpenRouter 凭据</h2><div class="settings-grid">
 <label>Base URL<input type="text" id="set-or-base" placeholder="留空 = OP_BASE_URL（默认 openrouter.ai/api/v1）"></label>
 <label>API Key<input type="password" id="set-or-key" placeholder="留空 = OP_API_KEY（再回退 LLM_API_KEY）" autocomplete="off"></label>

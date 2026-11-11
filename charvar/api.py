@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from charvar import __version__, assets, llm, paths, settings_service, storage, subject_images
 from charvar import adhoc as adhoc_service
 from charvar import adhoc_compose as adhoc_compose_service
+from charvar import adhoc_upscale as adhoc_upscale_service
 from charvar import adhoc_video as adhoc_video_service
 from charvar import adhoc_tts as adhoc_tts_service
 from charvar import dreamina_image
@@ -77,6 +78,7 @@ _PAGE_ROUTES = {
     "/ui/gen": "gen.html",
     "/ui/adhoc": "adhoc.html",
     "/ui/video": "video.html",
+    "/ui/upscale": "upscale.html",
     "/ui/tts": "tts.html",
     "/ui/recipes": "recipes.html",
     "/ui/subjects": "subjects.html",
@@ -453,6 +455,19 @@ class VideoGenerateRequest(BaseModel):
     first_frame: AdhocReferenceSpec | None = None
     references: list[AdhocReferenceSpec] = Field(default_factory=list)
     video_references: list[StagedVideoRefSpec] = Field(default_factory=list)
+
+
+class UpscaleGenerateRequest(BaseModel):
+    """网页「放大」页的请求（与 CLI ``charvar upscale`` 同一套参数；SeedVR2 / ffmpeg 两路）。
+
+    输入视频只认上传暂存（``POST /upscales/upload`` 的 id）—— 浏览器永远不给路径。
+    异步作业：本端点只提交（源已达标时同步返回原样复制结果），前端按
+    /upscales/{run_id}/status 轮询。backend/target 空串 = 设置页「放大」默认。
+    """
+
+    staged_id: str
+    backend: str = ""  # 空 = 设置页；显式值 comfyui(SeedVR2) / ffmpeg
+    target: str = ""  # 空 = 设置页；720p/1080p/4k
 
 
 class TtsGenerateRequest(BaseModel):
@@ -2374,6 +2389,124 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         except (ValueError, TypeError) as exc:
             raise HTTPException(502, f"LLM 文案输出不合格：{exc}") from exc
         return adhoc_video_service.save_copy(run_id, copy)
+
+    # ---- Playground 放大（charvar.adhoc_upscale：web 与 CLI charvar upscale 同一通路） ----
+    # 同 /videos 的路由纪律：字面路径必须放在 {run_id} 通配可用到它们之前；
+    # 这里 /upscales/upload 单段不会撞 /upscales/{run_id}/xxx 双段，仍按纪律归组。
+
+    @app.post("/upscales/upload")
+    def api_upscale_input_upload(file: UploadFile) -> dict[str, Any]:
+        """上传一段要放大的输入视频 → 暂存并返回 id（≤200MB，按魔数判容器）。"""
+        data = file.file.read()
+        try:
+            path = adhoc_upscale_service.save_staged_input(data, file.filename or "")
+        except adhoc_upscale_service.UpscaleError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        adhoc_upscale_service.prune_staged_inputs()
+        return {"id": path.stem, "name": path.name, "size": path.stat().st_size}
+
+    @app.delete("/upscales/upload/{ref_id}")
+    def api_upscale_input_delete(ref_id: str) -> dict[str, Any]:
+        try:
+            adhoc_upscale_service.staged_input(ref_id).unlink(missing_ok=True)
+        except adhoc_upscale_service.UpscaleError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        return {"ok": True}
+
+    @app.get("/upscales/upload/{ref_id}")
+    def api_upscale_input_file(ref_id: str) -> FileResponse:
+        try:
+            return FileResponse(adhoc_upscale_service.staged_input(ref_id))
+        except adhoc_upscale_service.UpscaleError as exc:
+            raise HTTPException(404, str(exc)) from exc
+
+    @app.post("/upscales/generate")
+    def api_upscale_generate(req: UpscaleGenerateRequest) -> dict[str, Any]:
+        """Playground 放大：给一段视频把短边放大到目标档位（异步作业，提交即返回）。
+
+        走的是 CLI ``charvar upscale`` 同一套（``charvar.adhoc_upscale``），不落 runs 表。
+        """
+        try:
+            input_path = adhoc_upscale_service.staged_input(req.staged_id)
+        except adhoc_upscale_service.UpscaleError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        with _db() as conn:
+            defaults = settings_service.get_settings(conn).upscale
+        backend = (req.backend or "").strip().lower() or defaults.backend
+        target = (req.target or "").strip().lower() or defaults.target
+        upscale_req = adhoc_upscale_service.UpscaleRequest(
+            backend=backend,  # type: ignore[arg-type]
+            input_path=input_path,
+            target=target,
+            wait=False,
+            staged_input_id=req.staged_id,
+        )
+        try:
+            result = adhoc_upscale_service.generate(upscale_req, db_path)
+        except adhoc_upscale_service.UpscaleError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001 - 提交失败统一转 502
+            raise HTTPException(502, f"放大提交失败：{exc}") from exc
+        payload = result.model_dump()
+        payload["status_url"] = f"/upscales/{result.run_id}/status"
+        return payload
+
+    @app.get("/upscales")
+    def api_upscale_list(
+        response: Response,
+        limit: int = Query(20, ge=1, le=100),
+        offset: int = Query(0, ge=0),
+    ) -> list[dict[str, Any]]:
+        """最近的 Playground 放大记录（读 manifest.json；不落 runs 表）。
+
+        列表本体保持裸数组；总数走 X-Total-Count 响应头，给「最近放大」翻页。
+        """
+        response.headers["X-Total-Count"] = str(adhoc_upscale_service.count_recent())
+        return adhoc_upscale_service.list_recent(limit, offset)
+
+    @app.get("/upscales/{run_id}/status")
+    def api_upscale_status(run_id: str) -> dict[str, Any]:
+        """查一次放大作业状态并收片（前端每 8s 轮询；ready/failed 后不再打上游）。"""
+        try:
+            summary = adhoc_upscale_service.refresh(run_id, db_path)
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except adhoc_upscale_service.UpscaleError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        if summary.get("status") == "ready":
+            summary["video_url"] = f"/upscales/{run_id}/video"
+            summary["poster_url"] = f"/upscales/{run_id}/poster"
+        return summary
+
+    @app.get("/upscales/{run_id}/video")
+    def api_upscale_file(run_id: str) -> FileResponse:
+        try:
+            return FileResponse(adhoc_upscale_service.video_file(run_id))
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except adhoc_upscale_service.UpscaleError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.get("/upscales/{run_id}/poster")
+    def api_upscale_poster(run_id: str) -> FileResponse:
+        try:
+            return FileResponse(
+                adhoc_upscale_service.poster_file(run_id), media_type="image/jpeg"
+            )
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except adhoc_upscale_service.UpscaleError as exc:
+            raise HTTPException(400, str(exc)) from exc
+
+    @app.get("/upscales/{run_id}/manifest")
+    def api_upscale_manifest(run_id: str) -> dict[str, Any]:
+        try:
+            path = adhoc_upscale_service.run_dir(run_id) / "manifest.json"
+        except adhoc_upscale_service.UpscaleError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        if not path.exists():
+            raise HTTPException(404, f"没有 manifest：{run_id}")
+        return json.loads(path.read_text(encoding="utf-8"))
 
     # ---- Playground 语音（charvar.adhoc_tts：web 与 CLI charvar tts 同一通路） ----
     # 同步生成（与视频的异步作业不同）：/tts/generate 等音频字节返回后再响应，

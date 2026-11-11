@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>charvar · 放大</title><link rel="stylesheet" href="/static/style.css"><link rel="icon" type="image/svg+xml" href="/static/favicon.svg"><link rel="alternate icon" type="image/png" sizes="1024x1024" href="/static/icon.png"><link rel="apple-touch-icon" type="image/png" sizes="1024x1024" href="/static/icon.png"></head><body>
+<!-- 真多页页面文件：顶栏由 nav.js 渲染；分组容器只用 .form-section（见 .superdesign/design-system.md）。
+     脚本清单见文件尾；加新页 = 本文件 + nav.js NAV_PAGES + charvar/api.py 路由表三处同步 -->
+<header class="topbar"></header>
+<main>
+<section id="page-ups"><div class="card"><div class="row-head"><h2>放大</h2><span class="hint">把一段视频的短边放大到目标档位 · SeedVR2 画质修复 / ffmpeg 快速插值</span></div>
+<div class="form-section">
+<div class="form-section-title">模式与参数</div>
+<div class="adhoc-switch">
+<div class="segmented" id="ups-backend"><button type="button" class="seg active" data-backend="comfyui">SeedVR2（画质修复）</button><button type="button" class="seg" data-backend="ffmpeg">FFmpeg（快速）</button></div>
+<span class="hint" id="ups-backend-hint"></span>
+</div>
+<div class="form-grid">
+<label>目标短边<select id="ups-target"><option value="720p">720p</option><option value="1080p">1080p</option><option value="4k">4K（短边 2160）</option></select></label>
+</div>
+</div>
+<div class="form-section">
+<div class="form-section-title"><span>输入视频</span><span id="ups-input-count" class="hint">已选 0 条</span></div>
+<div id="ups-input-list" class="ref-grid"></div>
+<div class="actions">
+<label class="btn file-btn">上传视频<input type="file" id="ups-input-file" accept="video/mp4,video/webm,video/quicktime,video/mpeg" hidden></label>
+<button id="btn-ups-input-clear" type="button">移除</button>
+</div>
+</div>
+<div class="actions"><button id="btn-ups-generate" class="primary">放大</button><span id="ups-status" class="status"></span>
+<span class="hint" id="ups-cost-hint"></span></div>
+</div>
+<div class="card" id="ups-result-card" hidden><div class="row-head"><h2>结果 <span id="ups-result-summary"></span></h2><div class="actions">
+<a id="ups-dl-video" class="btn" hidden download>下载 MP4</a>
+<a id="ups-dl-manifest" class="btn" hidden>manifest.json</a>
+</div></div>
+<div class="video-result"><video id="ups-result-player" controls preload="metadata"></video></div>
+<pre id="ups-result-log" class="log"></pre></div>
+<div class="card"><div class="row-head"><h2>最近放大</h2><div class="actions"><button id="btn-ups-recent-refresh">刷新</button></div></div>
+<div id="ups-recent" class="image-grid"></div></div>
+</section>
+</main><script src="/static/core.js"></script><script src="/static/nav.js"></script><script src="/static/media.js"></script><script src="/static/upscale.js"></script></body></html>

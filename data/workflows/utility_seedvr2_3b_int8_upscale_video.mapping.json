@@ -1,0 +1,26 @@
+{
+  "description": "SeedVR2 3B int8 视频超分（utility workflow）。放大倍数不是固定 2x：后端按「目标短边/源短边」计算 multiplier 注入 ResizeImageMaskNode（lanczos 按 multiplier 等比缩放后交给 SeedVR2 修复）；源视频短边已达目标时调用方直接原样返回、不入队。输入视频由调用方 upload/image 上传后把 ComfyUI 侧文件名注入 LoadVideo 的 file 字段。filename_prefix 带子目录（upscale/<run_id>），SaveVideo 产物按 run 隔离。SeedVR2 的 seed / tile / temporal 参数保持 workflow 原值不注入（单步重建，seed 无意义）。",
+  "output_nodes": [
+    "76"
+  ],
+  "mappings": [
+    {
+      "field": "file",
+      "node_id": "73",
+      "input_key": "file",
+      "required": true
+    },
+    {
+      "field": "multiplier",
+      "node_id": "66:57",
+      "input_key": "resize_type.multiplier",
+      "required": true
+    },
+    {
+      "field": "filename_prefix",
+      "node_id": "76",
+      "input_key": "filename_prefix",
+      "required": false
+    }
+  ]
+}

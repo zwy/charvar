@@ -175,6 +175,33 @@ mode 按输入自动分派（charvar 内部处理，调的人不用选）：
 - 成片落 `data/generated/adhoc_video/{id}/`（与 openrouter 同布局）；扩展名
   按魔数嗅探，CLI 落盘名不信任。
 - 画布不自动清理（canvas CLI 无 delete）；堆积多了在即梦网页端手动删。
+
+## charvar upscale comfyui / ffmpeg
+
+给一段**已有的视频**把短边放大到目标档位（默认 1080p）。两条后端：
+
+| 参数 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `input_path` | 位置参数 | — | 输入视频（mp4/mov/mpeg/webm，按魔数判容器） |
+| `--target` | str | `1080p` | 目标短边档位：`720p` / `1080p` / `4k`（4k = 短边 2160） |
+| `--workflow` | str | 设置页/兜底 `utility_seedvr2_3b_int8_upscale_video` | 仅 comfyui：SeedVR2 workflow 名（data/workflows/ 成对文件） |
+| `--timeout` | float | 1800（comfyui） | 轮询超时秒数；超时时作业还在跑，manifest 保留可续查 |
+| `--poll-interval` | float | `5` | 轮询间隔秒数（comfyui） |
+| `--out` / `-o` | path | — | 另外落一份到这个路径（成片本体仍落 run 目录） |
+| `--json` | flag | — | 结果以 JSON 输出到终端 |
+
+**要点：**
+
+- **源视频短边已 ≥ 目标档位 → 原样复制返回，不入队**（SeedVR2 是超分模型，
+  缩小/无增益重跑都不该发生）；ffmpeg 同规则。
+- comfyui 后端：视频先上传 ComfyUI input 目录，`file`/`multiplier`/`filename_prefix`
+  按 mapping.json 注入（multiplier = 目标短边/源短边，节点 id 一律来自 mapping）；
+  成片靠轮询 ComfyUI history 收（prompt_id 在 manifest.job.id）。
+- ffmpeg 后端：本机 lanczos 插值 + libx264 crf18 重编码，秒级出片；输出宽高按
+  multiplier 取偶。
+- 产物落 `data/generated/adhoc_upscale/{id}/`（original/ + thumbs/ 海报 + manifest），
+  网页「放大」页签同一条通路；settings「放大页默认」组存默认后端/档位。
+
 ## charvar tts openrouter
 
 用 OpenRouter 出一段语音（文本 → 音频）。**同步**：命令块到音频返回为止，

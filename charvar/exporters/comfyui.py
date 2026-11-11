@@ -317,14 +317,18 @@ def _output_filenames(history_entry: dict[str, Any], output_nodes: list[str] | N
         outputs = {nid: out for nid, out in outputs.items() if nid in allowed}
     files: list[dict[str, str]] = []
     for _nid, node_output in outputs.items():
-        for img in node_output.get("images", []):
-            files.append(
-                {
-                    "filename": img.get("filename", ""),
-                    "subfolder": img.get("subfolder", ""),
-                    "type": img.get("type", "output"),
-                }
-            )
+        # SaveVideo（视频类输出节点）的 history 输出键与图片节点不同：实测兼容三个键 ——
+        # images（图片节点）/ gifs（Video 类输出节点的常用键）/ videos（预留）。谁有货用谁。
+        for key in ("images", "gifs", "videos"):
+            for item in node_output.get(key, []):
+                if isinstance(item, dict):
+                    files.append(
+                        {
+                            "filename": item.get("filename", ""),
+                            "subfolder": item.get("subfolder", ""),
+                            "type": item.get("type", "output"),
+                        }
+                    )
     return files
 
 
@@ -429,6 +433,31 @@ def upload_image(base: str, path: Path, *, remote_name: str | None = None) -> st
             data={"overwrite": "true", "type": "input"},
             files={"image": (name, path.read_bytes())},
             timeout=30,
+        )
+    resp.raise_for_status()
+    data = resp.json()
+    if not data.get("name"):
+        raise ValueError(f"ComfyUI upload 未返回文件名：{data}")
+    return str(data["name"])
+
+
+def upload_video(base: str, path: Path, *, remote_name: str | None = None) -> str:
+    """上传本地视频到 ComfyUI input 目录（POST /upload/image，multipart）。
+
+    ComfyUI 只有一个通用文件上传端点（/upload/image），视频同样从它进 input 目录
+    —— LoadVideo 类节点的 file 字段（widget 带 video_upload）吃的就是这个。
+    语义与 upload_image 完全一致：remote_name 必须唯一（overwrite=true，同名覆盖
+    会让队列里上一轮未执行的 prompt 取到新视频）。
+    """
+    if not path.exists():
+        raise FileNotFoundError(f"本地视频不存在：{path}")
+    name = remote_name or path.name
+    with _httpx_client(timeout=httpx.Timeout(30.0, write=600.0)) as client:
+        resp = client.post(
+            f"{base.rstrip('/')}/upload/image",
+            data={"overwrite": "true", "type": "input"},
+            files={"image": (name, path.read_bytes())},
+            timeout=600,
         )
     resp.raise_for_status()
     data = resp.json()

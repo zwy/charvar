@@ -19,6 +19,10 @@ IMAGE_KIND_KEYS = ("character_sheet", "headshot", "front", "side", "behind")
 _DEFAULT_WORKFLOW_T2I = "image_qwen_image_2_1_turbo_t2i_easy_api"
 _DEFAULT_WORKFLOW_EDIT = "image_qwen_image_2_1_turbo_image_edit_easy_api"
 
+# 「放大」页偏好兜底（设置页没配时用；真源在 adhoc_upscale._TARGET_SHORT 同值）
+_UPS_DEFAULT_BACKEND = "comfyui"
+_UPS_DEFAULT_TARGET = "1080p"
+
 
 class ImageSize(BaseModel):
     aspect_ratio: str = "3:4"
@@ -127,10 +131,25 @@ class OpenRouterTtsSettings(BaseModel):
     model: str = ""
 
 
+class UpscaleSettings(BaseModel):
+    """「放大」页（Playground 视频放大）默认偏好：请求显式 > 这里 > 兜底。
+
+    - backend: comfyui(SeedVR2 画质修复) / ffmpeg(快速插值)；
+    - target: 输出短边档位 720p/1080p/4k（默认 1080p）；
+    - workflow: ComfyUI 放大 workflow 名（成对文件在 data/workflows/），
+      空 = adhoc_upscale 兜底 utility_seedvr2_3b_int8_upscale_video。
+    """
+
+    backend: str = _UPS_DEFAULT_BACKEND
+    target: str = _UPS_DEFAULT_TARGET
+    workflow: str = ""
+
+
 class AppSettings(BaseModel):
     comfy_t2i_workflow: str = _DEFAULT_WORKFLOW_T2I
     comfy_edit_workflow: str = _DEFAULT_WORKFLOW_EDIT
     image_sizes: dict[str, ImageSize] = Field(default_factory=dict)
+    upscale: UpscaleSettings = Field(default_factory=UpscaleSettings)
     llm: LlmSettings = Field(default_factory=LlmSettings)
     openrouter: OpenRouterSettings = Field(default_factory=OpenRouterSettings)
     dreamina: DreaminaSettings = Field(default_factory=DreaminaSettings)
@@ -187,6 +206,10 @@ def get_settings(conn: sqlite3.Connection) -> AppSettings:
         if isinstance(ot_raw, dict)
         else OpenRouterTtsSettings()
     )
+    up_raw = data.get("upscale")
+    upscale = (
+        UpscaleSettings.model_validate(up_raw) if isinstance(up_raw, dict) else UpscaleSettings()
+    )
     # 迁移：旧的单模型配置（DB 里的 openrouter.model）平移到两个模式；
     # 新字段各自可再覆盖。model 字段本体保留在返回值里，读接口不再展示。
     if not openrouter.t2i_model:
@@ -197,6 +220,7 @@ def get_settings(conn: sqlite3.Connection) -> AppSettings:
         comfy_t2i_workflow=str(data.get("comfy_t2i_workflow") or _DEFAULT_WORKFLOW_T2I),
         comfy_edit_workflow=str(data.get("comfy_edit_workflow") or _DEFAULT_WORKFLOW_EDIT),
         image_sizes=sizes,
+        upscale=upscale,
         llm=llm,
         openrouter=openrouter,
         dreamina=dreamina,
@@ -218,6 +242,7 @@ def save_settings(conn: sqlite3.Connection, patch: dict) -> AppSettings:
             "comfy_t2i_workflow",
             "comfy_edit_workflow",
             "image_sizes",
+            "upscale",
             "llm",
             "openrouter",
             "dreamina",
