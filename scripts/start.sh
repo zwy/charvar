@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 后台启动 charvar Web 管理端（默认 http://127.0.0.1:8710）
+# 后台启动 charvar Web 管理端（默认 http://127.0.0.1:8710；监听地址可用 CHARVAR_WEB_HOST 覆盖，默认 0.0.0.0 同局域网可访问）
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
@@ -32,7 +32,12 @@ for _ in $(seq 1 20); do
     if [ -n "$listener_pid" ]; then
       printf '%s\n' "$listener_pid" > "$PID_FILE"
     fi
-    echo "charvar 已启动：http://127.0.0.1:${CHARVAR_WEB_PORT}（screen：${SCREEN_NAME}）"
+    host_ip=$(ipconfig getifaddr en0 2>/dev/null || true)
+    msg_addrs="http://127.0.0.1:${CHARVAR_WEB_PORT}"
+    if [ -n "$host_ip" ]; then
+      msg_addrs="${msg_addrs} 或 http://${host_ip}:${CHARVAR_WEB_PORT}（局域网）"
+    fi
+    echo "charvar 已启动：${msg_addrs}（screen：${SCREEN_NAME}）"
     exit 0
   fi
   sleep 0.3
