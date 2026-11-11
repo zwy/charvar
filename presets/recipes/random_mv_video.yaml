@@ -33,8 +33,6 @@ steps:
   scene_from: 场景设计
   strip_accessories: true
   framing_extra: 这是 MV 首帧图（16:9 横画幅）：首席全身入镜（头顶到脚完整），站位居中，头顶、左右与画面四周留出充分余白，为后续切镜的群舞队型与机位横移留纵深空间；地面完整可见；人物双手不持物、头上不戴帽、身上不挎包。
-  backend: comfyui
-  resolution: 2k
   aspect: "16:9"
   style_lock:
   - cinematic live-action，真人实拍电影感画质
@@ -64,6 +62,5 @@ steps:
   frame_from: 首帧图
   frame_slot: first_frame
   duration: 15
-  resolution: 768p
   aspect: "16:9"
   wait_s: 900

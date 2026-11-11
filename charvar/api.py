@@ -202,6 +202,7 @@ class OverlayApplyRequest(BaseModel):
 
 class RecipeRunRequest(BaseModel):
     seed: int | None = None            # 缺省 = 配方级 seed
+    gen: recipes_service.GenParams | None = None  # 运行级生成参数（生图/生视频各一组；空 = 跟随默认链）
 
 
 class SubjectImageGenerateRequest(BaseModel):
@@ -2896,7 +2897,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         # 同步执行（auto 步里 push 可能阻塞几分钟 —— 与 /runs/{id}/video 的 ffmpeg 合成同类）
         with _db() as conn:
             try:
-                return recipes_service.start_run(conn, name, seed=req.seed).model_dump()
+                return recipes_service.start_run(conn, name, seed=req.seed, gen=req.gen).model_dump()
             except recipes_service.PresetError as exc:
                 raise HTTPException(getattr(exc, "status", 400), str(exc)) from exc
             except Exception as exc:  # noqa: BLE001

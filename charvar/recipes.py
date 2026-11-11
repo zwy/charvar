@@ -112,6 +112,34 @@ class RecipeRef(BaseModel):
     label: str | None = None
 
 
+class GenImageParams(BaseModel):
+    """运行级生图参数（配方页「生成参数」面板 / CLI flags 下发）。
+
+    全部字段可空 = 跟随下一个环节；生效优先级：运行级显式 > 步级显式 > 设置页/env 默认链。
+    resolution/quality 的字面值由调用方保证落在所选后端/模型的枚举里（提交时校验兜底）。
+    """
+
+    backend: Literal["comfyui", "openrouter", "dreamina"] | None = None
+    model: str | None = None
+    resolution: str | None = None
+    quality: str | None = None   # 仅 OpenRouter 生图
+
+
+class GenVideoParams(BaseModel):
+    """运行级生视频参数（video_model 步）。时长/画幅不在运行级——脚本时长与构图归配方管。"""
+
+    backend: Literal["openrouter", "dreamina"] | None = None
+    model: str | None = None
+    resolution: str | None = None
+
+
+class GenParams(BaseModel):
+    """一次配方运行的成对生成参数（image + video），随 manifest 落盘供 continue 复用。"""
+
+    image: GenImageParams = Field(default_factory=GenImageParams)
+    video: GenVideoParams = Field(default_factory=GenVideoParams)
+
+
 class RecipeStep(BaseModel):
     """配方一步。kind 决定字段集；extra 禁止（写错字段名要显式报错）。"""
 
@@ -156,7 +184,8 @@ class RecipeStep(BaseModel):
 
     # ---- adhoc_image 步（单图；Playground 通路） ----
     prompt: str | None = None          # 原样使用；唯一的模板机制 = {{服装}} 占位符（配 dress_from）
-    backend: Literal["comfyui", "openrouter", "dreamina"] = "openrouter"
+    # None = 没写 → 运行级参数（GenParams）接手，再落默认 openrouter（运行级 > 步级 > 默认链）
+    backend: Literal["comfyui", "openrouter", "dreamina"] | None = None
     model: str | None = None           # 空 = 设置页/env 默认链
     resolution: str | None = None      # charvar 档位或 provider 枚举；空 = 跟随默认
     quality: str | None = None         # 仅 OpenRouter 生效
@@ -247,6 +276,7 @@ class RecipeRunState(BaseModel):
     created_at: str
     seed: int = 0
     status: Literal["waiting", "running", "done", "failed"] = "running"
+    gen: GenParams | None = None       # 运行级生成参数（continue 复用同一组；旧 manifest 无该字段 = None）
     steps: list[StepState] = Field(default_factory=list)
 
 
@@ -685,8 +715,12 @@ def _new_recipe_run_id(recipe: Recipe, seed: int) -> str:
     return f"recipe_{safe_name}_s{seed}_{stamp}"
 
 
-def start_run(conn, recipe_name: str, *, seed: int | None = None) -> RecipeRunState:
-    """开一次配方运行：建 manifest 并自动推进到第一个 manual 步停住。"""
+def start_run(conn, recipe_name: str, *, seed: int | None = None, gen: GenParams | None = None) -> RecipeRunState:
+    """开一次配方运行：建 manifest 并自动推进到第一个 manual 步停住。
+
+    gen = 运行级生成参数（配方页「生成参数」面板 / CLI flags / API body 下发）；
+    随 manifest 落盘，continue 复用同一组 —— 想换参数请重新开始一次运行。
+    """
     recipe = load_recipe(recipe_name)
     seed = recipe.seed if seed is None else int(seed)
     run_id = _new_recipe_run_id(recipe, seed)
@@ -697,6 +731,7 @@ def start_run(conn, recipe_name: str, *, seed: int | None = None) -> RecipeRunSt
         # 时间格式与 runs 表一致（空格分隔），页面两边展示同一式样
         created_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         seed=seed,
+        gen=gen,
         steps=[
             StepState(index=i, kind=s.kind, label=s.label, manual=manual_default(s))
             for i, s in enumerate(recipe.steps)
@@ -1181,6 +1216,33 @@ def _produce_video(state: RecipeRunState, source_label: str) -> Path:
         raise _GateStop(f"成片文件不存在：{run_id}/videos/{name}（{exc}）") from exc
 
 
+def _effective_image_params(
+    state: RecipeRunState, step: RecipeStep
+) -> tuple[str, str | None, str, str | None]:
+    """生图参数缺省链：运行级显式 > 步级显式 > 缺省（backend=openrouter，其余=不发送）。
+
+    步字段没写 = 步级显式缺席（backend 现在可为 None）；resolution/quality 的字面值
+    由提交时校验兜底（枚举外自动降级/报错，与 Playground 通路同一套）。
+    """
+    gen = state.gen
+    gi = gen.image if gen else None
+    backend = (gi.backend if gi else None) or step.backend or "openrouter"
+    model = (gi.model if gi else None) or step.model
+    resolution = (gi.resolution if gi else None) or step.resolution or ""
+    quality = (gi.quality if gi else None) or step.quality
+    return backend, model, resolution, quality
+
+
+def _effective_video_params(state: RecipeRunState, step: RecipeStep) -> tuple[str, str | None, str | None]:
+    """生视频参数缺省链（video_model 步）：运行级 > 步级 > 缺省 openrouter；时长/画幅归步管。"""
+    gen = state.gen
+    gv = gen.video if gen else None
+    backend = (gv.backend if gv else None) or "openrouter"
+    model = (gv.model if gv else None) or step.model
+    resolution = (gv.resolution if gv else None) or step.resolution
+    return backend, model, resolution
+
+
 def _run_adhoc_image_step(conn, recipe: Recipe, state: RecipeRunState, step: RecipeStep, st: StepState) -> dict[str, Any]:
     """单图步（Playground 通路）：一张独立提示词图，用作首帧/参考图。"""
     from charvar import adhoc as adhoc_service
@@ -1213,15 +1275,16 @@ def _run_adhoc_image_step(conn, recipe: Recipe, state: RecipeRunState, step: Rec
         if not str(dress or "").strip():
             raise PresetError(f"{step.label}：服饰条目 {ref} 没有可用文本（prompt_text/keywords 均空）")
         prompt = prompt.replace("{{服装}}", str(dress))
+    backend, model, resolution, quality = _effective_image_params(state, step)
     req = adhoc_service.AdhocRequest(
         prompt=prompt,
-        backend=step.backend,
-        model=step.model,
+        backend=backend,
+        model=model,
         negative_prompt=step.negative_prompt,
-        quality=step.quality,
+        quality=quality,
         reference_paths=reference_paths,
         aspect_ratio=str(step.aspect or "3:4"),
-        resolution=step.resolution or "",
+        resolution=resolution,
         seed=int(step.seed) if step.seed is not None else int(recipe.seed),
         workflow=step.workflow,
         wait=True,
@@ -1272,12 +1335,13 @@ def _submit_video_job(conn, recipe: Recipe, state: RecipeRunState, step: RecipeS
         if not prompt_text:
             raise PresetError(f"{step.label}：视频脚本步 {step.prompt_from} 没有产出 prompt")
 
+    backend, model, resolution = _effective_video_params(state, step)
     req = adhoc_video.VideoRequest(
         prompt=prompt_text,
-        backend="openrouter",
-        model=step.model,
+        backend=backend,   # 运行级 > 缺省 openrouter；即梦作业由 adhoc_video 按供应商分派
+        model=model,
         duration=step.duration,
-        resolution=step.resolution,
+        resolution=resolution,
         aspect_ratio=str(step.aspect or ""),
         seed=int(step.seed) if step.seed is not None else int(recipe.seed),
         first_frame=frame_path,
@@ -1521,15 +1585,16 @@ def _run_combo_image_step(conn, recipe: Recipe, state: RecipeRunState, step: Rec
             faces_section, _scene_text_from(state, step) or None,
             style_text=_style_text_of(step) or None,
         )
+        backend, model, resolution, quality = _effective_image_params(state, step)
         req = adhoc_service.AdhocRequest(
             prompt=prompt,
-            backend=step.backend,
-            model=step.model,
+            backend=backend,
+            model=model,
             negative_prompt=step.negative_prompt,
-            quality=step.quality,
+            quality=quality,
             reference_paths=[face_file],
             aspect_ratio=str(step.aspect or "3:4"),
-            resolution=step.resolution or "",
+            resolution=resolution,
             seed=int(step.seed) if step.seed is not None else int(recipe.seed),
             workflow=step.workflow,
             wait=True,
@@ -1631,15 +1696,16 @@ def _run_combo_image_step(conn, recipe: Recipe, state: RecipeRunState, step: Rec
         )
     if costume_file is not None:
         reference_paths.append(costume_file)
+    backend, model, resolution, quality = _effective_image_params(state, step)
     req = adhoc_service.AdhocRequest(
         prompt=prompt,
-        backend=step.backend,
-        model=step.model,
+        backend=backend,
+        model=model,
         negative_prompt=step.negative_prompt,
-        quality=step.quality,
+        quality=quality,
         reference_paths=reference_paths,
         aspect_ratio=str(step.aspect or "3:4"),
-        resolution=step.resolution or "",
+        resolution=resolution,
         seed=int(step.seed) if step.seed is not None else int(recipe.seed),
         workflow=step.workflow,
         wait=True,
@@ -1713,15 +1779,16 @@ def _run_combo_image_step_cat(conn, recipe: Recipe, state: RecipeRunState, step:
         prompt = prompt + "\n\n【全局质感（全程一致）】\n" + _style_text_of(step)
     if _safety_text_of(step):
         prompt = prompt + "\n\n【安全红线（全程一致）】\n" + _safety_text_of(step)
+    backend, model, resolution, quality = _effective_image_params(state, step)
     req = adhoc_service.AdhocRequest(
         prompt=prompt,
-        backend=step.backend,
-        model=step.model,
+        backend=backend,
+        model=model,
         negative_prompt=step.negative_prompt,
-        quality=step.quality,
+        quality=quality,
         reference_paths=[],
         aspect_ratio=str(step.aspect or "3:4"),
-        resolution=step.resolution or "",
+        resolution=resolution,
         seed=int(step.seed) if step.seed is not None else int(recipe.seed),
         workflow=step.workflow,
         wait=True,

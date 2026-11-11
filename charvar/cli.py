@@ -984,12 +984,46 @@ def recipes_status(
 def recipes_run(
     name: str = typer.Argument(..., help="配方名（presets/recipes/<name>.yaml）"),
     seed: Optional[int] = typer.Option(None, "--seed", help="种子（缺省 = 配方级 seed）"),
-    continue_run: bool = typer.Option(False, "--continue", help="继续该配方最近一次未完成的运行（人工过目后）"),
+    image_backend: Optional[str] = typer.Option(
+        None, "--image-backend", help="运行级生图后端：comfyui/openrouter/dreamina（缺省=跟随默认链）"
+    ),
+    image_model: Optional[str] = typer.Option(
+        None, "--image-model", help="运行级生图模型（openrouter 模型 id / 即梦模型名；缺省=跟随默认链）"
+    ),
+    image_resolution: Optional[str] = typer.Option(
+        None, "--image-resolution", help="运行级生图分辨率（comfyui 1k/2k；openrouter/即梦按模型枚举字面值）"
+    ),
+    image_quality: Optional[str] = typer.Option(
+        None, "--image-quality", help="运行级生图质量（仅 OpenRouter；缺省=跟随默认链）"
+    ),
+    video_backend: Optional[str] = typer.Option(
+        None, "--video-backend", help="运行级生视频后端：openrouter/dreamina（缺省 openrouter）"
+    ),
+    video_model: Optional[str] = typer.Option(None, "--video-model", help="运行级生视频模型（缺省=跟随默认链）"),
+    video_resolution: Optional[str] = typer.Option(
+        None, "--video-resolution", help="运行级生视频分辨率（按模型枚举字面值，如 768p）"
+    ),
+    continue_run: bool = typer.Option(False, "--continue", help="继续该配方最近一次未完成的运行（人工过目后；用 manifest 存量参数，flags 无效）"),
     json_out: bool = typer.Option(False, "--json", help="状态以 JSON 输出"),
 ) -> None:
-    """启动 / 继续一次配方运行。状态落 data/generated/recipe_runs/<id>/manifest.json。"""
+    """启动 / 继续一次配方运行。状态落 data/generated/recipe_runs/<id>/manifest.json。
+
+    运行级生成参数（--image-* / --video-*）只在首次 run 生效并落入 manifest；
+    优先级 运行级显式 > 步级显式 > 设置页/env 默认链。想换参数 = 重新跑一次新运行。"""
     from charvar import recipes as recipes_service
 
+    gen: Optional[recipes_service.GenParams] = None
+    if any(v is not None for v in (image_backend, image_model, image_resolution, image_quality,
+                                   video_backend, video_model, video_resolution)):
+        gen = recipes_service.GenParams(
+            image=recipes_service.GenImageParams(
+                backend=image_backend, model=image_model,
+                resolution=image_resolution, quality=image_quality,
+            ),
+            video=recipes_service.GenVideoParams(
+                backend=video_backend, model=video_model, resolution=video_resolution,
+            ),
+        )
     with storage.connect() as conn:
         try:
             if continue_run:
@@ -1003,7 +1037,7 @@ def recipes_run(
                     _die(f"配方 {name} 没有可继续的运行（先不带 --continue 跑一次）")
                 state = recipes_service.advance_state(conn, runs[0]["recipe_run_id"])
             else:
-                state = recipes_service.start_run(conn, name, seed=seed)
+                state = recipes_service.start_run(conn, name, seed=seed, gen=gen)
         except PresetError as exc:
             _die(str(exc))
     if json_out:

@@ -66,8 +66,6 @@ steps:
   framing_extra: 这是搞笑猫咪挑战的首帧图：猫全身入镜（从猫头顶、耳朵到尾巴尖完整），
     头顶与画面四周留出充分余白，让后续视频的大幅度荒诞动作（跳跃/扑跳/翻滚）始终保持在画面内；
     地面完整可见；猫身上不戴项圈、衣物等配饰。
-  backend: comfyui
-  resolution: 2k
   aspect: "9:16"
   style_lock:
   - cinematic live-action，真人实拍电影感画质
@@ -84,8 +82,6 @@ steps:
   prompt_from: 视频脚本
   frame_from: 首帧图
   frame_slot: first_frame
-  model: heygen/heygen-video-1
   duration: 8
-  resolution: 768p
   aspect: "9:16"
   wait_s: 600

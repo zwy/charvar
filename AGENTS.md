@@ -240,6 +240,7 @@ DB → 仓库对偶：`charvar subject export <id>` 快照成 `presets/subjects/
   **`--continue` 是「续跑已有运行」——首次必须不带它**（`charvar recipes run <名>` 建运行并停在首个检查点），否则报「没有可继续的运行」。
 - **状态**：`data/generated/recipe_runs/<recipe_id>/manifest.json`（recipe_id 白名单 `^recipe_[A-Za-z0-9_.-]+$` 且无 `..`，同 adhoc 严格度），**不建 DB 表**、不落 runs 表；配方定义改版（步数不一致）时 continue 拒绝，要求重建。
 - **入口三处同语义**：`charvar recipes list|run|status`（`--continue` 续最近一次）、`/recipes*` API、「配方」页签（`recipes.js`）。
+- **生成参数是运行级**（backend/model/分辨率已从配方 YAML 摘除）：配方页「生成参数」面板或 CLI `--image-*/--video-*` flags 随 run 下发、锁进 manifest（continue 复用）；优先级 运行级 > 步级 > 设置页/env 默认链。细则见 `docs/配方系统.md`。
 - 示例配方：`presets/recipes/stockings_showcase.yaml`（真出 27 张图，跑前想清楚）、`presets/recipes/random_cast_video.yaml`（随机选角 8 秒视频）。
 - **随机三库配方**（舞蹈 `random_dance_video`：站姿池；MV `random_mv_video`：多镜/伴舞；`random_mv_video_up`：特写大字；荒诞 `random_absurd_video`：白名单池/安全锁；猫 `random_cat_video`：随机猫/猫池；贱剧 `random_cat_skit_video`：剧本池/三拍；捣乱 `random_cat_naughty_video`：捣乱池/装无辜）：`pick` 随机选角 → 脚本/场景/首帧（猫系脚本先行）→ `video_model`。种子含 run_id：每跑换批。
 

@@ -8,10 +8,35 @@
 <div class="card"><div class="row-head"><h2>视频配方</h2><div class="actions"><button id="btn-recipes-refresh">刷新</button></div></div>
 <div class="table-wrap"><table id="recipes-table"><thead><tr><th>配方</th><th>标题</th><th>类别</th><th>步骤链</th><th>操作</th></tr></thead><tbody></tbody></table></div>
 </div>
+<div class="card" id="recipe-genparams-card">
+<div class="row-head"><h2>生成参数</h2></div>
+<span class="hint">空值 = 跟随设置页默认链 · 参数随「开始运行」锁定到该次运行（重开一次运行才能换）</span>
+<div class="form-section">
+<div class="form-section-title">生图</div>
+<div class="adhoc-switch">
+<div class="segmented" id="rp-image-backend"><button type="button" class="seg active" data-backend="openrouter">OpenRouter</button><button type="button" class="seg" data-backend="comfyui">ComfyUI</button><button type="button" class="seg" data-backend="dreamina">即梦</button></div>
+</div>
+<div class="form-grid">
+<label id="rp-image-model-field">模型<select id="rp-image-model"></select></label>
+<label id="rp-image-resolution-field">分辨率档<select id="rp-image-resolution"></select></label>
+<label id="rp-image-quality-field">质量<select id="rp-image-quality"></select></label>
+</div>
+</div>
+<div class="form-section">
+<div class="form-section-title">生视频</div>
+<div class="adhoc-switch">
+<div class="segmented" id="rp-video-backend"><button type="button" class="seg active" data-backend="openrouter">OpenRouter</button><button type="button" class="seg" data-backend="dreamina">即梦</button></div>
+</div>
+<div class="form-grid">
+<label id="rp-video-model-field">模型<select id="rp-video-model"></select></label>
+<label id="rp-video-resolution-field">分辨率档<select id="rp-video-resolution"></select></label>
+</div>
+</div>
+</div>
 <div class="card" id="recipe-detail-card" hidden><div class="row-head"><h2 id="recipe-detail-title">配方详情</h2><div class="actions"><label class="check">种子<input type="number" id="recipe-run-seed" placeholder="配方默认"></label><button id="btn-recipe-run" class="primary">开始运行</button><button id="btn-recipe-doc">查看文档</button></div></div>
 <div id="recipe-steps" class="chip-row"></div>
 <pre id="recipe-doc" class="log" hidden></pre></div>
 <div class="card"><div class="row-head"><h2>配方运行</h2><div class="actions"><button id="btn-recipe-runs-refresh">刷新</button></div></div>
 <div class="table-wrap"><table id="recipe-runs-table"><thead><tr><th>配方运行</th><th>配方</th><th>状态</th><th>种子</th><th>时间</th><th>操作</th></tr></thead><tbody></tbody></table></div></div>
 </section>
-</main><script src="/static/core.js"></script><script src="/static/nav.js"></script><script src="/static/media.js"></script><script src="/static/recipes.js"></script></body></html>
+</main><script src="/static/core.js"></script><script src="/static/nav.js"></script><script src="/static/media.js"></script><script src="/static/tables.js"></script><script src="/static/recipes_genparams.js"></script><script src="/static/recipes.js"></script></body></html>

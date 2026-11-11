@@ -994,7 +994,7 @@ def test_repo_random_cast_recipe_parses():
     ]
     script, video = recipe.steps[1], recipe.steps[4]
     assert script.duration == 8 and script.frame_from is None  # 脚本先行：无图文本模式写稿
-    assert video.duration == 8 and video.resolution == "768p"
+    assert video.duration == 8 and video.resolution is None
     assert recipe.steps[0].face["sources"] == ["face-db-01", "face-db-02-cn", "face-db-03-cn"]
     assert recipe.steps[2].script_from == "视频脚本"
 
@@ -1210,7 +1210,7 @@ def test_repo_dance_recipe_parses():
     assert combo.strip_accessories is True and "余白" in (combo.framing_extra or "")
     assert script.amplitude == "large" and script.frame_from == "首帧图"
     assert script.duration == 8 and len(script.types) == 6
-    assert video.duration == 8 and video.resolution == "768p"
+    assert video.duration == 8 and video.resolution is None
 
 
 @pytest.fixture()
@@ -1440,7 +1440,7 @@ def test_repo_random_mv_recipe_parses():
     assert script.multishot is True and script.ensemble is True and script.shots == 4
     assert script.duration == 15 and script.frame_from == "首帧图"
     assert script.amplitude == "large" and len(script.types) == 5
-    assert video.duration == 15 and video.resolution == "768p"
+    assert video.duration == 15 and video.resolution is None
     assert video.aspect == "16:9" and video.frame_from == "首帧图"
     assert len(combo.style_lock) == 3 and any("high-key" in w for w in combo.style_lock)
     assert any("live-action" in w for w in script.style_lock)
@@ -1604,7 +1604,7 @@ def test_repo_random_mv_up_recipe_parses():
     assert script.text_pool == ["HIT", "OWN IT", "SHINE", "GO GO", "LOVE"]
     assert script.shots == 4 and script.duration == 15 and script.frame_from == "首帧图"
     assert script.amplitude == "large" and len(script.types) == 5
-    assert video.duration == 15 and video.resolution == "768p"  # 过审档（实测 $0.018/s）
+    assert video.duration == 15 and video.resolution is None  # 过审档（实测 $0.018/s）
     assert video.aspect == "16:9" and video.frame_from == "首帧图"
     assert len(combo.style_lock) == 3 and any("high-key" in w for w in combo.style_lock)
     assert any("live-action" in w for w in script.style_lock)
@@ -1620,7 +1620,7 @@ def test_repo_photo_idol_mv10_recipe_parses():
     img, video = recipe.steps[0], recipe.steps[1]
     # 首帧通路钉 openai/gpt-image-2.6-flare：Qwen-Edit 试跑不过验收清单（肩入画+素颜），编辑系模型才跟得动
     # 「极近特写重构图 + 日系 idol 妆」两条硬要求（实测 flare 一把过，$0.023/张）
-    assert img.backend == "openrouter" and img.model == "openai/gpt-image-2.6-flare"
+    assert img.backend is None and img.model is None  # 首帧模型改运行级（生成参数面板/CLI 下发）
     assert img.aspect == "16:9" and img.resolution is None  # flare 不声明 resolution，不发
     assert img.reference_labels == ["用户照片"]
     # 提示词 A 逐字锚点（身份唯一参考 + 构图红线 + 质感锁柔光变体）
@@ -1636,8 +1636,8 @@ def test_repo_photo_idol_mv10_recipe_parses():
     assert "单次扫完，不频闪、不往复" in video.prompt
     assert "主角不从远处人群中走近" in video.prompt and "不甩头、不转身" in video.prompt
     assert "除“READY”“SHINE”外，无其他文字、字幕、Logo或水印" in video.prompt
-    assert video.model == "heygen/heygen-video-1"  # 固定模板钉供应商（无声，音乐段当氛围读）
-    assert video.duration == 10 and video.resolution == "768p"  # 实测折半 ≈$0.18/条
+    assert video.model is None  # 模型/档位改运行级（生成参数面板/CLI 下发）
+    assert video.duration == 10 and video.resolution is None
     assert video.aspect == "16:9" and video.frame_from == "首帧图" and video.frame_slot == "first_frame"
 
 
@@ -1730,19 +1730,19 @@ def test_repo_dance_a_random_face_parses():
     assert img.reference_labels == ["脸部参考"]
     assert img.dress_from == "随机选脸" and img.prompt.count("{{服装}}") == 1
     assert "不沿用<image1>的衣着" in img.prompt
-    assert img.backend == "openrouter" and img.model == "openai/gpt-image-2.6-flare"
+    assert img.backend is None and img.model is None  # 首帧模型改运行级（生成参数面板/CLI 下发）
     assert img.aspect == "9:16"
     # 服装段唯一改写处：占位符注入（face 段纯脸无服装可沿用）
     assert "沿用<image1>中人物的服装" not in img.prompt
     # 身份段等其余段落保留原文锚点
     assert "以<image1>中的人物为唯一主体" in img.prompt
     assert "真人照片保持自然真实的摄影质感，绘画角色保持原有绘画风格" in img.prompt
-    # 舞步视频提示词逐字未动（锚点抽两处）+ 档位不变
+    # 舞步视频提示词逐字未动（锚点抽两处）
     vp = video.prompt
     assert "以输入首帧为唯一视觉依据，生成一段约5秒的单人轻快摇摆舞视频" in vp
     assert "4.4—5秒，俏皮亮相" in vp
-    assert video.model == "heygen/heygen-video-1"
-    assert video.duration == 5 and video.resolution == "480p" and video.aspect == "9:16"
+    assert video.model is None  # 模型/档位改运行级下发
+    assert video.duration == 5 and video.resolution is None and video.aspect == "9:16"
 
 
 _PICK_REF_YAML = """
@@ -1911,15 +1911,15 @@ def test_repo_dance_random_faces_parses():
         assert ref.source == "pick" and ref.step == "随机选脸" and ref.label == "脸部参考", name
         assert img.reference_labels == ["脸部参考"], name
         assert img.dress_from == "随机选脸" and img.prompt.count("{{服装}}") == 1, name
-        # 首帧走 flare：ComfyUI 对纯脸+文本姿态/构图 5/6 不达标（2026-11-07 实测）， flare 一次过硬
-        assert img.backend == "openrouter" and img.model == "openai/gpt-image-2.6-flare", name
+        # 首帧模型走运行级参数（生成参数面板/CLI 下发；实测 flare 一次过硬，见 docs）
+        assert img.backend is None and img.model is None, name
         assert img.aspect == "9:16", name
         assert "沿用<image1>中人物" not in img.prompt, name
         assert cloth_anchor in img.prompt, name
         # 舞步分秒段锚点（视频提示词保真）
         assert video_anchor in video.prompt, name
-        assert video.model == "heygen/heygen-video-1", name
-        assert video.duration == 5 and video.resolution == "480p" and video.aspect == "9:16", name
+        assert video.model is None, name
+        assert video.duration == 5 and video.resolution is None and video.aspect == "9:16", name
 
 
 def test_repo_dance_g_random_face_debound():
@@ -2132,8 +2132,8 @@ def test_repo_absurd_recipe_parses():
     assert combo.safety_lock == script.safety_lock and len(combo.safety_lock) >= 3
     assert combo.style_lock == script.style_lock and len(combo.style_lock) >= 3
     assert script.amplitude == "large" and script.frame_from == "首帧图" and script.duration == 8
-    assert len(script.types) == 4 and video.duration == 8 and video.resolution == "768p"
-    assert video.aspect == "9:16" and "heygen" in (video.model or "")
+    assert len(script.types) == 4 and video.duration == 8 and video.resolution is None
+    assert video.aspect == "9:16" and video.model is None  # 模型/档位改运行级下发
 
 
 def test_casting_allow_text_validation():
@@ -2359,7 +2359,7 @@ def test_repo_cat_recipe_parses():
     assert combo.subject_kind == "cat" and len(combo.appearances) >= 12
     assert combo.safety_lock == script.safety_lock and len(combo.safety_lock) >= 3
     assert video.frame_from == "首帧图" and video.prompt_from == "视频脚本"
-    assert video.duration == 8 and video.resolution == "768p"
+    assert video.duration == 8 and video.resolution is None
 
 
 def test_cat_full_flow(cat_env, monkeypatch):
@@ -2527,7 +2527,7 @@ def test_repo_skit_recipe_parses():
     assert combo.subject_kind == "cat" and len(combo.appearances) >= 12
     assert combo.safety_lock == script.safety_lock and len(combo.safety_lock) >= 3
     assert video.frame_from == "首帧图" and video.prompt_from == "视频脚本"
-    assert video.duration == 8 and video.resolution == "768p"
+    assert video.duration == 8 and video.resolution is None
 
 
 def test_video_script_skit_brief(monkeypatch):
@@ -2609,7 +2609,7 @@ def test_repo_naughty_recipe_parses():
     assert combo.scene_from == "场景设计" and combo.action_anchor == "setup"
     assert combo.safety_lock == script.safety_lock and len(combo.safety_lock) >= 3
     assert video.frame_from == "首帧图" and video.prompt_from == "视频脚本"
-    assert video.duration == 8 and video.resolution == "768p"
+    assert video.duration == 8 and video.resolution is None
 
 
 def test_video_script_naughty_brief(monkeypatch):
@@ -2931,3 +2931,89 @@ def test_crowd_prompt_and_brief(monkeypatch):
         clip_type="贱猫整活独角戏", duration=8, amplitude="skit", subject_kind="cat",
     )
     assert "不出现人类" in seen[0][0]["content"]
+
+
+# ---------- 运行级生成参数（GenParams：运行级显式 > 步级显式 > 缺省链） ----------
+
+def test_gen_params_reject_unknown_backend():
+    with pytest.raises(Exception):
+        recipes_service.GenImageParams(backend="foo")
+    with pytest.raises(Exception):
+        recipes_service.GenVideoParams(backend="comfyui")  # 视频后端只接 openrouter/dreamina
+
+
+def test_gen_params_none_keeps_legacy_behavior(model_env, monkeypatch):
+    """gen=None（旧 manifest / CLI 未给参数）：步字段生效，video 步落缺省 openrouter。"""
+    adhoc_reqs = _stub_adhoc_generate(monkeypatch)
+    video_reqs = _stub_adhoc_video(monkeypatch, [{"status": "ready", "job_id": "j1"}])
+    state = recipes_service.start_run(model_env, "demo_model_clip")
+    state = recipes_service.advance_state(model_env, state.recipe_run_id)
+    state = recipes_service.advance_state(model_env, state.recipe_run_id)
+    assert state.status == "done"
+    img, vid = adhoc_reqs[0], video_reqs[0]
+    assert img.backend == "comfyui"          # 步里写的 backend: comfyui
+    assert img.model is None                 # 没写模型 → 跟随默认链（不发送）
+    assert state.gen is None
+
+
+def test_gen_params_override_step_fields(model_env, monkeypatch):
+    """运行级显式盖过步级：backend/model/resolution/quality 四项全盖。"""
+    adhoc_reqs = _stub_adhoc_generate(monkeypatch)
+    video_reqs = _stub_adhoc_video(monkeypatch, [{"status": "ready", "job_id": "j1"}])
+    gen = recipes_service.GenParams(
+        image=recipes_service.GenImageParams(
+            backend="dreamina", model="seedream_5.5", resolution="2K", quality="high",
+        ),
+        video=recipes_service.GenVideoParams(
+            backend="dreamina", model="seedance_2.5", resolution="1080p",
+        ),
+    )
+    state = recipes_service.start_run(model_env, "demo_model_clip", gen=gen)
+    state = recipes_service.advance_state(model_env, state.recipe_run_id)
+    state = recipes_service.advance_state(model_env, state.recipe_run_id)
+    assert state.status == "done"
+    img, vid = adhoc_reqs[0], video_reqs[0]
+    assert (img.backend, img.model, img.resolution, img.quality) == (
+        "dreamina", "seedream_5.5", "2K", "high")
+    assert (vid.backend, vid.model, vid.resolution) == ("dreamina", "seedance_2.5", "1080p")
+    # 时长/画幅不进运行级 —— 步的 aspect/duration 语义不动
+    assert vid.aspect_ratio == ""  # 该步没写 aspect → 仍不发送
+
+
+def test_gen_params_survive_manifest_roundtrip(model_env, monkeypatch):
+    """gen 随 manifest 落盘；continue（不复传参数）仍吃到同一组。"""
+    adhoc_reqs = []
+    video_reqs = _stub_adhoc_video(monkeypatch, [{"status": "ready", "job_id": "j1"}])
+    from charvar import adhoc as adhoc_service
+
+    run_dir = recipes_service.paths.data_dir() / "generated" / "adhoc" / "adhoc_fake"
+    (run_dir / "original").mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (64, 96), (10, 20, 30)).save(run_dir / "original" / "000000.png")
+    (run_dir / "manifest.json").write_text("{}", encoding="utf-8")
+
+    def fake_generate(req, db_path=None):
+        adhoc_reqs.append(req)
+        return adhoc_service.AdhocResult(
+            image_path=str(run_dir / "original" / "000000.png"),
+            provider="comfyui", manifest_path=str(run_dir / "manifest.json"),
+            width=64, height=96, seed=req.seed,
+        )
+
+    monkeypatch.setattr(adhoc_service, "generate", fake_generate)
+    gen = recipes_service.GenParams(
+        image=recipes_service.GenImageParams(backend="comfyui", resolution="1k"),
+        video=recipes_service.GenVideoParams(model="heygen/heygen-video-1", resolution="768p"),
+    )
+    state = recipes_service.start_run(model_env, "demo_model_clip", gen=gen)
+    # manifest JSON 里真有 gen（write_state 的 model_dump 落盘）
+    raw = json.loads((recipes_service.manifest_path(state.recipe_run_id)).read_text(encoding="utf-8"))
+    assert raw["gen"]["image"]["backend"] == "comfyui"
+    assert raw["gen"]["video"]["resolution"] == "768p"
+    adhoc_reqs.clear()  # 只看 continue 阶段的请求参数（首轮可能停在检查点没发请求）
+    state = recipes_service.advance_state(model_env, state.recipe_run_id)
+    state = recipes_service.advance_state(model_env, state.recipe_run_id)
+    assert state.status == "done"
+    assert adhoc_reqs[0].backend == "comfyui"
+    assert adhoc_reqs[0].resolution == "1k"
+    assert video_reqs[0].model == "heygen/heygen-video-1"
+    assert video_reqs[0].resolution == "768p"

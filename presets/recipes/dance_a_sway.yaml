@@ -46,8 +46,6 @@ steps:
     只出现一名人物，人体比例自然，双臂和双手结构清楚，服装轮廓完整。没有文字、水印、拼图或动作残影。
 
     人物为成年女性（约二十五岁），整体是健康清新的日系偶像舞台摄影。
-  backend: openrouter
-  model: openai/gpt-image-2.6-flare
   aspect: "9:16"
   reference_labels: [脸部参考]
   dress_from: 随机选脸
@@ -90,8 +88,6 @@ steps:
     大幅甩头、转身背对镜头、深蹲、跳跃、夸张扭腰顶胯、手臂快速穿过面部、双手交叉纠缠、突然新增动作，以及人物外观或背景发生变化。
   frame_from: 首帧图
   frame_slot: first_frame
-  model: heygen/heygen-video-1
   duration: 5
-  resolution: 480p
   aspect: "9:16"
   wait_s: 420

@@ -50,8 +50,6 @@ steps:
     像人物正准备向镜头打招呼的瞬间。保持人物比例自然、手部结构清楚、服装细节完整，没有文字、水印、拼图或动作残影。
 
     人物为成年女性（约二十五岁），整体是健康清新的日系偶像舞台摄影。
-  backend: openrouter
-  model: openai/gpt-image-2.6-flare
   aspect: "9:16"
   reference_labels: [脸部参考]
   dress_from: 随机选脸
@@ -99,8 +97,6 @@ steps:
     双手遮挡面部、指尖接触眼睛、手掌贴脸、手臂交叉、手部快速伸向镜头、大幅甩头、身体前后探动、突然新增比心或飞吻动作，以及人物外观、服装或背景发生变化。
   frame_from: 首帧图
   frame_slot: first_frame
-  model: heygen/heygen-video-1
   duration: 5
-  resolution: 480p
   aspect: "9:16"
   wait_s: 420

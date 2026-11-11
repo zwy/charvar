@@ -91,7 +91,7 @@ async function runRecipe(name, seedFromInput) {
     ? Math.floor(Number(seedFromInput)) : null;
   const state = await api(`/recipes/${encodeURIComponent(name)}/run`, {
     method: "POST",
-    body: JSON.stringify({ seed }),
+    body: JSON.stringify({ seed, gen: recipeGenPayload() }),
   });
   await loadRecipeRuns();
   return state;
@@ -157,7 +157,8 @@ function showRecipeRun(runId) {
       body.innerHTML = "";
       const meta = document.createElement("div");
       meta.className = "hint";
-      meta.textContent = `${state.recipe} · 种子 ${state.seed} · ${String(state.created_at || "").replace("T", " ")}`;
+      meta.textContent = `${state.recipe} · 种子 ${state.seed} · ${String(state.created_at || "").replace("T", " ")}` +
+        (state.gen ? ` · ${recipeGenSummary(state.gen)}` : "");
       body.appendChild(meta);
       let videoProbe = null;
       for (const st of state.steps) {

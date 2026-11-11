@@ -33,8 +33,6 @@ steps:
   scene_from: 场景设计
   strip_accessories: true
   framing_extra: 这是舞蹈视频的首帧图：全身入镜（头顶到脚完整），头顶与画面四周留出充分余白，让后续视频大幅度的舞蹈动作（跳跃/挥臂/踢腿）始终保持在画面内；地面完整可见；人物双手不持物、头上不戴帽、身上不挎包。
-  backend: comfyui
-  resolution: 2k
   aspect: "9:16"
 
 - kind: video_script
@@ -53,6 +51,5 @@ steps:
   frame_from: 首帧图
   frame_slot: first_frame
   duration: 8
-  resolution: 768p
   aspect: "9:16"
   wait_s: 600

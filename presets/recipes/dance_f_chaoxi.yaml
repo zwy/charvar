@@ -54,8 +54,6 @@ steps:
     呈现人物从容准备开始跳舞的瞬间。人体比例自然，手部结构清楚，服装轮廓完整，没有文字、水印、拼图或动作残影。
 
     人物为成年女性（约二十五岁），整体是健康清新的日系偶像舞台摄影。
-  backend: openrouter
-  model: openai/gpt-image-2.6-flare
   aspect: "9:16"
   reference_labels: [脸部参考]
   dress_from: 随机选脸
@@ -112,8 +110,6 @@ steps:
     双手向镜头猛推、手臂完全绷直、连续出拳、双臂交叉、大幅身体波浪、躯干大幅扭转、单手单独大幅伸展、双手举到脸旁做挥手动作（收尾的肩旁比耶不算）、深蹲、转圈、甩头、突然新增比心或猫爪动作，以及人物外观、服装或背景发生变化。
   frame_from: 首帧图
   frame_slot: first_frame
-  model: heygen/heygen-video-1
   duration: 5
-  resolution: 480p
   aspect: "9:16"
   wait_s: 420

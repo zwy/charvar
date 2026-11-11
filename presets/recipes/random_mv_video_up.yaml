@@ -32,8 +32,6 @@ steps:
   input: 随机选库
   scene_from: 场景设计
   close_up: true
-  backend: comfyui
-  resolution: 2k
   aspect: "16:9"
   style_lock:
   - cinematic live-action，真人实拍电影感画质
@@ -66,6 +64,5 @@ steps:
   frame_from: 首帧图
   frame_slot: first_frame
   duration: 15
-  resolution: 768p
   aspect: "16:9"
   wait_s: 900

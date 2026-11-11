@@ -47,7 +47,6 @@ steps:
   label: 首帧图
   input: 随机选库
   scene_from: 场景设计
-  backend: dreamina
   aspect: "9:16"
   style_lock:
   - cinematic live-action，真人实拍电影感画质
@@ -63,8 +62,6 @@ steps:
   prompt_from: 视频脚本
   frame_from: 首帧图
   frame_slot: first_frame
-  model: heygen/heygen-video-1
   duration: 8
-  resolution: 768p
   aspect: "9:16"
   wait_s: 600

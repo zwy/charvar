@@ -71,8 +71,6 @@ steps:
   framing_extra: 这是拟人猫咪喜剧小品的首帧图：猫全身入镜（从猫头顶、耳朵到尾巴尖完整），
     头顶与画面四周留出充分余白，让后续的拟人动作与爪中道具始终保持在画面内；
     地面完整可见；猫身上不戴项圈、衣物等配饰（脚本里它手拿或嘴叼的道具除外）。
-  backend: comfyui
-  resolution: 2k
   aspect: "9:16"
   style_lock:
   - cinematic live-action，真人实拍电影感画质
@@ -90,8 +88,6 @@ steps:
   prompt_from: 视频脚本
   frame_from: 首帧图
   frame_slot: first_frame
-  model: heygen/heygen-video-1
   duration: 8
-  resolution: 768p
   aspect: "9:16"
   wait_s: 600

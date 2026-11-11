@@ -57,8 +57,6 @@ steps:
     正常人物准备开始跳秧歌的瞬间。人体比例自然，双手结构清楚，服装轮廓完整，没有文字、水印、拼图或动作残影。
 
     人物为成年女性（约二十五岁），整体是健康清新的日系偶像舞台摄影。
-  backend: openrouter
-  model: openai/gpt-image-2.6-flare
   aspect: "9:16"
   reference_labels: [脸部参考]
   dress_from: 随机选脸
@@ -115,8 +113,6 @@ steps:
     变成插画、动漫或 3D 渲染、人物外观变化、走动、跳跃、转圈、甩头、深蹲、双手同时离地、脚底滑行、双臂交叉、双手在身前合十、双手穿到脸部、手臂大幅张开成展示位、双手举过肩膀、双手在脸旁上下挥动、躯干大幅扭转、夸张扭腰顶胯、掀起裙摆、裙面走光、裙摆大幅甩动、背景或光线变化，以及画面里出现第二个人。
   frame_from: 首帧图
   frame_slot: first_frame
-  model: heygen/heygen-video-1
   duration: 5
-  resolution: 480p
   aspect: "9:16"
   wait_s: 420
