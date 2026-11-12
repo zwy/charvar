@@ -1,4 +1,4 @@
-/* 视频（Playground）页（web 面板）：
+/* 视频页（web 面板）：
    二级页签 = 供应商（OpenRouter / 即梦），一级页签 = 模式（文生视频 t2v /
    图生视频 i2v），显式选择。
    与出图（adhoc.js）同构：同一套暂存参考图四件套、GenRefs 弹层选图（主体档案 /
@@ -762,7 +762,7 @@ $("#btn-video-vref-clear").addEventListener("click", async () => {
   }
 });
 
-/* ---------- 参考图弹层选图（引擎在 genrefs.js —— 与 Playground 同一套弹层） ----------
+/* ---------- 参考图弹层选图（引擎在 genrefs.js —— 与图片页同一套弹层） ----------
    主体档案 = 两步弹层（先选主体 → 再选一张槽位图）；动作库 / 人脸库 / 服饰库 = 对应库浏览器。
    首帧区只给主体档案弹层（首帧要有完整人物外观，姿势线稿/服装平铺当首帧不合适）；
    参考图区给全部来源。动作/人脸/服饰参考图走后端同一套 spec 解析（role 在视频通路被忽略）。 */
@@ -878,8 +878,8 @@ $("#btn-video-ref-costume").addEventListener("click", () => {
   }, { requireImage: true });
 });
 
-/* 最近生成里有现成的产物图（Playground 出的图）：点开弹层选一张，直接当首帧/参考图，
-   不用先下载到本地再上传。图片是 Playground run 的落盘产物，不会随一次出片被清理。 */
+/* 最近生成里有现成的产物图（图片页出的图）：点开弹层选一张，直接当首帧/参考图，
+   不用先下载到本地再上传。图片是 图片页 run 的落盘产物，不会随一次出片被清理。 */
 $("#btn-video-frame-recent").addEventListener("click", () => {
   Media.pickRecentImage((rec) => {
     if (videoState.firstFrame) releaseVideoRef(videoState.firstFrame);
@@ -931,7 +931,7 @@ $("#btn-video-generate").addEventListener("click", async () => {
       return setStatus($("#video-status"), "即梦尾帧必须与首帧成对（先设首帧）", true);
     }
   }
-  // 种子留空 = 随机 0–100000（与生成页/Playground 同一约定，随机源在调用方这一侧）
+  // 种子留空 = 随机 0–100000（与生成页/图片页同一约定，随机源在调用方这一侧）
   const seedRaw = $("#video-seed").value.trim();
   const seed = seedRaw === "" ? Math.floor(Math.random() * 100001) : Number(seedRaw);
   const body = {
@@ -941,7 +941,7 @@ $("#btn-video-generate").addEventListener("click", async () => {
     duration: $("#video-duration").value ? Number($("#video-duration").value) : null,
     resolution: $("#video-resolution").value || null,
     seed,
-    // spec 映射与 Playground（adhoc.js）同一套：pose/face/costume 带 role 与库 id，
+    // spec 映射与 图片页（adhoc.js）同一套：pose/face/costume 带 role 与库 id，
     // 视频通路后端只解析文件路径（role 被忽略）。t2v 不发任何素材。
     references: isI2v
       ? videoState.references.map((ref) =>

@@ -40,7 +40,7 @@ async function apiPaged(path, options = {}) {
   return { items: await resp.json(), total: Number(resp.headers.get("X-Total-Count") || 0) };
 }
 
-/* 「最近生成」分页条（Playground / 视频 / 语音三页共用）。page 从 0 起，goto(newPage) 翻页，
+/* 「最近生成」分页条（图片 / 视频 / 语音三页共用）。page 从 0 起，goto(newPage) 翻页，
    返回值插到产物 grid 之后（.card > * + * 的间距规则自动生效）。 */
 function buildRecentPager({ page, pageSize, total, goto }) {
   const row = document.createElement("div");

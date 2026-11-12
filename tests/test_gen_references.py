@@ -1,4 +1,4 @@
-"""生成页新流程：参考图走「Playground 式来源 + role 分工」。
+"""生成页新流程：参考图走「adhoc 式来源 + role 分工」。
 
 覆盖：
 - /generate 两模式都把 references 存进结果（页面刷新不丢）；

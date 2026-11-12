@@ -1,4 +1,4 @@
-"""Playground 视频：给一段提示词（+ 可选首帧图 / 参考图）直接出一段视频。
+"""视频：给一段提示词（+ 可选首帧图 / 参考图）直接出一段视频。
 
 与出图（``charvar.adhoc``）同构：网页与 CLI ``charvar video`` 是同一套参数语义、
 同一套落盘、同一份 manifest；不进主体档案 5 槽位、不跑预设批量、不落 runs 表。
@@ -66,7 +66,7 @@ class AdhocVideoTimeout(AdhocVideoError):
 
 
 class VideoRequest(BaseModel):
-    """一次 Playground 视频生成的请求。"""
+    """一次 视频生成的请求。"""
 
     prompt: str
     backend: Backend = "openrouter"
@@ -90,7 +90,7 @@ class VideoRequest(BaseModel):
 
 
 class VideoResult(BaseModel):
-    """一次 Playground 视频生成的结果。"""
+    """一次 视频生成的结果。"""
 
     run_id: str
     video_path: str = ""
@@ -112,7 +112,7 @@ class VideoResult(BaseModel):
 
 
 def video_root() -> Path:
-    """Playground 视频根目录：``<data>/generated/adhoc_video/``。"""
+    """视频根目录：``<data>/generated/adhoc_video/``。"""
     return paths.data_dir() / "generated" / "adhoc_video"
 
 
@@ -324,7 +324,7 @@ def count_recent() -> int:
 
 
 def list_recent(limit: int = 20, offset: int = 0) -> list[dict[str, Any]]:
-    """最近的 Playground 视频记录（读 manifest.json，按时间倒序）。
+    """最近的 视频记录（读 manifest.json，按时间倒序）。
 
     manifest 是唯一留痕（不落 runs 表），所以这里就是扫目录；
     offset 是翻页起点（run_id 自带时间前缀，倒序即时间倒序），只对窗口内的目录读 manifest。
@@ -972,7 +972,7 @@ def generate(
     poll_interval: float | None = None,
     timeout_s: float | None = None,
 ) -> VideoResult:
-    """跑一次 Playground 视频生成，返回结果（含落盘路径与 manifest 路径）。
+    """跑一次 视频生成，返回结果（含落盘路径与 manifest 路径）。
 
     ``wait=True``（CLI 默认）：阻塞轮询到终态（completed → 成片；failed → 抛错）；
     ``wait=False``（web）：提交即返回 pending，后续由 :func:`refresh` 收片。

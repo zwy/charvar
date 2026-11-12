@@ -1,4 +1,4 @@
-"""Playground 视频（charvar.adhoc_video）：提交/轮询/收片与落盘（打桩 OpenRouter，不发真网）。"""
+"""视频（charvar.adhoc_video）：提交/轮询/收片与落盘（打桩 OpenRouter，不发真网）。"""
 from __future__ import annotations
 
 import io

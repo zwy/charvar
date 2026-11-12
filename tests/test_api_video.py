@@ -1,4 +1,4 @@
-"""Playground 视频的网页入口：/videos/* 接口（打桩 + MockTransport，不发真网）。"""
+"""视频的网页入口：/videos/* 接口（打桩 + MockTransport，不发真网）。"""
 from __future__ import annotations
 
 import io
@@ -231,7 +231,7 @@ def test_generate_with_subject_reference(client, tmp_path, monkeypatch):
 
 
 def test_generate_with_recent_run_first_frame(client, tmp_path, monkeypatch):
-    """「最近生成」来源：首帧/参考图直接指到 Playground 出图的落盘原图。"""
+    """「最近生成」来源：首帧/参考图直接指到 图片页出图的落盘原图。"""
     from charvar import adhoc as adhoc_service
 
     _inject_catalog(tmp_path, monkeypatch)
@@ -250,7 +250,7 @@ def test_generate_with_recent_run_first_frame(client, tmp_path, monkeypatch):
     monkeypatch.setattr(openrouter_video, "download", lambda job_id, **kw: b"\x00\x00\x00\x20ftyp" + b"\x00" * 12)
     monkeypatch.setattr(adhoc_video, "_make_poster", lambda p, d: None)
 
-    # 手工造一个 Playground 图 run（original/ 里放一张真图）
+    # 手工造一个 adhoc 图 run（original/ 里放一张真图）
     run_id = "adhoc_20261023-000000_deadbeef"
     run_dir = adhoc_service.run_dir(run_id)
     (run_dir / "original").mkdir(parents=True)

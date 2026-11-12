@@ -242,7 +242,7 @@ data/generated/adhoc/{时间戳}_{短id}/
 └── manifest.json          ← 完整请求与结果，便于复现
 ```
 
-Playground **不落 runs 表** —— 不进生成历史、不进图片墙。
+图片 **不落 runs 表** —— 不进生成历史、不进图片墙。
 
 ## 产物落盘（视频）
 

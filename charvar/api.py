@@ -150,7 +150,7 @@ class ComfyQueueRequest(BaseModel):
     resolution: Literal["1k", "2k"] | None = None
     overrides: dict[str, Any] = Field(default_factory=dict)
     reference_kinds: list[str] = Field(default_factory=list, description="主体图参考（兼容旧调用），按序注入 image/image2/…")
-    references: list[ReferenceSpec] = Field(default_factory=list, description="参考图（Playground 式来源 + role 分工）；给了它就不看 reference_kinds")
+    references: list[ReferenceSpec] = Field(default_factory=list, description="参考图（adhoc 式来源 + role 分工）；给了它就不看 reference_kinds")
 
 
 class OpenRouterQueueRequest(BaseModel):
@@ -164,7 +164,7 @@ class OpenRouterQueueRequest(BaseModel):
     aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
     resolution: str | None = Field(default=None, description="charvar 档位（1k/2k）或模型声明枚举值（1K/1.5K/2K/4K…）；空 = 用设置页/env 的模式默认")
     reference_kinds: list[str] = Field(default_factory=list, description="主体图参考（兼容旧调用），按序对应提示词里的 the first/second… reference image")
-    references: list[ReferenceSpec] = Field(default_factory=list, description="参考图（Playground 式来源 + role 分工）；给了它就不看 reference_kinds")
+    references: list[ReferenceSpec] = Field(default_factory=list, description="参考图（adhoc 式来源 + role 分工）；给了它就不看 reference_kinds")
     model: str | None = Field(default=None, description="覆盖默认模型（按模式取设置页/OP_IMAGE_T2I_MODEL、OP_IMAGE_I2I_MODEL）")
     seed: int | None = Field(default=None, description="覆盖种子；缺省用条目自带的稳定子种子")
     quality: str | None = Field(default=None, description="质量档；只在模型清单声明 quality 时生效，空 = 用模式默认")
@@ -253,7 +253,7 @@ class DreaminaQueueRequest(BaseModel):
     aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
     resolution: str | None = Field(default=None, description="1K/1.5K/2K/4K 按模型档位；空 = 用设置页/env 默认")
     reference_kinds: list[str] = Field(default_factory=list, description="主体图参考（兼容旧调用）：带 = i2i，不带 = t2i")
-    references: list[ReferenceSpec] = Field(default_factory=list, description="参考图（Playground 式来源 + role 分工）；给了它就不看 reference_kinds")
+    references: list[ReferenceSpec] = Field(default_factory=list, description="参考图（adhoc 式来源 + role 分工）；给了它就不看 reference_kinds")
     model: str | None = Field(default=None, description="即梦画布模型 id；空 = 设置页/env（DREAMINA_IMAGE_MODEL）默认 seedream_4.7")
     seed: int | None = Field(default=None, description="仅存档；即梦不暴露 seed")
 
@@ -280,7 +280,7 @@ class Message(BaseModel):
 class AdhocReferenceSpec(ReferenceSpec):
     """一张参考图的来源：上传暂存（staged_id）、主体档案（subject_id + kind）
 
-    或 Playground「最近生成」的原图（run_id，服务端从该 run 的 original/
+    或 图片页「最近生成」的原图（run_id，服务端从该 run 的 original/
     目录定文件名 —— 不接受任意路径）。
     顺序即提示词里 ``<image1>`` / ``<image2>`` 的顺序。
     """
@@ -301,7 +301,7 @@ def _reference_paths_from_specs(
 ) -> tuple[list[Path], list[str], list[str]]:
     """参考图规格 → (本地文件路径, role 列表, 暂存 id 列表)。
 
-    六种来源与 Playground 同源：上传暂存（staged_id）、主体档案槽位
+    六种来源与 图片页同源：上传暂存（staged_id）、主体档案槽位
     （subject_id + kind）、最近生成的原图（run_id；adhoc run 取唯一原图，
     charvar run 按 index 取第几张）、姿势库（pose_id + angle —— 灰人偶线稿，
     role 固定 pose）、人脸库（face_id —— AI 架构人物，role 固定 face）、
@@ -384,7 +384,7 @@ def _reference_paths_from_specs(
 def _run_reference_file(run_id: str, index: int | None = None) -> Path:
     """最近生成的原图 → 本地文件。
 
-    adhoc run（Playground）original/ 下只有一个文件；charvar run 按条目顺序
+    adhoc run（图片页）original/ 下只有一个文件；charvar run 按条目顺序
     取第 index 张（缺省第一张）。文件名由服务端从 run 目录定 —— 不收浏览器给的路径。
     """
     run_id = str(run_id or "").strip()
@@ -410,7 +410,7 @@ def _run_reference_file(run_id: str, index: int | None = None) -> Path:
 
 
 class AdhocGenerateRequest(BaseModel):
-    """网页「Playground」的请求（与 CLI ``charvar image`` 同一套参数）。"""
+    """网页「图片」的请求（与 CLI ``charvar image`` 同一套参数）。"""
 
     prompt: str
     backend: Literal["comfyui", "openrouter", "dreamina"] = "comfyui"
@@ -438,7 +438,7 @@ class VideoGenerateRequest(BaseModel):
     视频是异步作业：本端点只提交，前端按 /videos/{run_id}/status 轮询。
     首帧图 = 图生视频（OpenRouter frame_images / 即梦 image2video）；参考图 =
     参考生成（OpenRouter input_references / 即梦 multimodal2video 全能参考）。
-    都只认「上传暂存 / 主体档案就绪图 / Playground 最近生成原图 / 姿势库 / 人脸库 /
+    都只认「上传暂存 / 主体档案就绪图 / 图片页最近生成原图 / 姿势库 / 人脸库 /
     服饰库」六种来源（与 /adhoc 同一套 spec 规则，role 在视频通路被忽略 ——
     视频没有 LLM 锚定句，参考图只当图发）。
     参考视频 = OpenRouter input_references 的 video_url（Seedance gen2+ 才接）/
@@ -466,7 +466,7 @@ class UpscaleGenerateRequest(BaseModel):
 
     输入视频两个来源、**只认 id 不认路径**（和参考图同一条纪律）：
     - ``staged_id``：``POST /upscales/upload`` 的上传暂存 id；
-    - ``video_run_id``：Playground 视频 run（``GET /videos`` 榜单里的 run_id，产物在
+    - ``video_run_id``：视频 run（``GET /videos`` 榜单里的 run_id，产物在
       落盘布局里，服务端从 ``adhoc_video.video_file`` 取真实路径 —— 浏览器永远不给路径）。
     两者只能给一个。异步作业：本端点只提交（源已达标时同步返回原样复制结果），
     前端按 /upscales/{run_id}/status 轮询。backend/target 空串 = 设置页「放大」默认。
@@ -1280,7 +1280,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     ) -> GenerateResult:
         if not req.subject_id:
             raise HTTPException(400, "LLM 模式需要 subject_id：参考图来自主体档案的图片槽位")
-        # 参考图：新流程给 references（Playground 式来源 + role 分工），
+        # 参考图：新流程给 references（adhoc 式来源 + role 分工），
         # 提示词阶段只用 role 定锚定句分工；没给就回退旧的 reference_kinds。
         roles: list[str] = []
         pose_types: dict[int, str] = {}
@@ -1582,7 +1582,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     ) -> list[Path]:
         """推送生图时的参考图 → 本地文件列表。
 
-        新流程（references，Playground 式来源）优先；没给就回退旧接口的
+        新流程（references，adhoc 式来源）优先；没给就回退旧接口的
         主体档案槽位（reference_kinds），老调用不受影响。
         """
         if references:
@@ -1926,7 +1926,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             "supports_references": caps.supports_refs,
         }
 
-    # ---- Playground（跨项目调用同一通路的网页入口） ----
+    # ---- 图片页（跨项目调用同一通路的网页入口） ----
 
     def _adhoc_reference_paths(
         references: list[AdhocReferenceSpec],
@@ -1934,7 +1934,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         """参考图 spec → 本地路径列表（+ 暂存 id 列表，出图成功后清理）。
 
         只认六种来源：上传暂存的（staged_id）、主体档案里的（subject_id + kind）、
-        Playground「最近生成」的原图（run_id，文件名由服务端从该 run 目录取）、
+        图片页「最近生成」的原图（run_id，文件名由服务端从该 run 目录取）、
         姿势库（pose_id + angle + source）、人脸库（face_id + source）、
         服饰库（costume_id + source）。
         不接受任意路径 —— 那是把文件读权限开给了浏览器。
@@ -2061,7 +2061,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
 
     @app.post("/adhoc/generate")
     def api_adhoc_generate(req: AdhocGenerateRequest) -> dict[str, Any]:
-        """Playground：给一段提示词出一张图。
+        """图片：给一段提示词出一张图。
 
         走的是 CLI ``charvar image`` 同一套（``charvar.adhoc``），不落 runs 表。
         """
@@ -2102,7 +2102,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         limit: int = Query(20, ge=1, le=100),
         offset: int = Query(0, ge=0),
     ) -> list[dict[str, Any]]:
-        """最近的 Playground 记录（读 manifest.json；不落 runs 表）。
+        """最近的 图片记录（读 manifest.json；不落 runs 表）。
 
         列表本体保持裸数组（老调用方不受影响）；总数走 X-Total-Count 响应头，给「最近生成」翻页。
         """
@@ -2137,7 +2137,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             raise HTTPException(404, f"没有 manifest：{run_id}")
         return json.loads(path.read_text(encoding="utf-8"))
 
-    # ---- Playground 视频（charvar.adhoc_video：web 与 CLI charvar video 同一通路） ----
+    # ---- 视频（charvar.adhoc_video：web 与 CLI charvar video 同一通路） ----
     # 注意路由声明顺序：字面路径（/videos/models、/videos/references…）必须在
     # /videos/{run_id}/… 之前，否则 run_id 通配会把它们吞掉。
 
@@ -2147,7 +2147,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         """参考图 spec → 本地路径列表（+ 暂存 id 列表，成片 ready 后清理）。
 
         与 /adhoc 的 `_adhoc_reference_paths` 同一套规则：只认上传暂存（staged_id）、
-        主体档案就绪图（subject_id + kind）、Playground「最近生成」的原图（run_id）、
+        主体档案就绪图（subject_id + kind）、图片页「最近生成」的原图（run_id）、
         姿势库（pose_id + angle + source）、人脸库（face_id + source）、
         服饰库（costume_id + source），**不接受任意路径** —— 那是把文件读权限
         开给了浏览器。暂存池走 adhoc_video 自己的（出图/出片各自清理，互不误删）。
@@ -2181,7 +2181,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                 )
                 continue
             if spec.run_id:
-                # Playground 最近生成的原图：run_id 过严格正则，文件名服务端定
+                # 图片页最近生成的原图：run_id 过严格正则，文件名服务端定
                 try:
                     paths_found.append(adhoc_service.original_file(spec.run_id))
                 except FileNotFoundError as exc:
@@ -2320,7 +2320,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
 
     @app.post("/videos/generate")
     def api_video_generate(req: VideoGenerateRequest) -> dict[str, Any]:
-        """Playground 视频：给一段提示词出一段视频（异步作业，提交即返回）。
+        """视频：给一段提示词出一段视频（异步作业，提交即返回）。
 
         走的是 CLI ``charvar video`` 同一套（``charvar.adhoc_video``），不落 runs 表。
         """
@@ -2385,7 +2385,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         limit: int = Query(20, ge=1, le=100),
         offset: int = Query(0, ge=0),
     ) -> list[dict[str, Any]]:
-        """最近的 Playground 视频记录（读 manifest.json；不落 runs 表）。
+        """最近的 视频记录（读 manifest.json；不落 runs 表）。
 
         列表本体保持裸数组（老调用方不受影响）；总数走 X-Total-Count 响应头，给「最近生成」翻页。
         """
@@ -2444,7 +2444,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             raise HTTPException(502, f"LLM 文案输出不合格：{exc}") from exc
         return adhoc_video_service.save_copy(run_id, copy)
 
-    # ---- Playground 放大（charvar.adhoc_upscale：web 与 CLI charvar upscale 同一通路） ----
+    # ---- 放大（charvar.adhoc_upscale：web 与 CLI charvar upscale 同一通路） ----
     # 同 /videos 的路由纪律：字面路径必须放在 {run_id} 通配可用到它们之前；
     # 这里 /upscales/upload 单段不会撞 /upscales/{run_id}/xxx 双段，仍按纪律归组。
 
@@ -2476,7 +2476,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
 
     @app.post("/upscales/generate")
     def api_upscale_generate(req: UpscaleGenerateRequest) -> dict[str, Any]:
-        """Playground 放大：给一段视频把短边放大到目标档位（异步作业，提交即返回）。
+        """放大：给一段视频把短边放大到目标档位（异步作业，提交即返回）。
 
         走的是 CLI ``charvar upscale`` 同一套（``charvar.adhoc_upscale``），不落 runs 表。
         """
@@ -2489,7 +2489,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                 raise HTTPException(400, str(exc)) from exc
             input_label = ""
         else:
-            # 来源是 Playground 视频产片：run_id 过严格正则后从落盘布局取真实路径
+            # 来源是 视频产片：run_id 过严格正则后从落盘布局取真实路径
             try:
                 adhoc_video_service.run_dir(req.video_run_id)
             except adhoc_video_service.AdhocVideoError as exc:
@@ -2527,7 +2527,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         limit: int = Query(20, ge=1, le=100),
         offset: int = Query(0, ge=0),
     ) -> list[dict[str, Any]]:
-        """最近的 Playground 放大记录（读 manifest.json；不落 runs 表）。
+        """最近的 放大记录（读 manifest.json；不落 runs 表）。
 
         列表本体保持裸数组；总数走 X-Total-Count 响应头，给「最近放大」翻页。
         """
@@ -2578,7 +2578,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             raise HTTPException(404, f"没有 manifest：{run_id}")
         return json.loads(path.read_text(encoding="utf-8"))
 
-    # ---- Playground 语音（charvar.adhoc_tts：web 与 CLI charvar tts 同一通路） ----
+    # ---- 语音（charvar.adhoc_tts：web 与 CLI charvar tts 同一通路） ----
     # 同步生成（与视频的异步作业不同）：/tts/generate 等音频字节返回后再响应，
     # 没有 status 轮询。与 /videos 同款路由声明纪律：字面路径（/tts/models、/tts）
     # 必须在 /tts/{run_id}/… 之前，否则 run_id 通配会把它们吞掉。
@@ -2621,7 +2621,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
 
     @app.post("/tts/generate")
     def api_tts_generate(req: TtsGenerateRequest) -> dict[str, Any]:
-        """Playground 语音：给一段文本出一行语音（同步，等音频字节返回）。
+        """语音：给一段文本出一行语音（同步，等音频字节返回）。
 
         走的是 CLI ``charvar tts`` 同一套（``charvar.adhoc_tts``），不落 runs 表。
         """
@@ -2647,7 +2647,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         limit: int = Query(20, ge=1, le=100),
         offset: int = Query(0, ge=0),
     ) -> list[dict[str, Any]]:
-        """最近的 Playground 语音记录（读 manifest.json；不落 runs 表）。
+        """最近的 语音记录（读 manifest.json；不落 runs 表）。
 
         列表本体保持裸数组（老调用方不受影响）；总数走 X-Total-Count 响应头，给「最近生成」翻页。
         """
@@ -2699,7 +2699,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             meta = item.meta or {}
             # 快照缺失（老 run）回退：LLM 模式生成时 meta 已带 reference_kinds
             reference_kinds = list(queued.get("reference_kinds") or []) or list(meta.get("reference_kinds") or [])
-            # 参考图：优先用快照里的新规格（Playground 式来源），否则回退旧的主体槽位
+            # 参考图：优先用快照里的新规格（adhoc 式来源），否则回退旧的主体槽位
             queued_references = [
                 ReferenceSpec.model_validate(spec) for spec in (queued.get("references") or [])
             ]

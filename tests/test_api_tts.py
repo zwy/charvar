@@ -1,4 +1,4 @@
-"""Playground 语音的网页入口：/tts/* 接口（打桩 + 本地目录注入，不发真网）。"""
+"""语音的网页入口：/tts/* 接口（打桩 + 本地目录注入，不发真网）。"""
 from __future__ import annotations
 
 import json

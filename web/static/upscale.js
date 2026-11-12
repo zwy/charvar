@@ -1,4 +1,4 @@
-/* 放大（Playground）页脚本（upscale.js）：
+/* 放大页脚本（upscale.js）：
    SeedVR2（ComfyUI workflow，画质修复，慢）与 FFmpeg（本地插值重编码，快）两条后端，
    都把**短边**放大到目标档位；源短边已达目标时后端原样复制返回（不跑放大）。
    与视频（video.js）同构的 adhoc 家族异步作业：提交 → POST /upscales/generate 返回
@@ -96,7 +96,7 @@ $("#btn-ups-input-clear").addEventListener("click", async () => {
   renderUpsInput();
 });
 
-/* 从最近生成加入：Media.pickRecentVideo 列 Playground 视频成片（只列有片的）。
+/* 从最近生成加入：Media.pickRecentVideo 列 视频成片（只列有片的）。
    选中的是 run 的落盘产物，提交时发 video_run_id，服务端把 id 解析回真实路径。 */
 $("#btn-ups-input-recent").addEventListener("click", () => {
   Media.pickRecentVideo((rec) => {

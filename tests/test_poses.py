@@ -502,7 +502,7 @@ def test_poses_endpoints_serve_catalog_and_images(data_dir, client):
 
 
 def test_adhoc_generate_with_pose_reference(data_dir, client, monkeypatch):
-    """Playground i2i 带 pose 参考：解析到姿势库文件 + 上传 ComfyUI。"""
+    """图片页 i2i 带 pose 参考：解析到姿势库文件 + 上传 ComfyUI。"""
     _build_fake_pose_data(data_dir)
     with storage.connect(pathlib.Path(data_dir) / "test.db") as conn:
         poses_service.import_catalog(conn)

@@ -344,7 +344,7 @@ td .caption { color: var(--muted); }
   .subject-detail { width: 100%; border-radius: 0; }
 }
 /* 表单分段：基本信息 / 锁定项 / 补充 / 供应商参数 / 参考图 …（小标题 + 分隔线）。
-   全站唯一的分组机制 —— 预设页、Playground、视频、主体档案、设置都用它。
+   全站唯一的分组机制 —— 预设页、图片、视频、主体档案、设置都用它。
    标题右侧可放一句状态（如「已选 0 张」）。 */
 .form-section { display: flex; flex-direction: column; gap: var(--sp-2); }
 .form-section + .form-section { margin-top: var(--sp-3); padding-top: var(--sp-3); border-top: 1px solid var(--line); }
@@ -417,12 +417,12 @@ td .caption { color: var(--muted); }
 .modal-body video { display: block; width: 100%; max-height: 62vh; border-radius: var(--radius-panel); background: #000; }
 /* 合成视频弹层：视频 + 「下载 MP4」纵向排列，按钮与视频留出间距 */
 .video-result { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); }
-/* Playground 视频：结果播放器与历史卡片里的内联视频统一宽度 */
+/* 视频：结果播放器与历史卡片里的内联视频统一宽度 */
 #video-result-player { width: 100%; max-width: 560px; background: #000; border-radius: var(--radius-panel, 8px); }
 .video-card video { width: 100%; display: block; }
 .video-card .image-placeholder { min-height: 120px; display: flex; align-items: center; justify-content: center; }
 
-/* Playground 语音：结果播放器与历史卡片里的内联音频统一宽度 */
+/* 语音：结果播放器与历史卡片里的内联音频统一宽度 */
 #tts-result-player { width: 100%; max-width: 560px; }
 .tts-card audio { width: 100%; display: block; }
 .tts-card .image-placeholder { min-height: 60px; display: flex; align-items: center; justify-content: center; }
@@ -595,13 +595,13 @@ td .caption { color: var(--muted); }
 .size-row select { font: inherit; padding: 7px 9px; min-height: var(--ctl-h); border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; width: auto; flex: 1 1 auto; }
 .size-row select:last-child { flex: 0 0 96px; }
 
-/* Playground 页 */
+/* 图片页 */
 .adhoc-result-wrap img { display: block; max-width: min(640px, 100%); height: auto; object-fit: contain; background: #f4f6f9; border: 1px solid var(--line); border-radius: var(--radius-panel); cursor: zoom-in; }
 /* .actions 里的 select 不是 label 的子元素，拿不到 label input 的样式 → 单开一条 */
 .actions select { font: inherit; padding: 6px 9px; min-height: var(--ctl-h); border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; color: var(--text); max-width: 220px; }
 .actions select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
-/* Playground/视频「最近生成」卡：提示词最多 3 行（长提示词不再把卡片撑高），全文
+/* 图片/视频「最近生成」卡：提示词最多 3 行（长提示词不再把卡片撑高），全文
    点「查看提示词」看弹层 */
 #adhoc-recent .image-card p,
 #video-recent .image-card p {
@@ -611,12 +611,12 @@ td .caption { color: var(--muted); }
   overflow: hidden;
 }
 
-/* 「最近生成」分页条（Playground/视频/语音三页共用）：上一页 / 页码 / 下一页。
+/* 「最近生成」分页条（图片/视频/语音三页共用）：上一页 / 页码 / 下一页。
    作为 .card 的直接子元素，间距走 .card > * + * 的规则，不手写 margin。 */
 .pager-row { display: flex; align-items: center; justify-content: center; gap: var(--sp-2); }
 .pager-info { font-size: 12px; color: var(--muted); min-width: 10em; text-align: center; }
 
-/* 两级/两态切换一律 segmented（灰槽白键）：Playground 的后端×模式、生成页「生成模式」、
+/* 两级/两态切换一律 segmented（灰槽白键）：图片页的后端×模式、生成页「生成模式」、
    结果区「图片墙|表格」。多选筛选（画幅比、轮次徽标）才用胶囊 chip。 */
 .adhoc-switch {
   display: flex;
@@ -908,7 +908,7 @@ td .caption { color: var(--muted); }
   .face-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
 }
 
-/* Playground 参考构成槽位（工作流模式）：每种模式一套固定行 ——
+/* 图片页参考构成槽位（工作流模式）：每种模式一套固定行 ——
    左列 210px 标签（imageN 徽章垂直对齐），右列 480px 定宽控件列
    （虚线空态框 / 填态卡 / 正文域全部同宽），不做整卡通栏。 */
 #adhoc-flow-slots { display: flex; flex-direction: column; gap: var(--sp-2); }

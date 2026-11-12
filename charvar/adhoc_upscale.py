@@ -1,4 +1,4 @@
-"""Playground 放大：给一段视频把短边放大到目标档位（SeedVR2 超分 / FFmpeg 插值）。
+"""放大：给一段视频把短边放大到目标档位（SeedVR2 超分 / FFmpeg 插值）。
 
 与出图（``charvar.adhoc``）/ 出视频（``charvar.adhoc_video``）同构：网页与 CLI
 ``charvar upscale`` 是同一套参数语义、同一套落盘、同一份 manifest；不进主体档案、
@@ -75,7 +75,7 @@ class UpscaleRequest(BaseModel):
     """一次视频放大的请求。"""
 
     backend: Backend = "comfyui"
-    input_path: Path  # 放大源视频；web 层由暂存 id / Playground 视频 run_id 解析出路径
+    input_path: Path  # 放大源视频；web 层由暂存 id / 视频 run_id 解析出路径
     input_label: str = ""  # 展示名（最近生成的视频来源显示 run_id）；空 = input_path 文件名
     target: str = "1080p"  # 档位 = 输出短边：720p/1080p/4k
     workflow: str | None = None  # 仅 comfyui；空 = 设置页/兜底 workflow
@@ -112,7 +112,7 @@ class UpscaleResult(BaseModel):
 
 
 def upscale_root() -> Path:
-    """Playground 放大根目录：``<data>/generated/adhoc_upscale/``。"""
+    """放大根目录：``<data>/generated/adhoc_upscale/``。"""
     return paths.data_dir() / "generated" / "adhoc_upscale"
 
 
@@ -255,7 +255,7 @@ def count_recent() -> int:
 
 
 def list_recent(limit: int = 20, offset: int = 0) -> list[dict[str, Any]]:
-    """最近的 Playground 放大记录（读 manifest.json，按时间倒序翻页窗口）。"""
+    """最近的 放大记录（读 manifest.json，按时间倒序翻页窗口）。"""
     root = upscale_root()
     if not root.is_dir():
         return []

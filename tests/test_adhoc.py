@@ -1,4 +1,4 @@
-"""Playground（charvar.adhoc）：ComfyUI / OpenRouter 两条通路（MockTransport，不发真网）。"""
+"""图片页（charvar.adhoc）：ComfyUI / OpenRouter 两条通路（MockTransport，不发真网）。"""
 from __future__ import annotations
 
 import io
@@ -321,7 +321,7 @@ def test_manifest_written(env, monkeypatch):
 
 
 def test_does_not_write_runs_row(env, monkeypatch):
-    """Playground 不落 runs 表（不进生成历史 / 图片墙）。"""
+    """adhoc 不落 runs 表（不进生成历史 / 图片墙）。"""
     _fake_openrouter(monkeypatch)
     with storage.connect() as conn:
         before = conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0]

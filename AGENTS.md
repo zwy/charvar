@@ -33,16 +33,16 @@ styling=锚脸+发型+服装（section 随条目存，锚定分句 `face`/`face_
 参考图 role=`face`；浏览 `/faces` 与「人脸」页签；收藏
 `face_favorites` 用户层重灌不碰；新库/自建进 `FACE_SOURCES`。
 
-## Playground（跨项目调用）
+## 图片页（跨项目调用）
 
 `charvar/adhoc.py` 是「给一段提示词出一张图」的独立通路：不进主体档案 5 槽位、不跑预设批量、不落 runs 表。
 
 - CLI：`charvar image comfyui|openrouter|dreamina|models`（`--prompt`/`--prompt-file`/`--ref`/`--aspect`/`--seed`/`--out`/`--json`；`dreamina` 子命令没有 `--seed`，即梦不暴露）。产物默认落 `data/generated/adhoc/{id}/`（图 + 缩略图 + manifest.json）。
-- **网页入口**：顶栏「Playground」页签（`web/static/adhoc.js`），后端 `/adhoc/*`（`charvar/api.py`）。走的是**同一个** `charvar/adhoc.py` —— 网页与 CLI 是同一套参数语义、同一套落盘、同一份 manifest。改动 `charvar/adhoc.py` 的参数名或输出格式时，CLI、网页、skill 三处都要同步。
-- 网页的参考图只认三种来源：上传暂存（`/adhoc/references`）、主体档案里已就绪的档案图、Playground「最近生成」的原图（spec 带 `run_id`；run_id 过该模块自己的严格正则，文件名由服务端从该 run 的 `original/` 目录按落盘布局定 —— 浏览器永远不给路径）。**不接受任意路径** —— 那是把文件读权限开给了浏览器。
+- **网页入口**：顶栏「图片」页签（`web/static/adhoc.js`），后端 `/adhoc/*`（`charvar/api.py`）。走的是**同一个** `charvar/adhoc.py` —— 网页与 CLI 是同一套参数语义、同一套落盘、同一份 manifest。改动 `charvar/adhoc.py` 的参数名或输出格式时，CLI、网页、skill 三处都要同步。
+- 网页的参考图只认三种来源：上传暂存（`/adhoc/references`）、主体档案里已就绪的档案图、图片页「最近生成」的原图（spec 带 `run_id`；run_id 过该模块自己的严格正则，文件名由服务端从该 run 的 `original/` 目录按落盘布局定 —— 浏览器永远不给路径）。**不接受任意路径** —— 那是把文件读权限开给了浏览器。
 - 它给本项目外的项目/其他 agent 用；外部调用方依赖它的参数名与输出格式，改动要兼容。
 
-### Playground 视频
+### 视频
 
 `charvar/adhoc_video.py` 是「给一段提示词出一段视频」的同构通路，双供应商：OpenRouter
 （`charvar/openrouter_video.py`）与即梦（`charvar/dreamina_video.py`，细则见 `docs/即梦视频.md`）。
@@ -54,7 +54,7 @@ styling=锚脸+发型+服装（section 随条目存，锚定分句 `face`/`face_
 - 首帧图 = 图生视频（主体一致性靠它；**别用 character_sheet，四视图拼图会出多人**——用单人全身正面/front 槽位）；参考图 = `input_references`（≤4）；首帧与参考图同给首帧优先（i2v 页签不并送参考图；即梦该组合提交前拦）。
 - 默认链两边 = 请求显式 > 设置页（DB） > env > 兜底：OpenRouter `OP_VIDEO_MODEL`/heygen-video-1（key 与生图同链路）；即梦 `DREAMINA_VIDEO_MODEL`/`seedance_2.0_fast_vip`（无 key=本机 `dreamina-canvas auth login`；无 seed 不发送；按积分计费；首用合规需网页端先过一次；详见 docs/即梦视频.md）。
 
-### Playground 语音（OpenRouter TTS 通路）
+### 语音（OpenRouter TTS 通路）
 
 `charvar/adhoc_tts.py` 是「给一段文本出一段音频」的同构通路，只接 OpenRouter
 （`charvar/openrouter_tts.py` 客户端）；API 细节与实测话术见 `docs/语音通路.md`。
@@ -102,7 +102,7 @@ styling=锚脸+发型+服装（section 随条目存，锚定分句 `face`/`face_
 
 ## 预设页（生成工作流）
 
-页面按 Playground 的交互排成三步：
+页面按图片页的交互排成三步：
 
 1. **① 生图设置**：主体档案 + 供应商（ComfyUI / OpenRouter / 即梦）+ 该供应商的生图参数（画幅 / 分辨率 / 质量 / 模型版本 / **种子** / 负向 / 等待完成）+ 参考图。
 2. **② 生成提示词**：预设（可叠发型/服饰预设）+ 生成模式（经典模板 / LLM 优化）+ 模板参数（条数 / 采样 / 分隔符 / 背景光照）。
@@ -110,11 +110,11 @@ styling=锚脸+发型+服装（section 随条目存，锚定分句 `face`/`face_
 
 - **不保留文生图 / 图片编辑切换**：有参考图 = 图片编辑（ComfyUI 走图片编辑 workflow / OpenRouter 走 `i2i` 组 / 即梦走 `i2i`），无参考图 = 纯文生图，后端按「有没有参考图」自动分流。
 - **主体档案只有一个选择器（在①）**：提示词主体与参考图主体必须一致（锁定项说红发、参考图是黑发就出戏）。「从主体档案加入」复用①的主体 + 槽位下拉；**换主体时旧主体的档案参考图自动清掉**（`GenRefs.dropSubjectRefs()`，上传暂存 / 最近生成的不受主体约束，保留）。
-- **参考图来源与 Playground 同源**（`ReferenceSpec`）：`staged_id`（上传暂存）/ `subject_id`+`kind`（主体档案槽位）/ `run_id`（+`index`，最近生成原图；`adhoc_*` 取唯一原图，charvar run 按 index 取第 N 张）。**只认 id 不认路径**。
+- **参考图来源与图片页同源**（`ReferenceSpec`）：`staged_id`（上传暂存）/ `subject_id`+`kind`（主体档案槽位）/ `run_id`（+`index`，最近生成原图；`adhoc_*` 取唯一原图，charvar run 按 index 取第 N 张）。**只认 id 不认路径**。
 - **role（分工）**：每张参考图一个 role（`front`/`headshot`/`side`/`behind`/`character_sheet`，缺省 `front`），决定 LLM 锚定句里这张图管哪一摊；主体档案来源自动取槽位 kind 当 role。
 - references 随 `/generate` 存进 run（`GenerateResult.references`），推送生图与单条「重新生成」都按它取图；`regenerate` 优先重放快照里的 references。
 - `reference_kinds` 参数与 CLI 调用路径**仍受支持**（向后兼容），CLI `charvar gen --outfit` 同一套修复生效。
-- OpenRouter 参数档位按 `data/openrouter/api-response.json` 的 `supported_parameters` 动态加载（同 Playground）；即梦模型目录两表放 `web/static/tables.js`（gen.js 与 adhoc.js 共用，别再各写一份）。
+- OpenRouter 参数档位按 `data/openrouter/api-response.json` 的 `supported_parameters` 动态加载（同图片页）；即梦模型目录两表放 `web/static/tables.js`（gen.js 与 adhoc.js 共用，别再各写一份）。
 - **supported parameters 的几条约定**（两边页面一致）：
   - ComfyUI 没有 provider 枚举，档位固定 charvar 的 `1k`/`2k`（2k = Qwen 官方 ~4.2MP 像素）。
   - OpenRouter 的模型**不在面板里选**，跟设置页的 `t2i`/`i2i` 组默认（带参考图 = i2i 组）；分辨率 / 质量取该模型清单的枚举，没有就不显示。
@@ -130,7 +130,7 @@ styling=锚脸+发型+服装（section 随条目存，锚定分句 `face`/`face_
 ## 全站视觉分组与文案
 
 - **分组容器全站唯一** = `.form-section`（flex column + gap sp-2），组标题 `.form-section-title`（右侧可放状态，如「已选 0 张」）；组间用 `margin-top sp-3 + padding-top sp-3 + 1px 分隔线`，**不要**给 `.card` 的直接子元素手写 margin。
-  预设页① 拆三组（主体与种子 / 供应商参数 / 参考图），② 拆两组（预设与外观 / 提示词参数）；Playground = 供应商与参数 / 提示词 / 参考图；视频 = 模式与参数 / 提示词 / 首帧图 / 参考图 / 参考视频；主体档案 = 基本信息 / 锁定项 / 补充；设置页一卡一主题。**别新造 `.gen-group` 这类第二套分组类。**
+  预设页① 拆三组（主体与种子 / 供应商参数 / 参考图），② 拆两组（预设与外观 / 提示词参数）；图片 = 供应商与参数 / 提示词 / 参考图；视频 = 模式与参数 / 提示词 / 首帧图 / 参考图 / 参考视频；主体档案 = 基本信息 / 锁定项 / 补充；设置页一卡一主题。**别新造 `.gen-group` 这类第二套分组类。**
 - **间距只在 4/8/12/16 阶梯内收紧**：`.card` padding `14px 16px`、`.card > * + *` 用 sp-3、`.form-grid` 行距 sp-2、`.settings-grid`（设置页专用）行距 sp-3（列距均 sp-4）；`.segmented .seg` padding `4px 12px`。500px 断点要同步。
 - **灰字只写「控件里看不到的信息」**（枚举/像素/数量/不可逆后果），删掉复述控件、导航说明与实现细节长段落；每块最多一句，宁可删（细则见 design-system.md）。
 - 参考图区统一形态：组标题 + 右侧「已选 N 张」+ `.ref-empty` 虚线空态框（`#gen-ref-count` / `#adhoc-ref-count` / `#video-ref-count`）。
@@ -179,8 +179,8 @@ styling=锚脸+发型+服装（section 随条目存，锚定分句 `face`/`face_
   - 改写管线注入的材料**全是英文**（视角规范句、背景/光照池、参考图锚定句），所以 `zh` 不是"禁止英文"而是"把这些英文材料译写成中文再采用"；`any` 不写语言规定，多数仍出英文（跟随注入材料）。
   - **即梦字数**：英文改写实测 1656–2538 字符，超即梦多数模型 2000 上限（5.x 是 5000）；中文改写实测 527–636 稳过。推即梦时选 `zh`。
   - **带字表情包预设强制英文**（`text_policy=required_label`）：中文文案由程序按 display_text 原文追加，LLM 段出中文会被 sticker 禁字规则判为不合格（补调也救不回来）。此时选「中文」会被忽略并在 run 的 `warnings` 声明——`api.py` 的 warnings 是**合并**不是覆盖。
-- Playground（`charvar/adhoc.py`）的红线：参考图槽位名从 mapping 读（`image`/`image2`/…），不许写死节点 id；ComfyUI 上传的 remote_name 必须带唯一前缀（`upload_image` 发 `overwrite: true`，同名会互相覆盖 → 队列里的旧 prompt 取到新图）；`--out` 指定的文件后缀与内容必须一致（不一致时转格式，别让后缀骗人）；adhoc 不读 `settings.image_sizes`（那是主体档案槽位的尺寸）；不引入随机源（seed 由调用方显式给）。
-- Playground 的 run_id 直接拼进文件路径（`/adhoc/{run_id}/image` 直接 serve 磁盘文件）：`charvar.adhoc.run_dir()` 用自己的正则校验（`^adhoc_[A-Za-z0-9_.-]+$` 且不含 `..`），比 `assets.safe_run_id` 严 —— 后者放行 `..`。**别退回用 safe_run_id**。
+- 图片页（`charvar/adhoc.py`）的红线：参考图槽位名从 mapping 读（`image`/`image2`/…），不许写死节点 id；ComfyUI 上传的 remote_name 必须带唯一前缀（`upload_image` 发 `overwrite: true`，同名会互相覆盖 → 队列里的旧 prompt 取到新图）；`--out` 指定的文件后缀与内容必须一致（不一致时转格式，别让后缀骗人）；adhoc 不读 `settings.image_sizes`（那是主体档案槽位的尺寸）；不引入随机源（seed 由调用方显式给）。
+- 图片页的 run_id 直接拼进文件路径（`/adhoc/{run_id}/image` 直接 serve 磁盘文件）：`charvar.adhoc.run_dir()` 用自己的正则校验（`^adhoc_[A-Za-z0-9_.-]+$` 且不含 `..`），比 `assets.safe_run_id` 严 —— 后者放行 `..`。**别退回用 safe_run_id**。
 - 上传的参考图按**实际图片格式**判后缀（用 PIL 读，不信文件名），落 `data/generated/adhoc/_refs/`；出图成功后自动清掉，失败时保留以便重试。
 - **2K 必须用 Qwen-Image-2.1 官方像素表**（`charvar/exporters/comfyui.py` 的 `_QWEN_2K_SIZES`：1:1=2048×2048、4:3=2400×1792、3:4=1792×2400、3:2=2528×1696、2:3=1696×2528、16:9=2752×1536、9:16=1536×2752）。模型原生是**恒定 ~4.2MP 的 2K**（按面积定义，不是长边）——按长边归一算出的 2K 只有原生面积的 56%（16:9 才 2048×1152），模型被迫上采样 → 图糊。**别退回长边归一**。前端 `web/static/gen.js` 的 `QWEN_2K_SIZES` 是同一张表，改一处要同步另一处，否则预览像素和实际不符。
 - **档位只有 `1k` / `2k`，没有 4K 档**。官方明说远超 2K 训练尺寸会丢提示词遵循度；实测 4096×4096 耗时 75s（2K 只要 10s）且细节崩坏。`settings_service.ImageSize` 有 validator 把存量设置里的 "4k" 降级到 "1k"（别删 —— 存量 DB 里可能还有）。
@@ -246,7 +246,7 @@ DB → 仓库对偶：`charvar subject export <id>` 快照成 `presets/subjects/
 
 ### 生成步与参考视频
 
-两类**生成步**：`adhoc_image`（单图，Playground 通路）与 `video_model`（OpenRouter 视频异步作业）。字段表见 `docs/配方系统.md`：
+两类**生成步**：`adhoc_image`（单图，adhoc 通路）与 `video_model`（OpenRouter 视频异步作业）。字段表见 `docs/配方系统.md`：
 
 - **`video_model` 异步语义**：提交 → 轮询到 ready/failed 或 `wait_s` 超时转 waiting（续查不重复提交）；作业 failed → 步 failed，continue **清掉死作业重新提交**（重新计费）；提交被拒（枚举/key 错）= PresetError → failed，先修配置再 continue。
 - 两类生成步都 **retry 幂等**：产物在就复用，不重复生成。

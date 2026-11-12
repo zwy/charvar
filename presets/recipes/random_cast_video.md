@@ -68,6 +68,6 @@ charvar recipes run random_cast_video --continue # 提交视频作业并轮询�
 
 - 中途某步 failed：修好（配 LLM key / 启动 ComfyUI）后「继续」会**重跑该步**，不会换批。
 - 脚本先行后改 YAML 重建运行：v4 与 v3 步序不同，旧运行 continue 会被拒绝，重建即可
-  （产物在 Playground/视频各页自理）。
+  （产物在 图片/视频各页自理）。
 - `video_model` 提交即 202 作业；`wait_s: 600` 内收片，超时转 waiting 下次继续续查（作业本身不浪费）。
 - 服饰条目换装语义（`subject_policy`）与配件锚由三库组合流内建；纯文本（无图）条目不会进池。

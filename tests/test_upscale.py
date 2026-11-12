@@ -1,4 +1,4 @@
-"""Playground 放大（charvar.adhoc_upscale）：校验/倍数/run_id/暂存池/mapping 一致性 + ffmpeg 冒烟。"""
+"""放大（charvar.adhoc_upscale）：校验/倍数/run_id/暂存池/mapping 一致性 + ffmpeg 冒烟。"""
 from __future__ import annotations
 
 import json
@@ -193,7 +193,7 @@ def test_list_recent_shows_ready_record(env):
     assert rec["target"] == "720p"
 
 
-# ---------- 网页来源：Playground 最近生成视频（video_run_id → 服务端解析路径） ----------
+# ---------- 网页来源：图片页最近生成视频（video_run_id → 服务端解析路径） ----------
 
 
 def test_api_upscale_video_run_id_source(tmp_path, monkeypatch):
@@ -205,7 +205,7 @@ def test_api_upscale_video_run_id_source(tmp_path, monkeypatch):
     app = build_app(static_dir=None, db_path=tmp_path / "test.db")
     client = TestClient(app)
 
-    # 手工造一个 Playground 视频 run（original/ 里放一段真视频，manifest 供查询）
+    # 手工造一个 视频 run（original/ 里放一段真视频，manifest 供查询）
     from charvar import adhoc_video
 
     run_id = "video_20260101-000000_feedface"

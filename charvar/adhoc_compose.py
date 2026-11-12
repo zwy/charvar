@@ -1,4 +1,4 @@
-"""Playground 库组合工作流的提示词拼装（网页 ``POST /adhoc/compose`` 的编排层）。
+"""图片页库组合工作流的提示词拼装（网页 ``POST /adhoc/compose`` 的编排层）。
 
 只做编排与校验：**文案一律来自 ``pose_prompt.build_prompt`` /
 ``build_costume_prompt``** —— 与 CLI ``pose prompt`` / ``costume prompt`` 同源同

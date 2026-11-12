@@ -10,7 +10,7 @@ repeated drafts stay visually consistent.
 - Description: Sticky top bar — wordmark on the left, tab buttons on the right.
 - Extractable props: `activeTab` (string, defaultValue: "gen")
 - Hardcoded: brand text `charvar` + subtitle `角色变体提示词生成器`, all nav item labels
-  (预设 / Playground / 视频 / 配方 / 主体档案 / 历史记录 / 设置), all CSS
+  (预设 / 图片 / 视频 / 配方 / 主体档案 / 历史记录 / 设置), all CSS
 
 ## Card
 - Source: `web/static/style.css` (`.card`, `.card > * + *`, `.card h2`)

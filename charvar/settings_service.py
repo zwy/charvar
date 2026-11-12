@@ -47,7 +47,7 @@ class OpenRouterSettings(BaseModel):
     """OpenRouter 在线生图配置（按模式分两组，对齐 ComfyUI 的 t2i / edit 两个 workflow）。
 
     - ``t2i_*``：文生图（不带参考图）；``i2i_*``：图片编辑 / 参考生图（带参考图）。
-      带不带参考图由调用方决定（主体档案看槽位、批量推送看勾选、Playground 看参考图列表）。
+      带不带参考图由调用方决定（主体档案看槽位、批量推送看勾选、图片页看参考图列表）。
     - model 空串 = 用 env ``OP_IMAGE_T2I_MODEL`` / ``OP_IMAGE_I2I_MODEL``
       （再回退旧的 ``OP_IMAGE_MODEL``，最后 meta/muse-image）
     - resolution / quality 空串 = 用 env ``OP_IMAGE_T2I_RESOLUTION`` 等。
@@ -90,7 +90,7 @@ class DreaminaSettings(BaseModel):
 
 
 class OpenRouterVideoSettings(BaseModel):
-    """OpenRouter 视频生成配置（Playground 视频，``charvar.adhoc_video``）。
+    """OpenRouter 视频生成配置（视频，``charvar.adhoc_video``）。
 
     - model 空串 = 用 env ``OP_VIDEO_MODEL``（再缺省 heygen/heygen-video-1）；
     - API key 与生图同链路（OP_IMAGE_API_KEY / LLM_API_KEY），这里不重复配；
@@ -103,7 +103,7 @@ class OpenRouterVideoSettings(BaseModel):
 
 
 class DreaminaVideoSettings(BaseModel):
-    """即梦（Dreamina）视频生成配置（Playground 视频，``charvar.dreamina_video``）。
+    """即梦（Dreamina）视频生成配置（视频，``charvar.dreamina_video``）。
 
     - model 空串 = 用 env ``DREAMINA_VIDEO_MODEL``（再缺省 seedance_2.0_fast_vip
       —— 用户指定的最低价档；CLI 各子命令自己的默认模型互不相同，charvar 必须
@@ -119,7 +119,7 @@ class DreaminaVideoSettings(BaseModel):
 
 
 class OpenRouterTtsSettings(BaseModel):
-    """OpenRouter 语音合成(TTS)配置(Playground 语音,``charvar.adhoc_tts``)。
+    """OpenRouter 语音合成(TTS)配置(语音,``charvar.adhoc_tts``)。
 
     - model 空串 = 用 env ``OP_TTS_MODEL``(再缺省 heygen/heygen-voice-1-turbo:free);
     - API key 与生图/视频同链路(OP_IMAGE_API_KEY / LLM_API_KEY),这里不重复配;
@@ -132,7 +132,7 @@ class OpenRouterTtsSettings(BaseModel):
 
 
 class UpscaleSettings(BaseModel):
-    """「放大」页（Playground 视频放大）默认偏好：请求显式 > 这里 > 兜底。
+    """「放大」页（视频放大）默认偏好：请求显式 > 这里 > 兜底。
 
     - backend: comfyui(SeedVR2 画质修复) / ffmpeg(快速插值)；
     - target: 输出短边档位 720p/1080p/4k（默认 1080p）；
@@ -325,7 +325,7 @@ def dreamina_config(conn: sqlite3.Connection) -> dict[str, str]:
 
 
 def openrouter_video_config(conn: sqlite3.Connection) -> dict[str, str]:
-    """OpenRouter 视频（Playground 视频）的生效配置：DB > env > 缺省（heygen-video-1）。
+    """OpenRouter 视频（视频）的生效配置：DB > env > 缺省（heygen-video-1）。
 
     - model 走 openrouter_video.resolve_model 的完整链路（DB 值 > OP_VIDEO_MODEL > 默认）；
     - duration / resolution / aspect_ratio 不进配置 —— 枚举随所选模型的目录条目变，
@@ -338,7 +338,7 @@ def openrouter_video_config(conn: sqlite3.Connection) -> dict[str, str]:
 
 
 def dreamina_video_config(conn: sqlite3.Connection) -> dict[str, str]:
-    """即梦视频（Playground 视频）的生效配置：DB > env > 缺省（seedance_2.0_fast_vip）。
+    """即梦视频（视频）的生效配置：DB > env > 缺省（seedance_2.0_fast_vip）。
 
     - model 走 dreamina_video.resolve_model 的完整链路（DB 值 > env > 默认）；
     - resolution / duration / aspect_ratio 不进配置 —— resolution 是即梦必填档

@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>charvar · Playground</title><link rel="stylesheet" href="/static/style.css"><link rel="icon" type="image/svg+xml" href="/static/favicon.svg"><link rel="alternate icon" type="image/png" sizes="1024x1024" href="/static/icon.png"><link rel="apple-touch-icon" href="/static/icon.png"></head><body>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>charvar · 图片</title><link rel="stylesheet" href="/static/style.css"><link rel="icon" type="image/svg+xml" href="/static/favicon.svg"><link rel="alternate icon" type="image/png" sizes="1024x1024" href="/static/icon.png"><link rel="apple-touch-icon" href="/static/icon.png"></head><body>
 <!-- 真多页页面文件：顶栏由 nav.js 渲染；分组容器只用 .form-section（见 .superdesign/design-system.md）。
      脚本清单见文件尾；加新页 = 本文件 + nav.js NAV_PAGES + charvar/api.py 路由表三处同步 -->
 <header class="topbar"></header>
 <main>
-<section id="page-adhoc"><div class="card"><div class="row-head"><h2>Playground</h2><span class="hint">给一段提示词出一张图 · 不入档案、不进历史</span></div>
+<section id="page-adhoc"><div class="card"><div class="row-head"><h2>图片</h2><span class="hint">给一段提示词出一张图 · 不入档案、不进历史</span></div>
 <div class="form-section">
 <div class="form-section-title">生图模式</div>
 <div class="segmented" id="adhoc-flow"><button type="button" class="seg active" data-flow="free">自由生图</button><button type="button" class="seg" data-flow="single">单主体动作</button><button type="button" class="seg" data-flow="pair">双主体动作</button><button type="button" class="seg" data-flow="face">人脸动作</button><button type="button" class="seg" data-flow="costume">换装</button></div>
@@ -52,7 +52,7 @@
 <a id="adhoc-dl-image" class="btn" hidden download>下载原图</a>
 <a id="adhoc-dl-manifest" class="btn" hidden>manifest.json</a>
 </div></div>
-<div class="adhoc-result-wrap"><img id="adhoc-result-image" alt="Playground 结果"></div>
+<div class="adhoc-result-wrap"><img id="adhoc-result-image" alt="图片结果"></div>
 <pre id="adhoc-result-log" class="log"></pre></div>
 <div class="card"><div class="row-head"><h2>最近生成</h2><div class="actions"><button id="btn-adhoc-recent-refresh" class="btn-icon" data-icon="refresh" title="刷新" aria-label="刷新"></button></div></div>
 <div id="adhoc-recent" class="image-grid"></div></div>

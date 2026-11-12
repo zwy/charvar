@@ -423,7 +423,7 @@ td .caption { color: var(--muted); }
 .modal-body video { display: block; width: 100%; max-height: 62vh; border-radius: var(--radius-panel); background: #000; }
 /* 合成视频弹层：视频 + 「下载 MP4」纵向排列，按钮与视频留出间距 */
 .video-result { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); }
-/* Playground 视频：结果播放器与历史卡片里的内联视频统一宽度 */
+/* 视频：结果播放器与历史卡片里的内联视频统一宽度 */
 #video-result-player { width: 100%; max-width: 560px; background: #000; border-radius: var(--radius-panel, 8px); }
 .video-card video { display: block; }
 .video-card .image-placeholder { min-height: 120px; display: flex; align-items: center; justify-content: center; }
@@ -572,13 +572,13 @@ td .caption { color: var(--muted); }
 .size-row { display: flex; gap: 6px; }
 .size-row select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; width: auto; flex: 1; }
 
-/* Playground 页 */
+/* 图片页 */
 .adhoc-result-wrap img { display: block; max-width: min(640px, 100%); height: auto; object-fit: contain; background: #f4f6f9; border: 1px solid var(--line); border-radius: var(--radius-panel); cursor: zoom-in; }
 /* .actions 里的 select 不是 label 的子元素，拿不到 label input 的样式 → 单开一条 */
 .actions select { font: inherit; padding: 6px 9px; min-height: var(--ctl-h); border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; color: var(--text); max-width: 220px; }
 .actions select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
-/* Playground/视频「最近生成」卡：提示词最多 3 行（长提示词不再把卡片撑高），全文
+/* 图片/视频「最近生成」卡：提示词最多 3 行（长提示词不再把卡片撑高），全文
    点「查看提示词」看弹层 */
 #adhoc-recent .image-card p,
 #video-recent .image-card p {
@@ -588,7 +588,7 @@ td .caption { color: var(--muted); }
   overflow: hidden;
 }
 
-/* 两级/两态切换一律 segmented（灰槽白键）：Playground 的后端×模式、生成页「生成模式」、
+/* 两级/两态切换一律 segmented（灰槽白键）：图片页的后端×模式、生成页「生成模式」、
    结果区「图片墙|表格」。多选筛选（画幅比、轮次徽标）才用胶囊 chip。 */
 .adhoc-switch {
   display: flex;

@@ -104,10 +104,10 @@ class VariantSpec(BaseModel):
 class ReferenceSpec(BaseModel):
     """参考图规格：来源 + 在提示词里的分工（role）。
 
-    来源六种（与 Playground 同源）：
+    来源六种（与 图片页同源）：
     - ``staged_id``：上传暂存的图（``/adhoc/references`` 暂存池）；
     - ``subject_id`` + ``kind``：主体档案的图片槽位；
-    - ``run_id``：Playground「最近生成」的原图；
+    - ``run_id``：图片页「最近生成」的原图；
     - ``pose_id`` + ``angle``：姿势库（``source`` 选库，缺省 pose-db-01）的无细节
       灰人偶线稿/深度图 —— 只锚姿势构图，不锚任何身份外观
       （脸/发型/服装/配色来自主体档案或其它参考图）；
@@ -174,7 +174,7 @@ class GenerateRequest(BaseModel):
     # LLM 优化模式（需求 §生成优化）：LLM 结果完全替代 master_template 拼接
     mode: Literal["classic", "llm"] = "classic"
     reference_kinds: list[str] = Field(default_factory=list)  # 1–4 个主体图类型（兼容旧调用）
-    # 参考图（新流程，Playground 式来源）：提示词阶段只用 role 定锚定句分工，
+    # 参考图（新流程，adhoc 式来源）：提示词阶段只用 role 定锚定句分工，
     # 出图阶段按来源解析成本地文件。给了它就不再用 reference_kinds。
     references: list[ReferenceSpec] = Field(default_factory=list)
     llm_instructions: str | None = None

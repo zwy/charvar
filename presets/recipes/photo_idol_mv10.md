@@ -23,7 +23,7 @@ charvar recipes run photo_idol_mv10 --continue  # 提交 10s 成片作业并轮�
 ## 换人 / 复用
 
 - **换用户照片** = 替换 `presets/recipes/assets/user_photo.jpg`，然后重新 `recipes run` 建新运行（每次 run 全链重跑；素材缺失时步 gate 停 waiting）。
-- **已有合格首帧想直接出片**：同 run 内 `--continue` 走 retry 幂等（首帧产物在就复用，不重复出）；或按 Playground 视频页手动提（首帧 + 提示词 B）。
+- **已有合格首帧想直接出片**：同 run 内 `--continue` 走 retry 幂等（首帧产物在就复用，不重复出）；或按 视频页手动提（首帧 + 提示词 B）。
 - 当前 `user_photo.jpg` 是自合成测试人像（模板验证用）；真实用户照片直接同名替换。
 
 ## 模板固定内容（逐字铆在 YAML，改版先改源文档再同步）

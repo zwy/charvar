@@ -889,7 +889,7 @@ def regenerate_reference(
     前提与约束：
     - 只对自建（studio）条目开放 —— 站点图是数据资产（catalog 逐字域），重生成无意义；
     - **必须先有 ref_prompt**（没有制图提示词不能出图 —— 空提示词出的图与服饰语义脱节）；
-    - 走 Playground 同款 adhoc 通路（不落 runs 表，run 里留 manifest）：2k / 3:4，
+    - 走 图片页同款 adhoc 通路（不落 runs 表，run 里留 manifest）：2k / 3:4，
       C8 纯色帧检测照常拦截；
     - 旧三档挪 backup/（换稿不丢），三档回写 DB + 镜像 export 同步。
     """

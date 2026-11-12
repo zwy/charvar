@@ -41,9 +41,9 @@ app = typer.Typer(
 subject_app = typer.Typer(help="主体档案（SQLite 存储）", no_args_is_help=True)
 subject_image_app = typer.Typer(help="主体档案图片（槽位图导入）", no_args_is_help=True)
 presets_app = typer.Typer(help="YAML 预设", no_args_is_help=True)
-image_app = typer.Typer(help="Playground：给一段提示词直接出一张图", no_args_is_help=True)
-video_app = typer.Typer(help="Playground 视频：给一段提示词直接出一段视频（OpenRouter / 即梦，异步作业）", no_args_is_help=True)
-tts_app = typer.Typer(help="Playground 语音：给一段文本直接出一段语音（OpenRouter，同步）", no_args_is_help=True)
+image_app = typer.Typer(help="图片：给一段提示词直接出一张图", no_args_is_help=True)
+video_app = typer.Typer(help="视频：给一段提示词直接出一段视频（OpenRouter / 即梦，异步作业）", no_args_is_help=True)
+tts_app = typer.Typer(help="语音：给一段文本直接出一段语音（OpenRouter，同步）", no_args_is_help=True)
 app.add_typer(subject_app, name="subject")
 subject_app.add_typer(subject_image_app, name="image")
 app.add_typer(presets_app, name="presets")
@@ -51,7 +51,7 @@ recipes_app = typer.Typer(help="视频配方：线性步骤执行器（出图批
 app.add_typer(recipes_app, name="recipes")
 app.add_typer(image_app, name="image")
 app.add_typer(video_app, name="video")
-upscale_app = typer.Typer(help="Playground 放大：把一段视频的短边放大到目标档位（SeedVR2 / FFmpeg）", no_args_is_help=True)
+upscale_app = typer.Typer(help="放大：把一段视频的短边放大到目标档位（SeedVR2 / FFmpeg）", no_args_is_help=True)
 app.add_typer(upscale_app, name="upscale")
 app.add_typer(tts_app, name="tts")
 pose_app = typer.Typer(help="姿势库（pose-db-01 人偶线稿参考图）", no_args_is_help=True)
@@ -1056,7 +1056,7 @@ def recipes_run(
         typer.echo("→ 停在人工检查点：过目/推送成品后执行 charvar recipes run %s --continue" % name)
 
 
-# ---------- image（Playground） ----------
+# ---------- image（图片） ----------
 
 def _read_prompt(prompt: Optional[str], prompt_file: Optional[str]) -> str:
     """``--prompt`` 与 ``--prompt-file`` 二选一；``--prompt-file -`` 读 stdin。"""
@@ -1079,7 +1079,7 @@ def _read_prompt(prompt: Optional[str], prompt_file: Optional[str]) -> str:
 
 
 def _run_adhoc(req, json_out: bool) -> None:
-    """跑一次 Playground 生图并输出结果（--json 时 stdout 只有 JSON）。"""
+    """跑一次生图并输出结果（--json 时 stdout 只有 JSON）。"""
     from charvar import adhoc as adhoc_service
 
     try:
@@ -1238,10 +1238,10 @@ def image_models(
         typer.echo(f"{model['id']}\t{model['name']}")
 
 
-# ---------- video（Playground 视频） ----------
+# ---------- video（视频） ----------
 
 def _run_video(req, json_out: bool, *, timeout_s: float, poll_interval: float) -> None:
-    """跑一次 Playground 视频生成并输出结果（--json 时 stdout 只有 JSON）。"""
+    """跑一次视频生成并输出结果（--json 时 stdout 只有 JSON）。"""
     from charvar import adhoc_video as adhoc_video_service
 
     try:
@@ -1443,7 +1443,7 @@ def video_models(
         typer.echo("")
 
 
-# ---------- upscale(Playground 放大：SeedVR2 / ffmpeg) ----------
+# ---------- upscale(放大：SeedVR2 / ffmpeg) ----------
 
 def _run_upscale(
     req, json_out: bool, *, timeout_s: float, poll_interval: float
@@ -1535,10 +1535,10 @@ def upscale_ffmpeg(
     _run_upscale(req, json_out, timeout_s=0.0, poll_interval=0.0)
 
 
-# ---------- tts（Playground 语音） ----------
+# ---------- tts（语音） ----------
 
 def _run_tts(req, json_out: bool) -> None:
-    """跑一次 Playground 语音合成并输出结果（--json 时 stdout 只有 JSON）。"""
+    """跑一次语音合成并输出结果（--json 时 stdout 只有 JSON）。"""
     from charvar import adhoc_tts as adhoc_tts_service
 
     try:
@@ -1764,7 +1764,7 @@ def pose_prompt_cmd(
     costume: Optional[str] = typer.Option(None, "--costume", help="服饰库条目 id（如 SPR-0001；加 <image3> 服饰参考，双人动作暂不支持；无图条目走文本锚）"),
     face: Optional[str] = typer.Option(None, "--face", help="人脸库条目 id（支持唯一前缀与 source/id 前缀；face/styling 条目即身份锚，与 --subject/--subject2 互斥，双人动作暂不支持）"),
     body_lock_text: list[str] = typer.Option([], "--body-lock", help="体形锚句（英文短句，可多次；仅 --face 生效——有主体档案时走档案 body_lock）"),
-    run: bool = typer.Option(False, "--run", help="拼好的提示词直接出图（Playground 通路）"),
+    run: bool = typer.Option(False, "--run", help="拼好的提示词直接出图（adhoc 通路）"),
     backend: str = typer.Option("comfyui", "--backend", help="comfyui / openrouter / dreamina"),
     aspect: str = typer.Option("", "--aspect", help="画幅：3:4/1:1/16:9/…（缺省 = 动作声明的默认画幅，没有则 3:4）"),
     resolution: str = typer.Option("1k", "--resolution", help="分辨率档：1k/2k（或 OpenRouter 模型枚举）"),
@@ -1960,7 +1960,7 @@ def costume_prompt_cmd(
     subject: Optional[str] = typer.Option(None, "--subject", help="主体档案 id（--run 必填，取 front 槽位图）"),
     face: Optional[str] = typer.Option(None, "--face", help="人脸库条目 id（支持唯一前缀与 source/id 前缀；face/styling 条目即身份锚，与 --subject 互斥）"),
     body_lock_text: list[str] = typer.Option([], "--body-lock", help="体形锚句（英文短句，可多次；仅 --face 生效）"),
-    run: bool = typer.Option(False, "--run", help="拼好的提示词直接出图（Playground 通路）"),
+    run: bool = typer.Option(False, "--run", help="拼好的提示词直接出图（adhoc 通路）"),
     backend: str = typer.Option("comfyui", "--backend", help="comfyui / openrouter / dreamina"),
     aspect: str = typer.Option("3:4", "--aspect", help="画幅：3:4/1:1/16:9/…"),
     resolution: str = typer.Option("1k", "--resolution", help="分辨率档：1k/2k（或 OpenRouter 模型枚举）"),

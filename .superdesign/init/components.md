@@ -100,7 +100,7 @@ Grey track, white active key.
 ## Switch row — `.adhoc-switch`
 
 A wrapping row that holds a segmented control + an inline model-info hint. Used by the
-preset page and the Playground page.
+preset page and the image page.
 
 ```html
 <div class="adhoc-switch">
@@ -325,7 +325,7 @@ Monospace pre block, muted grey fill, scrollable, max 180px tall.
 
 ## Image card — `.image-card`
 
-Thumbnail card used by the image wall, Playground recent list, and video recent list.
+Thumbnail card used by the image wall, adhoc recent list, and video recent list.
 Whole card is clickable (opens the image modal).
 
 ```css

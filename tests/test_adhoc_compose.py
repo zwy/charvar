@@ -1,4 +1,4 @@
-"""Playground 工作流拼装（POST /adhoc/compose）：构成校验 + 提示词同源同结构。
+"""图片页工作流拼装（POST /adhoc/compose）：构成校验 + 提示词同源同结构。
 
 覆盖（待完善清单 B3/B4 网页侧）：
 - 四种工作流模式的 prompt 与 pose_prompt.build_prompt / build_costume_prompt

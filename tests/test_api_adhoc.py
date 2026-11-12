@@ -1,4 +1,4 @@
-"""Playground 的网页入口：/adhoc/* 接口（MockTransport + 打桩，不发真网）。"""
+"""图片页的网页入口：/adhoc/* 接口（MockTransport + 打桩，不发真网）。"""
 from __future__ import annotations
 
 import io
@@ -221,7 +221,7 @@ def test_generate_with_subject_reference(client, monkeypatch):
 
 
 def test_generate_with_recent_run_reference(client, monkeypatch):
-    """从「最近生成」取参考图：run_id 指到 Playground run 的落盘原图，成功后不清理。"""
+    """从「最近生成」取参考图：run_id 指到 图片页 run 的落盘原图，成功后不清理。"""
     uploads: list[str] = []
     _mock_comfy(monkeypatch, uploads, [])
     first = client.post(

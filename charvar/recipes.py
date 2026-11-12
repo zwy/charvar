@@ -3,18 +3,18 @@
 配方 = 一步列表的编排声明（2026-10-24 方案定稿）：
 - ``images``      主体档案 + 预设（可带服装预设笛卡尔积）建 run（classic 模式）；
                   ``push: comfyui`` 时自动提交并等待 + 同步成品（复用 exporter/assets 原语）；
-- ``adhoc_image`` 单图（Playground 通路，charvar.adhoc）：独立提示词出一张图
+- ``adhoc_image`` 单图（adhoc 通路，charvar.adhoc）：独立提示词出一张图
                   （openrouter/comfyui/dreamina），用于配方自带的首帧/参考图；
 - ``overlay``     贴字预设对指定 images 步的成品图贴字（PIL 后处理，落 labeled/，原图不动）；
 - ``video_synth`` 本地 ffmpeg 合成（presets/video/*.yaml），可吃贴字产物（labeled/）；
-- ``video_model`` 视频模型直出（Playground 视频通路，charvar.adhoc_video）：首帧（或尾帧）
+- ``video_model`` 视频模型直出（视频通路，charvar.adhoc_video）：首帧（或尾帧）
                   来自前面出图/贴字/单图步或配方 refs，参考视频/图片来自配方 refs，
                   OpenRouter 异步作业（提交 → 轮询，wait_s 超时转 waiting 可续查）。
 
 随机三库配方（2026-11-03）：``pick`` → ``scene_design`` → ``combo_image`` →
 ``video_script``；pick = 从人脸/动作/服饰库随机选条（casting.py，子种子掷骰）并按
 A（另一库复制）→ B（LLM 起稿）补齐动作描述；scene_design = LLM 设计场景段；
-combo_image = 三库组合流出首帧（build_prompt + Playground 通路，scene 段替换固定
+combo_image = 三库组合流出首帧（build_prompt + adhoc 通路，scene 段替换固定
 背景句）；video_script = LLM 写直出视频脚本；video_model 步新增 ``prompt_from``
 （脚本步的产出当 prompt）与 combo_image 可当帧来源。
 
@@ -182,7 +182,7 @@ class RecipeStep(BaseModel):
     music: str | None = None           # 合成音乐文件名覆盖（缺省 = 视频预设内置）
     use_labeled: bool = True           # 输入 run 有贴字产物时优先用 labeled/
 
-    # ---- adhoc_image 步（单图；Playground 通路） ----
+    # ---- adhoc_image 步（单图；adhoc 通路） ----
     prompt: str | None = None          # 原样使用；唯一的模板机制 = {{服装}} 占位符（配 dress_from）
     # None = 没写 → 运行级参数（GenParams）接手，再落默认 openrouter（运行级 > 步级 > 默认链）
     backend: Literal["comfyui", "openrouter", "dreamina"] | None = None
@@ -681,7 +681,7 @@ def write_state(state: RecipeRunState) -> Path:
 def delete_run(run_id: str) -> None:
     """清理一次配方运行：整个 run 目录（manifest.json 及运行期可能落的其他文件）删掉。
 
-    与生成产物解耦——adhoc 出图/视频步的成品落各自目录（Playground/视频页可见），
+    与生成产物解耦——adhoc 出图/视频步的成品落各自目录（图片/视频页可见），
     不随本删除消失；配方运行只是编排状态。
     """
     run_dir = recipe_run_dir(run_id)
@@ -1145,7 +1145,7 @@ def _resolve_ref_image(conn, recipe: Recipe, label: str, state: "RecipeRunState 
 
 
 def _resolve_ref_video(recipe: Recipe, label: str) -> Path:
-    """``recipe.video_refs`` 的 label → 本地视频路径（配方素材 / Playground 视频作业成片）。"""
+    """``recipe.video_refs`` 的 label → 本地视频路径（配方素材 / 视频作业成片）。"""
     ref = next((r for r in recipe.video_refs if r.label == label), None)
     if ref is None:
         raise PresetError(f"配方 {recipe.name}：video_refs 里没有 label {label!r}")
@@ -1222,7 +1222,7 @@ def _effective_image_params(
     """生图参数缺省链：运行级显式 > 步级显式 > 缺省（backend=openrouter，其余=不发送）。
 
     步字段没写 = 步级显式缺席（backend 现在可为 None）；resolution/quality 的字面值
-    由提交时校验兜底（枚举外自动降级/报错，与 Playground 通路同一套）。
+    由提交时校验兜底（枚举外自动降级/报错，与 adhoc 通路同一套）。
     """
     gen = state.gen
     gi = gen.image if gen else None
@@ -1244,7 +1244,7 @@ def _effective_video_params(state: RecipeRunState, step: RecipeStep) -> tuple[st
 
 
 def _run_adhoc_image_step(conn, recipe: Recipe, state: RecipeRunState, step: RecipeStep, st: StepState) -> dict[str, Any]:
-    """单图步（Playground 通路）：一张独立提示词图，用作首帧/参考图。"""
+    """单图步（adhoc 通路）：一张独立提示词图，用作首帧/参考图。"""
     from charvar import adhoc as adhoc_service
 
     run_id = str(st.outputs.get("image_run_id") or "")
@@ -1540,7 +1540,7 @@ def _safety_text_of(step: RecipeStep) -> str:
 
 
 def _run_combo_image_step(conn, recipe: Recipe, state: RecipeRunState, step: RecipeStep, st: StepState) -> dict[str, Any]:
-    """三库组合出图步：pick 的条目 → build_prompt（scene 段替换固定背景句）→ Playground 通路。
+    """三库组合出图步：pick 的条目 → build_prompt（scene 段替换固定背景句）→ adhoc 通路。
 
     与 CLI ``charvar pose prompt --face --costume --run`` 同语义（pose_prompt 同源
     文案、reference_images 同一压缩线）；描述/服饰要点从 DB 现读（可能已被手改）。

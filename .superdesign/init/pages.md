@@ -55,7 +55,7 @@ Three stacked white cards, then two more that appear after a run:
    - `.media-toolbar`: 同步图片 · segmented(图片墙|表格) · Contact sheet · 贴字… · 合成视频 · status
    - `#result-images` `.image-grid` + `#result-table-wrap` table
 
-## `#tab-adhoc` — Playground
+## `#tab-adhoc` — Image (图片)
 
 Entry: `web/static/index.html` (section `#tab-adhoc`)
 Dependencies:

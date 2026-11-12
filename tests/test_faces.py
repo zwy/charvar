@@ -240,7 +240,7 @@ def test_api_generate_accepts_face_reference(data_dir):
 
 
 def test_api_adhoc_accepts_face_reference(data_dir, monkeypatch):
-    """Playground 通路：face 参考解析成路径进 _prepare_references（不发真网）。"""
+    """adhoc 通路：face 参考解析成路径进 _prepare_references（不发真网）。"""
     _build_fake_face_data(data_dir)
     with storage.connect() as conn:
         faces_service.import_catalog(conn)

@@ -34,7 +34,7 @@ function setGenMode(mode) {
 $("#gen-mode-classic").addEventListener("click", () => setGenMode("classic"));
 $("#gen-mode-llm").addEventListener("click", () => setGenMode("llm"));
 
-/* ---------- ① 生图设置：供应商面板（参考 Playground 页） ---------- */
+/* ---------- ① 生图设置：供应商面板（与图片页同源） ---------- */
 const GEN_ASPECTS = ["auto", "3:4", "1:1", "16:9", "4:3", "9:16", "2:3", "3:2", "21:9"];
 const TIER_TO_SIDE = { "1k": 1024, "2k": 2048 };
 // Qwen-Image-2.1 官方 2K 像素（面积恒定 ~4.2MP）。后端 charvar/exporters/comfyui.py
@@ -265,7 +265,7 @@ function updateGenHints() {
   }
 }
 
-/* workflow 自动选择：带参考图 → 图片编辑 workflow；否则文生图（同 Playground）。 */
+/* workflow 自动选择：带参考图 → 图片编辑 workflow；否则文生图（同图片页）。 */
 function autoWorkload() {
   const s = state.comfySettings || {};
   return GenRefs.count() ? s.comfy_edit_workflow : s.comfy_t2i_workflow;
@@ -478,7 +478,7 @@ $("#btn-generate").addEventListener("click", async () => {
   const sep = $("#gen-separator").value;
   if (sep !== " ") payload.separator = sep;
   payload.mode = state.genMode;
-  // 参考图：Playground 式来源（上传暂存 / 最近生成 / 主体档案槽位）+ 分工标签。
+  // 参考图：adhoc 式来源（上传暂存 / 最近生成 / 主体档案槽位）+ 分工标签。
   // 提示词阶段只用分工定锚定句；出图阶段（第 ③ 步）按来源取文件。
   const references = GenRefs.specs();
   if (references.length) payload.references = references;

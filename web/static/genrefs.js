@@ -1,5 +1,5 @@
 /* 参考图选择器（预设页）：
-   三种来源与 Playground 同源 —— 上传暂存 / 最近生成的成图 / 主体档案槽位；
+   三种来源与 图片页同源 —— 上传暂存 / 最近生成的成图 / 主体档案槽位；
    每张图带一个「分工」标签（role），决定 LLM 改写的锚定句里它管哪一摊
    （全身正面 / 半身 / 侧面 / 背面 / 设定图）。顺序即提示词里的 <image1>、<image2>…。
 
@@ -241,13 +241,13 @@ const GenRefs = (() => {
               grid.appendChild(card);
             }
           }
-          // Playground 产物
+          // 图片页产物
           const adhoc = await api("/adhoc?limit=12").catch(() => []);
           const adhocDone = (adhoc || []).filter((r) => r.has_image);
           if (adhocDone.length) {
             const title = document.createElement("div");
             title.className = "hint";
-            title.textContent = "Playground 产物";
+            title.textContent = "图片页产物";
             grid.appendChild(title);
             for (const rec of adhocDone) {
               const card = document.createElement("div");
@@ -277,8 +277,8 @@ const GenRefs = (() => {
 
   /* ---------- 来源：动作库（线稿/深度图，无细节灰人偶只锚姿势构图） ----------
      与其它来源不同：动作库参考图的 role 固定 pose —— 图里没有角色外观可锚，
-     身份全部来自主体档案或其它参考图。预设页与 Playground 共用此浏览器，
-     onPick 由发起方（add / Playground 的 push）决定落入哪边；
+     身份全部来自主体档案或其它参考图。预设页与图片页共用此浏览器，
+     onPick 由发起方（add / 图片页的 push）决定落入哪边；
      pick.source = 库 id（pose-db-01/02），转成 ReferenceSpec.source。 */
   async function onPickPose() {
     showPoseBrowser((pick) => {
@@ -305,7 +305,7 @@ const GenRefs = (() => {
 
   /* ---------- 来源：人脸库（face-db-01 …，AI 架构虚构人物正面向き图） ----------
      形态 face=只锚脸（默认 role），styling=锚脸+发型+服装 —— role 与 spec 按条目
-     的 section 定。预设页与 Playground 共用 facegallery.js，onPick 由发起方决定
+     的 section 定。预设页与图片页共用 facegallery.js，onPick 由发起方决定
      落入哪边；pick.source = 库 id，转成 ReferenceSpec.source。 */
   async function onPickFace() {
     showFaceBrowser((pick) => {
@@ -341,7 +341,7 @@ const GenRefs = (() => {
      形态对齐动作库弹层（左侧网格选主体 → 右侧详情选图），交互同「选动作 → 选视角」：
      五个槽位按钮（character_sheet/半身/全身正面/侧面/背面）切预览，「加入参考图」确认。
      只有就绪（is_ready）的槽位可选；onPick({subject_id, kind, label, name, url}) 由
-     发起方决定落入哪边 —— 预设页与 Playground（自由生图 + 工作流模式）共用。 */
+     发起方决定落入哪边 —— 预设页与 图片页（自由生图 + 工作流模式）共用。 */
   function showSubjectBrowser(onPick, { title = "主体档案 · 先选主体，再选一张槽位图", currentId = "", currentKind = "" } = {}) {
     Media.showPanelModal(title, (body, close) => {
       body.innerHTML = `<div class="pose-browser"><div class="pose-master"><div class="hint">载入中…</div><div class="pose-grid image-grid"></div></div><div class="pose-detail"></div></div>`;
@@ -577,7 +577,7 @@ const GenRefs = (() => {
     roleLabel,
     ROLES,
     MAX_REFS,
-    // 动作库/人脸库/服饰库/主体档案浏览器（共用）：Playground（adhoc.js / adhocflow.js）也从这里发起，
+    // 动作库/人脸库/服饰库/主体档案浏览器（共用）：图片页（adhoc.js / adhocflow.js）也从这里发起，
     // onPick 由调用方决定加入哪边
     showPoseBrowser,
     showFaceBrowser,

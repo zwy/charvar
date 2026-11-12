@@ -1,4 +1,4 @@
-/* Playground 页（web 面板）：
+/* 图片页（web 面板）：
    一级页签 = 后端（ComfyUI / OpenRouter / 即梦），
    二级页签 = 模式（文生图 t2i / 图片编辑 i2i），显式选择。
    后端语义不变：AdhocRequest 有参考图才走 edit workflow / i2i 组 / image2image，
@@ -459,7 +459,7 @@ $("#btn-adhoc-recent-add").addEventListener("click", () => {
     });
     renderAdhocRefs();
     setStatus($("#adhoc-status"), "已加入参考图");
-  }, { title: "Playground · 从最近生成选择参考图" });
+  }, { title: "图片 · 从最近生成选择参考图" });
 });
 
 /* ---------- 出图 ---------- */
@@ -648,7 +648,7 @@ async function loadAdhocRecent(page = adhocRecentState.page) {
         });
       } else {
         // 全库为空：老文案 + 不出分页条
-        box.innerHTML = `<span class="hint">还没有 Playground 记录</span>`;
+        box.innerHTML = `<span class="hint">还没有图片记录</span>`;
         document.getElementById("adhoc-recent-pager")?.remove();
       }
       return;
@@ -683,7 +683,7 @@ async function loadAdhocRecent(page = adhocRecentState.page) {
         const promptBtn = document.createElement("button");
         promptBtn.textContent = "提示词";
         promptBtn.addEventListener("click", () =>
-          Media.showTextModal("Playground · 提示词", rec.prompt || "", { copyable: true }));
+          Media.showTextModal("图片 · 提示词", rec.prompt || "", { copyable: true }));
         actions.appendChild(promptBtn);
       }
       if (rec.has_image) {

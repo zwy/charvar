@@ -8,7 +8,7 @@ carry `data-tab` and toggle `.active`.
 | data-tab | Section id | Title | Content |
 |---|---|---|---|
 | `gen` | `#tab-gen` | 预设 | ① 生图设置 / ② 生成提示词 / 轮次条 / ③ 生成结果 |
-| `adhoc` | `#tab-adhoc` | Playground | 参数卡（提示词 + 供应商×模式 + 参考图） / 结果卡 / 最近生成卡 |
+| `adhoc` | `#tab-adhoc` | 图片 | 参数卡（提示词 + 供应商×模式 + 参考图） / 结果卡 / 最近生成卡 |
 | `video` | `#tab-video` | 视频 | 参数卡 / 结果卡 / 最近生成卡 |
 | `recipes` | `#tab-recipes` | 配方 | 配方列表 / 配方详情 / 配方运行 |
 | `subjects` | `#tab-subjects` | 主体档案 | 档案列表 / 档案详情表单 / 档案图片槽位 / 模板 |
@@ -51,14 +51,14 @@ push-to-image pipeline. It is the page targeted by the current design task.
 | GET | `/outfit-presets` | Outfit presets |
 | GET | `/comfy/workflows`, `/comfy/status` | Workflow dir / connectivity |
 
-### Playground / video / recipes
+### Image / video / recipes
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/adhoc/generate` | Playground: prompt → one image |
-| GET | `/adhoc?limit=` | Playground recent items |
+| POST | `/adhoc/generate` | Image: prompt → one image |
+| GET | `/adhoc?limit=` | Image recent items |
 | POST | `/adhoc/references`, DELETE `/adhoc/references/{id}` | Staged reference pool (upload) |
 | GET | `/adhoc/reference/{id}` | Serve a staged reference |
-| GET | `/adhoc/{run_id}/image`, `/thumb`, `/manifest` | Playground artifacts |
+| GET | `/adhoc/{run_id}/image`, `/thumb`, `/manifest` | Image artifacts |
 | GET | `/videos/models`, `/videos/generate`, `/videos/{id}/status` | Video jobs |
 | GET/POST | `/recipes`, `/recipes/{name}/run` | Recipe definitions and runs |
 | POST | `/recipe-runs/{id}/continue` | Resume at the next checkpoint |

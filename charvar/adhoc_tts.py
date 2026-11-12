@@ -1,4 +1,4 @@
-"""Playground 语音:给一段文本直接出一行语音(TTS)。
+"""语音:给一段文本直接出一行语音(TTS)。
 
 与出图(``charvar.adhoc``)、出视频(``charvar.adhoc_video``)同构:网页与 CLI
 ``charvar tts`` 是同一套参数语义、同一套落盘、同一份 manifest;不进主体档案
@@ -50,7 +50,7 @@ class AdhocTtsError(ValueError):
 
 
 class TtsRequest(BaseModel):
-    """一次 Playground 语音合成的请求。"""
+    """一次 语音合成的请求。"""
 
     text: str
     backend: Backend = "openrouter"
@@ -73,7 +73,7 @@ class TtsRequest(BaseModel):
 
 
 class TtsResult(BaseModel):
-    """一次 Playground 语音合成的结果。"""
+    """一次 语音合成的结果。"""
 
     run_id: str
     audio_path: str
@@ -94,7 +94,7 @@ class TtsResult(BaseModel):
 
 
 def tts_root() -> Path:
-    """Playground 语音根目录:``<data>/generated/adhoc_tts/``。"""
+    """语音根目录:``<data>/generated/adhoc_tts/``。"""
     return paths.data_dir() / "generated" / "adhoc_tts"
 
 
@@ -151,7 +151,7 @@ def count_recent() -> int:
 
 
 def list_recent(limit: int = 20, offset: int = 0) -> list[dict[str, Any]]:
-    """最近的 Playground 语音记录(读 manifest.json,按时间倒序)。
+    """最近的 语音记录(读 manifest.json,按时间倒序)。
 
     manifest 是唯一留痕(不落 runs 表),所以这里就是扫目录;
     offset 是翻页起点(run_id 自带时间前缀,倒序即时间倒序),只对窗口内的目录读 manifest。
@@ -341,7 +341,7 @@ def _mark(run_dir: Path, manifest: dict[str, Any], **patch: Any) -> dict[str, An
 
 
 def generate(req: TtsRequest, db_path: Path | None = None, *, timeout_s: float | None = None) -> TtsResult:
-    """跑一次 Playground 语音合成,返回结果(含落盘路径与 manifest 路径)。
+    """跑一次 语音合成,返回结果(含落盘路径与 manifest 路径)。
 
     同步一步到终态:调 ``openrouter_tts.generate`` → 落盘 → manifest 收尾,
     失败也留痕(manifest 记下失败原因方便回头查)。

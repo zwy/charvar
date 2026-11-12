@@ -1,4 +1,4 @@
-"""Playground 语音通路单测：run_id 拦截、validate 上限、同步生成落盘、失败留痕、列表。
+"""语音通路单测：run_id 拦截、validate 上限、同步生成落盘、失败留痕、列表。
 
 openrouter_tts 层全打桩（不发自网请求）；模型目录注入本地缓存。
 """

@@ -89,7 +89,7 @@ cat prompt.md | ~/.local/bin/charvar image comfyui --prompt-file - --out out.png
 
 ## 用户想在网页上出图
 
-charvar 的网页顶栏也有「Playground」页签（`http://127.0.0.1:8710`），走的是同一条通路。
+charvar 的网页顶栏也有「图片」页签（`http://127.0.0.1:8710`），走的是同一条通路。
 用户明确说「在网页上出图 / 用 charvar 的网页」时指那个 —— 告诉用户地址即可，别自己用 CLI 顶替。
 
 ## 视频（OpenRouter / 即梦通路）

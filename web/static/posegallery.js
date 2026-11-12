@@ -22,7 +22,7 @@ const PoseGallery = (() => {
     let selectedPose = null;
     let selectedAngle = null;
     let editingAction = false;  /* 动作描述编辑态：textarea + 保存/取消，只对当前条目×视角 */
-    /* lineConstraint（Playground 工作流弹层用；null = 不约束，整页/预设页现状）：
+    /* lineConstraint（图片页工作流弹层用；null = 不约束，整页/预设页现状）：
        "single" = 藏双人页签（单人构图的动作出图）；"pair" = 锁双人页签（双主体动作）。 */
     if (lineConstraint === "pair") filter.line = PAIR_LINE;
 
@@ -442,7 +442,7 @@ const PoseGallery = (() => {
             (requireAction && !actionText
               ? ' disabled title="先在该视角写动作描述（就地编辑保存后再入）"'
               : selectedAngle.text_only && !allowTextOnly
-              ? ' disabled title="无图动作（纯文本）—— 文本锚只接 Playground 工作流 / CLI，预设页走参考图锚定"'
+              ? ' disabled title="无图动作（纯文本）—— 文本锚只接图片页工作流 / CLI，预设页走参考图锚定"'
               : "") +
             ">加入参考图</button>" +
             "</div>"

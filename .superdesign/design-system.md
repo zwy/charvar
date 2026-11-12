@@ -16,7 +16,7 @@ marketing-grade; this is a workbench.
 
 **Key pages / architecture**
 - 预设 (preset page) — the 3-step batch flow: ① 生图设置 → ② 生成提示词 → ③ 生成结果
-- Playground — one prompt → one image, for cross-project use
+- Image (adhoc) — one prompt → one image, for cross-project use
 - 视频 / 配方 — video jobs and recipe pipelines
 - 主体档案 — subject profiles, their image slots, their prompt templates
 - 历史记录 / 设置 — run history and configuration
@@ -76,7 +76,7 @@ Never hand-write a margin on a card's direct child.
 
 **Grouping is one mechanism, app-wide:** `.form-section` (flex column, `--sp-2` gap) with
 `.form-section-title`, separated by a 1px rule + `--sp-3` padding. Every page that has more
-than one cluster of controls uses it — preset page, Playground, video, subject profile.
+than one cluster of controls uses it — preset page, the adhoc image page, video, subject profile.
 A page that is one card per topic (settings, recipes, history) does not need groups.
 Do not introduce a second grouping class.
 

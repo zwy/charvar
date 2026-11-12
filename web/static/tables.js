@@ -1,4 +1,4 @@
-/* 共享表（预设页 / Playground 页 / 视频页都用同一份，改一处要同步另一处）。
+/* 共享表（预设页 / 图片页 / 视频页都用同一份，改一处要同步另一处）。
 
    即梦画布（dreamina-canvas）模型目录：与 charvar/dreamina_canvas.py 的
    _IMAGE_MODELS / _VIDEO_MODELS 手工同源（CLI 1.3.0、2026-11-11 实测）。

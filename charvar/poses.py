@@ -618,7 +618,7 @@ def _locate(pose_id: str, angle: str | None, db_path=None, source: str = SOURCE_
     """(库, pose_id, angle) → (原寸图路径, 缓存键)。
 
     只认 DB 里有记录的组合 —— 文件名永远由服务端从 DB 行定（与主体槽位/
-    Playground run 同一原则：浏览器不给路径）。angle 缺省正面；source 必须给
+    图片页 run 同一原则：浏览器不给路径）。angle 缺省正面；source 必须给
     （同 id 多库共存，depth 库与线稿库靠它分文件）。
     缓存键 = 站点条目 id（取自落盘文件名，纯 ASCII 天然唯一 —— 视角原文是
     CJK，映射成下划线会互相相撞；缓存目录按库分，键不再跨库冲突）。
