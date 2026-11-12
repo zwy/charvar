@@ -6,19 +6,17 @@
 <main>
 <section id="page-video"><div class="card"><div class="row-head"><h2>视频</h2><span class="hint">给一段提示词出一段视频 · OpenRouter 按秒计费 / 即梦按积分计费</span></div>
 <div class="form-section">
-<div class="form-section-title">模式与参数</div>
+<div class="form-section-title">供应商与参数</div>
 <div class="adhoc-switch">
 <div class="segmented" id="video-backend"><button type="button" class="seg active" data-backend="openrouter">OpenRouter</button><button type="button" class="seg" data-backend="dreamina">即梦</button></div>
-</div>
-<div class="adhoc-switch">
-<div class="segmented" id="video-mode"><button type="button" class="seg active" data-mode="t2v">文生视频</button><button type="button" class="seg" data-mode="i2v">图生视频</button></div>
+<div class="segmented seg-sm" id="video-mode"><button type="button" class="seg active" data-mode="t2v">文生视频</button><button type="button" class="seg" data-mode="i2v">图生视频</button></div>
 <span id="video-model-field" class="hint"></span>
 </div>
 <div class="form-grid">
 <label id="video-openrouter-model-field">模型<select id="video-model"></select></label>
 <label id="video-dreamina-model-field" hidden>模型版本<select id="video-dreamina-model"></select></label>
 <label>画幅比例<select id="video-aspect"></select></label>
-<label>分辨率档<select id="video-resolution"></select></label>
+<label>分辨率<select id="video-resolution"></select></label>
 <label>时长<select id="video-duration"></select></label>
 <label id="video-seed-field">种子<input type="number" id="video-seed" placeholder="留空 = 随机；填数值 = 固定复现"></label>
 </div>
