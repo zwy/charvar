@@ -1,18 +1,17 @@
 /* 视频（Playground）页（web 面板）：
    二级页签 = 供应商（OpenRouter / 即梦），一级页签 = 模式（文生视频 t2v /
-   图生视频 i2v = 首帧图生视频），显式选择。
+   图生视频 i2v），显式选择。
    与出图（adhoc.js）同构：同一套暂存参考图四件套、GenRefs 弹层选图（主体档案 /
    动作库 / 人脸库 / 服饰库，见 genrefs.js）、供应商切换（档位切走再切回不重置）。
+   输入区按「供应商 × 选中模型」的能力显隐（videoInputCaps）：
+   - OpenRouter：按目录 supported_frame_images 定首帧/尾帧；参考图（input_references
+     ≤4，图+视频合计）与参考视频任一模型可发（被拒自动降级）；
+   - 即梦：按 DREAMINA_VIDEO_MODELS 的 modes（t2v / m2v / first_last_frame）与
+     m2v_ref（图/视频/合计上限）；
+   - 即梦首帧与参考素材互斥（后端 dispatch_mode 会拦），前端提交前拦。
    关键差异：视频是异步作业 —— 提交即返回 run_id，前端每 8s 轮询
    /videos/{run_id}/status 到 ready/failed；页面载入时找未终态的 run 恢复轮询
-   （跨刷新不断线）。
-   字段显隐：i2v 只显示首帧区，t2v 只显示参考图区；
-   即梦态：seed 收起（即梦不暴露）、无逐条成本预估（按积分计费）。 */
-
-const VIDEO_MODES = {
-  t2v: { refs: true, frame: false },
-  i2v: { refs: false, frame: true },
-};
+   （跨刷新不断线）；即梦态：seed 收起（即梦不暴露）、无逐条成本预估（按积分计费）。 */
 
 const videoState = {
   backend: "openrouter",
@@ -21,6 +20,7 @@ const videoState = {
   references: [],
   videoReferences: [],
   firstFrame: null,
+  lastFrame: null,
   activeRun: null,
   pollTimer: null,
   capsToken: 0,
@@ -58,7 +58,7 @@ function applyVideoCatalog() {
   const def = catalog.default_model || "";
   sel.innerHTML = [`<option value="">跟随默认（${escapeHtml(def || "未配置")}）</option>`]
     .concat(models.map((m) =>
-      `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name || m.id)}</option>`))
+      `<option value="${escapeHtml(m.id)}">${escapeHtml(modelLabel(m.id, m.name))}</option>`))
     .join("");
   sel.value = "";
   applyVideoEnums();
@@ -122,6 +122,7 @@ function applyVideoEnums(restore = false) {
   }
   $("#video-seed-field").hidden = Boolean(entry && entry.seed === false);
   renderVideoModelInfo();
+  applyVideoMode(); // 模型变了 → 能力（首帧/尾帧/参考图资质）可能变
   updateVideoCostHint();
 }
 
@@ -207,6 +208,7 @@ function applyDreaminaVideoEnums(restore = false) {
 
   $("#video-seed-field").hidden = true; // 即梦不暴露 seed
   renderVideoModelInfo();
+  applyVideoMode(); // 模型变了 → 能力（首帧/尾帧/参考图资质）可能变
   updateVideoCostHint();
 }
 
@@ -330,15 +332,95 @@ function updateVideoCostHint() {
 }
 /* ---------- 模式与面板显隐 ---------- */
 
-function applyVideoMode() {
-  const mode = VIDEO_MODES[videoState.mode] || VIDEO_MODES.t2v;
-  $("#video-frame-block").hidden = !mode.frame;
-  $("#video-refs-block").hidden = !mode.refs;
-  const refs = videoState.references;
-  const el = $("#video-ref-count");
-  if (el) {
-    el.textContent = `已选 ${refs.length} 张`;
+/* 供应商 × 选中模型的输入能力：显隐与上限都从它读。
+   OpenRouter 目录未声明 supported_frame_images 时按「支持」处理
+   （后端 build_body 同一语义，被拒走降级）；参考图/参考视频目录里没有
+   独立声明字段 → 可发，被拒降级（与后端一致）。
+   即梦：modes 含 first_last_frame 才有首帧/尾帧；含 m2v 才有参考图/参考视频
+   （m2v_ref 有图/视频分项上限）。 */
+function videoInputCaps() {
+  if (videoState.backend === "dreamina") {
+    const entry = dreaminaModelEntry() || {
+      modes: ["t2v", "m2v", "first_last_frame"],
+      m2v_ref: { total: 12, image: 9, video: 3 },
+    };
+    const modes = entry.modes || [];
+    // tables.js 的表用 m2vRef（camelCase），后端表是 m2v_ref —— 两边同源只差键名风格
+    const caps = entry.m2vRef || entry.m2v_ref || { total: 0, image: 0, video: 0 };
+    const hasM2v = modes.includes("m2v");
+    const hasFrames = modes.includes("first_last_frame");
+    return {
+      firstFrame: hasFrames,
+      lastFrame: hasFrames,
+      refs: hasM2v,
+      videoRefs: hasM2v && (caps.video || 0) > 0,
+      maxImage: hasM2v ? (caps.image || 0) : 0,
+      maxVideo: hasM2v ? (caps.video || 0) : 0,
+      maxTotal: hasM2v ? (caps.total || 0) : 0,
+      exclusive: true, // 即梦首帧与参考素材互斥
+    };
   }
+  const entry = currentVideoModelEntry();
+  const frames = (entry && entry.supported_frame_images) || [];
+  return {
+    firstFrame: true,
+    lastFrame: !entry || frames.length === 0 || frames.includes("last_frame"),
+    refs: true,
+    videoRefs: true,
+    maxImage: 4, maxVideo: 4, maxTotal: 4,
+    exclusive: false, // 官方语义：首帧优先，参考图只作外观参考
+  };
+}
+
+/* 输入区显隐：模式 × 能力。文生视频全部收起；图生视频按所选模型亮
+   （首帧区恒显 —— 两供应商现有目录里所有模型都收首帧；尾帧区在模型支持
+   且首帧已设时亮；参考图/参考视频区按 m2v 资质与目录）。 */
+function applyVideoMode() {
+  const isI2v = videoState.mode === "i2v";
+  const caps = videoInputCaps();
+  $("#video-frame-block").hidden = !isI2v || !caps.firstFrame;
+  $("#video-lastframe-block").hidden = !isI2v || !caps.lastFrame || !videoState.firstFrame;
+  $("#video-refs-block").hidden = !isI2v || !caps.refs;
+  $("#video-vrefs-block").hidden = !isI2v || !caps.videoRefs;
+  updateVideoRefHint();
+  updateVideoVrefHint();
+}
+
+/* 参考图 / 参考视频区的标题计数：数量 + 控件里看不到的上限/互斥（灰字只补信息） */
+function updateVideoRefHint() {
+  const el = $("#video-ref-count");
+  if (!el) return;
+  const n = videoState.references.length;
+  const parts = [`已选 ${n} 张`];
+  const caps = videoInputCaps();
+  if (videoState.mode === "i2v" || caps.refs) {
+    if (videoState.backend === "dreamina" && caps.refs) {
+      if (caps.maxImage < 9) parts.push(`本模型参考图 ≤${caps.maxImage}`);
+      if (videoState.firstFrame) parts.push("已设首帧 —— 即梦互斥，本次不发送（请清掉首帧或清参考图）");
+    } else if (videoState.backend !== "dreamina") {
+      parts.push(`与参考视频合计 ≤${caps.maxTotal}`);
+      if (videoState.firstFrame) parts.push("首帧优先，参考图只作外观参考");
+    }
+  }
+  el.textContent = parts.join(" · ");
+}
+
+function updateVideoVrefHint() {
+  const el = $("#video-vref-count");
+  if (!el) return;
+  const n = videoState.videoReferences.length;
+  const parts = [`已选 ${n} 段`];
+  const caps = videoInputCaps();
+  if (caps.videoRefs) {
+    if (videoState.backend === "dreamina") {
+      if (caps.maxVideo < 10) parts.push(`本模型参考视频 ≤${caps.maxVideo}`);
+      if (videoState.firstFrame) parts.push("已设首帧 —— 即梦互斥，本次不发送");
+    } else {
+      parts.push("与参考图合计 ≤4（仅部分模型接视频参考，被拒自动降级）");
+      if (videoState.firstFrame) parts.push("首帧优先");
+    }
+  }
+  el.textContent = parts.join(" · ");
 }
 
 /* ---------- 首帧 / 参考图列表 ---------- */
@@ -425,6 +507,43 @@ async function removeVideoRef(index) {
   updateVideoCostHint();
 }
 
+/* 首帧/尾帧共用的单图选择（上传/最近生成/主体档案）;尾帧区显隐随 applyVideoMode */
+function videoPickLastFrameRef(ref) {
+  if (videoState.lastFrame) releaseVideoRef(videoState.lastFrame);
+  videoState.lastFrame = ref;
+  renderVideoLastFrame();
+  updateVideoCostHint();
+  setStatus($("#video-status"), "已设为尾帧");
+}
+
+function renderVideoLastFrame() {
+  const box = $("#video-lastframe-list");
+  if (!box) return;
+  box.innerHTML = "";
+  const ref = videoState.lastFrame;
+  if (!ref) {
+    const empty = document.createElement("div");
+    empty.className = "ref-empty";
+    empty.textContent = "未选尾帧";
+    box.appendChild(empty);
+    return;
+  }
+  const el = document.createElement("div");
+  el.className = "ref-pick";
+  el.innerHTML = `${ref.url ? `<img src="${ref.url}" alt="">` : `<span class="ref-thumb-empty"></span>`}
+    <span class="ref-name">${escapeHtml(ref.name || "尾帧")}</span>
+    <span class="badge">#尾帧</span>`;
+  const img = el.querySelector("img");
+  if (img) {
+    img.title = "预览大图";
+    img.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      Media.showImageModal(ref.url, ref.name || "");
+    });
+  }
+  box.appendChild(el);
+}
+
 $("#video-frame-file").addEventListener("change", async (ev) => {
   const file = (ev.target.files || [])[0];
   ev.target.value = "";
@@ -440,9 +559,28 @@ $("#video-frame-file").addEventListener("change", async (ev) => {
       localUrl: true,
     };
     renderVideoFrame();
+    applyVideoMode(); // 首帧就位 → 亮尾帧区（模型支持时）
     updateVideoCostHint();
   } catch (err) {
     setStatus($("#video-status"), `首帧上传失败：${err.message}`, true);
+  }
+});
+
+$("#video-lastframe-file").addEventListener("change", async (ev) => {
+  const file = (ev.target.files || [])[0];
+  ev.target.value = "";
+  if (!file) return;
+  try {
+    const out = await apiUpload("/videos/references", file);
+    videoPickLastFrameRef({
+      type: "staged",
+      id: out.id,
+      name: out.name || file.name,
+      url: URL.createObjectURL(file),
+      localUrl: true,
+    });
+  } catch (err) {
+    setStatus($("#video-status"), `尾帧上传失败：${err.message}`, true);
   }
 });
 
@@ -450,10 +588,7 @@ $("#video-ref-file").addEventListener("change", async (ev) => {
   const files = Array.from(ev.target.files || []);
   ev.target.value = "";
   for (const file of files) {
-    if (videoState.references.length >= 4) {
-      setStatus($("#video-status"), "参考图最多 4 张", true);
-      break;
-    }
+    if (!videoCanAdd("image")) break;
     try {
       const out = await apiUpload("/videos/references", file);
       videoState.references.push({
@@ -480,7 +615,59 @@ $("#btn-video-frame-clear").addEventListener("click", async () => {
   }
   releaseVideoRef(ref);
   videoState.firstFrame = null;
+  // 首帧清掉 → 尾帧一并清（即梦按 [首,尾] 发送，单独尾帧会被拦；区也随即隐藏）
+  if (videoState.lastFrame) {
+    const last = videoState.lastFrame;
+    if (last.type === "staged") {
+      try {
+        await api(`/videos/references/${encodeURIComponent(last.id)}`, { method: "DELETE" });
+      } catch { /* 已清理 */ }
+    }
+    releaseVideoRef(last);
+    videoState.lastFrame = null;
+    renderVideoLastFrame();
+  }
   renderVideoFrame();
+  applyVideoMode();
+  updateVideoRefHint();
+  updateVideoVrefHint();
+  updateVideoCostHint();
+});
+
+/* 尾帧：从最近生成 / 主体档案弹层加入（与首帧同一套来源语义） */
+$("#btn-video-lastframe-recent").addEventListener("click", () => {
+  Media.pickRecentImage((rec) => {
+    videoPickLastFrameRef({
+      type: "recent",
+      run_id: rec.run_id,
+      name: (rec.prompt || "").slice(0, 40) || rec.run_id,
+      url: `/adhoc/${encodeURIComponent(rec.run_id)}/thumb`,
+    });
+  }, { title: "视频 · 从最近生成选择尾帧图" });
+});
+
+$("#btn-video-lastframe-subject").addEventListener("click", () => {
+  GenRefs.showSubjectBrowser((pick) => {
+    videoPickLastFrameRef({
+      type: "subject",
+      subject_id: pick.subject_id,
+      kind: pick.kind,
+      name: pick.name || `${pick.subject_id} / ${pick.label || pick.kind}`,
+      url: pick.url,
+    });
+  });
+});
+
+$("#btn-video-lastframe-clear").addEventListener("click", async () => {
+  const ref = videoState.lastFrame;
+  if (ref && ref.type === "staged") {
+    try {
+      await api(`/videos/references/${encodeURIComponent(ref.id)}`, { method: "DELETE" });
+    } catch { /* 已清理 */ }
+  }
+  releaseVideoRef(ref);
+  videoState.lastFrame = null;
+  renderVideoLastFrame();
   updateVideoCostHint();
 });
 
@@ -544,16 +731,14 @@ function renderVideoVrefs() {
     el.appendChild(del);
     box.appendChild(el);
   });
+  updateVideoVrefHint();
 }
 
 $("#video-vref-file").addEventListener("change", async (ev) => {
   const files = Array.from(ev.target.files || []);
   ev.target.value = "";
   for (const file of files) {
-    if (videoState.videoReferences.length >= 2) {
-      setStatus($("#video-status"), "参考视频最多 2 条", true);
-      break;
-    }
+    if (!videoCanAdd("video")) break;
     try {
       const out = await apiUpload("/videos/video-references", file);
       videoState.videoReferences.push({ type: "staged", id: out.id, name: out.name || file.name });
@@ -586,6 +771,9 @@ function videoPickFrameRef(ref) {
   if (videoState.firstFrame) releaseVideoRef(videoState.firstFrame);
   videoState.firstFrame = ref;
   renderVideoFrame();
+  applyVideoMode(); // 首帧就位 → 亮尾帧区
+  updateVideoRefHint();
+  updateVideoVrefHint();
   updateVideoCostHint();
   setStatus($("#video-status"), "已设为首帧");
 }
@@ -602,9 +790,21 @@ function videoAddRef(ref) {
   return true;
 }
 
-function videoRefAddGuard() {
-  if (videoState.references.length >= 4) {
-    setStatus($("#video-status"), "参考图最多 4 张", true);
+/* 按模型上限拦新增（图、视频分别查分项与合计）；OR 合计 4 张（input_references） */
+function videoCanAdd(kind, delta = 1) {
+  const caps = videoInputCaps();
+  const label = kind === "image" ? "参考图" : "参考视频";
+  if (kind === "image" && videoState.references.length + delta > caps.maxImage) {
+    setStatus($("#video-status"), `${label}最多 ${caps.maxImage} 张（当前模型上限）`, true);
+    return false;
+  }
+  if (kind === "video" && videoState.videoReferences.length + delta > caps.maxVideo) {
+    setStatus($("#video-status"), `${label}最多 ${caps.maxVideo} 段（当前模型上限）`, true);
+    return false;
+  }
+  const total = videoState.references.length + videoState.videoReferences.length + delta;
+  if (total > caps.maxTotal) {
+    setStatus($("#video-status"), `参考图 + 参考视频合计最多 ${caps.maxTotal}（当前模型上限）`, true);
     return false;
   }
   return true;
@@ -623,7 +823,7 @@ $("#btn-video-frame-subject").addEventListener("click", () => {
 });
 
 $("#btn-video-ref-subject").addEventListener("click", () => {
-  if (!videoRefAddGuard()) return;
+  if (!videoCanAdd("image")) return;
   GenRefs.showSubjectBrowser((pick) => {
     videoAddRef({
       type: "subject",
@@ -637,7 +837,7 @@ $("#btn-video-ref-subject").addEventListener("click", () => {
 
 /* 动作库（线稿/深度 · 只锚姿势构图）：pick.source = 库 id，转成 ref.pose_source */
 $("#btn-video-ref-pose").addEventListener("click", () => {
-  if (!videoRefAddGuard()) return;
+  if (!videoCanAdd("image")) return;
   GenRefs.showPoseBrowser((pick) => {
     videoAddRef({
       type: "pose",
@@ -652,7 +852,7 @@ $("#btn-video-ref-pose").addEventListener("click", () => {
 
 /* 人脸库（AI 架构虚构人物 · 锚脸部身份） */
 $("#btn-video-ref-face").addEventListener("click", () => {
-  if (!videoRefAddGuard()) return;
+  if (!videoCanAdd("image")) return;
   GenRefs.showFaceBrowser((pick) => {
     videoAddRef({
       type: "face",
@@ -666,7 +866,7 @@ $("#btn-video-ref-face").addEventListener("click", () => {
 
 /* 服饰库（只锚服装与整套配件；requireImage = 纯文本条目禁选 —— 参考图必须真有图可发） */
 $("#btn-video-ref-costume").addEventListener("click", () => {
-  if (!videoRefAddGuard()) return;
+  if (!videoCanAdd("image")) return;
   GenRefs.showCostumeBrowser((pick) => {
     videoAddRef({
       type: "costume",
@@ -696,9 +896,7 @@ $("#btn-video-frame-recent").addEventListener("click", () => {
 });
 
 $("#btn-video-ref-recent").addEventListener("click", () => {
-  if (videoState.references.length >= 4) {
-    return setStatus($("#video-status"), "参考图最多 4 张", true);
-  }
+  if (!videoCanAdd("image")) return;
   Media.pickRecentImage((rec) => {
     videoState.references.push({
       type: "recent",
@@ -717,9 +915,21 @@ $("#btn-video-ref-recent").addEventListener("click", () => {
 $("#btn-video-generate").addEventListener("click", async () => {
   const prompt = $("#video-prompt").value.trim();
   if (!prompt) return setStatus($("#video-status"), "提示词为空", true);
-  const mode = VIDEO_MODES[videoState.mode];
-  if (videoState.mode === "i2v" && !videoState.firstFrame) {
-    return setStatus($("#video-status"), "图生视频需要 1 张首帧图：上传、从最近生成选，或从主体档案选就绪的图", true);
+  const isI2v = videoState.mode === "i2v";
+  if (isI2v) {
+    // 图生视频：至少要有一路输入素材（首帧 / 参考图 / 参考视频）
+    if (!videoState.firstFrame && !videoState.references.length && !videoState.videoReferences.length) {
+      return setStatus($("#video-status"), "图生视频需要至少一路输入：首帧图、参考图或参考视频（上方任一区加入）", true);
+    }
+    // 即梦互斥：首帧与参考素材同给会被后端拦，前端先拦并给出明确指引
+    if (videoState.backend === "dreamina" && videoState.firstFrame &&
+        (videoState.references.length || videoState.videoReferences.length)) {
+      return setStatus($("#video-status"), "即梦首帧与参考图/参考视频互斥：清掉首帧走全能参考，或清掉参考素材走首帧生视频", true);
+    }
+    // 即梦单独尾帧不收（按 首帧→尾帧 发送）
+    if (videoState.backend === "dreamina" && videoState.lastFrame && !videoState.firstFrame) {
+      return setStatus($("#video-status"), "即梦尾帧必须与首帧成对（先设首帧）", true);
+    }
   }
   // 种子留空 = 随机 0–100000（与生成页/Playground 同一约定，随机源在调用方这一侧）
   const seedRaw = $("#video-seed").value.trim();
@@ -731,10 +941,9 @@ $("#btn-video-generate").addEventListener("click", async () => {
     duration: $("#video-duration").value ? Number($("#video-duration").value) : null,
     resolution: $("#video-resolution").value || null,
     seed,
-    // 图生视频发首帧不发参考图；文生视频只发参考图
     // spec 映射与 Playground（adhoc.js）同一套：pose/face/costume 带 role 与库 id，
-    // 视频通路后端只解析文件路径（role 被忽略）
-    references: videoState.mode === "t2v"
+    // 视频通路后端只解析文件路径（role 被忽略）。t2v 不发任何素材。
+    references: isI2v
       ? videoState.references.map((ref) =>
           ref.type === "staged"
             ? { staged_id: ref.id }
@@ -761,7 +970,9 @@ $("#btn-video-generate").addEventListener("click", async () => {
               }
             : { subject_id: ref.subject_id, kind: ref.kind })
       : [],
-    video_references: videoState.videoReferences.map((ref) => ({ staged_id: ref.id })),
+    video_references: videoState.mode === "i2v"
+      ? videoState.videoReferences.map((ref) => ({ staged_id: ref.id }))
+      : [],
     // 首帧区 UI 只出 staged/recent/subject 三种来源（四库只进参考图区）；
     // 后端 /videos 的 spec 解析对首帧同样支持六种来源，改 UI 时这里同步
     first_frame: videoState.mode === "i2v" && videoState.firstFrame
@@ -770,6 +981,14 @@ $("#btn-video-generate").addEventListener("click", async () => {
           : videoState.firstFrame.type === "recent"
           ? { run_id: videoState.firstFrame.run_id }
           : { subject_id: videoState.firstFrame.subject_id, kind: videoState.firstFrame.kind })
+      : null,
+    // 尾帧：模型支持 + 首帧已设才可见，同来源子集
+    last_frame: videoState.mode === "i2v" && videoState.lastFrame && videoState.firstFrame
+      ? (videoState.lastFrame.type === "staged"
+          ? { staged_id: videoState.lastFrame.id }
+          : videoState.lastFrame.type === "recent"
+          ? { run_id: videoState.lastFrame.run_id }
+          : { subject_id: videoState.lastFrame.subject_id, kind: videoState.lastFrame.kind })
       : null,
   };
   const model = videoState.backend === "dreamina"
@@ -856,8 +1075,10 @@ function dropVideoRefsSent() {
   videoState.references = [];
   videoState.videoReferences = [];
   videoState.firstFrame = null;
+  videoState.lastFrame = null;
   freed.forEach(releaseVideoRef);
   renderVideoFrame();
+  renderVideoLastFrame();
   renderVideoVrefs();
   applyVideoMode();
 }
@@ -1177,6 +1398,7 @@ async function applyBackendPanel() {
 
 function initVideo() {
   renderVideoFrame();
+  renderVideoLastFrame();
   renderVideoRefs();
   renderVideoVrefs();
   applyVideoMode();

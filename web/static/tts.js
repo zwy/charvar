@@ -45,7 +45,7 @@ function applyTtsCatalog() {
   const def = catalog.default_model || "";
   sel.innerHTML = [`<option value="">跟随默认（${escapeHtml(def || "未配置")}）</option>`]
     .concat(models.map((m) =>
-      `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name || m.id)}</option>`))
+      `<option value="${escapeHtml(m.id)}">${escapeHtml(modelLabel(m.id, m.name))}</option>`))
     .join("");
   sel.value = "";
   applyTtsEnums();

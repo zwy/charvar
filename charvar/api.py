@@ -444,7 +444,8 @@ class VideoGenerateRequest(BaseModel):
     参考视频 = OpenRouter input_references 的 video_url（Seedance gen2+ 才接）/
     即梦 multimodal2video 的 --video（≤2 条，只认上传暂存）。
     OpenRouter 侧首帧与参考图同给时首帧优先（官方语义）；即梦侧该组合**提交前
-    直接拦**（图生视频只收 1 张首帧）。
+    直接拦**（首帧与全能参考互斥）。last_frame 尾帧图：模型声明支持才发
+    （OpenRouter 按 supported_frame_images；即梦必须与首帧成对，单独尾帧被拦）。
     """
 
     prompt: str
@@ -455,6 +456,7 @@ class VideoGenerateRequest(BaseModel):
     aspect_ratio: str = "9:16"
     seed: int = 0
     first_frame: AdhocReferenceSpec | None = None
+    last_frame: AdhocReferenceSpec | None = None
     references: list[AdhocReferenceSpec] = Field(default_factory=list)
     video_references: list[StagedVideoRefSpec] = Field(default_factory=list)
 
@@ -2257,6 +2259,8 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             )
         with _db() as conn:
             default_model = settings_service.openrouter_video_config(conn)["model"]
+        # 目录顺序多 provider 混排，下拉展示统一按 id 排序（缓存 JSON 保持上游原样）
+        models.sort(key=lambda m: (m["id"].lower(), m["name"].lower()))
         return {"data": models, "default_model": default_model}
 
     @app.post("/videos/references")
@@ -2324,6 +2328,9 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         first_frames, first_staged = (
             _video_reference_spec_paths([req.first_frame]) if req.first_frame else ([], [])
         )
+        last_frames, last_staged = (
+            _video_reference_spec_paths([req.last_frame]) if req.last_frame else ([], [])
+        )
         video_ref_paths: list[Path] = []
         video_staged_ids: list[str] = []
         for spec in req.video_references:
@@ -2341,10 +2348,11 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             aspect_ratio=req.aspect_ratio,
             seed=req.seed,
             first_frame=first_frames[0] if first_frames else None,
+            last_frame=last_frames[0] if last_frames else None,
             reference_paths=reference_paths,
             reference_video_paths=video_ref_paths,
             wait=False,
-            staged_ref_ids=staged_ids + first_staged,
+            staged_ref_ids=staged_ids + first_staged + last_staged,
             staged_video_ref_ids=video_staged_ids,
         )
         try:
@@ -2607,6 +2615,8 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             )
         with _db() as conn:
             default_model = settings_service.openrouter_tts_config(conn)["model"]
+        # 目录顺序多 provider 混排，下拉展示统一按 id 排序（缓存 JSON 保持上游原样）
+        models.sort(key=lambda m: (m["id"].lower(), m["name"].lower()))
         return {"data": models, "default_model": default_model}
 
     @app.post("/tts/generate")

@@ -95,7 +95,7 @@ async function rpApplyImagePanel() {
     return;
   }
   // openrouter：模型下拉 + 具体模型的能力枚举（caps 拉取异步，先填当前值兜底）
-  const items = [["", "跟随设置默认"]].concat(rpGenPanel.orImageModels.map((m) => [m.id, m.name]));
+  const items = [["", "跟随设置默认"]].concat(rpGenPanel.orImageModels.map((m) => [m.id, modelLabel(m.id, m.name)]));
   group.openrouter.model = rpFillSelect("#rp-image-model", items, group.openrouter.model);
   if (group.openrouter.model) rpLoadImageCaps(group.openrouter.model);
   else rpApplyImageCaps(null);
@@ -149,7 +149,7 @@ function rpApplyVideoPanel() {
     group.dreamina.resolution = rpFillSelect("#rp-video-resolution", resItems, group.dreamina.resolution);
     $("#rp-video-resolution-field").hidden = resItems.length === 1;
   } else {
-    const items = [["", "跟随设置默认"]].concat(rpGenPanel.orVideoModels.map((m) => [m.id, m.name]));
+    const items = [["", "跟随设置默认"]].concat(rpGenPanel.orVideoModels.map((m) => [m.id, modelLabel(m.id, m.name)]));
     group.openrouter.model = rpFillSelect("#rp-video-model", items, group.openrouter.model);
     const entry = rpGenPanel.orVideoModels.find((m) => m.id === group.openrouter.model);
     const resItems = [["", "跟随默认"]].concat(((entry && entry.supported_resolutions) || []).map((v) => [v, v]));

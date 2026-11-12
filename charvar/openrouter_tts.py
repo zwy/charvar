@@ -256,6 +256,8 @@ def model_choices() -> list[dict[str, str]]:
         if not model_id:
             continue
         out.append({"id": model_id, "name": str(item.get("name") or model_id)})
+    # 目录顺序多 provider 混排,下拉/CLI 展示统一按 id 排序
+    out.sort(key=lambda m: (m["id"].lower(), m["name"].lower()))
     return out
 
 

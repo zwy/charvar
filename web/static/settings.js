@@ -13,7 +13,7 @@ const OR_CAPS_BY_MODE = { t2i: null, i2i: null };
 function orModelOptionsHtml() {
   const parts = [`<option value="">（跟随 env 默认）</option>`];
   for (const m of OR_MODEL_OPTIONS) {
-    parts.push(`<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`);
+    parts.push(`<option value="${escapeHtml(m.id)}">${escapeHtml(modelLabel(m.id, m.name))}</option>`);
   }
   return parts.join("");
 }
@@ -129,7 +129,7 @@ async function loadSettings() {
     $("#set-or-t2i-model").innerHTML = optionsHtml;
     $("#set-or-i2i-model").innerHTML = optionsHtml;
     const list = $("#or-model-options");
-    list.innerHTML = OR_MODEL_OPTIONS.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`).join("");
+    list.innerHTML = OR_MODEL_OPTIONS.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(modelLabel(m.id, m.name))}</option>`).join("");
     await refreshOpenRouterSettingFields(settings);
     $("#set-or-base").value = or.base_url || "";
     $("#set-or-key").value = "";
@@ -144,7 +144,7 @@ async function loadSettings() {
     const vSel = $("#set-or-video-model");
     const defaultVideoModel = (videoCatalog && videoCatalog.default_model) || "";
     const vOptions = [`<option value="">跟随默认（${escapeHtml(defaultVideoModel || "OP_VIDEO_MODEL / heygen/heygen-video-1")}）</option>`]
-      .concat(videoModels.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name || m.id)}</option>`));
+      .concat(videoModels.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(modelLabel(m.id, m.name))}</option>`));
     if (orv.model && !videoModels.some((m) => m.id === orv.model)) {
       vOptions.push(`<option value="${escapeHtml(orv.model)}">${escapeHtml(orv.model)}（不在当前清单里）</option>`);
     }
@@ -160,7 +160,7 @@ async function loadSettings() {
     const tSel = $("#set-or-tts-model");
     const defaultTtsModel = (ttsCatalog && ttsCatalog.default_model) || "";
     const tOptions = [`<option value="">跟随默认（${escapeHtml(defaultTtsModel || "OP_TTS_MODEL / heygen-voice-1-turbo:free")}）</option>`]
-      .concat(ttsModels.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name || m.id)}</option>`));
+      .concat(ttsModels.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(modelLabel(m.id, m.name))}</option>`));
     if (ort.model && !ttsModels.some((m) => m.id === ort.model)) {
       tOptions.push(`<option value="${escapeHtml(ort.model)}">${escapeHtml(ort.model)}（不在当前清单里）</option>`);
     }

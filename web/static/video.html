@@ -11,7 +11,7 @@
 <div class="segmented" id="video-backend"><button type="button" class="seg active" data-backend="openrouter">OpenRouter</button><button type="button" class="seg" data-backend="dreamina">即梦</button></div>
 </div>
 <div class="adhoc-switch">
-<div class="segmented" id="video-mode"><button type="button" class="seg active" data-mode="t2v">文生视频</button><button type="button" class="seg" data-mode="i2v">图生视频（首帧）</button></div>
+<div class="segmented" id="video-mode"><button type="button" class="seg active" data-mode="t2v">文生视频</button><button type="button" class="seg" data-mode="i2v">图生视频</button></div>
 <span id="video-model-field" class="hint"></span>
 </div>
 <div class="form-grid">
@@ -38,6 +38,17 @@
 <button id="btn-video-frame-clear" type="button">移除首帧</button>
 </div>
 </div>
+<div class="form-section" id="video-lastframe-block" hidden>
+<div class="form-section-title">尾帧图</div>
+<span class="hint">收尾画面（首帧→尾帧插值）；需先设首帧 —— 清掉首帧时尾帧一并清除</span>
+<div id="video-lastframe-list" class="ref-grid"></div>
+<div class="actions">
+<label class="btn file-btn">上传尾帧<input type="file" id="video-lastframe-file" accept="image/*" hidden></label>
+<button id="btn-video-lastframe-recent" type="button">从最近生成加入</button>
+<button id="btn-video-lastframe-subject" type="button">从主体档案加入</button>
+<button id="btn-video-lastframe-clear" type="button">移除尾帧</button>
+</div>
+</div>
 <div class="form-section" id="video-refs-block">
 <div class="form-section-title"><span>参考图</span><span id="video-ref-count" class="hint"></span></div>
 <div id="video-ref-list" class="ref-grid"></div>
@@ -52,7 +63,7 @@
 </div>
 </div>
 <div class="form-section" id="video-vrefs-block">
-<div class="form-section-title">参考视频</div>
+<div class="form-section-title"><span>参考视频</span><span id="video-vref-count" class="hint"></span></div>
 <span class="hint">≤2 条 · mp4/mov/webm ≤48MB · OpenRouter 仅 Seedance gen2+ 接 video_url；即梦走全能参考</span>
 <div id="video-vref-list" class="ref-grid"></div>
 <div class="actions">

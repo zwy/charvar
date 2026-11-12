@@ -104,6 +104,14 @@ function escapeHtml(text) {
   }[c]));
 }
 
+/* 模型下拉条目文案：id 优先（排序与选型都按 id），name 只在跟 id 不同时附带展示
+   （gen.js/video.js/tts.js/recipes_genparams.js 共用）。调用方负责对返回值 escapeHtml。 */
+function modelLabel(id, name) {
+  const sid = String(id ?? "").trim();
+  const sname = String(name ?? "").trim();
+  return !sid || sname === sid ? (sid || sname || "") : `${sid} · ${sname}`;
+}
+
 /* 库浏览页共享的搜索命中（posegallery/costumegallery/facegallery 三处同一语义）：
    q 按空白切 token、全部 AND 子串命中 hay（大小写不敏感）。glossary 可选
    （日文词 → 英文关键词的映射，costume 库用）：token 未能直中时按词表扩写再试
