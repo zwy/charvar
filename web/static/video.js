@@ -379,7 +379,9 @@ function applyVideoMode() {
   const isI2v = videoState.mode === "i2v";
   const caps = videoInputCaps();
   $("#video-frame-block").hidden = !isI2v || !caps.firstFrame;
-  $("#video-lastframe-block").hidden = !isI2v || !caps.lastFrame || !videoState.firstFrame;
+  // 模型支持尾帧就在图生视频下常显 —— 未设首帧时区内提示「先设首帧」，选择器挡住
+  // （之前藏在「首帧已设」后面，切到支持尾帧的模型也看不到，用户以为没做）
+  $("#video-lastframe-block").hidden = !isI2v || !caps.lastFrame;
   $("#video-refs-block").hidden = !isI2v || !caps.refs;
   $("#video-vrefs-block").hidden = !isI2v || !caps.videoRefs;
   updateVideoRefHint();
@@ -524,7 +526,7 @@ function renderVideoLastFrame() {
   if (!ref) {
     const empty = document.createElement("div");
     empty.className = "ref-empty";
-    empty.textContent = "未选尾帧";
+    empty.textContent = videoState.firstFrame ? "未选尾帧" : "先在「首帧图」区设一张首帧，再选尾帧";
     box.appendChild(empty);
     return;
   }
@@ -559,14 +561,18 @@ $("#video-frame-file").addEventListener("change", async (ev) => {
       localUrl: true,
     };
     renderVideoFrame();
+    renderVideoLastFrame(); // 空态文案随首帧切换（「先设首帧」→「未选尾帧」）
     applyVideoMode(); // 首帧就位 → 亮尾帧区（模型支持时）
-    updateVideoCostHint();
   } catch (err) {
     setStatus($("#video-status"), `首帧上传失败：${err.message}`, true);
   }
 });
 
 $("#video-lastframe-file").addEventListener("change", async (ev) => {
+  if (!videoState.firstFrame) {
+    setStatus($("#video-status"), "先在「首帧图」区设一张首帧，再选尾帧", true);
+    return;
+  }
   const file = (ev.target.files || [])[0];
   ev.target.value = "";
   if (!file) return;
@@ -634,8 +640,15 @@ $("#btn-video-frame-clear").addEventListener("click", async () => {
   updateVideoCostHint();
 });
 
-/* 尾帧：从最近生成 / 主体档案弹层加入（与首帧同一套来源语义） */
+/* 尾帧：从最近生成 / 主体档案弹层加入（与首帧同一套来源语义）；未设首帧先挡住 */
+function lastFrameReady() {
+  if (videoState.firstFrame) return true;
+  setStatus($("#video-status"), "先在「首帧图」区设一张首帧，再选尾帧", true);
+  return false;
+}
+
 $("#btn-video-lastframe-recent").addEventListener("click", () => {
+  if (!lastFrameReady()) return;
   Media.pickRecentImage((rec) => {
     videoPickLastFrameRef({
       type: "recent",
@@ -647,6 +660,7 @@ $("#btn-video-lastframe-recent").addEventListener("click", () => {
 });
 
 $("#btn-video-lastframe-subject").addEventListener("click", () => {
+  if (!lastFrameReady()) return;
   GenRefs.showSubjectBrowser((pick) => {
     videoPickLastFrameRef({
       type: "subject",
@@ -771,6 +785,7 @@ function videoPickFrameRef(ref) {
   if (videoState.firstFrame) releaseVideoRef(videoState.firstFrame);
   videoState.firstFrame = ref;
   renderVideoFrame();
+  renderVideoLastFrame(); // 空态文案随首帧切换（「先设首帧」→「未选尾帧」）
   applyVideoMode(); // 首帧就位 → 亮尾帧区
   updateVideoRefHint();
   updateVideoVrefHint();
