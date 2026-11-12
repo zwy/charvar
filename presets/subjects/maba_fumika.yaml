@@ -1,0 +1,32 @@
+# 馬場ふみか主体档案。
+# 本文件由角色开发目录的生成脚本与交付文档同源产出（final/maba_fumika/全场景通用提示词模板.md）。
+# 体形锚点从 identity_lock 移到 body_lock（锁定项只留脸/发/肤色），
+# body_lock 拆成 2 条英文短句、每条 ≤400 字符（换装场景用，写长了稀释动作段）。
+id: maba_fumika
+name: 馬場ふみか
+subject_noun: woman
+trigger_word: maba_fumika
+reference_tag: <image1>
+style_lock:
+- 真人写实摄影，日系写真风格，柔和均匀的影棚漫射光，色彩明亮柔和
+- 保留细微皮肤纹理与真实发丝，锐化与磨皮克制，保留毛孔与细小绒毛的细节。
+identity_lock:
+- 族裔与年龄感：东亚，二十多岁，成熟感而非幼态。
+- 脸型是柔和的鹅蛋形轮廓，额头饱满，颧骨平滑，下颌线圆润收窄，下巴圆润不过尖。
+- 眉毛细而平直，眉峰不明显，保留真实毛流。
+- 眼睛是深棕色的杏眼，眼型圆润，上眼睑略有弧度，双眼皮褶皱清晰，眼尾略微下垂，眼神清澈，睫毛自然上翘，眼球有明确的高光点。
+- 鼻梁细直但不过高，鼻头小巧。
+- 嘴唇饱满，上唇薄、下唇略厚，保留细微唇纹，唇色是自然淡粉。
+- 皮肤白皙偏暖，质感干净真实，面颊有淡粉色腮红，妆容轻薄干净，面部保留自然的成年感。
+- 深棕近黑的浓密长直发，自然披散在肩前，发尾垂到胸下缘附近。额前是一层轻薄自然的空气刘海，刘海分成几缕细发丝斜落到额头与眉眼附近，两侧发丝顺贴脸颊，发根蓬松，发丝有真实的层次与光泽。
+outfit_lock:
+- 上身穿一件两件式三角比基尼的上装。罩杯是三角形的，布面是紫红底色的小碎花图案，花色里有粉紫、浅蓝与米白的小花，罩杯的每一道边缘都包着一道藏青蓝色的滚边。罩杯上缘的细肩带是藏青蓝色，肩带从罩杯上角沿肩头向上延伸。两个罩杯在胸前正中相交，交点处打一个藏青蓝色的小蝴蝶结，两条带尾从蝴蝶结垂到上腹。布面是哑光质感的泳衣面料，略有细密织纹。
+- 下身穿一件两件式三角比基尼的下装。前面是一块三角形的布面，布面是紫红底色的小碎花图案，花色里有粉紫、浅蓝与米白的小花，布面的每一道边缘都包着一道藏青蓝色的滚边。腰侧各有一根藏青蓝色的细系带从胯部向上延伸，在腰侧打结后垂下，带尾垂到胯部下方。布面是哑光质感的泳衣面料，略有细密织纹。
+- 脚上穿一双白色贝壳串凉鞋，鞋面是几排乳白色的贝壳片串成的带子，一条沿脚背横向穿过，一条从脚背斜向延伸到脚趾之间，鞋底是平的乳白色橡胶底，鞋带在脚背外侧扣住。
+- 仅胸部一段的面料被撑起绷紧，肩带、腰部与下装保持泳衣贴身的自然垂坠。
+- 上装背面是两根藏青蓝色的细肩带各自从肩头向后延伸，绕过背部的两侧，在两肩胛之间、背上部偏下的位置打一个藏青蓝色的小蝴蝶结，蝴蝶结不在后颈上，后颈与肩胛之间是空的。
+- 无随身配饰。默认造型不含帽子、首饰、包袋、手表。
+body_lock:
+- 'her figure is a full hourglass adult woman: narrow relaxed shoulders, a very large bust whose widest span is about half again the width across her outer shoulders, rounded and forming its own forward volume with a clear drop from bust to waist and a lower contour settling under its own weight'
+- 'a fine clearly defined waist tucked in below the ribs, full rounded hips markedly pushed backward with hip width about a third wider than the shoulders, upper arms and forearms carrying visible muscle and fat, full wide thighs, and narrow tapering calves'
+extra: Keep the same face, facial features, hairstyle, skin tone, body proportions and figure in every pose and every new scene.
