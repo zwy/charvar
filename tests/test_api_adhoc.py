@@ -350,6 +350,24 @@ def test_illegal_run_id_rejected(client):
     assert client.get("/adhoc/adhoc_..%2F..%2Fetc/image").status_code in (400, 404)
 
 
+# ---------- 删除记录 ----------
+
+def test_delete_run_removes_directory(client, monkeypatch):
+    from charvar import adhoc as adhoc_service
+
+    uploads: list[str] = []
+    _mock_comfy(monkeypatch, uploads, [])
+    out = client.post("/adhoc/generate", json={"prompt": "a dog", "backend": "comfyui"}).json()
+    run_id = out["run_id"]
+    assert (adhoc_service.run_dir(run_id) / "manifest.json").exists()
+    resp = client.delete(f"/adhoc/{run_id}")
+    assert resp.status_code == 200
+    assert not adhoc_service.run_dir(run_id).exists()
+    # 删完列表里也没有了
+    items = client.get("/adhoc?limit=12").json()
+    assert all(r["run_id"] != run_id for r in items)
+
+
 # ---------- 即梦（Dreamina）后端 ----------
 
 def test_adhoc_generate_dreamina_backend(client, monkeypatch):

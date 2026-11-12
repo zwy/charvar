@@ -196,7 +196,10 @@ $("#btn-subject-save").addEventListener("click", async () => {
 $("#btn-subject-delete").addEventListener("click", async () => {
   const sid = state.currentSubject;
   if (!sid) return;
-  if (!confirm(`删除主体 ${sid}？档案、五槽位图与模板一并删除，不可恢复。`)) return;
+  if (!(await Media.showConfirm({
+    title: "删除主体",
+    message: `删除主体 ${sid}？档案、五槽位图与模板一并删除，不可恢复。`,
+  }))) return;
   try {
     await api(`/subjects/${encodeURIComponent(sid)}`, { method: "DELETE" });
     state.currentSubject = null;
@@ -357,7 +360,10 @@ $("#subject-image-slots").addEventListener("click", async (ev) => {
       await api(`/subjects/${encodeURIComponent(sid)}/images/${kind}/sync`, { method: "POST" });
       await loadSubjectImages();
     } else if (act === "delete") {
-      if (!confirm(`删除 ${SLOT_LABELS[kind]} 的图片？`)) return;
+      if (!(await Media.showConfirm({
+        title: "删除槽位图",
+        message: `删除 ${SLOT_LABELS[kind]} 的图片？不可恢复。`,
+      }))) return;
       await api(`/subjects/${encodeURIComponent(sid)}/images/${kind}`, { method: "DELETE" });
       await loadSubjectImages();
     }

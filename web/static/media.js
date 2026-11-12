@@ -322,6 +322,44 @@ const Media = {
     overlay.querySelector("[data-close]")?.focus();
   },
 
+  /* 统一确认弹层（Promise<boolean>）：确认 = true；取消 / Esc / 点遮罩 / 关闭钮 = false。
+     danger 时确认钮走红色（button.danger）。替代逐页的 window.confirm()。 */
+  showConfirm({ title = "确认操作", message = "", confirmLabel = "删除", cancelLabel = "取消", danger = true } = {}) {
+    return new Promise((resolve) => {
+      const overlay = document.createElement("div");
+      let settled = false;
+      const settle = (value) => {
+        if (settled) return;
+        settled = true;
+        document.removeEventListener("keydown", handleKey);
+        document.body.classList.remove("modal-open");
+        overlay.remove();
+        resolve(value);
+      };
+      const handleKey = (event) => { if (event.key === "Escape") settle(false); };
+      overlay.className = "image-overlay";
+      overlay.setAttribute("role", "dialog");
+      overlay.setAttribute("aria-modal", "true");
+      // 与 showImageModal 同一骨架，只换了 body 内容；宽度用 .confirm-modal 收窄
+      overlay.innerHTML =
+        `<div class="image-modal confirm-modal"><div class="modal-head"><strong></strong><button class="btn-icon" data-close title="关闭" aria-label="关闭">${icon("x")}</button></div>` +
+        `<div class="modal-body"><p class="confirm-message"></p><div class="confirm-actions"><button type="button" class="confirm-ok${danger ? " danger" : ""}" data-confirm></button><button type="button" data-cancel></button></div></div></div>`;
+      overlay.querySelector(".modal-head strong").textContent = title || "";
+      overlay.querySelector(".confirm-message").textContent = message || "";
+      const okBtn = overlay.querySelector("[data-confirm]");
+      okBtn.textContent = confirmLabel;
+      overlay.querySelector("[data-cancel]").textContent = cancelLabel;
+      okBtn.addEventListener("click", () => settle(true));
+      overlay.querySelector("[data-cancel]").addEventListener("click", () => settle(false));
+      overlay.querySelector("[data-close]").addEventListener("click", () => settle(false));
+      overlay.addEventListener("click", (event) => { if (event.target === overlay) settle(false); });
+      document.addEventListener("keydown", handleKey);
+      document.body.classList.add("modal-open");
+      document.body.appendChild(overlay);
+      okBtn.focus();
+    });
+  },
+
   /* 「从最近生成」选图：列图片页最近的出图记录（只列有图的），点卡片即选定。
      onPick(rec) 收到 /adhoc 列表记录（含 run_id / prompt），由调用方决定装进首帧还是参考图。 */
   pickRecentImage(onPick, { title = "从最近生成选择" } = {}) {

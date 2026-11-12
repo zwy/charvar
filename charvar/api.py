@@ -2137,6 +2137,17 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             raise HTTPException(404, f"没有 manifest：{run_id}")
         return json.loads(path.read_text(encoding="utf-8"))
 
+    @app.delete("/adhoc/{run_id}")
+    def api_adhoc_run_delete(run_id: str) -> dict[str, Any]:
+        """删一条图片生成记录（产物目录整个移除，含 manifest；不可恢复）。"""
+        try:
+            adhoc_service.delete_run(run_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except adhoc_service.AdhocError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return {"ok": True, "deleted": run_id}
+
     # ---- 视频（charvar.adhoc_video：web 与 CLI charvar video 同一通路） ----
     # 注意路由声明顺序：字面路径（/videos/models、/videos/references…）必须在
     # /videos/{run_id}/… 之前，否则 run_id 通配会把它们吞掉。
@@ -2422,6 +2433,17 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             raise HTTPException(404, f"没有 manifest：{run_id}")
         return json.loads(path.read_text(encoding="utf-8"))
 
+    @app.delete("/videos/{run_id}")
+    def api_video_run_delete(run_id: str) -> dict[str, Any]:
+        """删一条视频生成记录（成片/海报帧/manifest 整目录移除；作业在跑时拒绝）。"""
+        try:
+            adhoc_video_service.delete_run(run_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except adhoc_video_service.AdhocVideoError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return {"ok": True, "deleted": run_id}
+
     @app.post("/videos/{run_id}/copy")
     def api_video_copy(run_id: str) -> dict[str, Any]:
         """给该视频 run 生成一套发布文案（标题/简介/话题），结果写进 manifest["copy"]。"""
@@ -2578,6 +2600,17 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             raise HTTPException(404, f"没有 manifest：{run_id}")
         return json.loads(path.read_text(encoding="utf-8"))
 
+    @app.delete("/upscales/{run_id}")
+    def api_upscale_run_delete(run_id: str) -> dict[str, Any]:
+        """删一条放大记录（成片/manifest 整目录移除；作业在跑时拒绝）。"""
+        try:
+            adhoc_upscale_service.delete_run(run_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except adhoc_upscale_service.UpscaleError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return {"ok": True, "deleted": run_id}
+
     # ---- 语音（charvar.adhoc_tts：web 与 CLI charvar tts 同一通路） ----
     # 同步生成（与视频的异步作业不同）：/tts/generate 等音频字节返回后再响应，
     # 没有 status 轮询。与 /videos 同款路由声明纪律：字面路径（/tts/models、/tts）
@@ -2676,6 +2709,17 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         if not path.exists():
             raise HTTPException(404, f"没有 manifest：{run_id}")
         return json.loads(path.read_text(encoding="utf-8"))
+
+    @app.delete("/tts/{run_id}")
+    def api_tts_run_delete(run_id: str) -> dict[str, Any]:
+        """删一条语音记录（音频/manifest 整目录移除，不可恢复）。"""
+        try:
+            adhoc_tts_service.delete_run(run_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except adhoc_tts_service.AdhocTtsError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return {"ok": True, "deleted": run_id}
 
     @app.post("/runs/{run_id}/regenerate")
     def api_run_regenerate(run_id: str, req: RunRegenerateRequest) -> dict[str, Any]:

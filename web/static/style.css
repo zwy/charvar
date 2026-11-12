@@ -475,6 +475,13 @@ td .caption { color: var(--muted); }
 
 /* 提示词查看 / 模板编辑弹层 */
 .prompt-modal { width: min(900px, 92vw); }
+
+/* 统一确认弹层（Media.showConfirm）：小面板 + 说明文字 + 危险色确认钮 */
+.confirm-modal { width: min(440px, 92vw); }
+.confirm-modal .modal-body { overflow: visible; max-height: none; }
+.confirm-message { margin: 0; line-height: 1.7; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: var(--sp-2); }
+.confirm-actions .danger { border-color: #f3c7c7; }
 .prompt-view {
   margin: 0;
   font-family: var(--mono);

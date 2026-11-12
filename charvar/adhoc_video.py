@@ -379,6 +379,24 @@ def read_manifest(run_id: str) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def delete_run(run_id: str) -> None:
+    """删掉一个 run 的产物目录（成片/海报帧/manifest 一并）。非法 id 报错。
+
+    作业还在跑（pending/in_progress）时拒绝 —— 删目录会让 status 轮询与收片
+    打在空路径上；等出片或失败后再删。
+    """
+    directory = run_dir(run_id)
+    if not directory.is_dir():
+        raise FileNotFoundError(f"没有记录：{run_id}")
+    try:
+        status = str((read_manifest(run_id) or {}).get("status") or "")
+    except (OSError, ValueError):
+        status = ""
+    if status in ("pending", "in_progress"):
+        raise AdhocVideoError(f"作业还在跑（{status}），等出片或失败后再删：{run_id}")
+    shutil.rmtree(directory)
+
+
 def save_copy(run_id: str, copy: dict[str, Any]) -> dict[str, Any]:
     """把生成的文案写进 manifest["copy"]（带时间戳），返回写进去的内容。"""
     directory = run_dir(run_id)

@@ -1267,6 +1267,26 @@ function buildVideoRecentCard(rec) {
     });
     actions.appendChild(copyBtn);
   }
+  const delBtn = document.createElement("button");
+  delBtn.className = "btn-icon danger";
+  delBtn.title = "删除";
+  delBtn.setAttribute("aria-label", "删除");
+  delBtn.innerHTML = icon("trash");
+  delBtn.addEventListener("click", async () => {
+    if (!(await Media.showConfirm({
+      title: "删除记录",
+      message: `删除这条视频记录（${rec.run_id}）？成片与 manifest 一并删除，不可恢复。`,
+    }))) return;
+    if (videoState.activeRun === rec.run_id) stopVideoPolling();
+    try {
+      await api(`/videos/${encodeURIComponent(rec.run_id)}`, { method: "DELETE" });
+      setStatus($("#video-status"), `已删除：${rec.run_id}`);
+      loadVideoRecent(videoRecentState.page);
+    } catch (err) {
+      setStatus($("#video-status"), `删除失败：${err.message}`, true);
+    }
+  });
+  actions.appendChild(delBtn);
   card.appendChild(actions);
   const note = document.createElement("div");
   note.className = "image-meta";

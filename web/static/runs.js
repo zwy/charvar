@@ -29,7 +29,10 @@ async function loadRuns() {
   );
   tbody.querySelectorAll("button[data-del]").forEach((btn) =>
     btn.addEventListener("click", async () => {
-      if (!confirm(`删除生成记录 ${btn.dataset.del}？`)) return;
+      if (!(await Media.showConfirm({
+        title: "删除记录",
+        message: `删除生成记录 ${btn.dataset.del}？历史记录删除，不可恢复。`,
+      }))) return;
       await api(`/runs/${encodeURIComponent(btn.dataset.del)}`, { method: "DELETE" });
       loadRuns();
     })

@@ -100,7 +100,9 @@ def test_upload_and_delete_reference(client):
 
 
 def test_illegal_reference_id_rejected(client):
-    assert client.get("/videos/reference/../x").status_code in (404, 400)
+    # httpx 把 URL 里的 ".." 归一化成 /videos/x —— 会落在新加的 DELETE /videos/{run_id}
+    # 上方法不符（405）；关键仍是非法 id 不给读文件
+    assert client.get("/videos/reference/../x").status_code in (404, 400, 405)
 
 
 # ---------- 模型目录 ----------
@@ -280,6 +282,44 @@ def test_generate_with_bad_recent_run_id_rejected(client):
 def test_status_404_and_illegal_run_id(client):
     assert client.get("/videos/video_nope/status").status_code == 404
     assert client.get("/videos/evil_/status").status_code in (400, 404)
+    # httpx 会把参考图 URL 里的 ".." 归一化成 /videos/x —— 落到 DELETE /videos/{run_id}
+    # 上方法不符（405）；关键仍是非法 id 不给读文件
+    assert client.get("/videos/reference/../x").status_code in (404, 400, 405)
+
+
+def test_delete_run_ready_and_inflight_guard(client, tmp_path, monkeypatch):
+    """delete：终态 run 直接删目录；作业在跑（pending/in_progress）→ 409。"""
+    _inject_catalog(tmp_path, monkeypatch)
+
+    def fake_submit(body, *, api_key=None, base_url=None, timeout_s=None):
+        return openrouter_video.VideoJob("job-del", "pending")
+
+    def fake_poll(job_id, **kw):
+        return {"status": "completed", "unsigned_urls": [], "usage": {"cost": 0.1}}
+
+    monkeypatch.setattr(openrouter_video, "submit", fake_submit)
+    monkeypatch.setattr(openrouter_video, "wait_for_job", lambda *a, **k: (_ for _ in ()).throw(AssertionError()))
+    monkeypatch.setattr(openrouter_video, "poll", fake_poll)
+    monkeypatch.setattr(openrouter_video, "download", lambda job_id, **kw: b"\x00\x00\x00\x20ftyp" + b"\x00" * 12)
+    monkeypatch.setattr(adhoc_video, "_make_poster", lambda p, d: None)
+
+    out = client.post("/videos/generate", json={"prompt": "p"}).json()
+    run_id = out["run_id"]
+    assert client.get(f"/videos/{run_id}/status").json()["status"] == "ready"
+
+    # 进行中 run：手工造一个 pending manifest，delete 必须 409 且目录还在
+    busy = "video_20261112-000000_busy"
+    adhoc_video.run_dir(busy).mkdir(parents=True)
+    (adhoc_video.run_dir(busy) / "manifest.json").write_text(
+        json.dumps({"status": "pending", "job": {"id": "job-x", "status": "pending"}}), encoding="utf-8")
+    resp = client.delete(f"/videos/{busy}")
+    assert resp.status_code == 409
+    assert adhoc_video.run_dir(busy).exists()
+
+    # ready run：删除成功，目录消失
+    assert client.delete(f"/videos/{run_id}").status_code == 200
+    assert not adhoc_video.run_dir(run_id).exists()
+    assert client.delete(f"/videos/{run_id}").status_code == 404
 
 
 # ---------- 即梦（Dreamina）供应商 ----------

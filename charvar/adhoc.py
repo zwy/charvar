@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import time
 import uuid
 from pathlib import Path
@@ -121,6 +122,14 @@ def run_dir(run_id: str) -> Path:
     if not _RUN_ID_RE.fullmatch(str(run_id)) or ".." in str(run_id):
         raise AdhocError(f"非法 run_id：{run_id}")
     return _run_dir(run_id)
+
+
+def delete_run(run_id: str) -> None:
+    """删掉一个 run 的产物目录（原图/缩略图/manifest 一并）。非法 id 报错。"""
+    directory = run_dir(run_id)
+    if not directory.is_dir():
+        raise FileNotFoundError(f"没有记录：{run_id}")
+    shutil.rmtree(directory)
 
 
 # ---------- 参考图暂存（网页上传用） ----------

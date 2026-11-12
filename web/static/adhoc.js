@@ -712,6 +712,25 @@ async function loadAdhocRecent(page = adhocRecentState.page) {
         if (rec.seed != null) $("#adhoc-seed").value = rec.seed;
       });
       actions.appendChild(reuseBtn);
+      const delBtn = document.createElement("button");
+      delBtn.className = "btn-icon danger";
+      delBtn.title = "删除";
+      delBtn.setAttribute("aria-label", "删除");
+      delBtn.innerHTML = icon("trash");
+      delBtn.addEventListener("click", async () => {
+        if (!(await Media.showConfirm({
+          title: "删除记录",
+          message: `删除这条图片记录（${rec.run_id}）？原图与 manifest 一并删除，不可恢复。`,
+        }))) return;
+        try {
+          await api(`/adhoc/${encodeURIComponent(rec.run_id)}`, { method: "DELETE" });
+          setStatus($("#adhoc-status"), `已删除：${rec.run_id}`);
+          loadAdhocRecent(adhocRecentState.page);
+        } catch (err) {
+          setStatus($("#adhoc-status"), `删除失败：${err.message}`, true);
+        }
+      });
+      actions.appendChild(delBtn);
       card.appendChild(actions);
       box.appendChild(card);
     }

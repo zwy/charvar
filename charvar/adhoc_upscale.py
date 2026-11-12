@@ -304,6 +304,23 @@ def read_manifest(run_id: str) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def delete_run(run_id: str) -> None:
+    """删掉一个 run 的产物目录（成片/manifest 一并）。非法 id 报错。
+
+    作业还在跑（pending/in_progress）时拒绝 —— 删目录会让 status 轮询打在空路径上。
+    """
+    directory = run_dir(run_id)
+    if not directory.is_dir():
+        raise FileNotFoundError(f"没有记录：{run_id}")
+    try:
+        status = str((read_manifest(run_id) or {}).get("status") or "")
+    except (OSError, ValueError):
+        status = ""
+    if status in ("pending", "in_progress"):
+        raise UpscaleError(f"作业还在跑（{status}），等出片或失败后再删：{run_id}")
+    shutil.rmtree(directory)
+
+
 def _write_manifest(run_dir: Path, manifest: dict[str, Any]) -> None:
     path = run_dir / "manifest.json"
     path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")

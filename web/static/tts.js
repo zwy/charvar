@@ -265,6 +265,25 @@ function buildTtsRecentCard(rec) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   });
   actions.appendChild(reuseBtn);
+  const delBtn = document.createElement("button");
+  delBtn.className = "btn-icon danger";
+  delBtn.title = "删除";
+  delBtn.setAttribute("aria-label", "删除");
+  delBtn.innerHTML = icon("trash");
+  delBtn.addEventListener("click", async () => {
+    if (!(await Media.showConfirm({
+      title: "删除记录",
+      message: `删除这条语音记录（${rec.run_id}）？音频与 manifest 一并删除，不可恢复。`,
+    }))) return;
+    try {
+      await api(`/tts/${encodeURIComponent(rec.run_id)}`, { method: "DELETE" });
+      setStatus($("#tts-status"), `已删除：${rec.run_id}`);
+      loadTtsRecent(ttsRecentState.page);
+    } catch (err) {
+      setStatus($("#tts-status"), `删除失败：${err.message}`, true);
+    }
+  });
+  actions.appendChild(delBtn);
   card.appendChild(actions);
   const note = document.createElement("div");
   note.className = "image-meta";

@@ -154,7 +154,10 @@ async function loadRecipeRuns() {
     }));
   tbody.querySelectorAll("button[data-del]").forEach((btn) =>
     btn.addEventListener("click", async () => {
-      if (!confirm(`删除配方运行 ${btn.dataset.del}？`)) return;
+      if (!(await Media.showConfirm({
+        title: "删除记录",
+        message: `删除配方运行 ${btn.dataset.del}？运行记录删除，产物在各页自理。`,
+      }))) return;
       try {
         await api(`/recipe-runs/${encodeURIComponent(btn.dataset.del)}`, { method: "DELETE" });
         loadRecipeRuns();
@@ -256,7 +259,10 @@ function showRecipeRun(runId) {
       delBtn.className = "danger";
       delBtn.textContent = "删除此运行";
       delBtn.addEventListener("click", async () => {
-        if (!confirm(`删除配方运行 ${runId}？`)) return;
+        if (!(await Media.showConfirm({
+          title: "删除记录",
+          message: `删除配方运行 ${runId}？运行记录删除，产物在各页自理。`,
+        }))) return;
         delBtn.disabled = true;
         try {
           await api(`/recipe-runs/${encodeURIComponent(runId)}`, { method: "DELETE" });
