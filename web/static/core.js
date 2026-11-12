@@ -126,6 +126,8 @@ const ICON_PATHS = {
   play: '<path d="M3 2.5l12 7.5-12 7.5z" fill="currentColor" stroke="none"/>',
   download: '<path d="M10 2v11m0 0l-4.5-4.5M10 13l4.5-4.5M3.5 18h13" fill="none"/>',
   eye: '<path d="M1.8 10s3.2-5.4 8.2-5.4S18.2 10 18.2 10 15 15.4 10 15.4 1.8 10 1.8 10z" fill="none"/><circle cx="10" cy="10" r="2.6" fill="none"/>',
+  /* refresh（rotate-cw，feather 24 棒图按 10/12 缩放） */
+  refresh: '<path d="M19.2 3.3v5h-5" fill="none"/><path d="M17.1 12.5a7.5 7.5 0 1 1-1.77-7.8L19.2 8.3" fill="none"/>',
 };
 const ICON_NAMES = Object.keys(ICON_PATHS);
 function icon(name) {
@@ -133,6 +135,16 @@ function icon(name) {
   if (!body) return "";
   return `<svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
 }
+
+/* 静态页里的图标按钮（如各卡「刷新」）：html 只写 `data-icon` 名，页面加载时
+   由这里统一注入 icon() 的 svg —— 图标仍只有 core.js 这一份来源，设计系统
+   「无第三方图标集」红线不变；图标名未知时保留原 innerHTML 兜底。 */
+document.addEventListener("DOMContentLoaded", () => {
+  for (const el of document.querySelectorAll("[data-icon]")) {
+    const svg = icon(el.dataset.icon);
+    if (svg) el.innerHTML = svg;
+  }
+});
 
 /* 主体档案 5 种槽位的文案（gen 页 sticker 提示与主体页槽位共用） */
 const SLOT_LABELS = {

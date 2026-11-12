@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from charvar import costumes as costumes_service
 from charvar import faces as faces_service
 from charvar import poses as poses_service
+from charvar import subject_images as subject_images_service
 from charvar import pose_prompt, storage
 from charvar.models import ReferenceSpec
 
@@ -43,6 +44,10 @@ class ComposeRequest(BaseModel):
     costume_id: str | None = None  # 服饰条目 id（换装必填；动作出图可选）
     costume_source: str | None = None  # 服饰库 id（item_id 跨库重叠，必须可追溯）
     body_lock: list[str] = Field(default_factory=list)  # 体形锚（仅人脸流程手给）
+    # 主体参考图槽位：网页弹层里用户显式选的（五槽位图之一）；缺省 = 空，
+    # 按线型自动（半身 headshot / 其余 front，与 CLI 对齐）。乙恒 front 缺省。
+    slot_kind: str | None = None
+    slot2_kind: str | None = None
 
 
 def _clean(value: str | None) -> str | None:
@@ -124,7 +129,8 @@ def compose(conn, req: ComposeRequest) -> dict:
             raise ComposeError(str(exc)) from exc
         body_lock = body_lock_text
     else:
-        slot2 = storage.get_subject_image(conn, subject2_id, "front") if subject2_id else None
+        slot2_kind = _clean(req.slot2_kind) or "front"
+        slot2 = storage.get_subject_image(conn, subject2_id, slot2_kind) if subject2_id else None
         profile = storage.get_subject(conn, subject_id)
         if profile is None:
             raise ComposeError(f"主体档案不存在：{subject_id}")
@@ -160,12 +166,22 @@ def compose(conn, req: ComposeRequest) -> dict:
         pose_aspect = str(row["aspect_ratio"] or "").strip()
 
     if subject_id:
-        # 槽位选择对齐 CLI：上半身动作取 headshot（缺则回退 front），全身/双人 front
-        anchor_line = line if workflow == "pose" else ""
-        try:
-            slot_label, slot = poses_service.subject_slot_for_prompt(conn, subject_id, anchor_line)
-        except poses_service.PoseError as exc:
-            raise ComposeError(str(exc)) from exc
+        # 槽位选择对齐 CLI：上半身动作取 headshot（缺则回退 front），全身/双人 front；
+        # 弹层显式选槽时（slot_kind）用户选择优先，槽位必须真实存在且已出图。
+        req_slot = _clean(req.slot_kind)
+        if req_slot:
+            if req_slot not in subject_images_service.IMAGE_KINDS:
+                raise ComposeError(
+                    f"未知主体图片槽位：{req_slot}（支持 {'/'.join(subject_images_service.IMAGE_KINDS)}）"
+                )
+            slot_label = req_slot
+            slot = storage.get_subject_image(conn, subject_id, slot_label)
+        else:
+            anchor_line = line if workflow == "pose" else ""
+            try:
+                slot_label, slot = poses_service.subject_slot_for_prompt(conn, subject_id, anchor_line)
+            except poses_service.PoseError as exc:
+                raise ComposeError(str(exc)) from exc
         if slot is None or not str(slot.get("file_path") or "").strip():
             raise ComposeError(f"主体档案没有 {slot_label} 槽位图：{subject_id}")
         # 换装才带档案 body_lock（对齐 CLI：subject and costume 才传；纯动作不传）
@@ -181,7 +197,7 @@ def compose(conn, req: ComposeRequest) -> dict:
         if face_id and kind == "pair":
             raise ComposeError("双人动作暂不支持人脸身份锚（双人身份走两个主体档案）")
     if subject2_id and slot2 is None:
-        raise ComposeError(f"主体档案没有 front 槽位图：{subject2_id}")
+        raise ComposeError(f"主体档案没有 {slot2_kind} 槽位图：{subject2_id}")
 
     # ---- 提示词拼装（同一份 pose_prompt 文案） ----
     # 纯文本条目（无参考图）走文本锚：服饰文本整段进提示词、无服装图槽位。

@@ -28,7 +28,6 @@ const adhocState = {
   caps: null, // 当前 OpenRouter 模式模型的清单能力
   modeModel: "", // 当前模式的默认模型（显示名 + capabilities 来源）
   capsToken: 0, // 后端/模式切换的竞态守卫：只采纳最后一次拉取的能力
-  subjectSlots: {}, // subject_id -> slots
   comfyTier: "2k", // ComfyUI 分辨率档（记住上次选择，切后端不丢）
 };
 
@@ -363,71 +362,81 @@ $("#btn-adhoc-ref-clear").addEventListener("click", async () => {
   }
 });
 
-/* 动作库 / 人脸库参考只在对应工作流模式选（引擎在 adhocflow.js —— 槽位 + 拼装
-   同一条链路）；自由生图的平铺参考图不再提供这两个来源。 */
+/* 参考图四个库来源的弹层（引擎在 genrefs.js —— 与预设页/工作流模式同一套弹层）：
+   主体档案 = 两步弹层（先选主体 → 再选一张槽位图）；人脸库 / 动作库 / 服饰库 = 对应库浏览器。
+   出图请求体按 ref.type 映射 ReferenceSpec（见下方 generate）。 */
 
-/* 主体档案里的参考图：下拉选主体 -> 选图片类型 -> 加入 */
-async function loadAdhocSubjectOptions() {
-  const sel = $("#adhoc-ref-subject");
-  const kindSel = $("#adhoc-ref-kind");
-  try {
-    const subjects = await api("/subjects");
-    sel.innerHTML = subjects.length
-      ? subjects
-          .map(
-            (s) =>
-              `<option value="${escapeHtml(s.id)}">${escapeHtml(s.id)} · ${escapeHtml(s.name)}</option>`
-          )
-          .join("")
-      : `<option value="">（还没有主体档案）</option>`;
-    sel.disabled = !subjects.length;
-    await loadAdhocKindOptions();
-  } catch {
-    sel.innerHTML = `<option value="">（加载失败）</option>`;
+function addAdhocRef(ref) {
+  if (adhocState.references.length >= ADHOC_MAX_REFS) {
+    setStatus($("#adhoc-status"), `参考图最多 ${ADHOC_MAX_REFS} 张`, true);
+    return false;
   }
+  adhocState.references.push(ref);
+  renderAdhocRefs();
+  setStatus($("#adhoc-status"), "已加入参考图");
+  return true;
 }
 
-async function loadAdhocKindOptions() {
-  const subjectId = $("#adhoc-ref-subject").value;
-  const kindSel = $("#adhoc-ref-kind");
-  if (!subjectId) {
-    kindSel.innerHTML = `<option value="">（先选主体）</option>`;
-    return;
-  }
-  try {
-    const data = await api(`/subjects/${encodeURIComponent(subjectId)}/images`);
-    adhocState.subjectSlots[subjectId] = data.slots || [];
-    const ready = (data.slots || []).filter((s) => s.is_ready);
-    kindSel.innerHTML = ready.length
-      ? ready.map((s) => `<option value="${escapeHtml(s.kind)}">${escapeHtml(s.label)}</option>`).join("")
-      : `<option value="">（该主体还没有就绪的图片）</option>`;
-  } catch {
-    kindSel.innerHTML = `<option value="">（加载失败）</option>`;
-  }
-}
-
-$("#adhoc-ref-subject").addEventListener("change", loadAdhocKindOptions);
-
-$("#btn-adhoc-ref-add").addEventListener("click", () => {
+$("#btn-adhoc-subject-add").addEventListener("click", () => {
   if (adhocState.references.length >= ADHOC_MAX_REFS) {
     return setStatus($("#adhoc-status"), `参考图最多 ${ADHOC_MAX_REFS} 张`, true);
   }
-  const subjectId = $("#adhoc-ref-subject").value;
-  const kind = $("#adhoc-ref-kind").value;
-  if (!subjectId || !kind) {
-    return setStatus($("#adhoc-status"), "先选主体和图片类型（只有就绪的图片能选）", true);
-  }
-  const slots = adhocState.subjectSlots[subjectId] || [];
-  const slot = slots.find((s) => s.kind === kind);
-  adhocState.references.push({
-    type: "subject",
-    subject_id: subjectId,
-    kind,
-    name: `${subjectId} / ${(slot && slot.label) || kind}`,
-    url: slot ? slot.thumb_url || slot.original_url : "",
+  GenRefs.showSubjectBrowser((pick) => {
+    addAdhocRef({
+      type: "subject",
+      subject_id: pick.subject_id,
+      kind: pick.kind,
+      name: pick.name || `${pick.subject_id} / ${pick.kind}`,
+      url: pick.url,
+    });
   });
-  renderAdhocRefs();
-  setStatus($("#adhoc-status"), "已加入参考图");
+});
+
+$("#btn-adhoc-face-add").addEventListener("click", () => {
+  if (adhocState.references.length >= ADHOC_MAX_REFS) {
+    return setStatus($("#adhoc-status"), `参考图最多 ${ADHOC_MAX_REFS} 张`, true);
+  }
+  GenRefs.showFaceBrowser((pick) => {
+    addAdhocRef({
+      type: "face",
+      face_id: pick.face_id,
+      face_source: pick.source || "",
+      name: pick.name || pick.face_id,
+      url: pick.url,
+    });
+  });
+});
+
+$("#btn-adhoc-pose-add").addEventListener("click", () => {
+  if (adhocState.references.length >= ADHOC_MAX_REFS) {
+    return setStatus($("#adhoc-status"), `参考图最多 ${ADHOC_MAX_REFS} 张`, true);
+  }
+  GenRefs.showPoseBrowser((pick) => {
+    addAdhocRef({
+      type: "pose",
+      pose_id: pick.pose_id,
+      angle: pick.angle,
+      pose_source: pick.source || "",
+      name: pick.name || pick.pose_id,
+      url: pick.url,
+    });
+  });
+});
+
+/* 服饰库弹层（与工作流模式同一浏览器；requireImage = 纯文本条目禁选 —— 参考图必须真有图可发） */
+$("#btn-adhoc-costume-add").addEventListener("click", () => {
+  if (adhocState.references.length >= ADHOC_MAX_REFS) {
+    return setStatus($("#adhoc-status"), `参考图最多 ${ADHOC_MAX_REFS} 张`, true);
+  }
+  GenRefs.showCostumeBrowser((pick) => {
+    addAdhocRef({
+      type: "costume",
+      costume_id: pick.item_id,
+      costume_source: pick.source_id || "",
+      name: pick.name || pick.item_id,
+      url: pick.url,
+    });
+  }, { requireImage: true });
 });
 
 /* 最近生成里有现成的产物图：点开弹层选一张，直接当参考图（不用先下载再上传）。
@@ -504,6 +513,12 @@ $("#btn-adhoc-generate").addEventListener("click", async () => {
             face_id: ref.face_id,
             role: "face",
             ...(ref.face_source ? { source: ref.face_source } : {}),
+          }
+        : ref.type === "costume"
+        ? {
+            costume_id: ref.costume_id,
+            role: "costume",
+            ...(ref.costume_source ? { source: ref.costume_source } : {}),
           }
         : { subject_id: ref.subject_id, kind: ref.kind }
     );
@@ -714,7 +729,6 @@ function initAdhoc() {
   $("#adhoc-aspect").value = "3:4";
   renderAdhocRefs();
   applyAdhocPanel();
-  loadAdhocSubjectOptions().catch(() => {});
   loadAdhocRecent().catch(() => {});
   AdhocFlow.init({ onChange: applyAdhocPanel });
   $$("#adhoc-flow .seg").forEach((btn) =>

@@ -14,10 +14,11 @@ const AdhocFlow = (() => {
   };
   const flow = { current: "free", references: null, meta: null, promptEdited: false, pending: false };
   const states = {
-    single: { subject: "", pose: null, costume: null },
-    pair:   { subject1: "", subject2: "", pose: null },
+    /* 主体身份锚都是 {id, kind} 二元组 —— kind = 两步弹层里选的槽位图（缺省回退 front） */
+    single: { subject: null, pose: null, costume: null },
+    pair:   { subject1: null, subject2: null, pose: null },
     face:   { face: null, bodyLock: "", pose: null, costume: null },
-    costume: { identity: "subject", subject: "", face: null, costume: null },
+    costume: { identity: "subject", subject: null, face: null, costume: null },
   };
   let onChange = null;
   let composeToken = 0;
@@ -65,48 +66,14 @@ const AdhocFlow = (() => {
       }
     }
   }
-  /* 主体档案弹窗选择器：档案卡网格（front 槽位图做展示，同其它弹层卡片样式）。
-     currentId 用于高亮当前已选档案。 */
-  function openSubjectPicker(onPick, currentId) {
-    Media.showPanelModal("主体档案 · 选择主体（决定提示词主体与 image1）", function (body, close) {
-      const wrap = document.createElement("div");
-      wrap.textContent = "载入中…";
-      body.appendChild(wrap);
-      ensureSubjects().then(function () {
-        return Promise.all((subjects || []).map(function (s) { return ensureSlots(s.id); }));
-      }).then(function () {
-        body.innerHTML = "";
-        if (!subjects || !subjects.length) {
-          body.innerHTML = "";
-          const empty = document.createElement("div");
-          empty.textContent = "还没有主体档案 —— 先在「主体档案」页建档";
-          body.appendChild(empty);
-          return;
-        }
-        const grid = document.createElement("div");
-        grid.className = "image-grid subject-pick-grid";
-        subjects.forEach(function (s) {
-          const v = subjectSlotValue(s.id);
-          const card = document.createElement("div");
-          card.className = "image-card subject-pick-card" + (currentId === s.id ? " active" : "");
-          card.innerHTML =
-            (v.url ? '<img src="' + escapeHtml(v.url) + '" alt="" loading="lazy">' : '<span class="ref-thumb-empty"></span>') +
-            '<div class="image-meta"><strong>' + escapeHtml(s.id) + "</strong>" +
-            "<span>" + escapeHtml(s.name) + "</span></div>";
-          card.addEventListener("click", function () {
-            onPick(s);
-            close();
-          });
-          grid.appendChild(card);
-        });
-        body.appendChild(grid);
-      }).catch(function () {
-        body.innerHTML = "";
-        const bad = document.createElement("div");
-        bad.textContent = "档案列表载入失败 —— 刷新后重试";
-        body.appendChild(bad);
-      });
-    });
+  /* 主体档案弹窗选择器（两步，对齐动作库弹层）：GenRefs.showSubjectBrowser ——
+     左侧网格选主体 → 右侧详情选一张槽位图（character_sheet/半身/全身正面/侧面/背面），
+     「加入参考图」确认。picked = {subject_id, kind, label, name, url}；currentId /
+     currentKind 用于重开弹层高亮当前已选。 */
+  function openSubjectPicker(onPick, currentId, currentKind) {
+    GenRefs.showSubjectBrowser(function (picked) {
+      onPick(picked);
+    }, { currentId: currentId || "", currentKind: currentKind || "" });
   }
   /* ---------- 槽位卡：空态 = 虚线占位（选择按钮），填态 = 缩略图 + 名称 + 固定徽章 ---------- */
   function slotCard(st, key, opts) {
@@ -158,24 +125,25 @@ const AdhocFlow = (() => {
   /* ---------- 弹层发起 ---------- */
   function openPicker(type) {
     if (type === "subject") {
-      openSubjectPicker(function (pick) {
-        states[flow.current].subject = pick.id;
+      const st = states[flow.current];
+      openSubjectPicker(function (picked) {
+        st.subject = { id: picked.subject_id, kind: picked.kind };
         subjectSaved();
-      }, states[flow.current].subject);
+      }, st.subject && st.subject.id, st.subject && st.subject.kind);
       return;
     }
     if (type === "subject1") {
-      openSubjectPicker(function (pick) {
-        states.pair.subject1 = pick.id;
+      openSubjectPicker(function (picked) {
+        states.pair.subject1 = { id: picked.subject_id, kind: picked.kind };
         subjectSaved();
-      }, states.pair.subject1);
+      }, states.pair.subject1 && states.pair.subject1.id, states.pair.subject1 && states.pair.subject1.kind);
       return;
     }
     if (type === "subject2") {
-      openSubjectPicker(function (pick) {
-        states.pair.subject2 = pick.id;
+      openSubjectPicker(function (picked) {
+        states.pair.subject2 = { id: picked.subject_id, kind: picked.kind };
         subjectSaved();
-      }, states.pair.subject2);
+      }, states.pair.subject2 && states.pair.subject2.id, states.pair.subject2 && states.pair.subject2.kind);
       return;
     }
     if (type === "pose") {
@@ -279,16 +247,16 @@ const AdhocFlow = (() => {
     const st = states[flow.current];
     if (flow.current === "single") {
       box.appendChild(slotCard(st, "subject", { image: "image1", label: "主体档案", badge: "主体", pick: "subject",
-        valueMap: function () { return subjectSlotValue(st.subject); } }));
+        valueMap: function () { return subjectSlotValue(st.subject && st.subject.id, st.subject && st.subject.kind); } }));
       box.appendChild(slotCard(st, "pose", textAnchorCardOpts(st, "pose",
         { image: "image2", label: "动作", badge: "动作", pick: "pose" }, "文本动作")));
       box.appendChild(slotCard(st, "costume", textAnchorCardOpts(st, "costume",
         { image: "image3", label: "服饰", badge: "服饰", pick: "costume", optional: true }, "文本服饰")));
     } else if (flow.current === "pair") {
       box.appendChild(slotCard(st, "subject1", { image: "image1", label: "主体甲（描述里的「甲」）", badge: "主体甲", pick: "subject1",
-        valueMap: function () { return subjectSlotValue(st.subject1); } }));
+        valueMap: function () { return subjectSlotValue(st.subject1 && st.subject1.id, st.subject1 && st.subject1.kind); } }));
       box.appendChild(slotCard(st, "subject2", { image: "image2", label: "主体乙（描述里的「乙」）", badge: "主体乙", pick: "subject2",
-        valueMap: function () { return subjectSlotValue(st.subject2, "front"); } }));
+        valueMap: function () { return subjectSlotValue(st.subject2 && st.subject2.id, st.subject2 && st.subject2.kind); } }));
       box.appendChild(slotCard(st, "pose", { image: "image3", label: "双人动作", badge: "双人动作", pick: "pose" }));
     } else if (flow.current === "face") {
       box.appendChild(slotCard(st, "face", { image: "image1", label: "人脸", badge: "人脸", pick: "face" }));
@@ -301,7 +269,7 @@ const AdhocFlow = (() => {
       box.appendChild(identitySeg());
       if (st.identity === "subject") {
         box.appendChild(slotCard(st, "subject", { image: "image1", label: "主体档案", badge: "主体", pick: "subject",
-          valueMap: function () { return subjectSlotValue(st.subject); } }));
+          valueMap: function () { return subjectSlotValue(st.subject && st.subject.id, st.subject && st.subject.kind); } }));
       } else {
         box.appendChild(slotCard(st, "face", { image: "image1", label: "人脸", badge: "人脸", pick: "face" }));
       }
@@ -343,7 +311,8 @@ const AdhocFlow = (() => {
     if (f === "single") {
       if (!st.subject || !st.pose) return null;
       const out = {
-        workflow: "pose", subject_id: st.subject,
+        workflow: "pose", subject_id: st.subject.id,
+        slot_kind: st.subject.kind || "",
         pose_id: st.pose.pose_id, pose_angle: st.pose.angle || "",
         pose_source: st.pose.source || "",
       };
@@ -356,7 +325,8 @@ const AdhocFlow = (() => {
     if (f === "pair") {
       if (!st.subject1 || !st.subject2 || !st.pose) return null;
       return {
-        workflow: "pose", subject_id: st.subject1, subject2_id: st.subject2,
+        workflow: "pose", subject_id: st.subject1.id, subject2_id: st.subject2.id,
+        slot_kind: st.subject1.kind || "", slot2_kind: st.subject2.kind || "",
         pose_id: st.pose.pose_id, pose_angle: st.pose.angle || "",
         pose_source: st.pose.source || "",
       };
@@ -386,7 +356,8 @@ const AdhocFlow = (() => {
         out.face_id = st.face.face_id;
         out.face_source = st.face.source || "";
       } else {
-        out.subject_id = st.subject;
+        out.subject_id = st.subject.id;
+        out.slot_kind = st.subject.kind || "";
       }
       return out;
     }

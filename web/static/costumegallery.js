@@ -9,7 +9,7 @@
    流程时在 genrefs 加 onPick，整页（无参考图上下文）不渲染加图按钮。 */
 
 const CostumeGallery = (() => {
-  function mount({ root, onPick, close, onStat, variant = "modal" }) {
+  function mount({ root, onPick, close, onStat, variant = "modal", requireImage = false }) {
     let allData = null;
     const filter = { source: "", category: "", q: "", fav: false, media: "" };
     let selectedItem = null;
@@ -631,9 +631,15 @@ const CostumeGallery = (() => {
       }
       const addBtn = detailEl.querySelector(".costume-add-btn");
       if (addBtn) {
-        /* 无图纯文本条目也能加 —— 走文本锚定换装（服饰文本进提示词，refs 不占槽位） */
+        /* 无图纯文本条目也能加 —— 走文本锚定换装（服饰文本进提示词，refs 不占槽位）。
+           requireImage（自由生图参考图用）反过来：纯文本条目没有参考图可发，禁选。 */
         if (!it.image_url) {
-          addBtn.title = "纯文本条目 —— 走文本锚定换装（提示词里没有这张参考图）";
+          if (requireImage) {
+            addBtn.disabled = true;
+            addBtn.title = "纯文本条目没有参考图 —— 不能当图片参考";
+          } else {
+            addBtn.title = "纯文本条目 —— 走文本锚定换装（提示词里没有这张参考图）";
+          }
         }
         addBtn.addEventListener("click", function () {
           onPick({

@@ -217,17 +217,45 @@ td .caption { color: var(--muted); }
    而它是横向滚动容器（overflow-x 把 visible 折算成 auto），窗口滚动对它无效 */
 #runs-table td:last-child .row-actions,
 #recipe-runs-table td:last-child .row-actions { flex-wrap: nowrap; }
-/* 配方列表的步骤链同样过长：单行省略（悬停 title 看全链） */
+/* 配方列表的步骤链同样过长：单行省略（悬停 title 看全链）。单元格不再走 mono；
+   步骤名用正文字色，kind/箭头退成 muted，manual 步骤点一枚小胶囊徽（全站 badge 语言） */
 #recipes-table td.recipe-chain {
   max-width: 26em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* 运行时间戳不折行（与历史页一致的单行样式，窄窗口交给横向滚动） */
+#recipes-table .recipe-chain em { font-style: normal; color: var(--muted); font-size: 11px; margin-left: 2px; }
+#recipes-table .chain-sep { font-style: normal; color: #b9c0cb; font-size: 12px; margin: 0 4px; }
+#recipes-table .chain-manual {
+  display: inline-block;
+  font-size: 10px; line-height: 1; color: var(--accent);
+  background: var(--accent-soft); border: 1px solid var(--accent-line);
+  border-radius: 999px; padding: 2px 6px; margin-left: 4px;
+  vertical-align: 1px;
+}
+/* 运行时间戳不折行（历史页与配方运行表同一套单行样式，窄窗口交给横向滚动；
+   历史表的时间列（第 7 列）没有 .created-at 类，按列位取） */
+#runs-table td:nth-child(7),
 #recipe-runs-table td.created-at { white-space: nowrap; }
 .copy-cell { cursor: pointer; }
 .copy-cell.cell-copied { background: var(--accent-soft); }
+
+/* 配方页（recipes.js）专属的小件：详情卡步骤 chips 只展示不可点；
+   运行弹层的步骤行此前没有任何样式（strong/span 挤一行灰糊）——补块面与分级 */
+#recipe-steps .chip { cursor: default; }
+.recipe-step-row {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-panel);
+  background: #fafbfd;
+}
+.recipe-step-row strong { font-size: 13px; }
+.recipe-step-row > span { color: var(--muted); font-size: 12px; margin-left: 6px; }
+.recipe-step-row .hint { margin-top: 2px; }
+/* 步骤终态着色（与运行状态徽章同色系）：done 绿 / failed 红，执行中保持 muted */
+.recipe-step-row .st-done { color: #15803d; }
+.recipe-step-row .st-failed { color: var(--danger); }
 .comfy-panel {
   padding: 14px 16px;
   background: #fafbfd;
@@ -619,8 +647,9 @@ td .caption { color: var(--muted); }
 #gen-ref-list .ref-name { white-space: normal; word-break: break-word; text-align: center; line-height: 1.4; }
 #gen-ref-list .ref-role { width: 100%; font-size: 11px; padding: 3px 4px; border: 1px solid var(--line); border-radius: var(--radius-ctl); background: #fff; }
 
-/* 行内 .btn-sm 的选中态（动作库的视角切换按钮）：跟 segmented active 同语言 */
-.btn-sm.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-line); font-weight: 600; }
+/* 行内 .btn-sm 的选中态（动作库的视角切换按钮）：跟 segmented active 同语言；
+   .actions 内的普通按钮也用同一套开合（配方页「查看文档」展开态） */
+.btn-sm.active, .actions button.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent-line); font-weight: 600; }
 
 /* 动作库弹层（genrefs.js · master-detail）：左筛选+网格 / 右常驻详情，中日对照。
    flex 子项必须 min-height:0 —— 否则 min-height:auto 让 288 条的网格把整个

@@ -149,6 +149,26 @@ def test_upper_body_uses_headshot_slot(client):
     assert data["meta"]["line_kind"] == "upper"
 
 
+def test_explicit_slot_kind_overrides_line_default(client):
+    """弹层显式选槽（slot_kind）优先于线型自动选择（上半身动作也可用 front）。"""
+    upper = dict(SINGLE, pose_id="upper80v2_P005", slot_kind="front")
+    data = _compose(client, **upper).json()
+    assert data["references"][0]["kind"] == "front"
+    assert data["meta"]["slot_label"] == "front"
+
+
+def test_unknown_slot_kind_rejected(client):
+    res = _compose(client, **dict(SINGLE, slot_kind="shoes"))
+    assert res.status_code == 400
+    assert "未知主体图片槽位" in res.json()["detail"]
+
+
+def test_slot_kind_without_image_rejected(client):
+    res = _compose(client, **dict(SINGLE, slot_kind="side"))
+    assert res.status_code == 400
+    assert "side 槽位图" in res.json()["detail"]
+
+
 def test_pair_two_subjects(client):
     data = _compose(client, subject_id="demo_witch", subject2_id="demo_witch",
                     pose_id="pair60_P010").json()

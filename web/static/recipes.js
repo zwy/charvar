@@ -18,6 +18,14 @@ function recipeCategoryText(category) {
   return category === "model" ? "生成配方" : category === "synthesis" ? "合成配方" : "未知";
 }
 
+/* 类别徽章：生成配方=蓝、合成配方=灰（状态色绿/红留给运行状态，别挪用） */
+function recipeCategoryBadge(category) {
+  const [cls, label] = category === "model" ? ["badge-queued", "生成配方"]
+    : category === "synthesis" ? ["", "合成配方"]
+    : ["", "未知"];
+  return `<span class="badge ${cls}" title="${escapeHtml(recipeCategoryText(category))}">${escapeHtml(label)}</span>`;
+}
+
 function recipeStatusText(status) {
   const map = { waiting: "待继续（检查点）", running: "执行中", done: "完成", failed: "失败（continue 重试）" };
   return map[status] || status;
@@ -54,13 +62,19 @@ async function loadRecipes() {
       tbody.appendChild(tr);
       continue;
     }
-    const chain = (r.steps || []).map((s) =>
+    /* 步骤链：纯文本 title 留全链（悬停看全），单元格里渲染成带轻分级的单行链
+       （步骤名 + 弱化的 kind + manual 小徽），过长仍走省略号（.recipe-chain） */
+    const chainText = (r.steps || []).map((s) =>
       `${s.label ? s.label : s.index}（${s.kind}）` + (s.manual ? "［manual］" : "")
     ).join(" → ");
+    const chainHtml = (r.steps || []).map((s) =>
+      `${escapeHtml(s.label ? s.label : s.index)}<em>${escapeHtml(s.kind)}</em>` +
+      (s.manual ? '<span class="chain-manual">manual</span>' : "")
+    ).join('<i class="chain-sep">→</i>');
     tr.innerHTML = `<td class="prompt" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}</td>` +
       `<td>${escapeHtml(r.title || "-")}</td>` +
-      `<td>${recipeCategoryText(r.category)}</td>` +
-      `<td class="prompt recipe-chain" title="${escapeHtml(chain)}">${escapeHtml(chain)}</td>` +
+      `<td>${recipeCategoryBadge(r.category)}</td>` +
+      `<td class="recipe-chain" title="${escapeHtml(chainText)}">${chainHtml}</td>` +
       `<td><div class="row-actions"><button data-detail="${escapeHtml(r.name)}">详情</button></div></td>`;
     tbody.appendChild(tr);
   }
@@ -167,7 +181,7 @@ function showRecipeRun(runId) {
         const mark = st.status === "done" ? "✓" : st.status === "failed" ? "✗" : "·";
         row.innerHTML = `<strong>${mark} ${escapeHtml(st.label || "#" + st.index)}</strong>` +
           `<span>（${KIND_LABEL(st.kind)}）</span>` +
-          `<span>${recipeStepMark(st.status)}</span>` +
+          `<span class="st-${escapeHtml(st.status)}">${recipeStepMark(st.status)}</span>` +
           (st.note ? `<div class="hint">${escapeHtml(st.note)}</div>` : "");
         body.appendChild(row);
         renderStepOutputs(st, body);
@@ -359,17 +373,28 @@ function renderStepOutputs(st, body) {
     body.appendChild(pre);
     return;
   }
-  if (st.kind === "combo_image" && out.image_url) {
+  if ((st.kind === "combo_image" || st.kind === "adhoc_image") && out.image_url) {
     const img = document.createElement("img");
     img.src = out.thumb_url || out.image_url;
-    img.alt = "首帧";
+    img.alt = st.label || "首帧";
     img.loading = "lazy";
     // .modal-body img 的 width:100% 会把 9:16 缩略图横向拉宽 —— 覆盖成含框小图
     img.style.cssText = "display:block;width:auto;max-width:180px;height:auto;max-height:240px;" +
       "object-fit:contain;background:#f4f6f9;border:1px solid var(--line);border-radius:var(--radius-panel);" +
       "margin-top:6px;cursor:zoom-in;";
     img.addEventListener("click", () =>
-      Media.showImageModal(out.image_url, "首帧图（点缩略看原图）"));
+      Media.showImageModal(out.image_url, `${st.label || "首帧图"}（点缩略看原图）`));
+    const meta = [
+      out.width && out.height ? `${out.width}×${out.height}` : "",
+      out.model || "",
+      typeof out.cost === "number" ? `$${out.cost.toFixed(3)}` : "",
+    ].filter(Boolean).join(" · ");
+    if (meta) {
+      const h = document.createElement("div");
+      h.className = "hint";
+      h.textContent = meta;
+      body.appendChild(h);
+    }
     body.appendChild(img);
   }
 }
@@ -402,6 +427,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const d = await api(`/recipes/${encodeURIComponent(recipeTabState.currentRecipe)}`);
       const box = $("#recipe-doc");
       box.hidden = !box.hidden;
+      $("#btn-recipe-doc").classList.toggle("active", !box.hidden);
       if (!box.hidden) box.innerHTML = renderMarkdown(d.doc || "（配方还没有文档：presets/recipes/<name>.md）");
     } catch (err) {
       alert(err.message);

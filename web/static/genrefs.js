@@ -327,6 +327,160 @@ const GenRefs = (() => {
     });
   }
 
+  /* 服饰库弹层：渲染逻辑在 costumegallery.js（与顶栏「服饰」整页及工作流模式弹层同源共用），
+     这里只挂弹层骨架。requireImage = 纯文本条目禁选（自由生图参考图必须真有图可发）。 */
+  function showCostumeBrowser(onPick, { title = "服饰库（只锚服装与整套配件）", requireImage = false } = {}) {
+    Media.showPanelModal(title, (body, close) => {
+      CostumeGallery.mount({ root: body, onPick, close, requireImage });
+    });
+  }
+
+  /* ---------- 来源：主体档案（两步弹层：先选主体，再选五张槽位图之一） ----------
+     形态对齐动作库弹层（左侧网格选主体 → 右侧详情选图），交互同「选动作 → 选视角」：
+     五个槽位按钮（character_sheet/半身/全身正面/侧面/背面）切预览，「加入参考图」确认。
+     只有就绪（is_ready）的槽位可选；onPick({subject_id, kind, label, name, url}) 由
+     发起方决定落入哪边 —— 预设页与 Playground（自由生图 + 工作流模式）共用。 */
+  function showSubjectBrowser(onPick, { title = "主体档案 · 先选主体，再选一张槽位图", currentId = "", currentKind = "" } = {}) {
+    Media.showPanelModal(title, (body, close) => {
+      body.innerHTML = `<div class="pose-browser"><div class="pose-master"><div class="hint">载入中…</div><div class="pose-grid image-grid"></div></div><div class="pose-detail"></div></div>`;
+      const grid = body.querySelector(".pose-grid");
+      const detailEl = body.querySelector(".pose-detail");
+      let subjects = [];
+      const slotsCache = {};
+      let selected = null;
+      let selectedSlot = null;
+      const esc = (s) => escapeHtml(String(s == null ? "" : s));
+
+      function firstThumb(id) {
+        const slots = slotsCache[id] || [];
+        // 展示图：front 槽位优先，缺则用第一张就绪的
+        const front = slots.find((s) => s.kind === "front") || slots.find((s) => s.is_ready) || null;
+        return front ? front.thumb_url || front.original_url || "" : "";
+      }
+
+      function renderGrid() {
+        grid.innerHTML = "";
+        subjects.forEach((s) => {
+          const thumb = firstThumb(s.id);
+          const card = document.createElement("div");
+          card.className = "image-card pose-card" + (selected && selected.id === s.id ? " active" : "");
+          card.innerHTML =
+            `<div class="pose-thumb">` +
+            (thumb ? `<img src="${esc(thumb)}" alt="" loading="lazy">` : `<div class="pose-thumb-empty">无图</div>`) +
+            `</div>` +
+            `<div class="image-meta"><strong>${esc(s.id)}</strong><span class="pose-zh">${esc(s.name)}</span></div>`;
+
+          card.addEventListener("click", () => {
+            selected = s;
+            const slots = slotsCache[s.id] || [];
+            // 进详情默认选第一张就绪的槽位图，避免每次都从空预览开始
+            selectedSlot = slots.find((k) => k.is_ready) || null;
+            [...grid.querySelectorAll(".pose-card")].forEach((el, i) =>
+              el.classList.toggle("active", subjects[i] === s)
+            );
+            renderDetail();
+          });
+          grid.appendChild(card);
+        });
+        if (!subjects.length) {
+          grid.innerHTML = `<div class="pose-empty">还没有主体档案 —— 先在「主体档案」页建档</div>`;
+          detailEl.innerHTML = "";
+          return;
+        }
+        renderDetail();
+      }
+
+      function renderDetail() {
+        const s = selected;
+        if (!s) {
+          detailEl.innerHTML = `<div class="pose-empty">在左侧选择一个主体</div>`;
+          return;
+        }
+        const slots = slotsCache[s.id] || [];
+        if (selectedSlot && !slots.some((k) => k.is_ready && k.kind === selectedSlot.kind)) {
+          selectedSlot = slots.find((k) => k.is_ready) || null;
+        }
+        const url = selectedSlot ? selectedSlot.thumb_url || selectedSlot.original_url || "" : "";
+        detailEl.innerHTML =
+          `<div class="pose-detail-img"${url ? ` title="点看大图"` : ""}>` +
+          (url
+            ? `<img src="${esc(url)}" alt="">`
+            : `<div class="pose-thumb-empty">${s.name || s.id} 尚无就绪槽位图</div>`) +
+          `</div>` +
+          `<div class="pose-detail-titles"><h3>${esc(s.id)}</h3><div class="pose-jp">${esc(s.name)}</div></div>` +
+          `<div class="pose-angle-block"><div class="pose-angle-label">选择槽位图（缺格未就绪不可选）</div>` +
+          `<div class="pose-angle-grid"></div></div>` +
+          `<div class="pose-detail-actions"><button type="button" class="pose-add-btn primary"${selectedSlot ? "" : " disabled"}>加入参考图</button></div>`;
+        if (url) {
+          detailEl.querySelector(".pose-detail-img").addEventListener("click", () => {
+            Media.showImageModal(selectedSlot.original_url || selectedSlot.thumb_url, `${s.id} · ${selectedSlot.label || selectedSlot.kind} 槽位图`);
+          });
+        }
+        const angleGrid = detailEl.querySelector(".pose-angle-grid");
+        slots.forEach((slot) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "btn-sm" + (selectedSlot && selectedSlot.kind === slot.kind ? " active" : "");
+          btn.textContent = slot.label || slot.kind;
+          if (!slot.is_ready) {
+            btn.disabled = true;
+            btn.title = "未就绪（还没出图/没上传）";
+          } else {
+            btn.addEventListener("click", () => {
+              selectedSlot = slot;
+              renderDetail();
+            });
+          }
+          angleGrid.appendChild(btn);
+        });
+        const addBtn = detailEl.querySelector(".pose-add-btn");
+        if (addBtn && selectedSlot) {
+          addBtn.addEventListener("click", () => {
+            onPick({
+              subject_id: s.id,
+              kind: selectedSlot.kind,
+              label: selectedSlot.label || selectedSlot.kind,
+              name: `${s.id} / ${selectedSlot.label || selectedSlot.kind}`,
+              url: selectedSlot.thumb_url || selectedSlot.original_url || "",
+            });
+            close();
+          });
+        }
+      }
+
+      api("/subjects")
+        .then(async (list) => {
+          subjects = list || [];
+          // 载入完成就撤掉占位提示（renderGrid 之后它没有存在意义）
+          const loading = body.querySelector(".pose-master .hint");
+          if (loading) loading.remove();
+          await Promise.all(
+            subjects.map(async (s) => {
+              try {
+                const data = await api(`/subjects/${encodeURIComponent(s.id)}/images`);
+                slotsCache[s.id] = data.slots || [];
+              } catch {
+                slotsCache[s.id] = [];
+              }
+            })
+          );
+          // 重开弹层回显当前已选：主体卡高亮 + 槽位按钮定位（currentId/currentKind）
+          if (currentId && subjects.some((s) => s.id === currentId)) {
+            selected = subjects.find((s) => s.id === currentId);
+            const slots = slotsCache[currentId] || [];
+            selectedSlot =
+              slots.find((k) => k.is_ready && k.kind === currentKind) ||
+              slots.find((k) => k.is_ready) ||
+              null;
+          }
+          renderGrid();
+        })
+        .catch((err) => {
+          grid.innerHTML = `<div class="pose-empty">加载失败：${esc(err.message)}</div>`;
+        });
+    });
+  }
+
   /* ---------- 对外接口 ---------- */
   function specs() {
     return state.references.map((ref) => {
@@ -413,10 +567,12 @@ const GenRefs = (() => {
     roleLabel,
     ROLES,
     MAX_REFS,
-    // 动作库/人脸库浏览器（共用）：Playground（adhoc.js）也从这里发起，
+    // 动作库/人脸库/服饰库/主体档案浏览器（共用）：Playground（adhoc.js / adhocflow.js）也从这里发起，
     // onPick 由调用方决定加入哪边
     showPoseBrowser,
     showFaceBrowser,
+    showCostumeBrowser,
+    showSubjectBrowser,
     // 主体档案换了 → 参考图的槽位下拉要重刷（主体只有一个选择器，在①）
     reloadKinds() {
       return loadKindOptions();
