@@ -34,9 +34,7 @@
 <div class="actions">
 <label class="btn file-btn">上传首帧<input type="file" id="video-frame-file" accept="image/*" hidden></label>
 <button id="btn-video-frame-recent" type="button">从最近生成加入</button>
-<select id="video-frame-subject"></select>
-<select id="video-frame-kind"></select>
-<button id="btn-video-frame-add" type="button">从主体档案加入</button>
+<button id="btn-video-frame-subject" type="button">从主体档案加入</button>
 <button id="btn-video-frame-clear" type="button">移除首帧</button>
 </div>
 </div>
@@ -46,9 +44,10 @@
 <div class="actions">
 <label class="btn file-btn">上传参考图<input type="file" id="video-ref-file" accept="image/*" multiple hidden></label>
 <button id="btn-video-ref-recent" type="button">从最近生成加入</button>
-<select id="video-ref-subject"></select>
-<select id="video-ref-kind"></select>
-<button id="btn-video-ref-add" type="button">从主体档案加入</button>
+<button id="btn-video-ref-subject" type="button">从主体档案加入</button>
+<button id="btn-video-ref-pose" type="button">从动作库加入</button>
+<button id="btn-video-ref-face" type="button">从人脸库加入</button>
+<button id="btn-video-ref-costume" type="button">从服饰库加入</button>
 <button id="btn-video-ref-clear" type="button">清空参考图</button>
 </div>
 </div>
@@ -73,4 +72,4 @@
 <div class="card"><div class="row-head"><h2>最近生成</h2><div class="actions"><button id="btn-video-recent-refresh" class="btn-icon" data-icon="refresh" title="刷新" aria-label="刷新"></button></div></div>
 <div id="video-recent" class="image-grid"></div></div>
 </section>
-</main><script src="/static/core.js"></script><script src="/static/nav.js"></script><script src="/static/tables.js"></script><script src="/static/media.js"></script><script src="/static/video.js"></script></body></html>
+</main><script src="/static/core.js"></script><script src="/static/nav.js"></script><script src="/static/tables.js"></script><script src="/static/media.js"></script><script src="/static/posegallery.js"></script><script src="/static/facegallery.js"></script><script src="/static/costumegallery.js"></script><script src="/static/genrefs.js"></script><script src="/static/video.js"></script></body></html>

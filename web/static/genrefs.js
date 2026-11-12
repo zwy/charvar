@@ -403,16 +403,21 @@ const GenRefs = (() => {
           selectedSlot = slots.find((k) => k.is_ready) || null;
         }
         const url = selectedSlot ? selectedSlot.thumb_url || selectedSlot.original_url || "" : "";
+        /* 内容区 + 固定底栏：槽位选择与「加入参考图」常驻底栏，不随内容滚动 */
         detailEl.innerHTML =
+          `<div class="gallery-detail-body">` +
           `<div class="pose-detail-img"${url ? ` title="点看大图"` : ""}>` +
           (url
             ? `<img src="${esc(url)}" alt="">`
             : `<div class="pose-thumb-empty">${s.name || s.id} 尚无就绪槽位图</div>`) +
           `</div>` +
           `<div class="pose-detail-titles"><h3>${esc(s.id)}</h3><div class="pose-jp">${esc(s.name)}</div></div>` +
+          `</div>` +
+          `<div class="gallery-detail-footer">` +
           `<div class="pose-angle-block"><div class="pose-angle-label">选择槽位图（缺格未就绪不可选）</div>` +
           `<div class="pose-angle-grid"></div></div>` +
-          `<div class="pose-detail-actions"><button type="button" class="pose-add-btn primary"${selectedSlot ? "" : " disabled"}>加入参考图</button></div>`;
+          `<div class="pose-detail-actions"><button type="button" class="pose-add-btn primary"${selectedSlot ? "" : " disabled"}>加入参考图</button></div>` +
+          `</div>`;
         if (url) {
           detailEl.querySelector(".pose-detail-img").addEventListener("click", () => {
             Media.showImageModal(selectedSlot.original_url || selectedSlot.thumb_url, `${s.id} · ${selectedSlot.label || selectedSlot.kind} 槽位图`);
@@ -476,6 +481,9 @@ const GenRefs = (() => {
               null;
           }
           renderGrid();
+          // 回显后把选中的主体卡滚进可视区（列表长时高亮卡在下面看不见）
+          const activeCard = grid.querySelector(".pose-card.active");
+          if (activeCard) activeCard.scrollIntoView({ block: "nearest" });
         })
         .catch((err) => {
           grid.innerHTML = `<div class="pose-empty">加载失败：${esc(err.message)}</div>`;

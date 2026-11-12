@@ -364,7 +364,9 @@ const FaceGallery = (() => {
         detailEl.innerHTML = '<div class="face-empty">在左侧选择一个条目</div>';
         return;
       }
+      /* 内容区 + 固定底栏：加图按钮常驻底栏（有参考图上下文才渲染底栏） */
       detailEl.innerHTML =
+        '<div class="gallery-detail-body">' +
         '<div class="face-detail-img" title="点看大图">' +
         '<img src="' + esc(p.full_url) + '" alt="' + esc(p.face_id) + '"></div>' +
         '<div class="face-detail-titles">' +
@@ -379,9 +381,12 @@ const FaceGallery = (() => {
         '<button type="button" class="btn-sm face-detail-fav' + (p.favorited ? " on" : "") +
         '">' + (p.favorited ? "已收藏" : "收藏") + "</button>" +
         "</div>" +
+        "</div>" +
         (onPick
-          ? '<div class="face-detail-actions">' +
+          ? '<div class="gallery-detail-footer">' +
+            '<div class="face-detail-actions">' +
             '<button type="button" class="face-add-btn primary">加入参考图</button>' +
+            "</div>" +
             "</div>"
           : "");
       detailEl.querySelector(".face-detail-img").addEventListener("click", function () {

@@ -302,8 +302,8 @@ def openrouter_mode_config(conn: sqlite3.Connection) -> dict[str, dict[str, str]
     return modes
 
 
-def dreamina_config(conn: sqlite3.Connection) -> dict[str, str]:
-    """即梦生图的生效配置：DB > env > 缺省。
+def dreamina_image_defaults(settings: "AppSettings") -> dict[str, str]:
+    """从已加载的 AppSettings 算即梦生图生效默认：DB > env > 缺省（不查库）。
 
     - model 走 dreamina_image.resolve_model 的完整链路（DB 值 > env >
       空 = 画布默认 seedream_4.7）；
@@ -312,12 +312,16 @@ def dreamina_config(conn: sqlite3.Connection) -> dict[str, str]:
     """
     from charvar import dreamina_image
 
-    settings = get_settings(conn)
     ds = settings.dreamina
     return {
         "model": dreamina_image.resolve_model(ds.model),
         "resolution": dreamina_image.resolve_resolution(ds.resolution),
     }
+
+
+def dreamina_config(conn: sqlite3.Connection) -> dict[str, str]:
+    """即梦生图的生效配置：DB > env > 缺省（读库后交给 dreamina_image_defaults）。"""
+    return dreamina_image_defaults(get_settings(conn))
 
 
 def openrouter_video_config(conn: sqlite3.Connection) -> dict[str, str]:

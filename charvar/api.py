@@ -438,7 +438,9 @@ class VideoGenerateRequest(BaseModel):
     视频是异步作业：本端点只提交，前端按 /videos/{run_id}/status 轮询。
     首帧图 = 图生视频（OpenRouter frame_images / 即梦 image2video）；参考图 =
     参考生成（OpenRouter input_references / 即梦 multimodal2video 全能参考）。
-    都只认「上传暂存 / 主体档案就绪图 / Playground 最近生成原图」三种来源。
+    都只认「上传暂存 / 主体档案就绪图 / Playground 最近生成原图 / 姿势库 / 人脸库 /
+    服饰库」六种来源（与 /adhoc 同一套 spec 规则，role 在视频通路被忽略 ——
+    视频没有 LLM 锚定句，参考图只当图发）。
     参考视频 = OpenRouter input_references 的 video_url（Seedance gen2+ 才接）/
     即梦 multimodal2video 的 --video（≤2 条，只认上传暂存）。
     OpenRouter 侧首帧与参考图同给时首帧优先（官方语义）；即梦侧该组合**提交前
@@ -1184,6 +1186,9 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         data["dreamina_video_default_model"] = dreamina_video.resolve_model(
             settings.dreamina_video.model
         )
+        # 即梦生图：生效默认（DB > env > 缺省，settings_service.dreamina_image_defaults），
+        # 供前端下拉空值标签/说明行显示真实默认，别在前端写死「默认 5.0 · 2K」这类过期字样
+        data["dreamina_image_default"] = settings_service.dreamina_image_defaults(settings)
         # 即梦：CLI 是否可用（登录态在 dreamina-canvas auth login 侧查，这里只探文件在不在）
         try:
             dreamina_image.resolve_binary()
@@ -2140,9 +2145,10 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         """参考图 spec → 本地路径列表（+ 暂存 id 列表，成片 ready 后清理）。
 
         与 /adhoc 的 `_adhoc_reference_paths` 同一套规则：只认上传暂存（staged_id）、
-        主体档案就绪图（subject_id + kind）、Playground「最近生成」的原图（run_id），
-        **不接受任意路径** —— 那是把文件读权限开给了浏览器。暂存池走 adhoc_video
-        自己的（出图/出片各自清理，互不误删）。
+        主体档案就绪图（subject_id + kind）、Playground「最近生成」的原图（run_id）、
+        姿势库（pose_id + angle + source）、人脸库（face_id + source）、
+        服饰库（costume_id + source），**不接受任意路径** —— 那是把文件读权限
+        开给了浏览器。暂存池走 adhoc_video 自己的（出图/出片各自清理，互不误删）。
         """
         paths_found: list[Path] = []
         staged_ids: list[str] = []
@@ -2181,7 +2187,43 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                 except adhoc_service.AdhocError as exc:
                     raise HTTPException(400, str(exc)) from exc
                 continue
-            raise HTTPException(400, "参考图缺少来源（staged_id、subject_id + kind 或 run_id）")
+            if spec.pose_id:
+                # 姿势库的无细节灰人偶（线稿/深度图）：预处理压缩版与出图通路共用
+                try:
+                    paths_found.append(
+                        poses_service.prepared_reference_file(
+                            spec.pose_id, spec.angle, db_path, source=spec.pose_source()
+                        )
+                    )
+                except poses_service.PoseError as exc:
+                    raise HTTPException(400, str(exc)) from exc
+                continue
+            if spec.face_id:
+                # 人脸库的 AI 架构人物参考图：预处理压缩版与出图通路共用
+                try:
+                    paths_found.append(
+                        faces_service.prepared_reference_file(
+                            spec.face_id, db_path, source=spec.face_source()
+                        )
+                    )
+                except faces_service.FaceError as exc:
+                    raise HTTPException(400, str(exc)) from exc
+                continue
+            if spec.costume_id:
+                # 服饰库的服装参考图：纯文本条目（无图）在 prepared_reference_file 里报错
+                try:
+                    paths_found.append(
+                        costumes_service.prepared_reference_file(
+                            f"{spec.costume_source()}/{spec.costume_id}", db_path
+                        )
+                    )
+                except costumes_service.CostumeError as exc:
+                    raise HTTPException(400, str(exc)) from exc
+                continue
+            raise HTTPException(
+                400,
+                "参考图缺少来源（staged_id、subject_id + kind、run_id、pose_id、face_id 或 costume_id）",
+            )
         return paths_found, staged_ids
 
     @app.get("/videos/models")

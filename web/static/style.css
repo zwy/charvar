@@ -672,7 +672,7 @@ td .caption { color: var(--muted); }
 /* 动作库弹层（genrefs.js · master-detail）：左筛选+网格 / 右常驻详情，中日对照。
    flex 子项必须 min-height:0 —— 否则 min-height:auto 让 288 条的网格把整个
    弹层撑到内容高（数万 px），内部滚动失效变整页长条。 */
-.pose-browser { display: flex; width: 100%; height: 66vh; min-height: 420px; }
+.pose-browser { display: flex; width: 100%; height: 74vh; min-height: 420px; }
 .pose-master { width: 62%; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-3); border-right: 1px solid var(--line); }
 .pose-toolbar { display: flex; flex-direction: column; gap: var(--sp-2); }
 .pose-toolbar .segmented { align-self: flex-start; flex-wrap: wrap; }
@@ -699,7 +699,12 @@ td .caption { color: var(--muted); }
 .pose-card strong { font-family: var(--mono); font-size: 12px; color: var(--text); }
 .pose-card .pose-zh { font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .pose-card .pose-jp { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.pose-detail { width: 38%; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4); background: #fafbfd; overflow-y: auto; border-radius: 0 0 var(--radius-card) var(--radius-card); }
+/* 详情栏拆「可滚动内容 + 固定底栏」两段：长内容（动作描述 / 关键词块）只在
+   .gallery-detail-body 里滚，视角/槽位选择与「加入参考图」常驻底栏不随滚动走
+   （三库详情 + 主体档案弹层共用，.gallery-* 类三处同名）。 */
+.gallery-detail-body { flex: 1 1 0; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4); background: #fafbfd; }
+.gallery-detail-footer { flex: none; display: flex; flex-direction: column; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); background: #fff; border-top: 1px solid var(--line); }
+.pose-detail { width: 38%; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 0; padding: 0; background: #fafbfd; overflow: hidden; border-radius: 0 0 var(--radius-card) var(--radius-card); }
 .pose-detail .pose-detail-img { background: #fff; border: 1px solid var(--line); border-radius: var(--radius-panel); padding: var(--sp-3); display: flex; align-items: center; justify-content: center; }
 .pose-detail .pose-detail-img img { display: block; max-width: 100%; max-height: 320px; object-fit: contain; background: #f4f6f9; border-radius: var(--radius-ctl); cursor: zoom-in; }
 .pose-detail-titles h3 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.45; }
@@ -709,11 +714,11 @@ td .caption { color: var(--muted); }
 .pose-meta em { font-style: normal; }
 .pose-angle-label { font-size: 11px; font-weight: 600; letter-spacing: .05em; color: var(--muted); }
 .pose-angle-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: var(--sp-1); }
-.pose-detail-actions { margin-top: auto; display: flex; flex-direction: column; gap: var(--sp-2); padding-top: var(--sp-2); }
+.pose-detail-actions { display: flex; flex-direction: column; gap: var(--sp-2); }
 .pose-detail-actions .primary { width: 100%; }
 .pose-empty { grid-column: 1 / -1; padding: var(--sp-4); text-align: center; font-size: 12px; color: var(--muted); }
-.pose-grid::-webkit-scrollbar, .pose-detail::-webkit-scrollbar { width: 4px; }
-.pose-grid::-webkit-scrollbar-thumb, .pose-detail::-webkit-scrollbar-thumb { background: var(--line); border-radius: 10px; }
+.pose-grid::-webkit-scrollbar, .gallery-detail-body::-webkit-scrollbar { width: 4px; }
+.pose-grid::-webkit-scrollbar-thumb, .gallery-detail-body::-webkit-scrollbar-thumb { background: var(--line); border-radius: 10px; }
 /* 详情栏默认画幅（自建库条目）：select 不在 label 里，单开一条（对齐 costume-policy-row） */
 .pose-aspect-block {
   display: flex;
@@ -746,7 +751,7 @@ td .caption { color: var(--muted); }
   .pose-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
 }
 
-/* 整页版（posepage.js「动作」页签）：弹层是 66vh 定高，整页跟随视口高度 */
+/* 整页版（posepage.js「动作」页签）：弹层是 74vh 定高，整页跟随视口高度 */
 .pose-browser-page { height: min(980px, calc(100vh - 210px)); min-height: 520px; }
 /* 卡片有内边距：detail 面板不再贴卡边，底角圆角降一档 */
 .pose-browser-page .pose-detail { border-radius: 0 0 var(--radius-panel) var(--radius-panel); }
@@ -760,7 +765,7 @@ td .caption { color: var(--muted); }
    布局骨架与动作库同一套「页签 + 搜索 + 网格 + 常驻详情」（.costume-* 与 .pose-*
    一一对应）；缩略图是 2:3（动作库 3:4），卡片用关键词预览代替双语标题。
    网格行的收缩红线同 .pose-grid 注释——overflow:hidden 卡片 + auto 行高会逐行压叠。 */
-.costume-browser { display: flex; width: 100%; height: 66vh; min-height: 420px; }
+.costume-browser { display: flex; width: 100%; height: 74vh; min-height: 420px; }
 .costume-master { width: 62%; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-3); border-right: 1px solid var(--line); }
 .costume-toolbar { display: flex; flex-direction: column; gap: var(--sp-2); }
 .costume-toolbar .segmented { align-self: flex-start; flex-wrap: wrap; }
@@ -776,7 +781,7 @@ td .caption { color: var(--muted); }
 .costume-card .image-meta { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 1px; min-height: 0; }
 .costume-card strong { font-family: var(--mono); font-size: 12px; color: var(--text); }
 .costume-card .costume-kw { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.costume-detail { width: 38%; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4); background: #fafbfd; overflow-y: auto; border-radius: 0 0 var(--radius-card) var(--radius-card); }
+.costume-detail { width: 38%; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 0; padding: 0; background: #fafbfd; overflow: hidden; border-radius: 0 0 var(--radius-card) var(--radius-card); }
 .costume-detail .costume-detail-img { background: #fff; border: 1px solid var(--line); border-radius: var(--radius-panel); padding: var(--sp-3); display: flex; align-items: center; justify-content: center; }
 .costume-detail .costume-detail-img img { display: block; max-width: 100%; max-height: 420px; object-fit: contain; background: #f4f6f9; border-radius: var(--radius-ctl); cursor: zoom-in; }
 .costume-detail-titles h3 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.45; }
@@ -802,12 +807,12 @@ td .caption { color: var(--muted); }
 .costume-kw-label { font-size: 11px; font-weight: 600; letter-spacing: .05em; color: var(--muted); }
 .costume-kw-text { background: #fafbfd; border: 1px dashed var(--line); border-radius: var(--radius-panel); padding: var(--sp-3); font-size: 12px; line-height: 1.6; color: var(--text); word-break: break-word; }
 .costume-kw-muted { color: var(--muted); }
-.costume-detail-actions { margin-top: auto; display: flex; flex-direction: column; gap: var(--sp-2); padding-top: var(--sp-2); }
+.costume-detail-actions { display: flex; flex-direction: column; gap: var(--sp-2); }
 .costume-detail-actions .primary { width: 100%; }
 .costume-empty { grid-column: 1 / -1; padding: var(--sp-4); text-align: center; font-size: 12px; color: var(--muted); }
-.costume-grid::-webkit-scrollbar, .costume-detail::-webkit-scrollbar { width: 4px; }
-.costume-grid::-webkit-scrollbar-thumb, .costume-detail::-webkit-scrollbar-thumb { background: var(--line); border-radius: 10px; }
-/* 整页版（costumepage.js「服装」页签）：弹层是 66vh 定高，整页跟随视口高度 */
+.costume-grid::-webkit-scrollbar, .gallery-detail-body::-webkit-scrollbar { width: 4px; }
+.costume-grid::-webkit-scrollbar-thumb, .gallery-detail-body::-webkit-scrollbar-thumb { background: var(--line); border-radius: 10px; }
+/* 整页版（costumepage.js「服装」页签）：弹层是 74vh 定高，整页跟随视口高度 */
 .costume-browser-page { height: min(980px, calc(100vh - 210px)); min-height: 520px; }
 .costume-browser-page .costume-detail { border-radius: 0 0 var(--radius-panel) var(--radius-panel); }
 @media (max-width: 720px) {
@@ -847,7 +852,7 @@ td .caption { color: var(--muted); }
    布局骨架与动作库同一套「页签 + 搜索 + 网格 + 常驻详情」（.face-* 与 .pose-*
    一一对应，服饰库同款先例）；缩略图 400×500 = 3:4（与动作库同框）。
    网格行的收缩红线同 .pose-grid 注释——overflow:hidden 卡片 + auto 行高会逐行压叠。 */
-.face-browser { display: flex; width: 100%; height: 66vh; min-height: 420px; }
+.face-browser { display: flex; width: 100%; height: 74vh; min-height: 420px; }
 .face-master { width: 62%; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-3); border-right: 1px solid var(--line); }
 .face-toolbar { display: flex; flex-direction: column; gap: var(--sp-2); }
 .face-toolbar .segmented { align-self: flex-start; flex-wrap: wrap; }
@@ -864,7 +869,7 @@ td .caption { color: var(--muted); }
 .face-card .image-meta { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 1px; min-height: 0; }
 .face-card .face-zh { font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .face-card .face-jp { font-family: var(--mono); font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.face-detail { width: 38%; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: var(--sp-3); padding: var(--sp-4); background: #fafbfd; overflow-y: auto; border-radius: 0 0 var(--radius-card) var(--radius-card); }
+.face-detail { width: 38%; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 0; padding: 0; background: #fafbfd; overflow: hidden; border-radius: 0 0 var(--radius-card) var(--radius-card); }
 .face-detail .face-detail-img { background: #fff; border: 1px solid var(--line); border-radius: var(--radius-panel); padding: var(--sp-3); display: flex; align-items: center; justify-content: center; }
 .face-detail .face-detail-img img { display: block; max-width: 100%; max-height: 420px; object-fit: contain; background: #f4f6f9; border-radius: var(--radius-ctl); cursor: zoom-in; }
 .face-detail-titles h3 { margin: 0; font-size: 15px; font-weight: 600; line-height: 1.45; }
@@ -873,8 +878,11 @@ td .caption { color: var(--muted); }
 .face-meta { font-size: 12px; color: var(--muted); }
 .face-meta em { font-style: normal; }
 .face-empty { grid-column: 1 / -1; padding: var(--sp-4); text-align: center; font-size: 12px; color: var(--muted); }
-.face-grid::-webkit-scrollbar, .face-detail::-webkit-scrollbar { width: 4px; }
-.face-grid::-webkit-scrollbar-thumb, .face-detail::-webkit-scrollbar-thumb { background: var(--line); border-radius: 10px; }
+/* 人脸库加图按钮此前漏了三库共用的 actions 声明（不拉满宽），补上同款 */
+.face-detail-actions { display: flex; flex-direction: column; gap: var(--sp-2); }
+.face-detail-actions .primary { width: 100%; }
+.face-grid::-webkit-scrollbar, .gallery-detail-body::-webkit-scrollbar { width: 4px; }
+.face-grid::-webkit-scrollbar-thumb, .gallery-detail-body::-webkit-scrollbar-thumb { background: var(--line); border-radius: 10px; }
 /* 徽章：形状对齐动作库 .pose-badge（小方形无圆角），styling 形态换色区隔 */
 .face-badge {
   display: inline-block; flex: none; padding: 3px 8px; font-size: 11px; line-height: 1;
@@ -882,7 +890,7 @@ td .caption { color: var(--muted); }
   white-space: nowrap;
 }
 .face-badge-sec { background: #f4f6f9; color: var(--muted); border-color: var(--line); }
-/* 整页版（facepage.js「人脸」页签）：弹层是 66vh 定高，整页跟随视口高度 */
+/* 整页版（facepage.js「人脸」页签）：弹层是 74vh 定高，整页跟随视口高度 */
 .face-browser-page { height: min(980px, calc(100vh - 210px)); min-height: 520px; }
 .face-browser-page .face-detail { border-radius: 0 0 var(--radius-panel) var(--radius-panel); }
 @media (max-width: 720px) {

@@ -2,9 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "charvar",
-      "url": "http://localhost:8710",
-      "port": 8710
+      "name": "charvar-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["CHARVAR_WEB_PORT=8823", ".venv/bin/python", "-m", "web.app"],
+      "port": 8823
     }
   ]
 }

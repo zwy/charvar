@@ -222,7 +222,7 @@ function renderGenModelInfo() {
   const res = $("#gen-resolution").value;
   const cliNote = state.dreaminaCliOk === false ? " · ⚠ 未找到 dreamina-canvas CLI" : "";
   el.textContent =
-    `即梦：${model || `跟随设置（${def.model || "5.0"}）`} · ${res || `跟随设置（${def.resolution || "2K"}）`}${cliNote}`;
+    `即梦：${model || `跟随设置（${def.model || DREAMINA_DEFAULT_IMAGE_MODEL}）`} · ${res || `跟随设置（${def.resolution || "2K"}）`}${cliNote}`;
 }
 
 /* 参数网格下方那行：只说「当前会出多大的图」——比例与像素。 */
@@ -713,7 +713,7 @@ async function refreshGenBackendPanel() {
   try {
     const settings = await api("/settings");
     state.openrouterSettings = settings;
-    state.dreaminaDefaults = settings.dreamina || {};
+    state.dreaminaDefaults = settings.dreamina_image_default || settings.dreamina || {};
     state.dreaminaCliOk = settings.dreamina_cli_available !== false;
   } catch {
     state.dreaminaDefaults = state.dreaminaDefaults || {};

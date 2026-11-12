@@ -1,8 +1,8 @@
 /* 视频（Playground）页（web 面板）：
    二级页签 = 供应商（OpenRouter / 即梦），一级页签 = 模式（文生视频 t2v /
    图生视频 i2v = 首帧图生视频），显式选择。
-   与出图（adhoc.js）同构：同一套暂存参考图四件套、主体档案选图、供应商切换
-   （档位切走再切回不重置）。
+   与出图（adhoc.js）同构：同一套暂存参考图四件套、GenRefs 弹层选图（主体档案 /
+   动作库 / 人脸库 / 服饰库，见 genrefs.js）、供应商切换（档位切走再切回不重置）。
    关键差异：视频是异步作业 —— 提交即返回 run_id，前端每 8s 轮询
    /videos/{run_id}/status 到 ready/failed；页面载入时找未终态的 run 恢复轮询
    （跨刷新不断线）。
@@ -23,7 +23,6 @@ const videoState = {
   firstFrame: null,
   activeRun: null,
   pollTimer: null,
-  subjectSlots: {},
   capsToken: 0,
   /* 切供应商时各记各的档位（切回不重置）；dreaminaCliOk/即梦默认模型懒加载自 /settings */
   saved: {
@@ -400,8 +399,10 @@ function renderVideoRefs() {
     }
     const del = document.createElement("button");
     del.type = "button";
-    del.className = "btn-sm";
-    del.textContent = "移除";
+    del.className = "btn-icon";
+    del.title = "移除";
+    del.setAttribute("aria-label", "移除");
+    del.innerHTML = icon("x");
     del.addEventListener("click", () => removeVideoRef(index));
     el.appendChild(del);
     box.appendChild(el);
@@ -526,8 +527,10 @@ function renderVideoVrefs() {
     el.appendChild(badge);
     const del = document.createElement("button");
     del.type = "button";
-    del.className = "btn-sm";
-    del.textContent = "移除";
+    del.className = "btn-icon";
+    del.title = "移除";
+    del.setAttribute("aria-label", "移除");
+    del.innerHTML = icon("x");
     del.addEventListener("click", async () => {
       const ref0 = videoState.videoReferences[index];
       if (ref0 && ref0.type === "staged") {
@@ -574,92 +577,105 @@ $("#btn-video-vref-clear").addEventListener("click", async () => {
   }
 });
 
-/* ---------- 主体档案选图（首帧 / 参考图各一对下拉） ---------- */
+/* ---------- 参考图弹层选图（引擎在 genrefs.js —— 与 Playground 同一套弹层） ----------
+   主体档案 = 两步弹层（先选主体 → 再选一张槽位图）；动作库 / 人脸库 / 服饰库 = 对应库浏览器。
+   首帧区只给主体档案弹层（首帧要有完整人物外观，姿势线稿/服装平铺当首帧不合适）；
+   参考图区给全部来源。动作/人脸/服饰参考图走后端同一套 spec 解析（role 在视频通路被忽略）。 */
 
-async function loadVideoKindOptions(subjectId, kindSel) {
-  if (!subjectId) {
-    kindSel.innerHTML = `<option value="">（先选主体）</option>`;
-    return;
-  }
-  try {
-    const data = await api(`/subjects/${encodeURIComponent(subjectId)}/images`);
-    videoState.subjectSlots[subjectId] = data.slots || [];
-    const ready = (data.slots || []).filter((s) => s.is_ready);
-    kindSel.innerHTML = ready.length
-      ? ready.map((s) => `<option value="${escapeHtml(s.kind)}">${escapeHtml(s.label)}</option>`).join("")
-      : `<option value="">（该主体还没有就绪的图片）</option>`;
-  } catch {
-    kindSel.innerHTML = `<option value="">（加载失败）</option>`;
-  }
-}
-
-async function loadVideoSubjects() {
-  let subjects = [];
-  try {
-    subjects = await api("/subjects");
-  } catch { /* 列表空态由各下拉兜底 */ }
-  const options = subjects.length
-    ? subjects.map((s) =>
-        `<option value="${escapeHtml(s.id)}">${escapeHtml(s.id)} · ${escapeHtml(s.name)}</option>`).join("")
-    : `<option value="">（还没有主体档案）</option>`;
-  for (const id of ["video-frame-subject", "video-ref-subject"]) {
-    const sel = $("#" + id);
-    sel.innerHTML = options;
-    sel.disabled = !subjects.length;
-  }
-  await loadVideoKindOptions($("#video-frame-subject").value, $("#video-frame-kind"));
-  await loadVideoKindOptions($("#video-ref-subject").value, $("#video-ref-kind"));
-}
-
-$("#video-frame-subject").addEventListener("change", () =>
-  loadVideoKindOptions($("#video-frame-subject").value, $("#video-frame-kind")));
-$("#video-ref-subject").addEventListener("change", () =>
-  loadVideoKindOptions($("#video-ref-subject").value, $("#video-ref-kind")));
-
-function videoSlotFor(subjectId, kind) {
-  return (videoState.subjectSlots[subjectId] || []).find((s) => s.kind === kind);
-}
-
-$("#btn-video-frame-add").addEventListener("click", () => {
-  const subjectId = $("#video-frame-subject").value;
-  const kind = $("#video-frame-kind").value;
-  if (!subjectId || !kind) {
-    return setStatus($("#video-status"), "先选主体和图片类型（只有就绪的图片能选）", true);
-  }
-  const slot = videoSlotFor(subjectId, kind);
+function videoPickFrameRef(ref) {
   if (videoState.firstFrame) releaseVideoRef(videoState.firstFrame);
-  videoState.firstFrame = {
-    type: "subject",
-    subject_id: subjectId,
-    kind,
-    name: `${subjectId} / ${(slot && slot.label) || kind}`,
-    url: slot ? slot.thumb_url || slot.original_url : "",
-  };
+  videoState.firstFrame = ref;
   renderVideoFrame();
   updateVideoCostHint();
-  setStatus($("#video-status"), "已加入首帧");
-});
+  setStatus($("#video-status"), "已设为首帧");
+}
 
-$("#btn-video-ref-add").addEventListener("click", () => {
+function videoAddRef(ref) {
   if (videoState.references.length >= 4) {
-    return setStatus($("#video-status"), "参考图最多 4 张", true);
+    setStatus($("#video-status"), "参考图最多 4 张", true);
+    return false;
   }
-  const subjectId = $("#video-ref-subject").value;
-  const kind = $("#video-ref-kind").value;
-  if (!subjectId || !kind) {
-    return setStatus($("#video-status"), "先选主体和图片类型（只有就绪的图片能选）", true);
-  }
-  const slot = videoSlotFor(subjectId, kind);
-  videoState.references.push({
-    type: "subject",
-    subject_id: subjectId,
-    kind,
-    name: `${subjectId} / ${(slot && slot.label) || kind}`,
-    url: slot ? slot.thumb_url || slot.original_url : "",
-  });
+  videoState.references.push(ref);
   renderVideoRefs();
   updateVideoCostHint();
   setStatus($("#video-status"), "已加入参考图");
+  return true;
+}
+
+function videoRefAddGuard() {
+  if (videoState.references.length >= 4) {
+    setStatus($("#video-status"), "参考图最多 4 张", true);
+    return false;
+  }
+  return true;
+}
+
+$("#btn-video-frame-subject").addEventListener("click", () => {
+  GenRefs.showSubjectBrowser((pick) => {
+    videoPickFrameRef({
+      type: "subject",
+      subject_id: pick.subject_id,
+      kind: pick.kind,
+      name: pick.name || `${pick.subject_id} / ${pick.label || pick.kind}`,
+      url: pick.url,
+    });
+  });
+});
+
+$("#btn-video-ref-subject").addEventListener("click", () => {
+  if (!videoRefAddGuard()) return;
+  GenRefs.showSubjectBrowser((pick) => {
+    videoAddRef({
+      type: "subject",
+      subject_id: pick.subject_id,
+      kind: pick.kind,
+      name: pick.name || `${pick.subject_id} / ${pick.label || pick.kind}`,
+      url: pick.url,
+    });
+  });
+});
+
+/* 动作库（线稿/深度 · 只锚姿势构图）：pick.source = 库 id，转成 ref.pose_source */
+$("#btn-video-ref-pose").addEventListener("click", () => {
+  if (!videoRefAddGuard()) return;
+  GenRefs.showPoseBrowser((pick) => {
+    videoAddRef({
+      type: "pose",
+      pose_id: pick.pose_id,
+      angle: pick.angle,
+      pose_source: pick.source || "",
+      name: pick.name || pick.pose_id,
+      url: pick.url,
+    });
+  });
+});
+
+/* 人脸库（AI 架构虚构人物 · 锚脸部身份） */
+$("#btn-video-ref-face").addEventListener("click", () => {
+  if (!videoRefAddGuard()) return;
+  GenRefs.showFaceBrowser((pick) => {
+    videoAddRef({
+      type: "face",
+      face_id: pick.face_id,
+      face_source: pick.source || "",
+      name: pick.name || pick.face_id,
+      url: pick.url,
+    });
+  });
+});
+
+/* 服饰库（只锚服装与整套配件；requireImage = 纯文本条目禁选 —— 参考图必须真有图可发） */
+$("#btn-video-ref-costume").addEventListener("click", () => {
+  if (!videoRefAddGuard()) return;
+  GenRefs.showCostumeBrowser((pick) => {
+    videoAddRef({
+      type: "costume",
+      costume_id: pick.item_id,
+      costume_source: pick.source_id || "",
+      name: pick.name || pick.item_id,
+      url: pick.url,
+    });
+  }, { requireImage: true });
 });
 
 /* 最近生成里有现成的产物图（Playground 出的图）：点开弹层选一张，直接当首帧/参考图，
@@ -716,15 +732,38 @@ $("#btn-video-generate").addEventListener("click", async () => {
     resolution: $("#video-resolution").value || null,
     seed,
     // 图生视频发首帧不发参考图；文生视频只发参考图
+    // spec 映射与 Playground（adhoc.js）同一套：pose/face/costume 带 role 与库 id，
+    // 视频通路后端只解析文件路径（role 被忽略）
     references: videoState.mode === "t2v"
       ? videoState.references.map((ref) =>
           ref.type === "staged"
             ? { staged_id: ref.id }
             : ref.type === "recent"
             ? { run_id: ref.run_id }
+            : ref.type === "pose"
+            ? {
+                pose_id: ref.pose_id,
+                angle: ref.angle || "",
+                role: "pose",
+                ...(ref.pose_source ? { source: ref.pose_source } : {}),
+              }
+            : ref.type === "face"
+            ? {
+                face_id: ref.face_id,
+                role: "face",
+                ...(ref.face_source ? { source: ref.face_source } : {}),
+              }
+            : ref.type === "costume"
+            ? {
+                costume_id: ref.costume_id,
+                role: "costume",
+                ...(ref.costume_source ? { source: ref.costume_source } : {}),
+              }
             : { subject_id: ref.subject_id, kind: ref.kind })
       : [],
     video_references: videoState.videoReferences.map((ref) => ({ staged_id: ref.id })),
+    // 首帧区 UI 只出 staged/recent/subject 三种来源（四库只进参考图区）；
+    // 后端 /videos 的 spec 解析对首帧同样支持六种来源，改 UI 时这里同步
     first_frame: videoState.mode === "i2v" && videoState.firstFrame
       ? (videoState.firstFrame.type === "staged"
           ? { staged_id: videoState.firstFrame.id }
@@ -1173,7 +1212,6 @@ function initVideo() {
     })
   );
   loadVideoCatalog().catch(() => {});
-  loadVideoSubjects().catch(() => {});
   loadVideoRecent().catch(() => {});
 }
 

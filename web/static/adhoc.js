@@ -182,8 +182,10 @@ function renderAdhocModelInfo() {
     adhocState.dreaminaCliOk === false
       ? "；⚠ 未找到 dreamina CLI（需安装并 dreamina login）"
       : "";
+  const def = adhocState.dreaminaDefaults || {};
+  const defNote = `当前生效：模型 ${def.model || DREAMINA_DEFAULT_IMAGE_MODEL} · 分辨率 ${def.resolution || "2K"}`;
   el.innerHTML =
-    `即梦共用一组设置：带参考图 = image2image，不带 = text2image；模型下拉空值 = 跟随设置页/env（模型默认 5.0，分辨率默认 2K）${cliNote}`;
+    `即梦共用一组设置：带参考图 = image2image，不带 = text2image；模型下拉空值 = 跟随设置页/env（${defNote}）${cliNote}`;
 }
 
 function updateAdhocHints() {
@@ -242,7 +244,8 @@ async function applyAdhocDreaminaOptions() {
     try {
       const s = await api("/settings");
       adhocState.dreaminaCliOk = s.dreamina_cli_available !== false;
-      adhocState.dreaminaDefaults = s.dreamina || {};
+      // 生效默认 = DB > env > 缺省（后端 dreamina_config 已解析），别用 raw 设置值
+      adhocState.dreaminaDefaults = s.dreamina_image_default || s.dreamina || {};
     } catch {
       adhocState.dreaminaCliOk = true;
       adhocState.dreaminaDefaults = {};

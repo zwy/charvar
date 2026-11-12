@@ -13,6 +13,7 @@ const CostumeGallery = (() => {
     let allData = null;
     const filter = { source: "", category: "", q: "", fav: false, media: "" };
     let selectedItem = null;
+    let detailLastKey = "";  /* renderDetail 同条目重画时恢复内容区滚动位置用 */
 
     root.innerHTML =
       '<div class="costume-browser' + (variant === "page" ? " costume-browser-page" : "") + '">' +
@@ -517,7 +518,14 @@ const CostumeGallery = (() => {
           "</div>";
       }
 
+      /* 内容区 + 固定底栏：长内容（关键词/文本层块）在内容区滚，「加入参考图」常驻底栏。
+         编辑态保存失败等原因会整栏重画 —— 保留内容区滚动位置（换条目重置）。 */
+      const prevBody = detailEl.querySelector(".gallery-detail-body");
+      const itemKey = it.source_id + "/" + it.item_id;
+      const restoreScroll = prevBody && detailLastKey === itemKey ? prevBody.scrollTop : 0;
+      detailLastKey = itemKey;
       detailEl.innerHTML =
+        '<div class="gallery-detail-body">' +
         (it.image_url
           ? '<div class="costume-detail-img" title="点看大图">' +
             '<img src="' + esc(it.image_url) + '" alt="' + esc(it.item_id) + '"></div>'
@@ -535,11 +543,16 @@ const CostumeGallery = (() => {
         policyBlock +
         blocks.join("") +
         regenRow +
+        "</div>" +
         (onPick
-          ? '<div class="costume-detail-actions">' +
+          ? '<div class="gallery-detail-footer">' +
+            '<div class="costume-detail-actions">' +
             '<button type="button" class="costume-add-btn primary">加入参考图</button>' +
+            "</div>" +
             "</div>"
           : "");
+      const costBody = detailEl.querySelector(".gallery-detail-body");
+      if (costBody && restoreScroll) costBody.scrollTop = restoreScroll;
 
       /* 事件：详情收藏钮走同一条 toggleFav（卡片徽章 ♥ chip 与它实时同步，三库同款） */
       detailEl.querySelector(".costume-detail-fav").addEventListener("click", function () {

@@ -169,10 +169,11 @@ async function loadSettings() {
     // 即梦：model 下拉（画布目录，tables.js 与后端 _IMAGE_MODELS 同源）+ 分辨率档按模型配对；
     // 已存值不在清单/档位时补一项（存旧值不丢）。空 = env/默认链（seedream_4.7 · 2K）。
     const dm = settings.dreamina || {};
+    const dmi = settings.dreamina_image_default || {}; // 生效默认（DB > env > 缺省）
     const dmModelSel = $("#set-dreamina-model");
     const dmResSel = $("#set-dreamina-resolution");
     const dmEntries = Object.entries(DREAMINA_IMAGE_MODELS);
-    const dmOptions = [`<option value="">跟随默认（${escapeHtml(DREAMINA_DEFAULT_IMAGE_MODEL)}）</option>`]
+    const dmOptions = [`<option value="">跟随默认（当前生效 ${escapeHtml(dmi.model || DREAMINA_DEFAULT_IMAGE_MODEL)}）</option>`]
       .concat(dmEntries.map(([id, e]) => `<option value="${escapeHtml(id)}">${escapeHtml(e.label)}</option>`));
     if (dm.model && !dmEntries.some(([id]) => id === dm.model)) {
       dmOptions.push(`<option value="${escapeHtml(dm.model)}">${escapeHtml(dm.model)}（不在当前清单）</option>`);
@@ -182,7 +183,8 @@ async function loadSettings() {
     const dreaminaResolutionOptions = (modelId, current, keepUnknown) => {
       const entry = DREAMINA_IMAGE_MODELS[modelId] || DREAMINA_IMAGE_MODELS[DREAMINA_DEFAULT_IMAGE_MODEL];
       const tiers = entry.resolutions;
-      const opts = [`<option value="">（跟随 env 默认）</option>`]
+      const effRes = modelId ? "" : dmi.resolution || "";
+      const opts = [`<option value="">（跟随 env 默认${effRes ? `，当前生效 ${escapeHtml(effRes)}` : ""}）</option>`]
         .concat(tiers.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`));
       if (keepUnknown && current && !tiers.includes(current)) {
         opts.push(`<option value="${escapeHtml(current)}">${escapeHtml(current)}（不在档位里）</option>`);

@@ -360,8 +360,18 @@ const PoseGallery = (() => {
       return Promise.resolve();
     }
 
+    /* renderDetail：拆「可滚内容区 + 固定底栏」两段（.gallery-detail-body / footer）——
+       视角切换与「加入参考图」常驻底栏，长内容（动作描述）只在内容区滚；
+       同一动作内重画（换视角 / 编辑态切换）时保留内容区滚动位置，换动作重置到顶。 */
+    let lastDetailKey = "";
+    let lastDetailScroll = 0;
+
     function renderDetail() {
       const p = selectedPose;
+      const key = p ? p.source + "/" + p.pose_id : "";
+      const prevBody = detailEl.querySelector(".gallery-detail-body");
+      if (prevBody && key && key === lastDetailKey) lastDetailScroll = prevBody.scrollTop;
+      lastDetailKey = key;
       if (!p) {
         detailEl.innerHTML = '<div class="pose-empty">在左侧选择一个动作</div>';
         return;
@@ -372,6 +382,7 @@ const PoseGallery = (() => {
       }
       const actionText = selectedAngle ? String(selectedAngle.action_text || "").trim() : "";
       detailEl.innerHTML =
+        '<div class="gallery-detail-body">' +
         '<div class="pose-detail-img"' + (selectedAngle.thumb_url ? ' title="点看大图"' : "") + ">" +
         (selectedAngle.thumb_url
           ? '<img src="' + esc(selectedAngle.thumb_url) + '" alt="' + esc(p.number) + '">'
@@ -399,10 +410,6 @@ const PoseGallery = (() => {
             "</select>" +
             "</div>"
           : "") +
-        '<div class="pose-angle-block">' +
-        '<div class="pose-angle-label">选择视角</div>' +
-        '<div class="pose-angle-grid"></div>' +
-        "</div>" +
         '<div class="pose-action-block">' +
         '<div class="pose-action-head">' +
         '<span class="pose-angle-label">动作描述 · ' + esc(selectedAngle.angle_zh) + "</span>" +
@@ -423,6 +430,12 @@ const PoseGallery = (() => {
             (actionText ? esc(actionText) : '<span class="pose-action-muted">还没有动作描述</span>') +
             "</div>") +
         "</div>" +
+        "</div>" +
+        '<div class="gallery-detail-footer">' +
+        '<div class="pose-angle-block">' +
+        '<div class="pose-angle-label">选择视角</div>' +
+        '<div class="pose-angle-grid"></div>' +
+        "</div>" +
         (onPick
           ? '<div class="pose-detail-actions">' +
             '<button type="button" class="pose-add-btn primary"' +
@@ -433,7 +446,9 @@ const PoseGallery = (() => {
               : "") +
             ">加入参考图</button>" +
             "</div>"
-          : "");
+          : "") +
+        "</div>";
+      detailEl.querySelector(".gallery-detail-body").scrollTop = lastDetailScroll || 0;
       if (selectedAngle.thumb_url) {
         detailEl.querySelector(".pose-detail-img").addEventListener("click", function () {
           Media.showImageModal(selectedAngle.full_url, p.number + " " + (p.title_zh || p.title) + "（" + p.title + "）");
