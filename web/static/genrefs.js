@@ -77,8 +77,10 @@ const GenRefs = (() => {
       el.appendChild(select);
       const del = document.createElement("button");
       del.type = "button";
-      del.className = "btn-sm";
-      del.textContent = "移除";
+      del.className = "btn-icon";
+      del.title = "移除";
+      del.setAttribute("aria-label", "移除");
+      del.innerHTML = icon("x");
       del.addEventListener("click", (ev) => {
         ev.stopPropagation();
         remove(index);

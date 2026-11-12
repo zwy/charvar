@@ -75,7 +75,7 @@ async function loadRecipes() {
       `<td>${escapeHtml(r.title || "-")}</td>` +
       `<td>${recipeCategoryBadge(r.category)}</td>` +
       `<td class="recipe-chain" title="${escapeHtml(chainText)}">${chainHtml}</td>` +
-      `<td><div class="row-actions"><button data-detail="${escapeHtml(r.name)}">详情</button></div></td>`;
+      `<td><div class="row-actions"><button class="btn-icon" data-detail="${escapeHtml(r.name)}" title="详情" aria-label="详情">${icon("eye")}</button></div></td>`;
     tbody.appendChild(tr);
   }
   tbody.querySelectorAll("button[data-detail]").forEach((btn) =>
@@ -130,9 +130,9 @@ async function loadRecipeRuns() {
       `<td>${recipeStatusBadge(r.status)}</td>` +
       `<td>${r.seed}</td><td class="created-at">${escapeHtml(r.created_at || "")}</td>` +
       `<td><div class="row-actions">` +
-      `<button data-view="${escapeHtml(r.recipe_run_id)}">查看</button>` +
-      (controllable ? `<button data-cont="${escapeHtml(r.recipe_run_id)}">继续</button>` : "") +
-      `<button class="danger" data-del="${escapeHtml(r.recipe_run_id)}">删除</button>` +
+      `<button class="btn-icon" data-view="${escapeHtml(r.recipe_run_id)}" title="查看" aria-label="查看">${icon("eye")}</button>` +
+      (controllable ? `<button class="btn-icon" data-cont="${escapeHtml(r.recipe_run_id)}" title="继续" aria-label="继续">${icon("play")}</button>` : "") +
+      `<button class="btn-icon danger" data-del="${escapeHtml(r.recipe_run_id)}" title="删除" aria-label="删除">${icon("trash")}</button>` +
       `</div></td>`;
     tbody.appendChild(tr);
   }
@@ -141,7 +141,7 @@ async function loadRecipeRuns() {
   tbody.querySelectorAll("button[data-cont]").forEach((btn) =>
     btn.addEventListener("click", async () => {
       btn.disabled = true;
-      btn.textContent = "继续中…";
+      btn.innerHTML = icon("refresh"); // 图标反馈：进行中（禁用+换图标，完成后表格重绘还原）
       try {
         const state = await api(`/recipe-runs/${encodeURIComponent(btn.dataset.cont)}/continue`, { method: "POST" });
         await loadRecipeRuns();
@@ -149,7 +149,7 @@ async function loadRecipeRuns() {
       } catch (err) {
         alert("继续失败：" + err.message);
         btn.disabled = false;
-        btn.textContent = "继续";
+        btn.innerHTML = icon("play");
       }
     }));
   tbody.querySelectorAll("button[data-del]").forEach((btn) =>

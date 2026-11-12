@@ -126,12 +126,22 @@ card padding shrinks).
 - **Form fields** are label-wrapped: muted 12px label above a full-width 35px control.
 - **Hints** are muted 12px secondary text. Treat them as a scarce resource — see below.
 - **Reference images** are 92px-min thumbnail cards with a role dropdown.
-- **Icons**: the app has no third-party icon set. Main/form buttons stay text-only.
-  **Card-level action rows** (`.image-actions`) may use small inline SVG icon buttons
-  (`.btn-icon`, 26×26, 14px glyph, `currentColor`, only for unambiguous verbs — play /
-  download / preview; the single source is `icon(name)` in `core.js`) mixed with 1–2-word
-  text labels (「提示词」「复用」). Longer explanatory labels (查看提示词 / 复用提示词)
-  are trimmed — the tooltip (`title`) carries the full verb.
+- **Icons**: the app has no third-party icon set; the single source is `icon(name)` in
+  `core.js`. Main / form / primary buttons stay text-only (保存设置, 出图, 生成提示词,
+  推送生图, provider-labelled 生成 buttons).
+  **Icon buttons** (`.btn-icon`, 26×26, 14px glyph, `currentColor`) are the language-free
+  form of *repeated, unambiguous verbs* — the set is deliberately closed so the same glyph
+  means the same verb on every page and i18n never has to translate them:
+  play · download · eye (查看) · refresh (刷新/重生成) · copy · edit · trash (删除) ·
+  save · x (关闭/取消/移除一项) · chevron-left/right (翻页) · check (点击成功反馈,
+  1.2–1.5s 还原). Every icon-only button carries `title` + `aria-label` with the full
+  verb (查看提示词 / 复制 ID / 贴字图…); longer text labels (「提示词」「复用」) are
+  trimmed — the tooltip carries the full verb.
+  Icon buttons appear where those verbs repeat: card action rows (`.image-actions`),
+  table row actions (`.row-actions`), slot actions, detail-block edit pairs
+  (保存+取消 next to a textarea), per-reference 移除, modal close, and the recent-pager.
+  Verbs that carry qualification stay text: AI 起草, 同步, 加入参考图, 重新生成参考图,
+  provider-labelled (Comfy生成 / OP生成 / 即梦重新生成).
 
 ## Copy policy (this round's focus)
 

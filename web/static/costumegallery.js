@@ -348,17 +348,17 @@ const CostumeGallery = (() => {
       btn.addEventListener("click", function () {
         copyText(text)
           .then(function () {
-            btn.textContent = "已复制";
+            btn.innerHTML = icon("check"); // 图标反馈，1.2s 后还原
             btn.disabled = true;
             setTimeout(function () {
-              btn.textContent = "复制";
+              btn.innerHTML = icon("copy");
               btn.disabled = false;
             }, 1200);
           })
           .catch(function () {
-            btn.textContent = "复制失败";
+            btn.innerHTML = icon("refresh");
             setTimeout(function () {
-              btn.textContent = "复制";
+              btn.innerHTML = icon("copy");
             }, 1200);
           });
       });
@@ -448,8 +448,8 @@ const CostumeGallery = (() => {
           body =
             '<textarea class="costume-edit-ta" rows="5">' + esc(value) + "</textarea>" +
             '<div class="costume-edit-row">' +
-            '<button type="button" class="btn-sm costume-edit-save">保存</button>' +
-            '<button type="button" class="btn-sm costume-edit-cancel">取消</button>' +
+            '<button type="button" class="btn-icon costume-edit-save" title="保存" aria-label="保存">' + icon("save") + "</button>" +
+            '<button type="button" class="btn-icon costume-edit-cancel" title="取消" aria-label="取消">' + icon("x") + "</button>" +
             "</div>";
         } else {
           body =
@@ -466,10 +466,10 @@ const CostumeGallery = (() => {
           (kind === "prompt-text" && !editingKind
             ? '<span class="costume-badge costume-badge-muted">' + (it.prompt_source === "ai_draft" ? "AI 起稿" : "手工维护") + "</span>"
             : "") +
-          '<button type="button" class="btn-sm costume-copy" data-kind="' + kind + '"' +
+          '<button type="button" class="btn-icon costume-copy" data-kind="' + kind + '" title="复制" aria-label="复制"' +
           (value ? '' : ' disabled') +
-          '>复制</button>' +
-          '<button type="button" class="btn-sm costume-edit-btn" data-kind="' + kind + '">编辑</button>' +
+          '>' + icon("copy") + '</button>' +
+          '<button type="button" class="btn-icon costume-edit-btn" data-kind="' + kind + '" title="编辑" aria-label="编辑">' + icon("edit") + '</button>' +
           "</span>" +
           "</div>";
         return '<div class="costume-kw-block" data-block="' + kind + '">' + head + body + "</div>";
@@ -499,7 +499,7 @@ const CostumeGallery = (() => {
         '<option value="keep"' + (polAcc === "keep" ? " selected" : "") + '>保留配件</option>' +
         '<option value="remove"' + (polAcc === "remove" ? " selected" : "") + '>摘掉鞋袜与配件</option>' +
         "</select>" +
-        '<button type="button" class="btn-sm costume-pol-save">保存</button>' +
+        '<button type="button" class="btn-icon costume-pol-save" title="保存" aria-label="保存">' + icon("save") + "</button>" +
         "</div>" +
         "</div>";
 

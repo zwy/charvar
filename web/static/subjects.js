@@ -251,15 +251,15 @@ function renderSubjectImageSlots() {
         <span class="hint">${SLOT_HINTS[slot.kind] || ""} · 默认 ${slot.aspect_ratio} / ${slot.resolution}</span>
         <textarea class="slot-prompt" rows="3" placeholder="提示词（失焦自动保存）">${escapeHtml(slot.prompt || "")}</textarea>
         <div class="slot-actions">
-          <button data-act="view" data-kind="${slot.kind}">查看</button>
-          <button data-act="copy" data-kind="${slot.kind}">复制</button>
+          <button class="btn-icon" data-act="view" data-kind="${slot.kind}" title="查看提示词" aria-label="查看提示词">${icon("eye")}</button>
+          <button class="btn-icon" data-act="copy" data-kind="${slot.kind}" title="复制提示词" aria-label="复制提示词">${icon("copy")}</button>
           <button data-act="suggest" data-kind="${slot.kind}">AI 起草</button>
-          <button data-act="edit-prompt" data-kind="${slot.kind}">编辑提示词</button>
+          <button class="btn-icon" data-act="edit-prompt" data-kind="${slot.kind}" title="编辑提示词" aria-label="编辑提示词">${icon("edit")}</button>
           <button data-act="generate" data-kind="${slot.kind}" class="primary">${slot.is_ready ? "Comfy重新生成" : "Comfy生成"}</button>
           <button data-act="generate-openrouter" data-kind="${slot.kind}">${slot.is_ready ? "OP重新生成" : "OP生成"}</button>
           <button data-act="generate-dreamina" data-kind="${slot.kind}">${slot.is_ready ? "即梦重新生成" : "即梦生成"}</button>
           <label class="btn file-btn">上传<input type="file" data-upload="${slot.kind}" accept=".png,.jpg,.jpeg,.webp" hidden></label>
-          ${slot.is_ready ? `<button data-act="delete" data-kind="${slot.kind}" class="danger">删除</button>` : ""}
+          ${slot.is_ready ? `<button class="btn-icon danger" data-act="delete" data-kind="${slot.kind}" title="删除" aria-label="删除">${icon("trash")}</button>` : ""}
           ${slot.status === "queued" ? `<button data-act="sync" data-kind="${slot.kind}">同步</button>` : ""}
         </div>
         <span class="slot-status status"></span>

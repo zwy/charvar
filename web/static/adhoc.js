@@ -293,8 +293,10 @@ function renderAdhocRefs() {
     }
     const del = document.createElement("button");
     del.type = "button";
-    del.className = "btn-sm";
-    del.textContent = "移除";
+    del.className = "btn-icon";
+    del.title = "移除";
+    del.setAttribute("aria-label", "移除");
+    del.innerHTML = icon("x");
     del.addEventListener("click", () => removeAdhocRef(index));
     el.appendChild(del);
     box.appendChild(el);

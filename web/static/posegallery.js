@@ -409,15 +409,15 @@ const PoseGallery = (() => {
         '<span class="pose-action-btns">' +
         (editingAction
           ? ""
-          : (actionText ? '<button type="button" class="btn-sm pose-action-copy">复制</button>' : "") +
-            '<button type="button" class="btn-sm pose-action-edit">编辑</button>') +
+          : (actionText ? '<button type="button" class="btn-icon pose-action-copy" title="复制" aria-label="复制">' + icon("copy") + "</button>" : "") +
+            '<button type="button" class="btn-icon pose-action-edit" title="编辑" aria-label="编辑">' + icon("edit") + "</button>") +
         "</span>" +
         "</div>" +
         (editingAction
           ? '<textarea class="pose-edit-ta" rows="5">' + esc(actionText) + "</textarea>" +
             '<div class="pose-edit-row">' +
-            '<button type="button" class="btn-sm pose-action-save">保存</button>' +
-            '<button type="button" class="btn-sm pose-action-cancel">取消</button>' +
+            '<button type="button" class="btn-icon pose-action-save" title="保存" aria-label="保存">' + icon("save") + "</button>" +
+            '<button type="button" class="btn-icon pose-action-cancel" title="取消" aria-label="取消">' + icon("x") + "</button>" +
             "</div>"
           : '<div class="pose-action-text">' +
             (actionText ? esc(actionText) : '<span class="pose-action-muted">还没有动作描述</span>') +
@@ -457,17 +457,17 @@ const PoseGallery = (() => {
         copyBtn.addEventListener("click", function () {
           copyText(actionText)
             .then(function () {
-              copyBtn.textContent = "已复制";
+              copyBtn.innerHTML = icon("check"); // 图标反馈，1.2s 后还原
               copyBtn.disabled = true;
               setTimeout(function () {
-                copyBtn.textContent = "复制";
+                copyBtn.innerHTML = icon("copy");
                 copyBtn.disabled = false;
               }, 1200);
             })
             .catch(function () {
-              copyBtn.textContent = "复制失败";
+              copyBtn.innerHTML = icon("refresh");
               setTimeout(function () {
-                copyBtn.textContent = "复制";
+                copyBtn.innerHTML = icon("copy");
               }, 1200);
             });
         });

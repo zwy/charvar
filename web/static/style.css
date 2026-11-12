@@ -176,6 +176,23 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   height: 26px;
   flex: none;
 }
+/* 行内/弹层/分页/详情块的图标按钮：同一形态，压过 .row-actions button、
+   .slot-actions button 等 4px 10px 内边距规则 */
+.row-actions .btn-icon,
+.slot-actions .btn-icon,
+.pager-row .btn-icon,
+.modal-head .btn-icon,
+.copy-section-head .btn-icon,
+.costume-kw-actions .btn-icon,
+.pose-action-btns .btn-icon,
+.costume-edit-row .btn-icon,
+.pose-edit-row .btn-icon,
+.costume-policy-row .btn-icon {
+  padding: 3px;
+  width: 26px;
+  height: 26px;
+  flex: none;
+}
 button:focus-visible, .btn:focus-visible, .tab:focus-visible, .chip:focus-visible,
 .seg:focus-visible, .subject-card:focus-visible, .ref-pick:focus-visible,
 .image-card:focus-visible, label.file-btn:focus-within {
@@ -440,7 +457,8 @@ td .caption { color: var(--muted); }
 .copy-section { display: flex; flex-direction: column; gap: var(--sp-1); }
 .copy-section-head { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-2); }
 .copy-section-head strong { font-size: 13px; }
-.copy-section-head .btn-sm { flex: none; }
+.copy-section-head .btn-sm,
+.copy-section-head .btn-icon { flex: none; }
 
 /* 主体档案图片槽位：一行一个，避免横图/有图无图时宽度不一 */
 .slot-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }

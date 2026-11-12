@@ -98,8 +98,8 @@ const AdhocFlow = (() => {
           : '<span class="ref-thumb-empty"></span>') +
         '<span class="ref-name">' + escapeHtml(value.name || "") + "</span>" +
         '<span class="badge">' + escapeHtml(image + " · " + opts.badge) + "</span>" +
-        "<button type=\"button\" class=\"btn-sm\">移除</button></div>";
-      const del = body.querySelector(".btn-sm");
+        '<button type="button" class="btn-icon" title="移除" aria-label="移除">' + icon("x") + '</button></div>';
+      const del = body.querySelector(".btn-icon");
       del.addEventListener("click", function (ev) {
         ev.stopPropagation();
         st[key] = null;

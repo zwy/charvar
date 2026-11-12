@@ -1031,12 +1031,15 @@ function buildCopySection(label, initialText) {
   head.className = "copy-section-head";
   head.innerHTML = `<strong>${escapeHtml(label)}</strong>`;
   const copyBtn = document.createElement("button");
-  copyBtn.className = "btn-sm";
-  copyBtn.textContent = "复制";
+  copyBtn.className = "btn-icon";
+  copyBtn.title = "复制";
+  copyBtn.setAttribute("aria-label", "复制");
+  copyBtn.innerHTML = icon("copy");
   let text = initialText || "";
   copyBtn.addEventListener("click", async () => {
-    copyBtn.textContent = (await copyText(text)) ? "已复制 ✓" : "复制失败";
-    setTimeout(() => { copyBtn.textContent = "复制"; }, 1500);
+    const ok = await copyText(text);
+    copyBtn.innerHTML = icon(ok ? "check" : "refresh"); // 图标反馈，1.5s 后还原
+    setTimeout(() => { copyBtn.innerHTML = icon("copy"); }, 1500);
   });
   head.appendChild(copyBtn);
   const pre = document.createElement("pre");
@@ -1073,13 +1076,16 @@ function showVideoCopyModal(rec) {
       rec.copy = copy;
     };
     const copyAll = document.createElement("button");
-    copyAll.className = "btn-sm";
-    copyAll.textContent = "复制全部";
+    copyAll.className = "btn-icon";
+    copyAll.title = "复制全部";
+    copyAll.setAttribute("aria-label", "复制全部");
+    copyAll.innerHTML = icon("copy");
     copyAll.addEventListener("click", async () => {
       const copy = rec.copy || {};
       const text = [copy.title, copy.intro, tagsText(copy)].filter(Boolean).join("\n");
-      copyAll.textContent = (await copyText(text)) ? "已复制 ✓" : "复制失败";
-      setTimeout(() => { copyAll.textContent = "复制全部"; }, 1500);
+      const ok = await copyText(text);
+      copyAll.innerHTML = icon(ok ? "check" : "refresh");
+      setTimeout(() => { copyAll.innerHTML = icon("copy"); }, 1500);
     });
     const generate = async () => {
       regen.disabled = true;
