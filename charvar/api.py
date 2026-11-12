@@ -2529,7 +2529,7 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     ) -> list[dict[str, Any]]:
         """最近的 放大记录（读 manifest.json；不落 runs 表）。
 
-        列表本体保持裸数组；总数走 X-Total-Count 响应头，给「最近放大」翻页。
+        列表本体保持裸数组；总数走 X-Total-Count 响应头，给「最近生成」翻页。
         """
         response.headers["X-Total-Count"] = str(adhoc_upscale_service.count_recent())
         return adhoc_upscale_service.list_recent(limit, offset)

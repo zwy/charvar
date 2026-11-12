@@ -245,7 +245,7 @@ def test_api_upscale_video_run_id_source(tmp_path, monkeypatch):
         time.sleep(0.1)
     assert status["status"] == "ready", status
     assert status["passthrough"] is False
-    # 「最近放大」列表显示 label（视频 run_id）
+    # 「最近生成」列表显示 label（视频 run_id）
     rec = adhoc_upscale.list_recent()[0]
     assert rec["input_name"] == run_id
 

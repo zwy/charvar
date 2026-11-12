@@ -3,7 +3,7 @@
    都把**短边**放大到目标档位；源短边已达目标时后端原样复制返回（不跑放大）。
    与视频（video.js）同构的 adhoc 家族异步作业：提交 → POST /upscales/generate 返回
    run_id → 每 8s 轮询 /upscales/{run_id}/status 到 ready/failed；页面载入时从
-   「最近放大」列表接上还在跑的作业（跨刷新不断线）。仅 1 条输入视频：上传暂存
+   「最近生成」列表接上还在跑的作业（跨刷新不断线）。仅 1 条输入视频：上传暂存
    POST /upscales/upload（≤200MB，魔数判容器），ready 时后端已清暂存、前端摘条目。 */
 
 "use strict";
@@ -235,7 +235,7 @@ function renderUpsResult(s) {
   }
 }
 
-/* ---------- 最近放大（分页，同 video.js 的分页器用法） ---------- */
+/* ---------- 最近生成（分页，同 video.js 的分页器用法） ---------- */
 
 const UPS_RECENT_PAGE_SIZE = 24;
 const upsRecentState = { page: 0, seq: 0 };
