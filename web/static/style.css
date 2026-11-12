@@ -47,7 +47,14 @@ body {
   top: 0;
   z-index: 10;
 }
-.brand { font-weight: 700; font-size: 16px; }
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 16px;
+}
+.brand-logo { display: block; border-radius: 6px; }
 .brand .sub { font-weight: 400; color: var(--muted); font-size: 12px; margin-left: 8px; }
 nav { display: flex; flex-wrap: wrap; gap: 6px; }
 .tab {

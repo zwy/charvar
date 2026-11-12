@@ -15,7 +15,7 @@ const NAV_PAGES = [
   const m = location.pathname.match(/^\/ui\/([a-z]+)$/);
   const current = m ? m[1] : (location.pathname === "/" ? "gen" : "");
   header.innerHTML = `
-    <div class="brand">charvar <span class="sub">角色变体提示词生成器</span></div>
+    <div class="brand"><img class="brand-logo" src="/static/favicon.svg" alt="charvar logo" width="22" height="22">charvar</div>
     <nav>${NAV_PAGES.map(([page, label]) =>
       `<a class="tab${page === current ? " active" : ""}" href="/ui/${page}">${label}</a>`
     ).join("")}</nav>`;
