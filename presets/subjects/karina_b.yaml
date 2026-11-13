@@ -1,0 +1,33 @@
+# 本文件由 `charvar subject derive` 生成（LLM 抽取 + 引用核对 + 审计），可人工修订。
+# 来源模板：karina_b.md（sha256:28bc32b9e3e8）
+# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-11-13 12:02 UTC
+# 起草 1 轮 · 审计 1 轮 · 审计通过 · 引用核对：16/16 条命中，无需修复
+id: karina_b
+name: Karina B
+subject_noun: woman
+trigger_word: karina_b
+reference_tag: <image1>
+style_lock:
+- 真人写实摄影，日系写真风格，色彩明亮柔和，保留细微皮肤纹理与真实发丝，锐化与磨皮克制，保留毛孔与细小绒毛的细节。
+identity_lock:
+- 东亚，二十多岁，成熟感而非幼态。
+- 脸型是柔和的鹅蛋形轮廓，额头饱满，颧骨平滑，下颌线圆润收窄，下巴圆润不过尖。
+- 眉毛细而平直，眉峰不明显，眉尾略微上扬，保留真实毛流。
+- 眼睛是深棕色的杏眼，眼型圆润偏大，上下眼睑的弧度更明显，双眼皮褶皱清晰，眼尾略微下垂，眼神清澈，睫毛浓密自然上翘，眼球有明确的高光点。
+- 鼻梁细直但不过高，鼻头小巧。
+- 嘴唇饱满，上唇薄、下唇略厚，保留细微唇纹，唇色是偏暖调的珊瑚粉色。
+- 皮肤白皙偏暖，质感干净真实，腮红在两颊铺开，呈柔和的粉红色晕染，妆容轻薄干净，面部保留自然的成年感。
+- 接近黑色的深棕长直发，自然披散在肩前，发尾垂到胸下缘附近。中分偏左，额前是一层较细透的轻薄碎刘海，刘海分成几缕稀疏的发丝斜落到额头与眉眼附近，两侧发丝顺贴脸颊，发根蓬松，发丝有真实的层次与光泽。
+- 侧脸轮廓能读出鼻梁、唇形与下颌线的完整侧面线条
+outfit_lock:
+- 上身穿一件黑色蕾丝文胸，三角杯形，罩杯的每一道边缘都包着一圈细密的黑色蕾丝纹样。肩带是很细的黑色带子，从罩杯上角沿肩头向上延伸。底围是一道窄的黑色带。布面是哑光质感的黑色蕾丝。
+- 下身穿一件黑色蕾丝三角内裤，腰线不高，前面是一块三角形的黑色蕾丝布面，胯部两侧的腿口开得较高，露出完整的臀线。布面是哑光质感的黑色蕾丝。
+- 背面是两根很细的黑色肩带各自从肩头向后延伸，肩带与背部中间的一道横向黑色带相连，交汇处有一道短竖扣。
+- 仅胸部一段的面料被撑起绷紧，肩带、腰部与下装保持贴身的自然垂坠。
+- 无鞋，双脚赤裸。
+- 无随身配饰，默认造型不含帽子、首饰、包袋、手表。
+body_lock:
+- 'her figure is a tall, slender, mature hourglass with a small frame, narrow shoulders, thin torso; her bust is extremely large and full, round and clearly spreading to both sides, its widest point about one and a half times the outer width of her shoulders, projecting forward as its own volume with the lower contour flaring outward; seen from the side her bust juts forward and her waist tucks in'
+- 'her waist is extremely thin and narrow, cinched just under the ribs with a flat abdomen and a clear drop to the waist line; her hips are round and full and lift backward with an arc break under the seat, close to shoulder width; seen from the side her seat lifts back; upper arms are narrower than her bust, forearms taper, thighs under two thirds of her hip width tapering to the knee, calves narrow'
+extra: Keep the same face, hairstyle, skin tone, body proportions and the same
+  black lace lingerie set on her in every pose and every new scene.

@@ -1,0 +1,32 @@
+# 本文件由 `charvar subject derive` 生成（LLM 抽取 + 引用核对 + 审计），可人工修订。
+# 来源模板：karina_a.md（sha256:2a683ca781d9）
+# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-11-13 12:01 UTC
+# 起草 1 轮 · 审计 1 轮 · 审计通过 · 引用核对：15/15 条命中，无需修复
+id: karina_a
+name: Karina A
+subject_noun: woman
+trigger_word: karina_a
+reference_tag: <image1>
+style_lock:
+- 真人写实摄影，日系写真风格，柔和均匀的影棚漫射光，色彩明亮柔和，保留细微皮肤纹理与真实发丝，锐化与磨皮克制，保留毛孔与细小绒毛的细节
+identity_lock:
+- 脸型是柔和的鹅蛋形轮廓，额头饱满，颧骨平滑，下颌线圆润收窄，下巴圆润不过尖
+- 眉毛细而平直，眉峰不明显，眉尾略微下垂
+- 深棕色杏眼，眼型细长，上下眼睑略有弧度，双眼皮褶皱清晰，眼尾略微下垂，睫毛浓密自然上翘
+- 鼻梁细直，鼻头小巧
+- 嘴唇饱满，上唇薄、下唇略厚，唇色偏冷调的淡粉色
+- 接近黑色的深棕长直发自然披散，发尾垂到胸下缘附近；中分偏右，额前是一层较厚密的轻薄碎刘海，刘海分成多缕细发丝斜落到额头与眉眼附近，两侧发丝顺贴脸颊，发根蓬松
+- 肤色白皙偏暖调，腮红集中在颧部偏左的一侧、呈柔和的玫瑰色晕染，妆容轻薄干净，保留自然的成年感
+- 东亚，二十多岁，成熟感而非幼态
+- 侧脸轮廓能读出鼻梁、唇形与下颌线的完整侧面线条
+outfit_lock:
+- 黑色蕾丝文胸，三角杯形，罩杯边缘是一圈细密的蕾丝纹样，肩带很细，底围是一道窄的黑色带
+- 黑色蕾丝三角内裤，腰线不高，前面是一块三角形蕾丝布面，胯部两侧的腿口开得较高，露出完整的臀线
+- 无鞋，双脚赤裸
+- 无随身配饰。默认造型不含帽子、首饰、包袋、手表
+- 背面是两根很细的黑色肩带各自从肩头向后延伸，肩带与背部中间的一道横向黑色带相连，交汇处有一道短竖扣
+body_lock:
+- 'her figure is a tall, slender, mature hourglass with a small frame, narrow shoulders, thin torso; her bust is extremely large and full, round and clearly spreading to both sides, its widest point about one and a half times the outer width of her shoulders, projecting forward as its own volume with the lower contour flaring outward; seen from the side her bust juts forward and her waist tucks in'
+- 'her waist is extremely thin and narrow, cinched just under the ribs with a flat abdomen and a clear drop to the waist line; her hips are round and full and lift backward with an arc break under the seat, close to shoulder width; seen from the side her seat lifts back; upper arms are narrower than her bust, forearms taper, thighs under two thirds of her hip width tapering to the knee, calves narrow'
+extra: Keep the same face, hairstyle, skin tone, body proportions and the same black
+  lace lingerie set on her in every pose and every new scene.
