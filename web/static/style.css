@@ -418,12 +418,12 @@ td .caption { color: var(--muted); }
 /* 合成视频弹层：视频 + 「下载 MP4」纵向排列，按钮与视频留出间距 */
 .video-result { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-2); }
 /* 视频：结果播放器与历史卡片里的内联视频统一宽度 */
-#video-result-player { width: 100%; max-width: 560px; background: #000; border-radius: var(--radius-panel, 8px); }
+#video-result-player { width: 100%; max-width: 480px; background: #000; border-radius: var(--radius-panel, 8px); }
 .video-card video { width: 100%; display: block; }
 .video-card .image-placeholder { min-height: 120px; display: flex; align-items: center; justify-content: center; }
 
 /* 语音：结果播放器与历史卡片里的内联音频统一宽度 */
-#tts-result-player { width: 100%; max-width: 560px; }
+#tts-result-player { width: 100%; max-width: 480px; }
 .tts-card audio { width: 100%; display: block; }
 .tts-card .image-placeholder { min-height: 60px; display: flex; align-items: center; justify-content: center; }
 
