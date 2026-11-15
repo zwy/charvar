@@ -160,9 +160,10 @@ class AppSettings(BaseModel):
 
 
 def default_image_sizes() -> dict[str, ImageSize]:
-    """默认尺寸：三视图/半身 3:4，全身 2:3，人脸头像 4:5；统一 1k 档。"""
+    """默认尺寸：三视图/半身 3:4，全身 2:3；人脸头像 4:5/2k（人脸细节档）。"""
     sizes = {kind: ImageSize() for kind in IMAGE_KIND_KEYS}
-    sizes["portrait"] = ImageSize(aspect_ratio="4:5")
+    # portrait 用 2k：人脸库（face-db/celeb100 v2）100/100 实测人像细节需要 2k
+    sizes["portrait"] = ImageSize(aspect_ratio="4:5", resolution="2k")
     for kind in ("front", "side", "behind"):
         sizes[kind] = ImageSize(aspect_ratio="2:3")
     return sizes

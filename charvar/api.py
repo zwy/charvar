@@ -508,7 +508,20 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
     # ---- 页面（真多页：每页面一个 html，路由表与 web/static/nav.js 的 NAV_PAGES 三处同步） ----
     if static_dir is not None and Path(static_dir).exists():
         static_dir = Path(static_dir)
-        app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+        class _NoCacheStaticFiles(StaticFiles):
+            """每个响应加 no-cache：浏览器带 ETag 回源校验。
+
+            2026-11-15 实锤：浏览器缓存旧 JS → 设置页下拉没有 4:5 → 保存把
+            portrait 画幅写回 3:4。starlette 1.2 的 StaticFiles 无 headers 参数，用子类。
+            """
+
+            def file_response(self, *args, **kwargs):  # noqa: ANN002, ANN003
+                response = super().file_response(*args, **kwargs)
+                response.headers["Cache-Control"] = "no-cache"
+                return response
+
+        app.mount("/static", _NoCacheStaticFiles(directory=static_dir), name="static")
 
         for route, filename in _PAGE_ROUTES.items():
             page_file = static_dir / Path(filename).name

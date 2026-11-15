@@ -83,7 +83,10 @@ def test_default_image_sizes_shape():
     sizes = default_image_sizes()
     assert sizes["character_sheet"].aspect_ratio == "3:4"
     assert sizes["behind"].aspect_ratio == "2:3"
-    assert all(s.resolution == "1k" for s in sizes.values())
+    assert sizes["portrait"].aspect_ratio == "4:5"
+    # portrait 人脸特写默认 2k（ celeb100 人脸库 100/100 实测，人像细节需要 2k）
+    assert sizes["portrait"].resolution == "2k"
+    assert all(s.resolution == "1k" for k, s in sizes.items() if k != "portrait")
 
 
 # ---------- OpenRouter 按模式配置（t2i 文生图 / i2i 图片编辑） ----------
