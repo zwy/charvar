@@ -24,3 +24,4 @@ dist/
 .superdesign/tmp/
 data/agent_shots/
 /.venv.bak-py312
+/data/pose_depth_batches
