@@ -1,0 +1,34 @@
+# 本文件由 `charvar subject derive` 生成（LLM 抽取 + 引用核对 + 审计），可人工修订。
+# 来源模板：himari.md（sha256:b78deedfb8ae）
+# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-11-15 11:04 UTC
+# 起草 1 轮 · 审计 1 轮 · 审计通过 · 引用核对：20/20 条命中，无需修复
+id: himari
+name: 陽葵
+subject_noun: woman
+trigger_word: himari
+reference_tag: <image1>
+style_lock:
+- 真人写实摄影，日系写真风格，色彩明亮柔和
+- 保留细微皮肤纹理与真实发丝，锐化与磨皮克制，保留毛孔与细小绒毛的细节
+identity_lock:
+- 东亚，二十多岁，年轻感明显、带一点少女感，不是成熟御姐
+- 脸型是柔和的鹅蛋形轮廓，额头饱满，颧骨平滑，下颌线圆润收窄，下巴圆润不过尖
+- 眉毛很细、颜色偏淡、眉形平直，眉峰不明显
+- 眼睛是深棕色的杏眼，眼型窄而细长，眼裂的长度明显大于宽度，上下眼睑略有弧度，双眼皮褶皱清晰，眼尾略微下垂，睫毛自然上翘
+- 鼻梁细直，鼻头小巧
+- 嘴唇小巧而饱满，上唇薄、下唇略厚，唇色是淡的裸粉色，下唇下方偏左有一颗小痣
+- 皮肤白皙偏暖，质感干净通透，脸颊饱满、带有年轻的肉感，轮廓线柔和，只有若有若无的极淡粉色晕染，妆容轻薄干净
+- 深棕色中长发，长度到肩胛附近，发尾自然散落；前额是偏分，刘海极轻薄、稀疏，额头的绝大部分露出来，只有几缕细发丝斜落到眉眼附近，两侧发丝顺贴脸颊，发根蓬松，发丝有真实的光泽与层次
+- 侧脸轮廓能读出鼻梁、唇形与下颌线的完整侧面线条
+outfit_lock:
+- 上身穿一件黑色三角杯比基尼上衣，罩杯的每一道边缘都包着一圈宽的白色滚边，两片罩杯之间的白色滚边在正中交叉成一个深的 V 形；肩带是细的黑色带子，肩带内侧沿边有一道白色滚边，肩带下端有一个小金属调节扣；底围是一道窄的黑色带；布面是哑光质感的黑色泳衣面料，在强光下受光面泛出极淡的冷蓝紫调
+- 下身穿一件黑色三角内裤，低腰，腰口与两侧腿口都包着一圈宽的白色滚边，正面是一块窄的三角形黑色布面
+- 无鞋，双脚赤裸
+- 无随身配饰。默认造型不含帽子、首饰、包袋、手表
+- 背面是两根细的黑色肩带各自从肩头向后延伸，肩带与背部中间的一道横向白色带相连，交汇处有一道短竖扣
+body_lock:
+- 'her figure is lush and tall: level shoulders, rounded shoulder tops, a fleshy torso cinched at the waist, long limbs; her bust is very large, full and round, flaring to both sides, its widest width about one third wider than across her outer shoulders, with its own forward volume and, in profile, forward projection deeper than its own width'
+- 'an extremely thin, clearly defined waist indented right below the ribcage, visible navel, flat abdomen flowing into the hips; full round hips slightly wider than across her shoulders with moderate backward lift; plump rounded upper arms, fine wrists, small hands; full rounded thighs wider than two thirds of her widest hip measure, gently narrowing to slender calves'
+extra: Keep the same face shape, facial features, hairstyle, hair colour, skin tone
+  and the same outfit in every pose and every new scene; only expression, pose, camera
+  angle and environment may change.
