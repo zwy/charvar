@@ -178,10 +178,11 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 });
 
-/* 主体档案 5 种槽位的文案（gen 页 sticker 提示与主体页槽位共用） */
+/* 主体档案 6 种槽位的文案（gen 页 sticker 提示与主体页槽位共用） */
 const SLOT_LABELS = {
   character_sheet: "人物半身像＋三视图",
   headshot: "人物半身像",
+  portrait: "人脸头像",
   front: "全身正面",
   side: "全身侧面",
   behind: "全身背面",
@@ -189,6 +190,7 @@ const SLOT_LABELS = {
 const SLOT_HINTS = {
   character_sheet: "文生图，第一步",
   headshot: "基于三视图编辑",
+  portrait: "基于三视图编辑",
   front: "基于三视图编辑",
   side: "基于三视图编辑",
   behind: "基于三视图编辑",

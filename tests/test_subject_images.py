@@ -119,8 +119,8 @@ def _mock_comfy(monkeypatch, uploads: list[str], payloads: list[dict], state: di
 def test_slots_and_template_roundtrip(client):
     client.post("/subjects", json={"id": "demo_witch", "name": "演示"})
     data = client.get("/subjects/demo_witch/images").json()
-    assert data["kinds"] == ["character_sheet", "headshot", "front", "side", "behind"]
-    assert len(data["slots"]) == 5
+    assert data["kinds"] == ["character_sheet", "headshot", "portrait", "front", "side", "behind"]
+    assert len(data["slots"]) == 6
     assert all(slot["status"] == "empty" and not slot["is_ready"] for slot in data["slots"])
     assert data["slots"][0]["label"] == "人物半身像＋三视图"
 

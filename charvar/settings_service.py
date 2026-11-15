@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field, field_validator
 from charvar import storage
 
 # 与 charvar.subject_images.IMAGE_KINDS 保持一致（避免循环导入，此处显式列出）
-IMAGE_KIND_KEYS = ("character_sheet", "headshot", "front", "side", "behind")
+IMAGE_KIND_KEYS = ("character_sheet", "headshot", "portrait", "front", "side", "behind")
 
 _DEFAULT_WORKFLOW_T2I = "image_qwen_image_2_1_turbo_t2i_easy_api"
 _DEFAULT_WORKFLOW_EDIT = "image_qwen_image_2_1_turbo_image_edit_easy_api"
@@ -160,8 +160,9 @@ class AppSettings(BaseModel):
 
 
 def default_image_sizes() -> dict[str, ImageSize]:
-    """默认尺寸：三视图/半身 3:4，全身 2:3；统一 1k 档。"""
+    """默认尺寸：三视图/半身 3:4，全身 2:3，人脸头像 4:5；统一 1k 档。"""
     sizes = {kind: ImageSize() for kind in IMAGE_KIND_KEYS}
+    sizes["portrait"] = ImageSize(aspect_ratio="4:5")
     for kind in ("front", "side", "behind"):
         sizes[kind] = ImageSize(aspect_ratio="2:3")
     return sizes

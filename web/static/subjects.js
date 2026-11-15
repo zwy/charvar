@@ -1,4 +1,4 @@
-/* 主体页（/ui/subjects）：主体档案库浏览、五槽位图、通用提示词模板。
+/* 主体页（/ui/subjects）：主体档案库浏览、六槽位图、通用提示词模板。
    上半是与人脸/动作/服饰三库同形态的 master-detail：左侧搜索 + 档案卡网格
    （front 缩略图、缺图占位），右侧详情 = 可编辑档案表单（id 只读展示）。
    建档统一走 CLI（空态文案指向 CLI 建档），页面只做选择 / 编辑现有档案 / 删除。
@@ -198,7 +198,7 @@ $("#btn-subject-delete").addEventListener("click", async () => {
   if (!sid) return;
   if (!(await Media.showConfirm({
     title: "删除主体",
-    message: `删除主体 ${sid}？档案、五槽位图与模板一并删除，不可恢复。`,
+    message: `删除主体 ${sid}？档案、六槽位图与模板一并删除，不可恢复。`,
   }))) return;
   try {
     await api(`/subjects/${encodeURIComponent(sid)}`, { method: "DELETE" });

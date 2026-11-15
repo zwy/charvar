@@ -1,7 +1,7 @@
-"""主体档案图片（需求 §主体档案 1）：每个主体 5 种固定图片槽位。
+"""主体档案图片（需求 §主体档案 1）：每个主体 6 种固定图片槽位。
 
-- kind 枚举集中在此：character_sheet（半身像＋三视图）先行，其余 4 种基于它
-  用 image-edit workflow 生成（两步流程，需求已确认）；headshot/front/side/behind
+- kind 枚举集中在此：character_sheet（半身像＋三视图）先行，其余 5 种基于它
+  用 image-edit workflow 生成（两步流程，需求已确认）；portrait/headshot/front/side/behind
   也可以由用户直接上传。
 - 状态机：empty（无行）→ queued（已提交 ComfyUI，等完成/超时补拉）→ ready / error。
 - 不走 runs 表（单图生命周期，不污染历史记录），但完整复用 ComfyUI 管道：
@@ -10,7 +10,7 @@
   （``generate_subject_image_openrouter``）与即梦（``generate_subject_image_dreamina``，
   官方 ``dreamina`` CLI）。两步流程与槽位语义完全一致，只是参考图分别走
   ComfyUI 的 image 节点 / ``input_references`` / ``image2image --images``。
-- 即梦通路不暴露 seed（请求值仅存档）、画幅用 --ratio（charvar 8 档与 CLI 枚举一致）、
+- 即梦通路不暴露 seed（请求值仅存档）、画幅用 --ratio（charvar 9 档与 CLI 枚举一致）、
   提示词长度按上游上限预检（charvar.dreamina_image 做校验）。
 - 所有随机（seed）由调用方显式传入，模块本身不引入随机源。
 """
@@ -29,14 +29,15 @@ from charvar import assets, dreamina_image, openrouter_image, paths, reference_i
 from charvar.exporters import comfyui as comfyui_exporter
 from charvar.models import GenerateResult, PromptItem, SubjectProfile
 
-IMAGE_KINDS: tuple[str, ...] = ("character_sheet", "headshot", "front", "side", "behind")
-ImageKind = Literal["character_sheet", "headshot", "front", "side", "behind"]
-# 两步流程：这 4 种需要 character_sheet 先 ready（生成时作为参考图上传）
-SHEET_DEPENDENT_KINDS = frozenset({"headshot", "front", "side", "behind"})
+IMAGE_KINDS: tuple[str, ...] = ("character_sheet", "headshot", "portrait", "front", "side", "behind")
+ImageKind = Literal["character_sheet", "headshot", "portrait", "front", "side", "behind"]
+# 两步流程：这 5 种需要 character_sheet 先 ready（生成时作为参考图上传）
+SHEET_DEPENDENT_KINDS = frozenset({"headshot", "portrait", "front", "side", "behind"})
 
 KIND_LABELS: dict[str, str] = {
     "character_sheet": "人物半身像＋三视图",
     "headshot": "人物半身像",
+    "portrait": "人脸头像",
     "front": "全身正面",
     "side": "全身侧面",
     "behind": "全身背面",
@@ -50,6 +51,7 @@ _SHEET_FRAMING = None  # 三视图含全身，禁用 closeup negative 兜底
 _KIND_FRAMING: dict[str, str | None] = {
     "character_sheet": _SHEET_FRAMING,
     "headshot": "chest",
+    "portrait": "head",
     "front": "full",
     "side": "full",
     "behind": "full",
@@ -262,7 +264,7 @@ def _require_ready_sheet(conn: sqlite3.Connection, subject_id: str) -> Path:
     sheet_file = _original_file(subject_id, "character_sheet")
     if row is None or row.get("status") != "ready" or sheet_file is None:
         raise SubjectImageError(
-            "需要先就绪 character_sheet（人物半身像＋三视图）：请先生成或上传它，再生成其余 4 种图片",
+            "需要先就绪 character_sheet（人物半身像＋三视图）：请先生成或上传它，再生成其余 5 种图片",
             status=409,
         )
     return sheet_file
@@ -397,7 +399,7 @@ def generate_subject_image(
 def _openrouter_reference_paths(conn: sqlite3.Connection, subject_id: str, kind: str) -> list[Path]:
     """该槽位要发给在线后端（OpenRouter / 即梦）的参考图。
 
-    与 ComfyUI 通路同源：其余 4 种以 character_sheet 为参考图（与 edit
+    与 ComfyUI 通路同源：其余 5 种以 character_sheet 为参考图（与 edit
     workflow 的 image 节点等价），走同一份预处理缓存（长边 1536 / JPEG q88）。
     character_sheet 本身是文生图，没有参考图。
     """
@@ -550,8 +552,8 @@ def generate_subject_image_dreamina(
 ) -> SubjectImageSlot:
     """用即梦（dreamina CLI）生成一个槽位图（两步流程 / 槽位状态机与另两条通路一致）。
 
-    - 画幅走 --ratio（charvar 8 档与即梦枚举一致），默认用「主体图默认尺寸」的画幅；
-    - 参考图与其余在线后端同源：其余 4 槽以 character_sheet 为参考（image2image）；
+    - 画幅走 --ratio（charvar 9 档与即梦枚举一致），默认用「主体图默认尺寸」的画幅；
+    - 参考图与其余在线后端同源：其余 5 槽以 character_sheet 为参考（image2image）；
     - 分辨率默认链：请求显式 > 设置页/env（DREAMINA_IMAGE_RESOLUTION）> 2k，
       且与 model_version 的组合在提交前校验（超限/不配对会白扣一次提交）；
     - 提示词处理与 OpenRouter 通路一致：<image1> 有参考图换序数词、无参考图摘掉。

@@ -1,7 +1,7 @@
 {
   "name": "character-forge",
-  "version": "1.4.1",
-  "updated": "2026-10-26",
+  "version": "1.4.2",
+  "updated": "2026-11-15",
   "description": "角色开发与提示词资产化 Skill：分阶段协助建立单角色提示词资产，交付一份只写当前态的角色提示词模板与两张基准图。",
   "entrypoint": "SKILL.md",
   "files": {
@@ -52,6 +52,11 @@
     }
   },
   "history": [
+    {
+      "version": "1.4.2",
+      "updated": "2026-11-15",
+      "note": "可选槽位清单加 portrait.png（人脸头像特写锚定，默认画幅 4:5）；交付文档模板槽位表同步加行。"
+    },
     {
       "version": "1.4.1",
       "date": "2026-10-26",

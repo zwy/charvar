@@ -153,7 +153,7 @@ def _collect_subject_images(path: Path, kind_hint: Optional[str]) -> tuple[list[
             hits.append((kind, candidate))
         if not hits:
             detail = "、".join(skipped) if skipped else "（目录为空）"
-            _die(f"目录里没有可识别的槽位图（character_sheet / headshot / front / side / behind）：{detail}")
+            _die(f"目录里没有可识别的槽位图（character_sheet / headshot / portrait / front / side / behind）：{detail}")
         return hits, skipped
     kind = kind_hint or subject_image_service.detect_kind(path.name)
     if kind is None:
@@ -272,7 +272,7 @@ def subject_image_import(
 ) -> None:
     """把交付包里的槽位图装进运行时：落盘 → 生成缩略图 → 建槽位行。
 
-    目录导入按文件名识别槽位（character_sheet / headshot / front / side / behind），
+    目录导入按文件名识别槽位（character_sheet / headshot / portrait / front / side / behind），
     其余文件跳过并在结果里列出。**缩略图随导入一并生成**，网页立刻有预览。
     """
     subject_id = subject or (path.name if path.is_dir() else None)
@@ -511,9 +511,9 @@ def subject_export(
 @subject_app.command("prompt")
 def subject_prompt(
     kind: Optional[str] = typer.Argument(
-        None, help="槽位类型 character_sheet/headshot/front/side/behind；与 --all 二选一"
+        None, help="槽位类型 character_sheet/headshot/portrait/front/side/behind；与 --all 二选一"
     ),
-    all_kinds: bool = typer.Option(False, "--all", help="起草全部 5 个槽位（5 次独立 LLM 调用）"),
+    all_kinds: bool = typer.Option(False, "--all", help="起草全部 6 个槽位（6 次独立 LLM 调用）"),
     material: Optional[str] = typer.Option(
         None, "--material", help="自定义参考资料原文：一段角色描述、character_sheet 文生图提示词、任何资料"
     ),
@@ -531,10 +531,10 @@ def subject_prompt(
     out: Optional[Path] = typer.Option(None, "--out", help="写文件：单槽=文件路径；--all=目录（落 <kind>.txt）"),
     json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出（外部 agent）"),
 ) -> None:
-    """起草主体档案 5 槽位的图片提示词（网页「AI 起草」同一条链路，纯文本 LLM 调用）。
+    """起草主体档案 6 槽位的图片提示词（网页「AI 起草」同一条链路，纯文本 LLM 调用）。
 
     没有主体档案和模板也能用：--material 给一段自定义参考资料即可起草。
-    headshot/front/side/behind 的草稿天然含 <image1>——出图时把 character_sheet 成品图
+    headshot/portrait/front/side/behind 的草稿天然含 <image1>——出图时把 character_sheet 成品图
     `--ref` 进去（ComfyUI 自动切编辑 workflow / OpenRouter 走 i2i 组）。
     """
     from charvar import llm as llm_service
@@ -549,7 +549,7 @@ def subject_prompt(
     if lang not in ("zh", "en", "any"):
         _die(f"lang 只支持 zh/en/any，收到：{lang}")
     if kind is None and not all_kinds:
-        _die("缺槽位类型：给 <kind>（character_sheet/headshot/front/side/behind）或 --all")
+        _die("缺槽位类型：给 <kind>（character_sheet/headshot/portrait/front/side/behind）或 --all")
     if kind is not None and all_kinds:
         _die("<kind> 与 --all 二选一")
     if material and material_file is not None:
@@ -1114,7 +1114,7 @@ def image_comfyui(
     ref: Optional[list[str]] = typer.Option(
         None, "--ref", help="参考图路径，可重复（最多 4 张）"
     ),
-    aspect: str = typer.Option("3:4", "--aspect", help="画幅：1:1/3:4/16:9/4:3/9:16/2:3/3:2/21:9"),
+    aspect: str = typer.Option("3:4", "--aspect", help="画幅：1:1/3:4/4:5/16:9/4:3/9:16/2:3/3:2/21:9"),
     resolution: str = typer.Option("1k", "--resolution", help="分辨率档：1k/2k"),
     seed: int = typer.Option(0, "--seed", help="采样种子（0 = 固定复现；换种子出不同图）"),
     negative: Optional[str] = typer.Option(None, "--negative", help="负向提示词（空串 = 明确不用）"),
@@ -1154,7 +1154,7 @@ def image_openrouter(
     ref: Optional[list[str]] = typer.Option(
         None, "--ref", help="参考图路径，可重复（最多 4 张）"
     ),
-    aspect: str = typer.Option("3:4", "--aspect", help="画幅：1:1/3:4/16:9/4:3/9:16/2:3/3:2/21:9"),
+    aspect: str = typer.Option("3:4", "--aspect", help="画幅：1:1/3:4/4:5/16:9/4:3/9:16/2:3/3:2/21:9"),
     resolution: str = typer.Option(
         "1k", "--resolution", help="分辨率：1k/2k 或模型声明枚举值（512/1K/1.5K/2K/4K…）；空 = 设置页/env 模式默认"
     ),
@@ -1194,7 +1194,7 @@ def image_dreamina(
     ref: Optional[list[str]] = typer.Option(
         None, "--ref", help="参考图路径，可重复（最多 4 张，走 i2i）"
     ),
-    aspect: str = typer.Option("3:4", "--aspect", help="画幅：1:1/3:4/16:9/4:3/9:16/2:3/3:2/21:9（即梦原生 8 档，同列表）"),
+    aspect: str = typer.Option("3:4", "--aspect", help="画幅：1:1/3:4/4:5/16:9/4:3/9:16/2:3/3:2/21:9（charvar 9 档；即梦按模型枚举拦）"),
     resolution: str = typer.Option(
         "", "--resolution", help="分辨率档 1K/1.5K/2K/4K 按模型；空 = 设置页/env（DREAMINA_IMAGE_RESOLUTION）默认 2K"
     ),

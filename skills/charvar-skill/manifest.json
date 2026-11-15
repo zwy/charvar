@@ -1,7 +1,7 @@
 {
   "name": "charvar-skill",
-  "version": "1.9.0",
-  "updated": "2026-11-11",
+  "version": "1.10.0",
+  "updated": "2026-11-15",
   "description": "按提示词实际出图/出视频的 Claude Code skill：ComfyUI、OpenRouter、即梦三条通路 + 视频放大（SeedVR2/FFmpeg）+ OpenRouter 语音（TTS）+ 主体档案 CLI。",
   "entrypoint": "SKILL.md",
   "files": {
@@ -16,6 +16,11 @@
     "note": "本 skill 无自带脚本；由仓库级 tests/test_skills.py 校验 frontmatter、版本同步与文件清单。"
   },
   "history": [
+    {
+      "version": "1.10.0",
+      "updated": "2026-11-15",
+      "note": "主体档案新增「人脸头像」槽位（portrait，第二槽位序、基于三视图编辑、默认画幅 4:5）；生图画幅枚举加 4:5（ComfyUI 2K 像素 1856×2320，1k 长边归一 832×1024）；即梦仅图片美学 V8.2 收 4:5。"
+    },
     {
       "version": "1.9.0",
       "updated": "2026-11-11",

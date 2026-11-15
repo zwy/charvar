@@ -1,7 +1,7 @@
 """视频：给一段提示词（+ 可选首帧图 / 参考图）直接出一段视频。
 
 与出图（``charvar.adhoc``）同构：网页与 CLI ``charvar video`` 是同一套参数语义、
-同一套落盘、同一份 manifest；不进主体档案 5 槽位、不跑预设批量、不落 runs 表。
+同一套落盘、同一份 manifest；不进主体档案 6 槽位、不跑预设批量、不落 runs 表。
 
 供应商两路，按 ``backend`` 分派（manifest 层已经供应商无关）：
 - ``openrouter``：在线 API 异步作业（``charvar.openrouter_video``）；

@@ -35,7 +35,7 @@ styling=锚脸+发型+服装（section 随条目存，锚定分句 `face`/`face_
 
 ## 图片页（跨项目调用）
 
-`charvar/adhoc.py` 是「给一段提示词出一张图」的独立通路：不进主体档案 5 槽位、不跑预设批量、不落 runs 表。
+`charvar/adhoc.py` 是「给一段提示词出一张图」的独立通路：不进主体档案 6 槽位、不跑预设批量、不落 runs 表。
 
 - CLI：`charvar image comfyui|openrouter|dreamina|models`（`--prompt`/`--prompt-file`/`--ref`/`--aspect`/`--seed`/`--out`/`--json`；`dreamina` 子命令没有 `--seed`，即梦不暴露）。产物默认落 `data/generated/adhoc/{id}/`（图 + 缩略图 + manifest.json）。
 - **网页入口**：顶栏「图片」页签（`web/static/adhoc.js`），后端 `/adhoc/*`（`charvar/api.py`）。走的是**同一个** `charvar/adhoc.py` —— 网页与 CLI 是同一套参数语义、同一套落盘、同一份 manifest。改动 `charvar/adhoc.py` 的参数名或输出格式时，CLI、网页、skill 三处都要同步。
@@ -111,7 +111,7 @@ styling=锚脸+发型+服装（section 随条目存，锚定分句 `face`/`face_
 - **不保留文生图 / 图片编辑切换**：有参考图 = 图片编辑（ComfyUI 走图片编辑 workflow / OpenRouter 走 `i2i` 组 / 即梦走 `i2i`），无参考图 = 纯文生图，后端按「有没有参考图」自动分流。
 - **主体档案只有一个选择器（在①）**：提示词主体与参考图主体必须一致（锁定项说红发、参考图是黑发就出戏）。「从主体档案加入」复用①的主体 + 槽位下拉；**换主体时旧主体的档案参考图自动清掉**（`GenRefs.dropSubjectRefs()`，上传暂存 / 最近生成的不受主体约束，保留）。
 - **参考图来源与图片页同源**（`ReferenceSpec`）：`staged_id`（上传暂存）/ `subject_id`+`kind`（主体档案槽位）/ `run_id`（+`index`，最近生成原图；`adhoc_*` 取唯一原图，charvar run 按 index 取第 N 张）。**只认 id 不认路径**。
-- **role（分工）**：每张参考图一个 role（`front`/`headshot`/`side`/`behind`/`character_sheet`，缺省 `front`），决定 LLM 锚定句里这张图管哪一摊；主体档案来源自动取槽位 kind 当 role。
+- **role（分工）**：每张参考图一个 role（`front`/`headshot`/`portrait`/`side`/`behind`/`character_sheet`，缺省 `front`），决定 LLM 锚定句里这张图管哪一摊；主体档案来源自动取槽位 kind 当 role。
 - references 随 `/generate` 存进 run（`GenerateResult.references`），推送生图与单条「重新生成」都按它取图；`regenerate` 优先重放快照里的 references。
 - `reference_kinds` 参数与 CLI 调用路径**仍受支持**（向后兼容），CLI `charvar gen --outfit` 同一套修复生效。
 - OpenRouter 参数档位按 `data/openrouter/api-response.json` 的 `supported_parameters` 动态加载（同图片页）；即梦模型目录两表放 `web/static/tables.js`（gen.js 与 adhoc.js 共用，别再各写一份）。
@@ -204,7 +204,7 @@ DB → 仓库对偶：`charvar subject export <id>` 快照成 `presets/subjects/
 
 ## 槽位图出图与编辑提示词起草
 
-五张槽位图（设定板／front／headshot／side／behind）的出图顺序、体形锚写法、
+六张槽位图（设定板／front／headshot／portrait／side／behind）的出图顺序、体形锚写法、
 「用 `charvar subject prompt` 起草但不当最终稿」等实测规则见 `docs/槽位图出图.md`。
 
 ## 服饰预设与贴字

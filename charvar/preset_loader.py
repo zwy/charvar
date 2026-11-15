@@ -23,7 +23,7 @@ from charvar.models import LetteringStyle, VariantSpec
 VALID_FRAMINGS = ("full", "chest", "head")
 
 # 出图画幅白名单：与 exporter 的 SUPPORTED_ASPECT_RATIOS 一致（auto = 按景别推导）
-VALID_ASPECT_RATIOS = ("auto", "1:1", "3:4", "16:9", "4:3", "9:16", "2:3", "3:2", "21:9")
+VALID_ASPECT_RATIOS = ("auto", "1:1", "3:4", "4:5", "16:9", "4:3", "9:16", "2:3", "3:2", "21:9")
 
 SUPPORTED_SCHEMA_VERSIONS = (1, 2)
 

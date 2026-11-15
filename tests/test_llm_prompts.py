@@ -25,7 +25,7 @@ def test_draft_character_sheet_carries_layout_rules():
 
 
 def test_draft_edit_kinds_reference_image1():
-    for kind in ("headshot", "front", "side", "behind"):
+    for kind in ("headshot", "portrait", "front", "side", "behind"):
         msgs = draft_subject_image_prompt_messages(_subject(), kind, "")
         text = msgs[0]["content"]
         assert "<image1>" in text, kind

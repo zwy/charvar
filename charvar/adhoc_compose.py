@@ -44,7 +44,7 @@ class ComposeRequest(BaseModel):
     costume_id: str | None = None  # 服饰条目 id（换装必填；动作出图可选）
     costume_source: str | None = None  # 服饰库 id（item_id 跨库重叠，必须可追溯）
     body_lock: list[str] = Field(default_factory=list)  # 体形锚（仅人脸流程手给）
-    # 主体参考图槽位：网页弹层里用户显式选的（五槽位图之一）；缺省 = 空，
+    # 主体参考图槽位：网页弹层里用户显式选的（六槽位图之一）；缺省 = 空，
     # 按线型自动（半身 headshot / 其余 front，与 CLI 对齐）。乙恒 front 缺省。
     slot_kind: str | None = None
     slot2_kind: str | None = None

@@ -2,7 +2,7 @@
 
 两组调用：
 - draft_subject_image_prompt_messages：为主体档案 5 种图片起草提示词
-  （character_sheet = 文生图；其余 4 种 = 以 <image1>（character_sheet 参考图）为基准的编辑指令）；
+  （character_sheet = 文生图；其余 5 种 = 以 <image1>（character_sheet 参考图）为基准的编辑指令）；
 - build_rewrite_messages：批量改写变体提示词，句序固定：
   参考图用途 → 目标景别 → 躯干/头部/视线 → 目标表情 → 背景/光照。
 
@@ -115,6 +115,13 @@ _KIND_BRIEFS: dict[str, str] = {
         "正面朝向镜头、平视，眼平视镜头，五官与发型清楚，表情可用模板默认神情；"
         "平视、近似正交，无广角变形、无俯视仰视；主体居中，背景为中性纯色、柔和均匀光照。"
     ),
+    "portrait": (
+        "图像编辑指令：角色设定图参考图以 <image1> 提供，身份、服饰与画风以它为准，只改构图和镜头。"
+        "画面：同一主体的人脸头像特写：从头顶完整展示至肩颈，脸部居中、占画面主要位置，"
+        "五官、发型与发色清楚，表情可用模板默认神情；"
+        "平视、近似正交，无广角变形、无俯视仰视；单人特写，不出现其他角色或肢体；"
+        "背景为中性纯色、柔和均匀光照。"
+    ),
     "front": (
         "图像编辑指令：角色设定图参考图以 <image1> 提供，身份、服饰与画风以它为准，只改构图和镜头。"
         "画面：同一主体的全身正面定妆：正面朝向镜头平视，自然站立，双臂垂下与身体留少量间隙，"
@@ -203,6 +210,10 @@ REFERENCE_ROLE_CLAUSES: dict[str, str] = {
         "copy the face, feature proportions, hair, skin tone, and headwear exactly as "
         "they appear in {tag}"
     ),
+    "portrait": (
+        "copy the face, feature proportions, hair, skin tone, and headwear exactly as "
+        "they appear in {tag}"
+    ),
     "front": (
         "copy the body shape, proportions, complete outfit, and footwear, including "
         "their colors, materials, and details, from {tag}"
@@ -240,6 +251,10 @@ REFERENCE_ROLE_CLAUSES_OUTFIT: dict[str, str] = {
         "keep the whole identity and art style exactly as shown in {tag}"
     ),
     "headshot": (
+        "copy the face, feature proportions, hair, skin tone, and headwear exactly as "
+        "they appear in {tag}"
+    ),
+    "portrait": (
         "copy the face, feature proportions, hair, skin tone, and headwear exactly as "
         "they appear in {tag}"
     ),
@@ -295,6 +310,12 @@ REFERENCE_ROLE_CLAUSES_HAIRSTYLE: dict[str, str] = {
         "accessories, the whole hairstyle fully exposed; the hair's cut, length, and "
         "styling follow the prescribed hairstyle instead of {tag}"
     ),
+    "portrait": (
+        "copy the face, feature proportions, skin tone, and hair color exactly as they "
+        "appear in {tag}; her head is bare, with no hat, no headwear, and no hair "
+        "accessories, the whole hairstyle fully exposed; the hair's cut, length, and "
+        "styling follow the prescribed hairstyle instead of {tag}"
+    ),
     "front": (
         "copy the body shape, proportions, complete outfit, and footwear, including "
         "their colors, materials, and details, from {tag}"
@@ -327,6 +348,12 @@ REFERENCE_ROLE_CLAUSES_OUTFIT_HAIRSTYLE: dict[str, str] = {
         "keep the whole identity, hair color, and art style exactly as shown in {tag}"
     ),
     "headshot": (
+        "copy the face, feature proportions, skin tone, and hair color exactly as they "
+        "appear in {tag}; her head is bare, with no hat, no headwear, and no hair "
+        "accessories, the whole hairstyle fully exposed; the hair's cut, length, and "
+        "styling follow the prescribed hairstyle instead of {tag}"
+    ),
+    "portrait": (
         "copy the face, feature proportions, skin tone, and hair color exactly as they "
         "appear in {tag}; her head is bare, with no hat, no headwear, and no hair "
         "accessories, the whole hairstyle fully exposed; the hair's cut, length, and "

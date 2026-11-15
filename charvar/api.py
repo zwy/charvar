@@ -146,7 +146,7 @@ class ComfyQueueRequest(BaseModel):
     negative_prompt: str | None = None
     wait: bool = False
     comfy_url: str | None = None
-    aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
+    aspect_ratio: Literal["auto","1:1","3:4","4:5","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
     resolution: Literal["1k", "2k"] | None = None
     overrides: dict[str, Any] = Field(default_factory=dict)
     reference_kinds: list[str] = Field(default_factory=list, description="主体图参考（兼容旧调用），按序注入 image/image2/…")
@@ -161,7 +161,7 @@ class OpenRouterQueueRequest(BaseModel):
     ``resolution`` / ``quality`` 只在模型清单声明支持时才真正生效。
     """
 
-    aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
+    aspect_ratio: Literal["auto","1:1","3:4","4:5","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
     resolution: str | None = Field(default=None, description="charvar 档位（1k/2k）或模型声明枚举值（1K/1.5K/2K/4K…）；空 = 用设置页/env 的模式默认")
     reference_kinds: list[str] = Field(default_factory=list, description="主体图参考（兼容旧调用），按序对应提示词里的 the first/second… reference image")
     references: list[ReferenceSpec] = Field(default_factory=list, description="参考图（adhoc 式来源 + role 分工）；给了它就不看 reference_kinds")
@@ -210,7 +210,7 @@ class RecipeRunRequest(BaseModel):
 class SubjectImageGenerateRequest(BaseModel):
     prompt: str | None = None
     seed: int = 0
-    aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
+    aspect_ratio: Literal["auto","1:1","3:4","4:5","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
     resolution: Literal["1k", "2k"] | None = None
     comfy_url: str | None = None
     wait: bool = True
@@ -221,7 +221,7 @@ class SubjectImageOpenRouterRequest(BaseModel):
 
     prompt: str | None = None
     seed: int = 0
-    aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
+    aspect_ratio: Literal["auto","1:1","3:4","4:5","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
     # charvar 档位（1k/2k）或模型声明枚举值（1K/4K…）；空 = 用设置页/env 的模式默认
     resolution: str | None = None
     model: str | None = None
@@ -237,7 +237,7 @@ class SubjectImageDreaminaRequest(BaseModel):
 
     prompt: str | None = None
     seed: int = 0
-    aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
+    aspect_ratio: Literal["auto","1:1","3:4","4:5","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
     resolution: str | None = Field(default=None, description="1K/1.5K/2K/4K 按模型档位；空 = 设置页/env（DREAMINA_IMAGE_RESOLUTION）默认")
     model: str | None = Field(default=None, description="即梦画布模型 id；空 = 设置页/env（DREAMINA_IMAGE_MODEL）默认 seedream_4.7")
 
@@ -247,10 +247,10 @@ class DreaminaQueueRequest(BaseModel):
 
     即梦不区分 t2i/i2i 配置组：带参考图走 i2i、不带走 t2i，
     配置共用一组（设置页「即梦 Dreamina 生图」/ env DREAMINA_IMAGE_*）。
-    画幅用 --ratio（charvar 8 档与即梦原生枚举一致）；不暴露 seed。
+    画幅用 --ratio（charvar 9 档与即梦原生枚举一致）；不暴露 seed。
     """
 
-    aspect_ratio: Literal["auto","1:1","3:4","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
+    aspect_ratio: Literal["auto","1:1","3:4","4:5","16:9","4:3","9:16","2:3","3:2","21:9"] | None = None
     resolution: str | None = Field(default=None, description="1K/1.5K/2K/4K 按模型档位；空 = 用设置页/env 默认")
     reference_kinds: list[str] = Field(default_factory=list, description="主体图参考（兼容旧调用）：带 = i2i，不带 = t2i")
     references: list[ReferenceSpec] = Field(default_factory=list, description="参考图（adhoc 式来源 + role 分工）；给了它就不看 reference_kinds")
@@ -291,7 +291,7 @@ class AdhocReferenceSpec(ReferenceSpec):
 # face = 人脸库虚构人物参考图（锚脸部身份 / styling 锚整体造型）；
 # costume = 服饰库服装参考图（只锚服装与整套配件）；
 # 其余缺省按 front 处理，pose/face/costume 来源缺省各按 pose/face/costume 处理。
-REFERENCE_ROLES = ("character_sheet", "headshot", "front", "side", "behind", "pose", "face", "costume")
+REFERENCE_ROLES = ("character_sheet", "headshot", "portrait", "front", "side", "behind", "pose", "face", "costume")
 DEFAULT_REFERENCE_ROLE = "front"
 
 

@@ -24,9 +24,10 @@ def test_defaults(client):
     data = client.get("/settings").json()
     assert data["comfy_t2i_workflow"] == "image_qwen_image_2_1_turbo_t2i_easy_api"
     assert data["comfy_edit_workflow"] == "image_qwen_image_2_1_turbo_image_edit_easy_api"
-    assert set(data["image_sizes"].keys()) == {"character_sheet", "headshot", "front", "side", "behind"}
+    assert set(data["image_sizes"].keys()) == {"character_sheet", "headshot", "portrait", "front", "side", "behind"}
     assert data["image_sizes"]["front"]["aspect_ratio"] == "2:3"
     assert data["image_sizes"]["character_sheet"]["aspect_ratio"] == "3:4"
+    assert data["image_sizes"]["portrait"]["aspect_ratio"] == "4:5"
     assert data["llm_configured"] is False
     assert data["llm"]["api_key"] == ""
 

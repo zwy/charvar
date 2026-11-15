@@ -10,6 +10,7 @@ const GenRefs = (() => {
   const ROLES = [
     ["front", "全身正面（体型/服饰/鞋）"],
     ["headshot", "半身（脸/发型）"],
+    ["portrait", "人脸头像（脸部锚定）"],
     ["side", "侧面（朝向/贴身细节）"],
     ["behind", "背面（后脑/背部）"],
     ["character_sheet", "设定图（整套）"],
@@ -339,7 +340,7 @@ const GenRefs = (() => {
 
   /* ---------- 来源：主体档案（两步弹层：先选主体，再选五张槽位图之一） ----------
      形态对齐动作库弹层（左侧网格选主体 → 右侧详情选图），交互同「选动作 → 选视角」：
-     五个槽位按钮（character_sheet/半身/全身正面/侧面/背面）切预览，「加入参考图」确认。
+     六个槽位按钮（character_sheet/半身/人脸头像/全身正面/侧面/背面）切预览，「加入参考图」确认。
      只有就绪（is_ready）的槽位可选；onPick({subject_id, kind, label, name, url}) 由
      发起方决定落入哪边 —— 预设页与 图片页（自由生图 + 工作流模式）共用。 */
   function showSubjectBrowser(onPick, { title = "主体档案 · 先选主体，再选一张槽位图", currentId = "", currentKind = "" } = {}) {

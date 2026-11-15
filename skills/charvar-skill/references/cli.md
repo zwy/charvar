@@ -12,7 +12,7 @@
 | `--prompt` | str | — | 图片提示词 |
 | `--prompt-file` | str | — | 提示词文件路径；`-` 表示读 stdin |
 | `--ref` | list | — | 参考图路径，可重复，最多 4 张 |
-| `--aspect` | str | `3:4` | `1:1` `3:4` `16:9` `4:3` `9:16` `2:3` `3:2` `21:9` |
+| `--aspect` | str | `3:4` | `1:1` `3:4` `4:5` `16:9` `4:3` `9:16` `2:3` `3:2` `21:9` |
 | `--resolution` | str | `1k` | `1k` `2k` |
 | `--seed` | int | `0` | 采样种子。0 = 固定复现 |
 | `--negative` | str | — | 负向提示词。给空串 `--negative ""` = 明确不要负向词 |
@@ -342,7 +342,7 @@ data/generated/adhoc_tts/{id}/
 ```bash
 ~/.local/bin/charvar subject image import <目录> --subject <id>
 # 目录导入缺省用目录名当主体 id（final/<id>/ → <id>）
-# 单文件：--kind <kind> 指定槽位（character_sheet / headshot / front / side / behind）
+# 单文件：--kind <kind> 指定槽位（character_sheet / headshot / portrait / front / side / behind）
 # --json：{"subject_id","imported":[{"kind","source_file","file_path","thumb"}],"skipped":[...]}
 ```
 
@@ -354,23 +354,23 @@ data/generated/adhoc_tts/{id}/
 - 手动拷 PNG 进 `data/subjects/<id>/` **不会建槽位行**（网页仍显示空槽）；缩略图缺失会在
   读取时自动补，但槽位行只能由本命令或网页上传产生。
 
-## charvar subject prompt〈起草 5 槽位图片提示词〉
+## charvar subject prompt〈起草 6 槽位图片提示词〉
 
 网页「主体档案图片 · AI 起草」的同一条链路（网页即时落库，CLI 缺省不落库）。
-LLM 一次起草一个槽位的图片提示词：character_sheet / headshot / front / side / behind。
+LLM 一次起草一个槽位的图片提示词：character_sheet / headshot / portrait / front / side / behind。
 **没有主体档案、没有模板也能用** —— `--material` 给一段自定义参考资料
 （角色描述、character_sheet 的文生图提示词、任何资料）：
 
 ```bash
 # 单槽：stdout 只放提示词本身，可管道接 charvar image
 ~/.local/bin/charvar subject prompt front --material "一位银发巫女少女……"
-# 5 槽全起草（5 次独立 LLM 调用）
+# 6 槽全起草（6 次独立 LLM 调用）
 ~/.local/bin/charvar subject prompt --all --material-file 资料.md --json
 ```
 
 | 参数 | 说明 |
 |---|---|
-| `<kind>` / `--all` | 槽位 5 选 1 或全拿；都缺报错，两者同给报错 |
+| `<kind>` / `--all` | 槽位 6 选 1 或全拿；都缺报错，两者同给报错 |
 | `--material` / `--material-file` | 自定义参考资料；`--material-file -` 读 stdin；两者二选一 |
 | `--subject` | 可选：YAML 路径或已入库 id（给了在 LLM 输入里拼【角色档案】块，锁项加权） |
 | `--template` | 可选：模板 .md；缺省链：显式 > 档案同目录同名 `<id>.md` > DB 模板 |

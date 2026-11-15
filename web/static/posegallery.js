@@ -13,7 +13,7 @@ const PoseGallery = (() => {
   /* 来源中文标签（与后端 POSE_SOURCES 的 zh 同步维护） */
   const POSE_SOURCE_ZH = { "pose-db-01": "线稿", "pose-db-02": "深度", "studio": "自建库" };
   /* 默认画幅可选值（自建库动作的 aspect 字段；与后端 STUDIO_ASPECTS 同单） */
-  const ASPECTS = ["1:1", "3:4", "16:9", "4:3", "9:16", "2:3", "3:2", "21:9"];
+  const ASPECTS = ["1:1", "3:4", "4:5", "16:9", "4:3", "9:16", "2:3", "3:2", "21:9"];
   /* 双人线的系統原文（lineConstraint 用） */
   const PAIR_LINE = "2人絡み";
   function mount({ root, onPick, close, onStat, variant = "modal", lineConstraint = null, requireAction = false, allowTextOnly = false }) {

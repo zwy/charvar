@@ -676,7 +676,7 @@ def test_subject_prompt_all_five_kinds(_export_env, monkeypatch):
     result = runner.invoke(cli.app, ["subject", "prompt", "--all", "--material", "x", "--json"])
     assert result.exit_code == 0, result.output
     items = json.loads(result.stdout)["items"]
-    assert [i["kind"] for i in items] == ["character_sheet", "headshot", "front", "side", "behind"]
+    assert [i["kind"] for i in items] == ["character_sheet", "headshot", "portrait", "front", "side", "behind"]
     assert all(i["prompt"] == "p" for i in items)
 
 

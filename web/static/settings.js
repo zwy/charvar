@@ -2,7 +2,7 @@
    OpenRouter 视频 / OpenRouter 语音 / 主体图默认尺寸。
    真多页版全局依赖：$/api/setStatus/escapeHtml/SLOT_LABELS 在 core.js —— 脚本清单见 settings.html。
    拆页改动：不再跨页调 gen 页的 refreshGenBackendPanel（真跳页后 gen 页加载时本来就重算）。 *//* ---------- 设置 ---------- */
-const ASPECT_OPTIONS = ["3:4", "1:1", "16:9", "4:3", "9:16", "2:3", "3:2", "21:9"];
+const ASPECT_OPTIONS = ["3:4", "4:5", "1:1", "16:9", "4:3", "9:16", "2:3", "3:2", "21:9"];
 
 /* OpenRouter 设置页：两种模式（t2i 文生图 / i2i 图片编辑）各一组模型 + 档位。
    模型选完按 api-response.json 的 supported_parameters 动态加载档位；

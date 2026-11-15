@@ -1,12 +1,12 @@
 ---
 name: charvar-skill
-description: Generate images with the charvar project's ComfyUI, OpenRouter, or Dreamina backends from any project. This skill should be used when the user asks to "用 comfyui 生图", "用 openrouter 生图", "用即梦生图", "charvar 帮我出图", "generate an image with comfyui", or otherwise asks to produce an image via the charvar CLI; also for generating short videos via OpenRouter or the Dreamina (即梦) CLI ("charvar 帮我出段视频", "用 openrouter 生视频", "用即梦生视频", "generate a video with charvar"), for upscaling a video's short side to a target tier via SeedVR2 (ComfyUI) or FFmpeg ("帮我把这段视频放大", "upscale this video with charvar"), for text-to-speech via OpenRouter ("charvar 帮我出语音", "把这段文字变成语音", "用 openrouter 生语音", "generate speech / TTS with charvar"), and for charvar subject-profile tasks such as "导入角色档案", "从模板生成主体档案" or using the charvar subject CLI, and for drafting the five subject-image slot prompts (character_sheet/headshot/front/side/behind) without an existing profile via "charvar subject prompt" ("起草主体图提示词", "AI 起草定妆图提示词", "帮我起草设定图提示词").
+description: Generate images with the charvar project's ComfyUI, OpenRouter, or Dreamina backends from any project. This skill should be used when the user asks to "用 comfyui 生图", "用 openrouter 生图", "用即梦生图", "charvar 帮我出图", "generate an image with comfyui", or otherwise asks to produce an image via the charvar CLI; also for short videos via OpenRouter or the Dreamina (即梦) CLI ("charvar 帮我出段视频", "用 openrouter 生视频", "用即梦生视频", "generate a video with charvar"), for upscaling a video's short side to a target tier via SeedVR2 (ComfyUI) or FFmpeg ("帮我把这段视频放大", "upscale this video with charvar"), for text-to-speech via OpenRouter ("charvar 帮我出语音", "把这段文字变成语音", "用 openrouter 生语音", "generate speech / TTS with charvar"), and for charvar subject-profile tasks such as "导入角色档案", "从模板生成主体档案" or using the charvar subject CLI, and for drafting the six subject-image slot prompts (character_sheet/headshot/portrait/front/side/behind) without an existing profile via "charvar subject prompt" ("起草主体图提示词", "AI 起草定妆图提示词", "帮我起草设定图提示词").
 ---
 
 # charvar 生图
 
-版本：1.9.0  
-更新：2026-11-11
+版本：1.10.0  
+更新：2026-11-15
 
 通过 charvar 项目的 CLI 出图。三条后端：**comfyui**（本机/局域网 ComfyUI）、
 **openrouter**（OpenRouter 在线生图）和 **dreamina**（即梦官方画布 CLI `dreamina-canvas`，消耗即梦积分）。
@@ -256,14 +256,14 @@ PY
 ## 起草主体图提示词（subject prompt；没档案没模板也能用）
 
 网页主体档案的「AI 起草」同一条链路。**手头只有一段角色描述、或一张 character_sheet 的
-文生图提示词、或任何资料** —— 没有主体档案、没有模板也能起草 5 槽位图片提示词
-（character_sheet / headshot / front / side / behind）：
+文生图提示词、或任何资料** —— 没有主体档案、没有模板也能起草 6 槽位图片提示词
+（character_sheet / headshot / portrait / front / side / behind）：
 
 ```bash
 ~/.local/bin/charvar subject prompt front --material "一位银发巫女少女，银白长发，尖顶帽……"
 # stdout 只放提示词本身，可直接管道接 charvar image
 ~/.local/bin/charvar subject prompt --all --material-file 资料.md --json
-# 5 槽全起草（5 次独立 LLM 调用）；--json 给脚本消费
+# 6 槽全起草（6 次独立 LLM 调用）；--json 给脚本消费
 ```
 
 没有档案、从零跑完一套定妆图（两步，第二步必须把设定图当参考图）：
@@ -272,7 +272,7 @@ PY
 # 1) 设定图（character_sheet）是文生图，直接出
 ~/.local/bin/charvar subject prompt character_sheet --material "..." | \
   ~/.local/bin/charvar image comfyui --prompt-file - --out sheet.png
-# 2) 其余 4 槽的草稿含 <image1>（以设定图为基准的编辑指令）—— 把设定图成品 --ref 进去
+# 2) 其余 5 槽的草稿含 <image1>（以设定图为基准的编辑指令）—— 把设定图成品 --ref 进去
 ~/.local/bin/charvar subject prompt front --material "..." | \
   ~/.local/bin/charvar image comfyui --prompt-file - --ref sheet.png --out front.png
 ```
@@ -321,6 +321,8 @@ PY
 
 ## 版本记录
 
+- **1.10.0**（2026-11-15）**主体档案新增「人脸头像」槽位（`portrait`）＋生图画幅新增 4:5**：6 槽位（character_sheet → headshot → portrait → front → side → behind，portrait 基于三视图编辑、默认 4:5）；`--aspect` 枚举加 4:5（ComfyUI 2K 像素表 1856×2320；即梦仅「图片美学 V8.2」收 4:5，其他模型提交前拦截）。
+
 - **1.9.0**（2026-11-11）**新增视频放大通路**：`charvar upscale comfyui|ffmpeg`（短边放大到 720p/1080p/4k；SeedVR2 超分走 ComfyUI 队列，ffmpeg 本机插值秒级）；源短边已达标原样返回；网页新增「放大」页签（同一条通路）与设置页「放大页默认」组。
 - **1.8.0**（2026-11-11）即梦底层整体换到官方画布 CLI `dreamina-canvas`：生图/视频每请求一张新画布（节点→报价→批准→运行→下载），旧 `dreamina` CLI 直发通路下线；模型目录换新（seedream_4.6/4.7/5.0/5.5、happyhorse/wan 等），旧模型名自动映射；视频 mode 分派 `t2v/first_last_frame/m2v`（尾帧首获支持）；manifest 新增 `canvas` 续查键。
 - **1.7.0**（2026-11-04）视频接入即梦（Dreamina CLI）：`charvar video dreamina`（子命令按输入分派，默认 seedance2.0fast_vip）；`video models --provider dreamina`；网页视频页供应商切换；设置页「即梦视频」组。
@@ -330,7 +332,7 @@ PY
 1.5.0（2026-10-26）：**主体图槽位提示词起草开放到 CLI**（网页「AI 起草」同一条链路）。此前起草
 槽位提示词只能在网页上对「已入库 + 有模板」的主体做；现在 `charvar subject prompt` 支持
 `--material` / `--material-file` 自定义参考资料 —— **没有主体档案、没有模板，只有一段角色描述
-或现成提示词也能起草** 5 槽位（character_sheet 是文生图；headshot/front/side/behind 是含
+或现成提示词也能起草** 6 槽位（character_sheet 是文生图；headshot/portrait/front/side/behind 是含
 `<image1>` 的编辑指令，生成时必须把设定图成品 `--ref` 进去）。两处行为变化：① 起草语言不再钉死
 英文 —— 缺省不写语言规定、输出跟随材料语言（网页同链生效），要英文加 `--lang en`；② CLI 缺省
 不落库，`--apply` 才写回 DB 槽位草稿（网页仍即时落库）。**推即梦注意**：英文草稿实测常超

@@ -238,7 +238,7 @@ STUDIO_MIRROR_DIR = "poses"  # 镜像目录 = presets/<dir>/<STUDIO_SOURCE_ID>/
 
 # 自建库默认画幅的白名单（生成端认的 8 个具体比例；"auto" 是 gen 通路的概念，
 # 文本动作要具体值，不发 auto）。
-STUDIO_ASPECTS = ("1:1", "3:4", "16:9", "4:3", "9:16", "2:3", "3:2", "21:9")
+STUDIO_ASPECTS = ("1:1", "3:4", "4:5", "16:9", "4:3", "9:16", "2:3", "3:2", "21:9")
 
 
 def import_studio(conn: sqlite3.Connection) -> dict:

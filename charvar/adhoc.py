@@ -4,7 +4,7 @@
 提示词是手工复制到即梦 AI / 本地 ComfyUI 出图的；这里把它变成一条命令。
 
 与三条通路的区别：
-- 主体档案 5 槽位（``charvar.subject_images``）——槽位固定、依赖 character_sheet 先就绪；
+- 主体档案 6 槽位（``charvar.subject_images``）——槽位固定、依赖 character_sheet 先就绪；
 - 预设批量（``charvar.api`` 的 /runs/{id}/comfyui）——一次几十条变体；
 - 本模块——一次一张、提示词原样使用、不依赖档案也不落 runs 表。
 
@@ -20,7 +20,7 @@ manifest 记完整请求与结果，便于复现；产物不落 runs 表（临�
   ``build_generate_body`` 内部收敛到 2^53-1；
 - 即梦（Dreamina）走官方 ``dreamina`` CLI（``charvar.dreamina_image``）：
   带参考图 = i2i，不带 = t2i（同一组设置，不分组）；
-  画幅用 --ratio（charvar 8 档与 CLI 枚举一致）；**不暴露 seed**，
+  画幅用 --ratio（charvar 9 档与 CLI 枚举一致）；**不暴露 seed**，
   请求里的 seed 只记 manifest；提示词长度在提交前预检（t2i/i2i 上限不同）；
 - 不引入随机源：seed 一律由调用方显式给定。
 """
@@ -48,7 +48,7 @@ Backend = Literal["comfyui", "openrouter", "dreamina"]
 _MAX_REFERENCES = 4
 
 # 画幅档位与 comfyui_exporter.SUPPORTED_ASPECT_RATIOS 一致（去掉 auto —— adhoc 没有景别概念）
-_ASPECT_RATIOS = ("1:1", "3:4", "16:9", "4:3", "9:16", "2:3", "3:2", "21:9")
+_ASPECT_RATIOS = ("1:1", "3:4", "4:5", "16:9", "4:3", "9:16", "2:3", "3:2", "21:9")
 _RESOLUTIONS = ("1k", "2k")
 
 

@@ -2,7 +2,7 @@
 
 与出图(``charvar.adhoc``)、出视频(``charvar.adhoc_video``)同构:网页与 CLI
 ``charvar tts`` 是同一套参数语义、同一套落盘、同一份 manifest;不进主体档案
-5 槽位、不跑预设批量、不落 runs 表。
+6 槽位、不跑预设批量、不落 runs 表。
 
 与视频的关键差异(TTS API 是**同步**的):
 - ``POST /audio/speech`` 一次请求直接返回音频字节,没有提交/轮询/下载三段,
