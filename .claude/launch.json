@@ -4,8 +4,18 @@
     {
       "name": "charvar-web",
       "runtimeExecutable": "env",
-      "runtimeArgs": ["CHARVAR_WEB_PORT=8823", ".venv/bin/python", "-m", "web.app"],
+      "runtimeArgs": [
+        "CHARVAR_WEB_PORT=8823",
+        ".venv/bin/python",
+        "-m",
+        "web.app"
+      ],
       "port": 8823
+    },
+    {
+      "name": "charvar-live",
+      "url": "http://localhost:8710",
+      "port": 8710
     }
   ]
 }
