@@ -424,7 +424,7 @@ td .caption { color: var(--muted); }
 
 /* 语音：结果播放器与历史卡片里的内联音频统一宽度 */
 #tts-result-player { width: 100%; max-width: 480px; }
-.tts-card audio { width: 100%; display: block; }
+.tts-card audio { width: 100%; display: block; padding: 8px 10px 0; }
 .tts-card .image-placeholder { min-height: 60px; display: flex; align-items: center; justify-content: center; }
 
 /* 表格行内操作按钮：并列一行，紧凑间距 */
