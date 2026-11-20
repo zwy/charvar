@@ -19,55 +19,27 @@
 | 页面 | 说明 |
 |---|---|
 | 预设 | 三步工作流：① 生图设置（主体 + 供应商 + 参数 + 参考图）→ ② 生成提示词（预设 + 模式）→ ③ 推送生图（单一按钮，结果表 + 导出） |
-| 图片 | 给一段提示词直接出一张图（跨项目调用通路） |
-| 视频 | OpenRouter 视频模型直出（异步作业） |
+| 图片 | 给一段提示词直接出一张图（跨项目调用通路；五种生图模式：自由生图 + 单主体/双主体/人脸动作 + 换装） |
+| 视频 | OpenRouter / 即梦视频直出（异步作业）；「最近生成」卡可一键「AI 文案」 |
+| 放大 | 视频短边放大到目标档位（SeedVR2 超分 / FFmpeg 插值） |
+| 语音 | OpenRouter TTS：文本 → 音频（同步，无轮询） |
 | 配方 | 配方定义 / 运行 / 检查点续跑 |
 | 主体档案 | 档案列表 + 详情表单 + 粘贴 YAML 导入 |
+| 姿势 | 姿势库浏览 + 动作描述编辑（`role=pose` 参考图来源） |
+| 服饰 | 服饰库浏览 + 文本层编辑 / 收藏（换装家族） |
+| 人脸 | 人脸库浏览 + 收藏（`role=face` 参考图来源） |
 | 历史记录 | 历次生成，查看 / 删除，导出链接长期有效 |
 | 设置 | LLM / 主体图尺寸 / workflow / OpenRouter / 即梦 / 视频模型 |
 
-## 预设页（生成工作流）
+## 预设页与网页交互约定
 
-原「生成」页改名「预设」——这页的本质是**基于预设批量生产图片**，流程按图片页的交互重排成三步：
+预设页的三步工作流细节、参考图三种来源与 role（分工）、页面分组与文案策略，是给编码代理的工作约定，**统一以仓库根 [AGENTS.md](AGENTS.md) 为准**——本 README 不再镜像那些内容（重复维护会漂移）。相关的细则文档：
 
-1. **① 生图设置**：选主体档案 + 生图供应商（ComfyUI / OpenRouter / 即梦）+ 该供应商的生图参数（画幅 / 分辨率 / 质量 / 模型版本 / 种子 / 负向 / 等待完成）+ 参考图。
-   - **不再区分文生图 / 图片编辑**：有参考图 = 图片编辑（ComfyUI 走图片编辑 workflow、OpenRouter 走 `i2i` 组、即梦走 `image2image`），没参考图 = 纯文生图，后端按「有没有参考图」自动分流。
-   - 参数档位跟随模型能力：OpenRouter 按 `data/openrouter/api-response.json` 里该模型的 `supported_parameters` 动态加载分辨率 / 质量档，不支持的档整个不显示（即梦档位见 `web/static/tables.js` 共享表）。
-   - **主体只有这一个选择器**：提示词主体与参考图主体必须一致（锁定项说红发、参考图是黑发就出戏了），所以「从主体档案加入」直接用这里的主体 + 槽位；换主体时旧主体的档案参考图会自动清掉。
-   - 种子 = 这一批变体的主种子（每条再派生子种子送进 ComfyUI / OpenRouter），留空 = 随机。
-2. **② 生成提示词**：选预设（可叠服装预设）+ 生成模式（经典模板 / LLM 优化）+ 提示词模板参数（条数 / 采样 / 分隔符 / 背景光照）→「生成提示词」。LLM 模式需要 1–4 张参考图来定锚定句分工。
-3. **③ 生成结果**：「推送生图」单一按钮，按第 ① 步选的供应商走对应通路（原先的「推送 ComfyUI… / 推送 OpenRouter… / 推送即梦…」三个面板已合并下线），随后是结果表 + 导出。卡标题行给出当前批的只读摘要（主体 · 预设 · 种子 · 条数）。
-
-### 页面分组与文案策略
-
-全站统一用「控件分组 + 紧凑节奏」：分组容器是 `.form-section`（组标题 `.form-section-title`，组间 1px 分隔线），卡片内间距收在 4/8/12/16 阶梯内（`.card` padding `14px 16px`、`.card > * + *` 与 `.form-grid` 行距用 8px）。
-
-| 页面 | 分组 |
-|---|---|
-| 预设 | ① 主体与种子 / 供应商参数 / 参考图　② 预设与服装 / 提示词参数 |
-| 图片 | 供应商与参数 / 提示词 / 参考图 |
-| 视频 | 模式与参数 / 提示词 / 首帧图 / 参考图 / 参考视频 |
-| 主体档案 | 基本信息 / 锁定项 / 补充 |
-| 配方 / 历史记录 / 设置 | 一卡一主题，不再拆组 |
-
-**灰字只写「控件里看不到的信息」**：当前生效的 workflow / 模型 / 枚举、当前输出的像素、已选参考图数量，以及不可逆后果（超限硬失败、暂存 24 小时清理、按秒计费、消耗积分）。复述控件含义、描述「先做 A 再做 B」这类导航说明、以及讲落盘路径 / CLI 用法这类实现细节的段落全部删掉——那些属于 README。参考图区无图时用虚线空态框（`.ref-empty`）而不是一段说明文字。
-
-视觉方向与文案策略固化在 `.superdesign/design-system.md`（用 Superdesign 工具产出），改动任何页面的分组、间距或文案前先读它。
-
-### 参考图：三种来源 + 分工（role）
-
-参考图的选择逻辑与图片页同源，三种来源：
-
-| 来源 | 传什么 | 说明 |
-|---|---|---|
-| 上传暂存 | `staged_id` | 网页上传后落暂存池（`/adhoc/references`） |
-| 主体档案 | `subject_id` + `kind` | 档案里的图片槽位（front / headshot / side / behind / character_sheet），主体 = ① 选的那个 |
-| 最近生成 | `run_id`（+ `index`） | 图片页「最近生成」的原图，或某次 charvar 运行的第 N 张原图 |
-
-- **只认 id，不认路径** —— 浏览器永远给不了文件系统路径（那是把文件读权限开给浏览器）。
-- 每张参考图带一个 **role（分工）**：决定这张图在 LLM 改写的锚定句里管哪一摊（`front` / `headshot` / `side` / `behind` / `character_sheet`），缺省 `front`；主体档案来源自动取槽位 kind 当 role。
-- 参考图规格随 `/generate` 存进 run（`GenerateResult.references`），推送生图和单条「重新生成」都按它取图，页面刷新不丢。
-- ComfyUI 上传的 `remote_name` 带 run_id（`charvar_{run_id}_{index}.jpg`）——`upload_image` 发 `overwrite: true`，同名会互相覆盖。
+- 生图参数档位（面板约定）：[docs/生图参数档位.md](docs/生图参数档位.md)
+- 库组合拼装（图片页四种固定构成）：[docs/图片页库组合.md](docs/图片页库组合.md)
+- 服饰家族 / 贴字 / 发型 / sticker：[docs/贴字与服饰预设.md](docs/贴字与服饰预设.md)
+- 配方系统：[docs/配方系统.md](docs/配方系统.md)
+- 视频放大：[docs/视频放大.md](docs/视频放大.md)、语音：[docs/语音通路.md](docs/语音通路.md)、即梦视频：[docs/即梦视频.md](docs/即梦视频.md)
 
 ## ComfyUI 配置（.env）
 
@@ -194,7 +166,19 @@ python3 -m charvar.cli gen -s silver_witch --format comfyui --workflow <name> --
 python3 -m charvar.cli gen -s silver_witch --format comfyui --workflow <name> --wait --count 3
 ```
 
-`pip install -e .` 后上述命令可用 `charvar …` 直接调用。
+`pip install -e .` 后上述命令可用 `charvar …` 直接调用。同一 CLI 还带其余通路（细节见各自 docs 与 `--help`）：
+
+```bash
+charvar image comfyui|openrouter|dreamina   # 单图（见下方「图片页（跨项目调用）」）
+charvar video openrouter|dreamina           # 短视频（异步作业；--timeout 阻塞轮询）
+charvar upscale comfyui|ffmpeg              # 视频放大（SeedVR2 画质修复 / FFmpeg 插值）
+charvar tts openrouter                      # 文本 → 语音（同步）
+charvar recipes list|run|status             # 配方执行（--continue 续跑检查点）
+charvar pose action|prompt|describe         # 姿势库动作描述（docs/姿势库.md）
+charvar costume prompt|import               # 服饰库（docs/服饰库.md）
+charvar face import|list                    # 人脸库（docs/人脸库.md）
+charvar overlay <run_id> --overlay <preset> # 贴字（docs/贴字与服饰预设.md）
+```
 
 ## 图片页（跨项目调用）
 
@@ -234,8 +218,11 @@ charvar image models    # 列 OpenRouter 可用模型
 网页顶栏「图片」页签是同一条通路的图形界面（后端 `/adhoc/*`，代码走同一个
 `charvar/adhoc.py`）：选后端（ComfyUI / OpenRouter）、画幅、分辨率、种子，
 写提示词，加参考图（上传本地图，或直接从主体档案里挑已就绪的档案图），出图后
-显示结果并可下载原图 / manifest.json。页面下方是「最近生成」墙，条目可以
-「复用提示词」再改。
+显示结果并可下载原图 / manifest.json。「自由生图」之外的四种模式（单主体动作 /
+双主体动作 / 人脸动作 / 换装）由页面从姿势库、人脸库、服饰库选条目后调
+`POST /adhoc/compose` 自动拼装提示词——语义与 CLI 的 `charvar pose prompt` /
+`charvar costume prompt` 同源，见 [docs/图片页库组合.md](docs/图片页库组合.md)。
+页面下方是「最近生成」墙，条目可以「复用提示词」再改。
 
 ## 预设
 
@@ -252,11 +239,11 @@ YAML 预设放 `presets/actions/`（动作预设的唯一归属目录；完整�
 
 预设根字段 `preferred_aspect_ratio`（如 `'4:3'`）声明出图画幅：智能画幅按它出图，不按景别推导；UI 手选的比例仍然优先。**画幅值必须加引号**——YAML 会把未加引号的 `4:3` 读成 sexagesimal 数字。
 
-### 服装预设
+### 服饰家族与贴字
 
-`presets/outfits/*.yaml` 是独立的服装预设家族（不进主预设下拉）：每条 = 英文服装描述段 `text` + 中文 `label`（贴字/展示用）。出图请求带上 `outfit_preset`（可选 `outfit_order`：`outfit_first` 默认 / `pose_first`）即与动作预设做**笛卡尔积**，变体 id = `{outfit_id}__{pose_id}`，服装段追加在动作段之后。
+服装是独立的**服饰家族**（住在服饰库 DB：`costume_items` 条目 + `costume_prompts` 文本层，不进主预设下拉；仓库镜像 `presets/costumes/<source>/<item>.yaml`）。出图请求叠服饰即与动作预设做**笛卡尔积**，变体 id = `{outfit_id}__{pose_id}`；服饰段固定排在提示词**第一句**，LLM 优化模式下走独立通路（分列喂给模型 + 程序兜底补写，防止把服装段当「参考图自带服装」丢弃）。
 
-LLM 优化模式（`mode=llm`）下服装走的是独立通路：服装段作为单独字段喂给模型，参考图锚定句**不再**让参考图提供衣服（参考图自带的白裙丝袜会和服装预设打架），改写结果里若没有这套衣服，程序会按原文补写并在 run 的 `warnings` 里声明。服装描述在任何语言模式下都**逐字保留英文原文**。
+同一条流水线还包括**贴字**（`presets/overlays/*.yaml`，PIL 确定性后处理）与**发型预设**（`presets/hairstyles/`）；带字表情包（sticker）是提示词驱动的另一套机制。字段、换装策略（`subject_policy`）与完整规则见 **[docs/贴字与服饰预设.md](docs/贴字与服饰预设.md)**。
 
 ## 主体档案
 
@@ -313,6 +300,8 @@ LLM 优化模式（`mode=llm`）下服装走的是独立通路：服装段作为
 
 ## HTTP API（127.0.0.1:8710）
 
+下表只列**生成工作流**（预设批量出图）的核心端点。其余通路的端点——图片 `/adhoc/*`（含 `POST /adhoc/compose` 库组合）、视频 `/videos/*`（含 `GET /videos/{id}/status` 与 `POST /videos/{id}/copy`）、语音 `/tts/*`、放大 `/upscale*`、三库 `/pose*` `/costume*` `/face*`、配方 `/recipes*`、语音合成 `POST /audio/speech`——见 `charvar/api.py` 顶部与 `web/static/nav.js`，页面与端点的对应关系由 `docs/` 各细则文件说明。
+
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/presets` | 预设列表（名称/类型/条数） |
@@ -350,9 +339,11 @@ LLM 优化模式（`mode=llm`）下服装走的是独立通路：服装段作为
 
 ```
 charvar/            核心包：models/preset_loader/wildcard/composer/caption
-│                   exporters（txt/jsonl/captions/comfyui）/storage/api/cli/adhoc
-presets/            actions/（动作预设）+ wildcards/ + subjects/ + outfits/ + overlays/
-                    + video/ + recipes/ + workflows/（规范见 presets/README.md）
+│                   exporters（txt/jsonl/captions/comfyui）/storage/api/cli
+│                   adhoc（单图）/adhoc_video/adhoc_tts/adhoc_upscale/adhoc_compose
+│                   recipes/casting/sticker_policy/social_copy/poses/costumes/faces
+presets/            actions/（动作预设）+ wildcards/ + subjects/ + costumes/ + hairstyles/
+                    + overlays/ + video/ + recipes/ + workflows/（规范见 presets/README.md）
 web/                web/app.py（uvicorn 启动）+ web/static/（无构建步骤）
 tests/              pytest：逐字一致性/可复现/子种子/拼接/矩阵/导出/API/adhoc/CLI
 scripts/            start.sh / stop.sh（默认端口 8710）/ install_cli.sh（装全局 CLI + skill）

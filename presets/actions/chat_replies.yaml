@@ -1,6 +1,7 @@
 # charvar 聊天表情包：12 张，主体由角色档案和参考图决定。
-# 本文件是待开发的 schema_version=2 预设，需先完成配套开发文档中的适配。
-# 当前未修改版本可能静默丢弃新增字段；不要直接导入旧版本后声称已支持带字表情包。
+# schema_version=2（sticker 合同）已实现并由 preset_loader 显式校验：逐条必带
+# display_text，缺字段/带 schema 1 直接报错，不会静默丢弃。细则见
+# docs/贴字与服饰预设.md 的「sticker（带字表情包）」一节。
 # display_text.content 是图片中文字的唯一真源，不是训练 caption。
 # classic 与 llm 都必须由共享编译器追加 lettering block；不要让 LLM 改写中文文案。
 # framing / angle 为 null 是刻意设计：具体姿态与构图以 text 为准，不套用头肩裁切或正面站姿。

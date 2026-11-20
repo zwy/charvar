@@ -14,10 +14,8 @@
 
 ## 姿势库
 
-参考图第四来源 `pose_id`+`angle`+`source`（详见 `docs/姿势库.md`）：线稿 pose-db-01 / 深度图 pose-db-02 同
-id 分键（新库/自建进 `POSE_SOURCES`）；**role=pose 只锚姿势不锚身份**，尾句按 display_type 分线稿/深度
-版；图库为本地素材；描述/收藏用户层重灌不碰；整页/弹层共用
-posegallery.js。
+- 参考图第四来源 `pose_id`+`angle`+`source`（细则见 `docs/姿势库.md`）：线稿 pose-db-01 / 深度图 pose-db-02 同 id 分键（新库/自建进 `POSE_SOURCES`）；**role=pose 只锚姿势不锚身份**，尾句按 display_type 分线稿/深度版；图库为本地素材；描述/收藏用户层重灌不碰；整页/弹层共用 posegallery.js。
+- CLI：`charvar pose action <id> [--angle 视角] --set '描述'`（空串=清除）、`charvar pose prompt <id> --subject <主体>` 直通出图、`charvar pose describe` LLM 批量起稿（source=ai_draft）；库灌入/浏览 `charvar pose import|list`。
 
 ## 服饰库
 
@@ -40,7 +38,9 @@ styling=锚脸+发型+服装（section 随条目存，锚定分句 `face`/`face_
 - CLI：`charvar image comfyui|openrouter|dreamina|models`（`--prompt`/`--prompt-file`/`--ref`/`--aspect`/`--seed`/`--out`/`--json`；`dreamina` 子命令没有 `--seed`，即梦不暴露）。产物默认落 `data/generated/adhoc/{id}/`（图 + 缩略图 + manifest.json）。
 - **网页入口**：顶栏「图片」页签（`web/static/adhoc.js`），后端 `/adhoc/*`（`charvar/api.py`）。走的是**同一个** `charvar/adhoc.py` —— 网页与 CLI 是同一套参数语义、同一套落盘、同一份 manifest。改动 `charvar/adhoc.py` 的参数名或输出格式时，CLI、网页、skill 三处都要同步。
 - 网页的参考图只认三种来源：上传暂存（`/adhoc/references`）、主体档案里已就绪的档案图、图片页「最近生成」的原图（spec 带 `run_id`；run_id 过该模块自己的严格正则，文件名由服务端从该 run 的 `original/` 目录按落盘布局定 —— 浏览器永远不给路径）。**不接受任意路径** —— 那是把文件读权限开给了浏览器。
-- 它给本项目外的项目/其他 agent 用；外部调用方依赖它的参数名与输出格式，改动要兼容。
+- 本项目外的项目/其他 agent 也调它；参数名与输出格式是对外契约，改动要兼容。
+- **库组合**：图片页五种生图模式（自由生图 = 平铺参考图手写锚定句；单主体动作/双主体动作/人脸动作/换装 = 固定槽位 → `POST /adhoc/compose`，`adhocflow.js` + `charvar/adhoc_compose.py`）。拼装**只做编排**，文案一律来自 `pose_prompt.build_prompt` / `build_costume_prompt`（与 CLI 同源，别在拼装层另造锚定句）；约束与同步细则见 `docs/图片页库组合.md`。
+- **放大**：`charvar upscale` CLI + 「放大」页签（`/ui/upscale`，`charvar/adhoc_upscale.py`）：视频短边放大到目标档位（SeedVR2 超分 / FFmpeg 插值），同构 adhoc（不落 runs 表）；见 `docs/视频放大.md`。
 
 ### 视频
 
@@ -53,18 +53,17 @@ styling=锚脸+发型+服装（section 随条目存，锚定分句 `face`/`face_
 - 参数枚举**提交前校验**（超档 400 白扣提交费）：OpenRouter 按 `GET /api/v1/videos/models` 目录（缓存 `data/openrouter/video-models.json`；目录标 `seed: false` 不发；拒参自动降级重试）；即梦按 `_VIDEO_MODELS` 静态表拦（分辨率/时长/ratio 必填、字面值按模型目录透传；`dreamina_canvas.py` 与 tables.js 两处同源，CLI 升级同步）。
 - 首帧图 = 图生视频（主体一致性靠它；**别用 character_sheet，四视图拼图会出多人**——用单人全身正面/front 槽位）；参考图 = `input_references`（≤4）；首帧与参考图同给首帧优先（i2v 页签不并送参考图；即梦该组合提交前拦）。
 - 默认链两边 = 请求显式 > 设置页（DB） > env > 兜底：OpenRouter `OP_VIDEO_MODEL`/heygen-video-1（key 与生图同链路）；即梦 `DREAMINA_VIDEO_MODEL`/`seedance_2.0_fast_vip`（无 key=本机 `dreamina-canvas auth login`；无 seed 不发送；按积分计费；首用合规需网页端先过一次；详见 docs/即梦视频.md）。
+- **AI 文案**：视频页「最近生成」卡 → `POST /videos/{run_id}/copy`（`social_copy.py`，无 CLI）：LLM 按 run 的 prompt 写标题/简介/话题，写进 `manifest["copy"]`（title≤20字/intro≤200/tags≤5），已有文案直出不重调 LLM。细则见 `docs/视频文案.md`。
 
 ### 语音（OpenRouter TTS 通路）
 
 `charvar/adhoc_tts.py` 是「给一段文本出一段音频」的同构通路，只接 OpenRouter
 （`charvar/openrouter_tts.py` 客户端）；API 细节与实测话术见 `docs/语音通路.md`。
 
-- **同步通路**（与视频的异步作业不同）：`POST /audio/speech` 一次请求直接返回音频
-  字节流，web `/tts/generate` 等音频返回再响应，**没有 status 轮询端点**。
+- **同步通路**（与视频不同）：`POST /audio/speech` 一次请求直接返回音频字节流，web `/tts/generate` 等音频返回再响应，**无 status 轮询端点**。
 - CLI：`charvar tts openrouter`（`--prompt`/`--prompt-file`/`--voice`/`--model`/`--format`/`--out`/`--json`）
   + `charvar tts models`；产物落 `data/generated/adhoc_tts/{id}/`（无 thumbs）。
-  **网页入口**：顶栏「语音」页签（`web/static/tts.js`）+ `/tts/*`。改参数名/输出格式
-  时 CLI、网页、skill 三处同步。
+  **网页入口**：顶栏「语音」页签（`tts.js`）+ `/tts/*`；改参数名/输出格式三处同步（同图片页）。
 - 模型目录走 `GET /api/v1/models?output_modalities=speech`，缓存
   `data/openrouter/speech-models.json`（三份缓存之一）。
 - **voice 实测必填**（heygen/minimax 不带 voice 一律 400）：目录 `supported_voices`
@@ -85,7 +84,7 @@ styling=锚脸+发型+服装（section 随条目存，锚定分句 `face`/`face_
 | `charvar-skill` | 按提示词实际出图（ComfyUI / OpenRouter / 即梦）、出视频、主体档案 CLI | 不做角色开发流程 |
 | `character-forge` | 角色开发：全身正面定妆 → 同图半身＋正侧背设定板 → 自包含「角色提示词资产文档」 | **不出图**（默认由用户自己出图并反馈） |
 
-- 两个 skill 配套：character-forge 产提示词与资产文档，charvar-skill 负责把提示词变成图。**别把出图逻辑写进 character-forge**，也别把角色开发流程写进 charvar-skill。
+- 两个 skill 配套：character-forge 产提示词与资产文档，charvar-skill 把提示词变成图；**别互相越界**（出图逻辑不进 character-forge，角色开发流程不进 charvar-skill）。
 - `skills/charvar-skill/` 改 CLI 参数时要同步改 skill 里的命令示例。
 - **安装**：`scripts/install_cli.sh`（幂等，`start.sh` 会调）按 `SKILL_NAMES` 数组装**所有** skill，装法**三处**一致：
   1. `~/.claude/skills/<name>`（软链到仓库）→ Claude Code CLI + Claude Desktop 的 **Code 标签页**；
@@ -96,31 +95,24 @@ styling=锚脸+发型+服装（section 随条目存，锚定分句 `face`/`face_
      （`ensurePluginStructure` 会清掉 app 没登记过的东西，所以必须同时写 manifest）。
 - 改名/合并后把旧名写进 `RETIRED_SKILL_NAMES`（新旧描述几乎相同会抢同一个请求）。
 - skill 里调 CLI 一律用绝对路径 `~/.local/bin/charvar` —— Desktop 聊天面的 shell 不保证把 `~/.local/bin` 加进 PATH。
-- `character-forge` 自带静态检查（`run_checks.py`，`--record` 回写 manifest），已接 `tests/test_skills.py` 门禁，不用单独跑。
-- 改了任一 skill 的 SKILL.md / README.md / manifest.json 里的**版本号**要三处同步，否则检查会失败。
+- `character-forge` 静态检查（`run_checks.py --record` 回写 manifest）已接 `tests/test_skills.py` 门禁，不用单独跑；改任一 skill 的**版本号**要 SKILL.md / README.md / manifest.json 三处同步，否则检查会失败。
 - **character-forge 交付校验**：提示词代码块预设为 `text template`（不计入预算），填完必须改成 `text submit`；`prompt_budget.py` 校验提示词块**必须加 `--markdown`**（不加会把整份文档误判为失败）。
 
 ## 预设页（生成工作流）
 
 页面按图片页的交互排成三步：
 
-1. **① 生图设置**：主体档案 + 供应商（ComfyUI / OpenRouter / 即梦）+ 该供应商的生图参数（画幅 / 分辨率 / 质量 / 模型版本 / **种子** / 负向 / 等待完成）+ 参考图。
-2. **② 生成提示词**：预设（可叠发型/服饰预设）+ 生成模式（经典模板 / LLM 优化）+ 模板参数（条数 / 采样 / 分隔符 / 背景光照）。
-3. **③ 生成结果**：「推送生图」**单一**按钮，随后是结果表 + 导出。卡标题行给当前批的只读摘要（主体 · 预设 · 种子 · 条数）。
+1. **① 生图设置**：主体档案 + 供应商（ComfyUI / OpenRouter / 即梦）+ 该供应商的生图参数（画幅/分辨率/质量/模型版本/**种子**/负向/等待完成）+ 参考图。
+2. **② 生成提示词**：预设（可叠发型/服饰预设）+ 生成模式（经典模板 / LLM 优化）+ 模板参数（条数/采样/分隔符/背景光照）。
+3. **③ 生成结果**：「推送生图」**单一**按钮，随后是结果表 + 导出。卡标题行给只读摘要（主体·预设·种子·条数）。
 
 - **不保留文生图 / 图片编辑切换**：有参考图 = 图片编辑（ComfyUI 走图片编辑 workflow / OpenRouter 走 `i2i` 组 / 即梦走 `i2i`），无参考图 = 纯文生图，后端按「有没有参考图」自动分流。
 - **主体档案只有一个选择器（在①）**：提示词主体与参考图主体必须一致（锁定项说红发、参考图是黑发就出戏）。「从主体档案加入」复用①的主体 + 槽位下拉；**换主体时旧主体的档案参考图自动清掉**（`GenRefs.dropSubjectRefs()`，上传暂存 / 最近生成的不受主体约束，保留）。
 - **参考图来源与图片页同源**（`ReferenceSpec`）：`staged_id`（上传暂存）/ `subject_id`+`kind`（主体档案槽位）/ `run_id`（+`index`，最近生成原图；`adhoc_*` 取唯一原图，charvar run 按 index 取第 N 张）。**只认 id 不认路径**。
 - **role（分工）**：每张参考图一个 role（`front`/`headshot`/`portrait`/`side`/`behind`/`character_sheet`，缺省 `front`），决定 LLM 锚定句里这张图管哪一摊；主体档案来源自动取槽位 kind 当 role。
 - references 随 `/generate` 存进 run（`GenerateResult.references`），推送生图与单条「重新生成」都按它取图；`regenerate` 优先重放快照里的 references。
-- `reference_kinds` 参数与 CLI 调用路径**仍受支持**（向后兼容），CLI `charvar gen --outfit` 同一套修复生效。
-- OpenRouter 参数档位按 `data/openrouter/api-response.json` 的 `supported_parameters` 动态加载（同图片页）；即梦模型目录两表放 `web/static/tables.js`（gen.js 与 adhoc.js 共用，别再各写一份）。
-- **supported parameters 的几条约定**（两边页面一致）：
-  - ComfyUI 没有 provider 枚举，档位固定 charvar 的 `1k`/`2k`（2k = Qwen 官方 ~4.2MP 像素）。
-  - OpenRouter 的模型**不在面板里选**，跟设置页的 `t2i`/`i2i` 组默认（带参考图 = i2i 组）；分辨率 / 质量取该模型清单的枚举，没有就不显示。
-  - 即梦：模型版本下拉空值 = 跟随设置页（`DREAMINA_IMAGE_MODEL`）；**「跟随设置默认」要真跟随**（空值发出去，后端才用设置页/env），不能名义上跟随、实际发硬编码的 2K。
-  - 即梦带参考图时从模型下拉去掉不收参考图的档（`DREAMINA_IMAGE_MODELS` 的 `refMax`，放 `tables.js` 共享）。
-  - 档位选择要记住：切供应商再切回来别重置（`state.comfyTier` / `adhocState.comfyTier` / `state.orResolution`）。
+- `reference_kinds` 与 CLI 调用路径**向后兼容保留**（`charvar gen --outfit` 同一套语义）。
+- OpenRouter 参数档位按 `data/openrouter/api-response.json` 的 `supported_parameters` 动态加载（同图片页）；即梦模型目录两表放 `web/static/tables.js`（gen.js 与 adhoc.js 共用，别再各写一份）。面板约定细则见 `docs/生图参数档位.md`。
 ### 前端是真多页
 
 - 页面= `web/static/<name>.html` 挂 `/ui/<name>`；`/` 同预设页。
@@ -172,8 +164,8 @@ styling=锚脸+发型+服装（section 随条目存，锚定分句 `face`/`face_
 - 档案图片有三条生图通路：ComfyUI（`subject_images.generate_subject_image`）、OpenRouter（`generate_subject_image_openrouter`）与即梦（`generate_subject_image_dreamina`）。三者同语义：两步流程（character_sheet 先出，其余 4 种以它为参考图）、同槽位状态机、同落盘位置（`data/subjects/{id}/{kind}.{ext}`）。产出哪个后端记在 `subject_images.provider` 列（`comfyui` / `openrouter` / `dreamina` / 空=上传）。
 - `web/static/style.css` 里 `label { display: flex }` 会盖掉浏览器默认的 `[hidden] { display: none }`，所以有 `[hidden] { display: none !important }` 这条兜底。新增按条件显隐的控件时，`<select>` 自身带 `hidden` 的话，JS 要同时清掉 select 和它外层 label 上的 `hidden`（`applyOpenRouterCapabilities` 就是这么做的）。
 - `.env`（COMFYUI_HOST/PORT 等）不进 git；改 .env 后要重启 web 服务。
-- 主体档案的锁定项中英文皆可：`style_lock` / `identity_lock` / `outfit_lock` 每条拼成一句 `Maintain ...` 进提示词——classic 模式**原样进提示词**（中文条目就是中文进图，Qwen-Image / OpenRouter 这类双语或 LLM 系模型没问题）；LLM 模式只作为 LLM 输入、由 LLM 重写成英文。目标后端要纯英文提示词时（SD 类老模型）建议仍写英文。导入/校验工具不得把非 ASCII 锁定项当错误。
-- **`body_lock`（主体档案可选字段）**：体形锚，专门给换装场景用。LLM 改写有参考图时逐条编成 `keep the figure exactly as shown in <imageN>: …` 分句追加进【参考图分工锚定块】（继承「逐字采用、全批相同」硬规则）；`identity_lock` 保持权威不动，classic 模式不用这个字段。建议写英文短句、1–2 条为宜（软上限 400 字符 ×2 条，写长了稀释动作段）。实测缺失时遮盖性服装会让整批胸部缩水（换装批的「身材没控制住」大多是这个）。Web 主体表单有「体型锁定」文本域；derive 抽取会自动生成（模板有体形锚点时压缩成英文断言句——引用核对豁免、缺失不报 omission、与模板矛盾才报 contradiction），`subject export` 自动带出。
+- 主体档案锁定项中英文皆可：`style_lock`/`identity_lock`/`outfit_lock` 每条拼成一句 `Maintain ...` 进提示词——classic **原样进**（中文进图，Qwen/OpenRouter 双语系没问题）；LLM 模式只作 LLM 输入、由 LLM 译成英文。要纯英文后端（SD 老模型）建议仍写英文。导入/校验工具不得把非 ASCII 锁定项当错误。
+- **`body_lock`（主体档案可选字段）**：体形锚，专门给换装场景用。LLM 改写有参考图时逐条编成 `keep the figure exactly as shown in <imageN>: …` 分句追加进【参考图分工锚定块】（继承「逐字采用、全批相同」硬规则）；`identity_lock` 保持权威不动，classic 模式不用这个字段。建议写英文短句、1–2 条为宜（软上限 400 字符 ×2 条，写长了稀释动作段）。实测缺失时遮盖性服装会让整批胸部缩水（换装批的「身材没控制住」大多是这个）。Web 主体表单有「体型锁定」文本域；derive 有体形锚点时自动压缩成英文断言句入档（引用核对豁免等细则见 `docs/主体档案.md`），`subject export` 自动带出。
 - 主体档案的 Markdown 模板上限 24,000 字符（`charvar.llm_prompts._TEMPLATE_MAX_CHARS`），超出尾部被静默截掉；交付文档按 ≤ 10,000 字符写（见「预设存储」）。
 - **LLM 改写的输出语言**（`GenerateRequest.llm_language`，网页「生成参数 → LLM 优化 → 提示词语言」）：`zh`=强制中文 / `en`=强制英文 / `any`=**不做强制性限制（缺省）**。措辞差异集中在 `charvar/llm_prompts.py` 的 `_LANG_PHRASES`（锚定句/视角规范/全身句/framing_guard/背景光照）。**`en` 分支的系统提示词是冻结文本，不得改写**——改 `_LANG_PHRASES["en"]` 或 `_prompt_string_rule` 时要用旧文件做字节级对比（有快照回归测试；快照锁的是**无服饰组合**那一版，服饰组合另有分支）。
   - 改写管线注入的材料**全是英文**（视角规范句、背景/光照池、参考图锚定句），所以 `zh` 不是"禁止英文"而是"把这些英文材料译写成中文再采用"；`any` 不写语言规定，多数仍出英文（跟随注入材料）。
@@ -195,7 +187,7 @@ styling=锚脸+发型+服装（section 随条目存，锚定分句 `face`/`face_
 3. 模板也可单独维护：`PUT /subjects/<id>/template`，或网页「主体档案 → 从 .md 文件载入」。
 4. 锁定项与模板全文逐字保留原文，不做改写或摘要。
 5. 导入后跑 `python3 -m pytest -q`，并用 `/subjects/<id>/images/<kind>/suggest-prompt` 验一次 LLM 起草能跑通。
-6. 交付包的槽位图用 `python3 -m charvar.cli subject image import <目录> --subject <id>` 装进运行时：落盘 + 生成 WebP 缩略图 + 建 `subject_images` 行（也可在 `subject add` 时加 `--images <目录>` 一次做完）。**手动把 PNG 拷进 `data/subjects/<id>/` 不会建槽位行**（网页仍显示空槽）；缩略图缺失会在读取时自动补，但槽位行只能由导入命令或网页上传产生。
+6. 交付包的槽位图用 `python3 -m charvar.cli subject image import <目录> --subject <id>` 装进运行时：落盘 + WebP 缩略图 + 建 `subject_images` 行（也可 `subject add` 时加 `--images <目录>` 一次做完）。**手动把 PNG 拷进 `data/subjects/<id>/` 不会建槽位行**（网页仍显示空槽）；缩略图缺失读取时自动补，槽位行只能由导入命令或网页上传产生。
 
 **只有模板 .md、还没写档案时**：`charvar subject derive <template.md> --id <slug>` 从模板派生候选
 （LLM 抽取 → 引用核对（zh 模式锁定项必须回指模板原文，防编造）→ 独立审计；默认只写 yaml 不入库，`--apply` 才入库，多版本模板必须 `--version <关键词>`）。
@@ -222,7 +214,7 @@ DB → 仓库对偶：`charvar subject export <id>` 快照成 `presets/subjects/
 - **赤足服饰**：text 写了「赤足/barefoot」时，构图句里的「鞋底 / soles of the shoes」自动换成脚的措辞（`composer.barefootize`）。
 - **贴字** = `presets/overlays/*.yaml`（`charvar/overlay.py`，PIL 确定性后处理，**不改原图**）：产物落 `<data>/generated/<run_id>/labeled/{index:06d}.png`。语义：`POST /runs/{id}/overlay` = `charvar overlay <run_id> --overlay <preset> [--text-from …] [--items 0,1]`。
 - 字体解析顺序与「只放可再分发的开源字体」的约定见 `docs/贴字与服饰预设.md`。
-- 与 **sticker（带字表情包）** 是两套机制：sticker 的字是提示词驱动（模型原生画字）；贴字是确定性 PIL 后处理。**sticker 预设拒绝服饰/发型组合**（语义冲突，400）。
+- 与 **sticker（带字表情包）** 是两套机制：sticker 的字是提示词驱动（模型原生画字，`charvar/sticker_policy.py` 共享策略层）；贴字是确定性 PIL 后处理。**sticker 预设拒绝服饰/发型组合**（语义冲突，400）；schema 2 预设合同 / display_text 文字编译 / 冲突检测细则见 `docs/贴字与服饰预设.md` 的「sticker（带字表情包）」一节。
 
 ## 发型预设（presets/hairstyles/）
 
@@ -242,7 +234,7 @@ DB → 仓库对偶：`charvar subject export <id>` 快照成 `presets/subjects/
 - **入口三处同语义**：`charvar recipes list|run|status`（`--continue` 续最近一次）、`/recipes*` API、「配方」页签（`recipes.js`）。
 - **生成参数是运行级**（backend/model/分辨率已从配方 YAML 摘除）：配方页「生成参数」面板或 CLI `--image-*/--video-*` flags 随 run 下发、锁进 manifest（continue 复用）；优先级 运行级 > 步级 > 设置页/env 默认链。细则见 `docs/配方系统.md`。
 - 示例配方：`presets/recipes/stockings_showcase.yaml`（真出 27 张图，跑前想清楚）、`presets/recipes/random_cast_video.yaml`（随机选角 8 秒视频）。
-- **随机三库配方**（舞蹈 `random_dance_video`：站姿池；MV `random_mv_video`：多镜/伴舞；`random_mv_video_up`：特写大字；荒诞 `random_absurd_video`：白名单池/安全锁；猫 `random_cat_video`：随机猫/猫池；贱剧 `random_cat_skit_video`：剧本池/三拍；捣乱 `random_cat_naughty_video`：捣乱池/装无辜）：`pick` 随机选角 → 脚本/场景/首帧（猫系脚本先行）→ `video_model`。种子含 run_id：每跑换批。
+- **随机三库配方**（`random_dance/mv/mv_up/absurd/cat/cat_skit/cat_naughty_video` 七种；池子与分工细则见 `docs/配方系统.md` 示例配方）：`pick` 随机选角 → 脚本/场景/首帧（猫系脚本先行）→ `video_model`。种子含 run_id：每跑换批。
 
 ### 生成步与参考视频
 
