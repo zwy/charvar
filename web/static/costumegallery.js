@@ -365,22 +365,17 @@ const CostumeGallery = (() => {
       });
     }
 
-    function selectItem(it) {
-      selectedItem = it;
-      const items = filteredItems();
-      [...grid.querySelectorAll(".costume-card")].forEach(function (el, i) {
-        el.classList.toggle("active", !!it && items[i] && items[i].item_id === it.item_id);
-      });
-      renderDetail();
-    }
-
     /* ---------- 编辑（一次一个块）：三个文本字段共用一套 ---------- */
     const EDIT_FIELDS = { "keywords": "keywords", "prompt-text": "prompt_text", "ref-prompt": "ref_prompt" };
     const EDIT_TITLES = { "keywords": "服饰关键词", "prompt-text": "文生图提示词（服饰段）", "ref-prompt": "平铺制图提示词" };
     let editingKind = null;
 
+    /* 编辑块集合：keywords 仅自建可编辑；prompt-text 两库；ref-prompt 仅自建展示。
+       isStudio 与后端 STUDIO_SOURCE_IDS 同口径（studio 平铺 + studio-mannequin 人台
+       都算自建 —— 人台条目同样有制图提示词 / 编辑 / 重新生成参考图）。 */
+    const STUDIO_SOURCES = ["studio", "studio-mannequin"];
     function isStudio(it) {
-      return it.source_id === "studio";
+      return STUDIO_SOURCES.includes(it.source_id);
     }
 
     function updateItem(it, changes) {

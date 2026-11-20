@@ -41,4 +41,8 @@ async function loadRuns() {
 
 $("#btn-runs-refresh").addEventListener("click", loadRuns);
 
-loadRuns().catch((err) => setStatus($("#runs-table"), `加载失败：${err.message}`, true));
+loadRuns().catch((err) => {
+  // 错误行插进 tbody：setStatus 在 <table> 上会拿 textContent 吞掉整张表
+  const tbody = $("#runs-table tbody");
+  if (tbody) tbody.innerHTML = `<tr><td colspan="8"><span class="status error">加载失败：${escapeHtml(err.message)}</span></td></tr>`;
+});

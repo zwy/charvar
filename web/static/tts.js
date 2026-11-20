@@ -122,9 +122,11 @@ $("#btn-tts-generate").addEventListener("click", async () => {
 function renderTtsResult(s) {
   $("#tts-result-card").hidden = false;
   const bits = [];
-  if (s.model) bits.push(escapeHtml(String(s.model)));
-  if (s.voice) bits.push(`voice ${escapeHtml(String(s.voice))}`);
-  bits.push(escapeHtml(s.response_format || "pcm"));
+  // 结果行走 textContent（本来就无 XSS 面），字段不再预转义 —— 转义后再进
+  // textContent 会把 &/< 显示成实体（二次转义）
+  if (s.model) bits.push(String(s.model));
+  if (s.voice) bits.push(`voice ${String(s.voice)}`);
+  bits.push(String(s.response_format || "pcm"));
   if (s.sample_rate) bits.push(`${s.sample_rate} Hz`);
   $("#tts-result-summary").textContent = bits.join(" · ");
   const player = $("#tts-result-player");

@@ -76,7 +76,8 @@ async function refreshOpenRouterSettingFields(settings) {
 async function onOpenRouterSettingModelChange(mode) {
   try {
     const settings = await api("/settings");
-    await fillOpenRouterSettingParams(mode, settings, $(`#set-or-${mode}-model`).value.trim());
+    // 本次切换模式的警示要留下（此前被丢弃：换 i2i 模型时「只支持文生图」的提示就不显示）
+    const hints = await fillOpenRouterSettingParams(mode, settings, $(`#set-or-${mode}-model`).value.trim());
     const hintEl = $("#or-model-hints");
     const otherMode = mode === "t2i" ? "i2i" : "t2i";
     const otherHints = OR_CAPS_BY_MODE[otherMode]
@@ -84,7 +85,7 @@ async function onOpenRouterSettingModelChange(mode) {
           ? [`图片编辑模型 ${OR_CAPS_BY_MODE[otherMode].model} 只支持文生图（清单里没有 image 输入），带参考图的生图会失败`]
           : [])
       : [];
-    if (hintEl) hintEl.textContent = otherHints.join("｜");
+    if (hintEl) hintEl.textContent = hints.concat(otherHints).join("｜");
   } catch {}
 }
 
