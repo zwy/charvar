@@ -39,3 +39,7 @@ const DREAMINA_DEFAULT_VIDEO_MODEL = "seedance_2.0_fast_vip";
 /* 视频画幅的通用兜底集（模型各自的 ratios 在 DREAMINA_VIDEO_MODELS 里；
    缺档位上下文时用这套）。别复用生图侧的表 —— 生图有 2:3/3:2。 */
 const DREAMINA_VIDEO_RATIOS = ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"];
+
+/* 生图画幅通用枚举（预设页在头部加 "auto" 后展示；图片页 / 自建姿势库条目同单。
+   改这里 = 预设页 + 图片页两处下拉一起变，别再各页自持一份）。 */
+const IMAGE_ASPECTS = ["3:4", "4:5", "1:1", "16:9", "4:3", "9:16", "2:3", "3:2", "21:9"];

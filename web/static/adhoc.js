@@ -14,7 +14,7 @@
    参考图预处理在后端统一做；种子留空 = 前端随机 0–100000（随机源在调用方这一侧，
    adhoc.py 仍只收显式 seed，不引入自己的随机源），填数值 = 固定复现；即梦不暴露 seed。 */
 
-const ADHOC_ASPECTS = ["3:4", "4:5", "1:1", "16:9", "4:3", "9:16", "2:3", "3:2", "21:9"];
+const ADHOC_ASPECTS = IMAGE_ASPECTS; // 共享表见 tables.js（别再各页自持一份）
 const ADHOC_MAX_REFS = 4;
 
 /* 即梦 model_version -> 分辨率枚举在共享文件 tables.js（预设页也用同一张表）。 */
@@ -25,11 +25,16 @@ const adhocState = {
   backend: "comfyui", // 一级：后端
   mode: "t2i", // 二级：模式（仅自由生图；工作流模式恒带参考图 = 图片编辑）
   references: [], // [{type:"staged", id, name, url} | {type:"subject", ...}]
-  caps: null, // 当前 OpenRouter 模式模型的清单能力
-  modeModel: "", // 当前模式的默认模型（显示名 + capabilities 来源）
-  capsToken: 0, // 后端/模式切换的竞态守卫：只采纳最后一次拉取的能力
-  comfyTier: "2k", // ComfyUI 分辨率档（记住上次选择，切后端不丢）
 };
+
+/* 共用面板引擎（imagepanel.js，与预设页同一份枚举/档位/联动逻辑；说明行与提示在页面） */
+const Panel = ImagePanel.mkPanel({
+  prefix: "adhoc",
+  getMode: () => (adhocState.flow !== "free" ? "i2i" : adhocState.mode),
+  getBackend: () => adhocState.backend,
+  getDreaminaDefaults: () => adhocState.dreaminaDefaults || {},
+  onRender: () => { renderAdhocModelInfo(); updateAdhocHints(); },
+});
 
 function adhocBackend() {
   return adhocState.backend;
@@ -41,119 +46,7 @@ function adhocSegToggle(containerSel, attr, value) {
   );
 }
 
-/* ---------- 面板应用：按「后端 × 模式」重算字段显隐与选项 ---------- */
-function applyAdhocPanel() {
-  const backend = adhocState.backend;
-  const isComfy = backend === "comfyui";
-  const isOpenRouter = backend === "openrouter";
-  const isDreamina = backend === "dreamina";
-  const isFlow = adhocState.flow !== "free"; // 工作流模式：参考构成槽位（恒图片编辑语义）
-  const i2i = isFlow || adhocState.mode === "i2i";
-
-  /* 通用显隐 */
-  $("#adhoc-negative-field").hidden = !isComfy; // 仅 ComfyUI 有负向词
-  $("#adhoc-model-field").hidden = isComfy; // 模型说明行：OR / 即梦才显示
-  $("#adhoc-model-select-field").hidden = !isDreamina;
-  $("#adhoc-seed-field").hidden = isDreamina; // 即梦不暴露 seed
-  $("#adhoc-refs-block").hidden = !i2i || isFlow; // 参考图区：自由生图 × 图片编辑
-  $("#adhoc-flow-block").hidden = !isFlow; // 参考构成：工作流模式
-  $("#adhoc-mode").hidden = isFlow; // t2i/i2i 分段只属于自由生图
-  const t2iHint = $("#adhoc-refs-t2i-hint");
-  t2iHint.hidden = !(!i2i && adhocState.references.length);
-  if (!t2iHint.hidden) {
-    t2iHint.textContent = `已选 ${adhocState.references.length} 张参考图不随文生图发送；切到「图片编辑」后生效（暂存 24 小时后清理）`;
-  }
-
-  if (isComfy) {
-    applyAdhocTierOptions();
-  } else if (isOpenRouter) {
-    // 能力异步回来才定枚举；先收起，等 applyAdhocCaps 再展开
-    adhocState.caps = null;
-    adhocState.modeModel = "";
-    $("#adhoc-resolution-field").hidden = true;
-    $("#adhoc-quality-field").hidden = true;
-    adhocState.capsLoading = true;
-    renderAdhocModelInfo();
-    loadAdhocModelCaps();
-  } else {
-    applyAdhocDreaminaOptions();
-  }
-  updateAdhocHints();
-}
-
-/* ---------- OpenRouter 能力拉取与枚举填充 ---------- */
-async function loadAdhocModelCaps() {
-  const token = (adhocState.capsToken += 1);
-  const settle = (fn) => {
-    if (token === adhocState.capsToken) fn();
-  };
-  adhocState.capsLoading = true;
-  renderAdhocModelInfo(); // 加载中…
-  let model = "";
-  try {
-    const settings = await api("/settings");
-    const mode = adhocState.flow !== "free" ? "i2i" : adhocState.mode;
-    model =
-      (settings.openrouter && settings.openrouter[`${mode}_model`]) ||
-      (mode === "t2i"
-        ? settings.openrouter_default_t2i_model
-        : settings.openrouter_default_i2i_model) ||
-      "";
-    adhocState.modeModel = model;
-    if (!model) {
-      settle(() => {
-        adhocState.capsLoading = false;
-        adhocState.caps = null;
-        applyAdhocCaps({});
-      });
-      return;
-    }
-    const caps = await api(`/openrouter/capabilities?model=${encodeURIComponent(model)}`);
-    settle(() => {
-      adhocState.capsLoading = false;
-      applyAdhocCaps(caps);
-    });
-  } catch {
-    settle(() => {
-      adhocState.capsLoading = false;
-      adhocState.caps = null;
-      applyAdhocCaps({});
-    });
-  }
-}
-
-function applyAdhocCaps(caps) {
-  adhocState.caps = caps || null;
-  const resSelect = $("#adhoc-resolution");
-  const resField = $("#adhoc-resolution-field");
-  const enums = (caps && caps.resolutions) || [];
-  if (enums.length) {
-    resSelect.innerHTML = [`<option value="">跟随设置默认</option>`]
-      .concat(enums.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`))
-      .join("");
-    // 默认 2K：枚举里有（大小写不敏感）就选它
-    const twoK = enums.find((v) => String(v).toLowerCase() === "2k");
-    resSelect.value = twoK || "";
-    resField.hidden = false;
-  } else {
-    // muse-image 这类清单为空的模型：分辨率只跟设置页/env，面板不造参数
-    resSelect.innerHTML = `<option value=""></option>`;
-    resSelect.value = "";
-    resField.hidden = true;
-  }
-
-  const qualities = (caps && caps.qualities) || [];
-  const qSelect = $("#adhoc-quality");
-  const qField = $("#adhoc-quality-field");
-  qSelect.innerHTML = [`<option value="">跟随设置默认</option>`]
-    .concat(qualities.map((q) => `<option value="${escapeHtml(q)}">${escapeHtml(q)}</option>`))
-    .join("");
-  qSelect.value = "";
-  qField.hidden = qualities.length === 0;
-  renderAdhocModelInfo();
-  updateAdhocHints();
-}
-
+/* ---------- 面板应用：按「后端 × 模式」重算字段显隐与选项（枚举/联动共用 imagepanel.js） ---------- */
 /* ---------- 说明行 / 参考图提示 ---------- */
 function renderAdhocModelInfo() {
   const el = $("#adhoc-model-field");
@@ -164,16 +57,16 @@ function renderAdhocModelInfo() {
   }
   const mode = adhocState.flow !== "free" ? "i2i" : adhocState.mode;
   if (adhocState.backend === "openrouter") {
-    if (adhocState.capsLoading) {
+    if (Panel.capsLoading) {
       el.textContent = "模型能力加载中…";
       return;
     }
     const label = mode === "i2i" ? "图片编辑" : "文生图";
-    const model = adhocState.modeModel || "";
+    const model = Panel.modeModel || "";
     el.innerHTML = model
       ? `当前走${label}：模型 <code>${escapeHtml(model)}</code>（跟随设置页，面板不选模型）`
       : `当前走${label}：设置页 / OP_IMAGE_${mode.toUpperCase()}_MODEL 还没配模型`;
-    if ((adhocState.flow !== "free" || mode === "i2i") && adhocState.caps && adhocState.caps.supports_references === false) {
+    if ((adhocState.flow !== "free" || mode === "i2i") && Panel.caps && Panel.caps.supports_references === false) {
       el.innerHTML += `；⚠ 该模型不支持参考图输入，参考图不会发送`;
     }
     return;
@@ -195,7 +88,7 @@ function updateAdhocHints() {
   const el = $("#adhoc-ref-count");
   if (el) {
     const parts = [`已选 ${count} 张`];
-    const caps = adhocState.caps;
+    const caps = Panel.caps;
     if (adhocState.backend === "openrouter" && caps && caps.supports_references === false) {
       parts.push("该模型只支持文生图，参考图不会发送");
     }
@@ -210,63 +103,40 @@ function updateAdhocHints() {
   }
 }
 
-/* ---------- ComfyUI / 即梦的档位选项 ---------- */
-function applyAdhocTierOptions() {
-  /* ComfyUI 通路没有 provider 枚举，档位固定 charvar 档；2k 走官方 ~4.2MP 像素表 */
-  const select = $("#adhoc-resolution");
-  select.innerHTML =
-    `<option value="1k">1k（长边 1024）</option>` +
-    `<option value="2k">2k（Qwen 官方 ~4.2MP）</option>`;
-  select.value = adhocState.comfyTier || "2k";
-  $("#adhoc-resolution-field").hidden = false;
-  $("#adhoc-quality-field").hidden = true;
-}
-
-/* 即梦：分辨率选项随所选模型版本配对（tables.js 画布目录，与后端同源）
-   模型空（跟随设置）就真跟随 —— 档位按设置页的默认模型列出来，但选中「跟随设置默认」。
-   字面值按目录原样（大小写有语义：seedance 小写 720p 等）。 */
-function applyDreaminaResolutionOptions() {
-  const modelValue = $("#adhoc-model-select").value;
-  const def = adhocState.dreaminaDefaults || {};
-  const sel = $("#adhoc-resolution");
-  const base = modelValue || def.model || DREAMINA_DEFAULT_IMAGE_MODEL;
-  const tiers = (DREAMINA_IMAGE_MODELS[base] || DREAMINA_IMAGE_MODELS[DREAMINA_DEFAULT_IMAGE_MODEL]).resolutions;
-  sel.innerHTML = [`<option value="">跟随设置默认（${def.resolution || "2K"}）</option>`]
-    .concat(tiers.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`))
-    .join("");
-  sel.value = modelValue ? (tiers.includes("2K") ? "2K" : tiers[0]) : "";
-  $("#adhoc-resolution-field").hidden = false;
-}
-
-/* 即梦：模型版本下拉；图片编辑页签不列连 t2i 兼收参考都没开的模型 */
-async function applyAdhocDreaminaOptions() {
-  if (adhocState.dreaminaCliOk === undefined) {
+async function applyAdhocPanel() {
+  // 即梦默认链（DB > env > 缺省）只拉一次 /settings（与旧 applyAdhocDreaminaOptions 的
+  // 惰性加载同语义；拉取失败回落缺省，面板不造参数）
+  if (adhocState.dreaminaDefaultsLoaded !== true) {
     try {
       const s = await api("/settings");
       adhocState.dreaminaCliOk = s.dreamina_cli_available !== false;
-      // 生效默认 = DB > env > 缺省（后端 dreamina_config 已解析），别用 raw 设置值
       adhocState.dreaminaDefaults = s.dreamina_image_default || s.dreamina || {};
     } catch {
       adhocState.dreaminaCliOk = true;
-      adhocState.dreaminaDefaults = {};
     }
+    adhocState.dreaminaDefaultsLoaded = true;
   }
-  const i2i = adhocState.mode === "i2i";
-  const models = Object.entries(DREAMINA_IMAGE_MODELS).filter(
-    ([, e]) => !i2i || e.refMax.i2i > 0 || e.refMax.t2i > 0
-  );
-  const def = adhocState.dreaminaDefaults || {};
-  const defLabel = `跟随设置默认（${def.model || DREAMINA_DEFAULT_IMAGE_MODEL} · ${def.resolution || "2K"}）`;
-  const sel = $("#adhoc-model-select");
-  const keep = sel.value;
-  sel.innerHTML = [`<option value="">${defLabel}</option>`]
-    .concat(models.map(([id, e]) => `<option value="${escapeHtml(id)}">${escapeHtml(e.label)}</option>`))
-    .join("");
-  // 记住上次选的模型版本（切走再切回来别重置）
-  sel.value = models.some(([id]) => id === keep) ? keep : "";
-  $("#adhoc-model-select-field").hidden = false;
-  applyDreaminaResolutionOptions();
-  renderAdhocModelInfo();
+  const backend = adhocState.backend;
+  const isFlow = adhocState.flow !== "free"; // 工作流模式：参考构成槽位（恒图片编辑语义）
+  const i2i = isFlow || adhocState.mode === "i2i";
+
+  /* 通用显隐（页面特有部分） */
+  $("#adhoc-seed-field").hidden = backend === "dreamina"; // 即梦不暴露 seed
+  $("#adhoc-refs-block").hidden = !i2i || isFlow; // 参考图区：自由生图 × 图片编辑
+  $("#adhoc-flow-block").hidden = !isFlow; // 参考构成：工作流模式
+  $("#adhoc-mode").hidden = isFlow; // t2i/i2i 分段只属于自由生图
+  const t2iHint = $("#adhoc-refs-t2i-hint");
+  t2iHint.hidden = !(!i2i && adhocState.references.length);
+  if (!t2iHint.hidden) {
+    t2iHint.textContent = `已选 ${adhocState.references.length} 张参考图不随文生图发送；切到「图片编辑」后生效（暂存 24 小时后清理）`;
+  }
+
+  Panel.apply({
+    backend,
+    withRefs: i2i,
+    dreaminaDefaults: adhocState.dreaminaDefaults || {},
+  });
+  updateAdhocHints();
 }
 
 /* ---------- 参考图：渲染 / 上传 / 移除 / 清空 ---------- */
@@ -785,10 +655,6 @@ $$("#adhoc-mode .seg").forEach((btn) =>
   })
 );
 
-$("#adhoc-model-select").addEventListener("change", applyDreaminaResolutionOptions);
-$("#adhoc-resolution").addEventListener("change", () => {
-  // ComfyUI 的档位记住，切后端再切回来不重置
-  if (adhocState.backend === "comfyui") adhocState.comfyTier = $("#adhoc-resolution").value;
-});
+Panel.bind(); // 档位记忆（ComfyUI/OR）+ 即梦模型→分辨率联动（共用引擎）
 
 initAdhoc();

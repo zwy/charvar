@@ -7,21 +7,18 @@
 
 /* ---------- 本页状态 ---------- */
 const state = {
-  subjects: [],
+  subjects: [], // 只用于展示名（结果摘要）；run 主体见 subjectId
+  subjectId: "", // run 主体：「从主体档案加入」弹层选定，或主体专属预设自动带入
+
   presets: [],
   presetDetails: {},
   lastRun: null, // GenerateResult(= 当前选中的轮次,结果卡 / 推送生图都作用于它)
   rounds: [], // 轮次条:{run_id, completed, total, errors, queued},按时间排
   genMode: "classic",
   backend: "comfyui", // ① 生图供应商:comfyui / openrouter / dreamina
-  caps: null, // 当前 OpenRouter 模型的能力(api-response.json 推导)
-  capsToken: 0, // 供应商切换的竞态守卫:只采纳最后一次拉取的能力
-  modeModel: "", // OpenRouter 当前模型(跟随设置页,面板不选模型)
   dreaminaCliOk: undefined, // 本机有没有 dreamina CLI
   dreaminaDefaults: {}, // 设置页的即梦默认值(模型/分辨率)
   comfySettings: null,
-  comfyTier: "2k", // ComfyUI 分辨率档(记住上次选择,切供应商不丢)
-  orResolution: "", // OpenRouter 分辨率(记住上次选择)
 };
 /* ---------- 生成模式（经典模板 / LLM 优化） ---------- */
 function setGenMode(mode) {
@@ -34,156 +31,37 @@ function setGenMode(mode) {
 $("#gen-mode-classic").addEventListener("click", () => setGenMode("classic"));
 $("#gen-mode-llm").addEventListener("click", () => setGenMode("llm"));
 
-/* ---------- ① 生图设置：供应商面板（与图片页同源） ---------- */
-const GEN_ASPECTS = ["auto", "3:4", "4:5", "1:1", "16:9", "4:3", "9:16", "2:3", "3:2", "21:9"];
-const TIER_TO_SIDE = { "1k": 1024, "2k": 2048 };
-// Qwen-Image-2.1 官方 2K 像素（面积恒定 ~4.2MP）。后端 charvar/exporters/comfyui.py
-// 的 _QWEN_2K_SIZES 是同一张表 —— 改了那边这里要同步，否则预览和实际不符。
-const QWEN_2K_SIZES = {
-  "1:1": [2048, 2048], "4:3": [2400, 1792], "3:4": [1792, 2400],
-  "4:5": [1856, 2320], "3:2": [2528, 1696], "2:3": [1696, 2528],
-  "16:9": [2752, 1536], "9:16": [1536, 2752],
-};
+/* ---------- ① 生图设置：供应商面板（共用引擎见 imagepanel.js；QWEN_2K_SIZES /
+   parseLongSide / 档位枚举 / OR caps 拉取 / 即梦模型联动都从那里来） ---------- */
+const GEN_ASPECTS = ["auto", ...IMAGE_ASPECTS]; // 共享表见 tables.js（预设页头部加 auto）
 
 /* 有参考图 = 图片编辑（i2i / edit workflow / image2image）；没有 = 纯文生图 */
 function genBackendMode() {
   return GenRefs.count() ? "i2i" : "t2i";
 }
 
+const Panel = ImagePanel.mkPanel({
+  prefix: "gen",
+  waitField: true, // #gen-wait-field 只属 ComfyUI
+  getMode: genBackendMode,
+  getBackend: () => state.backend,
+  getDreaminaDefaults: () => state.dreaminaDefaults || {},
+  onRender: () => {
+    renderGenModelInfo();
+    updateGenHints();
+  },
+});
+
 function applyGenBackendPanel() {
-  const backend = state.backend;
-  const isComfy = backend === "comfyui";
-  const isOpenRouter = backend === "openrouter";
-  const isDreamina = backend === "dreamina";
-  $("#gen-negative-field").hidden = !isComfy;   // 仅 ComfyUI 有负向词
-  $("#gen-wait-field").hidden = !isComfy;        // 仅 ComfyUI 支持等待完成
-  $("#gen-model-select-field").hidden = !isDreamina;
-  $("#gen-model-field").hidden = isComfy;        // 模型说明行：OR / 即梦才显示
-  if (isComfy) {
-    applyGenTierOptions();
-  } else if (isOpenRouter) {
-    // 能力异步回来才定枚举；先收起，等 applyGenCaps 再展开
-    state.caps = null;
-    state.modeModel = "";
-    $("#gen-resolution-field").hidden = true;
-    $("#gen-quality-field").hidden = true;
-    loadGenOpenRouterCaps();
-  } else {
-    applyGenDreaminaOptions();
-  }
-  renderGenModelInfo();
+  Panel.apply({
+    backend: state.backend,
+    withRefs: GenRefs.count() > 0,
+    dreaminaDefaults: state.dreaminaDefaults || {},
+  });
+  renderGenModelInfo(); // comfy 的 workflow 说明也走 model-field（OR/即梦由引擎回调再渲染）
   updateGenHints();
 }
 
-/* ComfyUI：档位固定 charvar 档（1k/2k），2k 走官方 ~4.2MP 像素表 */
-function applyGenTierOptions() {
-  const select = $("#gen-resolution");
-  select.innerHTML =
-    `<option value="1k">1k（长边 1024）</option>` +
-    `<option value="2k">2k（Qwen 官方 ~4.2MP）</option>`;
-  // 记住上次选的档：切走再切回来别重置
-  select.value = state.comfyTier || "2k";
-  $("#gen-resolution-field").hidden = false;
-  $("#gen-quality-field").hidden = true;
-}
-
-/* 即梦：模型下拉（画布目录，tables.js 与后端 _IMAGE_MODELS 同源）+ 分辨率随模型配对。
-   带参考图时不列连文生图模式都不收参考的模型，免得选到提交前才被后端拦
-   （后端 validate_references / validate_model_resolution 仍兜底）。 */
-function applyGenDreaminaOptions() {
-  const def = state.dreaminaDefaults || {};
-  const defLabel = `跟随设置默认（${def.model || DREAMINA_DEFAULT_IMAGE_MODEL} · ${def.resolution || "2K"}）`;
-  const withRefs = GenRefs.count() > 0;
-  const models = Object.entries(DREAMINA_IMAGE_MODELS)
-    .filter(([, e]) => !withRefs || (e.refMax.i2i > 0 || e.refMax.t2i > 0));
-  const sel = $("#gen-model-select");
-  const keep = sel.value;
-  sel.innerHTML = [`<option value="">${defLabel}</option>`]
-    .concat(models.map(([id, e]) => `<option value="${escapeHtml(id)}">${escapeHtml(e.label)}</option>`))
-    .join("");
-  sel.value = models.some(([id]) => id === keep) ? keep : "";
-  $("#gen-model-select-field").hidden = false;
-  applyGenDreaminaResolutionOptions();
-}
-
-/* 即梦分辨率：模型空（跟随设置）就真跟随 —— 档位仍列出来（按设置页的默认模型配对），
-   但选中的是「跟随设置默认」；显式选了模型才按那个模型列档。
-   字面值按目录原样（大小写有语义），后端 validate_model_resolution 仍兜底。 */
-function applyGenDreaminaResolutionOptions() {
-  const modelValue = $("#gen-model-select").value;
-  const def = state.dreaminaDefaults || {};
-  const sel = $("#gen-resolution");
-  const base = modelValue || def.model || DREAMINA_DEFAULT_IMAGE_MODEL;
-  const tiers = (DREAMINA_IMAGE_MODELS[base] || DREAMINA_IMAGE_MODELS[DREAMINA_DEFAULT_IMAGE_MODEL]).resolutions;
-  sel.innerHTML = [`<option value="">跟随设置默认（${def.resolution || "2K"}）</option>`]
-    .concat(tiers.map((t) => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`))
-    .join("");
-  sel.value = modelValue ? (tiers.includes("2K") ? "2K" : tiers[0]) : "";
-  $("#gen-resolution-field").hidden = false;
-  $("#gen-quality-field").hidden = true;
-}
-
-/* OpenRouter：档位按模型清单（api-response.json 的 supported_parameters）出枚举 */
-async function loadGenOpenRouterCaps() {
-  const token = (state.capsToken += 1);
-  const settle = (fn) => {
-    if (token === state.capsToken) fn();
-  };
-  let model = "";
-  try {
-    const settings = await api("/settings");
-    state.openrouterSettings = settings;
-    const mode = genBackendMode();
-    const or = settings.openrouter || {};
-    model = or[`${mode}_model`] || (mode === "i2i"
-      ? settings.openrouter_default_i2i_model
-      : settings.openrouter_default_t2i_model) || "";
-    state.modeModel = model;
-    if (!model) {
-      settle(() => {
-        state.caps = null;
-        applyGenCaps({});
-      });
-      return;
-    }
-    const caps = await api(`/openrouter/capabilities?model=${encodeURIComponent(model)}`);
-    settle(() => applyGenCaps(caps));
-  } catch {
-    settle(() => {
-      state.caps = null;
-      applyGenCaps({});
-    });
-  }
-}
-
-function applyGenCaps(caps) {
-  state.caps = caps || null;
-  const resSelect = $("#gen-resolution");
-  const enums = (caps && caps.resolutions) || [];
-  if (enums.length) {
-    resSelect.innerHTML = [`<option value="">跟随设置默认</option>`]
-      .concat(enums.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`))
-      .join("");
-    // 默认 2K（枚举里有，大小写不敏感）；上次选过且还在枚举里就沿用
-    const twoK = enums.find((v) => String(v).toLowerCase() === "2k");
-    const keep = enums.find((v) => v === state.orResolution);
-    resSelect.value = keep || twoK || "";
-    $("#gen-resolution-field").hidden = false;
-  } else {
-    resSelect.innerHTML = `<option value=""></option>`;
-    resSelect.value = "";
-    $("#gen-resolution-field").hidden = true;
-  }
-  const qualities = (caps && caps.qualities) || [];
-  const qSelect = $("#gen-quality");
-  qSelect.innerHTML = [`<option value="">跟随设置默认</option>`]
-    .concat(qualities.map((q) => `<option value="${escapeHtml(q)}">${escapeHtml(q)}</option>`))
-    .join("");
-  qSelect.value = "";
-  $("#gen-quality-field").hidden = qualities.length === 0;
-  renderGenModelInfo();
-  updateGenHints();
-}
 
 /* 供应商切换后，segmented 右边那行说明：当前生效的 workflow / 模型 / 枚举。
    只放「控件里看不到」的信息，其余一律不留。 */
@@ -200,9 +78,13 @@ function renderGenModelInfo() {
   }
   if (state.backend === "openrouter") {
     const mode = genBackendMode();
-    const model = state.modeModel || "";
+    if (Panel.capsLoading) {
+      el.textContent = "模型能力加载中…";
+      return;
+    }
+    const model = Panel.modeModel || "";
     const label = mode === "i2i" ? "图片编辑" : "文生图";
-    const caps = state.caps;
+    const caps = Panel.caps;
     const bits = [];
     if (caps && caps.resolutions && caps.resolutions.length) {
       bits.push(`分辨率 ${caps.resolutions.join("/")}`);
@@ -253,11 +135,11 @@ function updateGenHints() {
     const parts = ratio.split(":").map((n) => Number(n.trim()));
     if (parts.length !== 2 || parts.some((n) => !Number.isFinite(n) || n <= 0)) {
       hint.textContent = "比例无效";
-    } else if (state.backend === "comfyui" && tier === "2k" && QWEN_2K_SIZES[ratio]) {
-      const [w, h] = QWEN_2K_SIZES[ratio];
+    } else if (state.backend === "comfyui" && tier === "2k" && ImagePanel.QWEN_2K_SIZES[ratio]) {
+      const [w, h] = ImagePanel.QWEN_2K_SIZES[ratio];
       hint.textContent = `当前输出 ${w} × ${h}px（Qwen 官方 2K 像素，面积 ~4.2MP）`;
     } else {
-      const longSide = parseLongSide(tier) || 1024;
+      const longSide = ImagePanel.parseLongSide(tier) || 1024;
       const [w, h] = parts;
       const shortSide = Math.max(64, Math.round((longSide * Math.min(w, h)) / Math.max(w, h) / 64) * 64);
       hint.textContent = `当前输出 ${w >= h ? longSide : shortSide} × ${h >= w ? longSide : shortSide}px`;
@@ -281,14 +163,6 @@ async function refreshComfyWorkflows() {
   state.comfyWorkflows = (info.workflows || []).filter((w) => w.has_workflow && w.has_mapping);
 }
 
-/* 面板档位：charvar 档位（1k/2k）或 provider 枚举值（512/1K/1.5K/2K/4K…）。
-   长边换算与后端 exporters.dimensions_for 的通用分支一致（1K=1024 长边）。 */
-function parseLongSide(value) {
-  const m = String(value || "").trim().match(/^(\d+(?:\.\d+)?)\s*([kK])?$/);
-  if (!m) return null;
-  return Math.max(64, Math.round(parseFloat(m[1]) * (m[2] ? 1024 : 1)));
-}
-
 /* 预设元信息（/presets 列表项，含 preferred_aspect_ratio） */
 function currentPresetMeta() {
   const name = $("#gen-preset").value;
@@ -303,26 +177,12 @@ async function init() {
   ).join("");
   $("#gen-aspect").value = "auto";
   $("#gen-aspect").addEventListener("change", updateGenHints);
-  $("#gen-resolution").addEventListener("change", () => {
-    // 记住这次的档：切供应商再切回来别重置
-    if (state.backend === "comfyui") state.comfyTier = $("#gen-resolution").value;
-    else if (state.backend === "openrouter") state.orResolution = $("#gen-resolution").value;
-    updateGenHints();
-  });
-  $("#gen-model-select").addEventListener("change", applyGenDreaminaResolutionOptions);
-  // 主体只有一个选择器（①）：提示词主体与参考图主体必须一致 → 换主体要重刷槽位、
-  // 并清掉旧主体档案的参考图
-  $("#gen-subject").addEventListener("change", async () => {
-    await GenRefs.reloadKinds().catch(() => {});
-    const dropped = await GenRefs.dropSubjectRefs();
-    if (dropped) {
-      setStatus(
-        $("#gen-status"),
-        `主体已切换：清掉了 ${dropped} 张旧主体的档案参考图（提示词主体与参考图必须同一个人）`
-      );
-    }
-  });
+  Panel.bind(); // 档位记忆（ComfyUI/OR）+ 即梦模型→分辨率联动（共用引擎）
   GenRefs.mount();
+  // 主体与图片页同构：经「从主体档案加入」弹层选定（两步选槽位图）；
+  // 换主体 = 弹层里点另一个主体 → 旧主体的档案参考图自动清掉
+  $("#btn-gen-ref-add").addEventListener("click", onGenSubjectAdd);
+
   // 参考图增减会改模式（有图 = 图片编辑）→ 供应商面板要跟着重算
   let genRefCount = 0;
   GenRefs.onChange(() => {
@@ -332,10 +192,7 @@ async function init() {
     applyGenBackendPanel();
   });
   await Promise.allSettled([loadSubjects(), loadPresets(), loadOutfits(), loadHairstyles()]);
-  if (state.subjects.length) {
-    $("#gen-subject").value = state.subjects[0].id;
-  }
-  await GenRefs.reloadKinds().catch(() => {});
+  adoptSubjectFromPreset(); // 主体专属预设自动带入；先渲染一次主体提示
   await refreshComfyWorkflows().catch(() => {});
   await loadComfyWorkflowSettings().catch(() => {});
   await restoreRoundsFromSession();
@@ -344,16 +201,66 @@ async function init() {
   await refreshGenBackendPanel().catch(() => {});
 }
 
-async function loadSubjects() {
-  state.subjects = await api("/subjects");
-  const sel = $("#gen-subject");
-  sel.innerHTML = "";
-  for (const s of state.subjects) {
-    const opt = document.createElement("option");
-    opt.value = s.id;
-    opt.textContent = `${s.id} · ${s.name}`;
-    sel.appendChild(opt);
+/* ---------- run 主体（对齐图片页：经「从主体档案加入」弹层选定） ---------- */
+function currentSubject() {
+  return state.subjectId || "";
+}
+
+function renderSubjectHint() {
+  const el = $("#gen-subject-hint");
+  if (!el) return;
+  if (currentSubject()) {
+    const s = state.subjects.find((x) => x.id === currentSubject());
+    el.textContent = `主体 ${currentSubject()}${s ? ` · ${s.name}` : ""}`;
+  } else {
+    el.textContent = "主体：—（先点「从主体档案加入」选定）";
   }
+}
+
+async function onGenSubjectAdd() {
+  if (!state.subjects.length) {
+    setStatus($("#gen-status"), "先去「主体」页建一个档案", true);
+    return;
+  }
+  const current = currentSubject();
+  GenRefs.showSubjectBrowser(async (pick) => {
+    if (current && pick.subject_id !== current) {
+      // 换主体：旧主体的档案参考图自动清掉（提示词主体与参考图必须同一个人）
+      const dropped = await GenRefs.dropSubjectRefs();
+      if (dropped) {
+        setStatus($("#gen-status"), `主体已切换：清掉了 ${dropped} 张旧主体的档案参考图`);
+      }
+    }
+    state.subjectId = pick.subject_id;
+    renderSubjectHint();
+    GenRefs.addSubjectRef(pick);
+  }, {
+    currentId: current || "",
+    title: current
+      ? `主体档案 · ${current}（选一张槽位图加入参考图）`
+      : "主体档案 · 先选主体（决定本批提示词的主体），再选一张槽位图",
+  });
+}
+
+/* 主体专属预设自动带入主体（之前没选过/预设归属优先于已选为空时）；冲突只提醒 */
+function adoptSubjectFromPreset() {
+  const meta = currentPresetMeta();
+  const subject = (meta && meta.subject) || "";
+  if (subject && !state.subjectId) {
+    state.subjectId = subject;
+  } else if (subject && state.subjectId !== subject) {
+    setStatus($("#gen-status"), `预设归属主体 ${subject} ≠ 当前主体 ${state.subjectId}（出图按当前主体）`, true);
+  }
+  renderSubjectHint();
+}
+
+async function onGenPresetChange(name) {
+  await fillPresetOptions(name);
+  adoptSubjectFromPreset();
+}
+
+async function loadSubjects() {
+  state.subjects = await api("/subjects"); // 结果摘要的展示名用
 }
 
 async function loadOutfits() {
@@ -416,7 +323,7 @@ async function loadPresets() {
     if (!subject) continue;
     appendGroup(`主体专属 · ${subject}`, items);
   }
-  sel.addEventListener("change", () => fillPresetOptions(sel.value).catch(() => {}));
+  sel.addEventListener("change", () => onGenPresetChange(sel.value).catch(() => {}));
   if (state.presets.some((p) => p.name === "q21_default_30")) {
     sel.value = "q21_default_30";
   }
@@ -450,6 +357,10 @@ async function fillPresetOptions(name) {
 /* ---------- 生成 ---------- */
 $("#btn-generate").addEventListener("click", async () => {
   if (!state.subjects.length) return setStatus($("#gen-status"), "先去「主体」建一个档案", true);
+  const runSubjectId = currentSubject();
+  if (!runSubjectId) {
+    return setStatus($("#gen-status"), "先点①「从主体档案加入」选定主体（或选一个主体专属预设）", true);
+  }
   const rawSeed = $("#gen-seed").value.trim();
   // 种子：留空（默认）= 每次随机 0–100000（用户填了用填的，与固定背景/固定光照
   // 「留空随机」同一习惯；提示词内容随机仍由后端 seed_for(seed, key) 派生）。
@@ -457,7 +368,7 @@ $("#btn-generate").addEventListener("click", async () => {
     ? Math.floor(Number(rawSeed))
     : Math.floor(Math.random() * 100001);
   const payload = {
-    subject_id: $("#gen-subject").value,
+    subject_id: runSubjectId,
     preset: $("#gen-preset").value,
     seed,
     sampling: $("#gen-sampling").value,
@@ -539,15 +450,44 @@ function renderResult(result) {
       : `<td><span class="caption">—</span></td>`;
     const promptCell = `<td class="copy-cell" title="点击复制">${escapeHtml(item.prompt)}</td>`;
     const capCell = `<td class="copy-cell" title="点击复制" data-caption="1"><span class="caption">${escapeHtml(item.caption)}</span></td>`;
+    // 逐条重生成（与图墙的 🔁 同一端点）：同一提示词换个随机种子重推；沿用 /runs/{id}/regenerate
+    const regenCell = `<td class="row-actions"><button class="btn-icon" data-regen="${item.index}" title="重生成（同一提示词换个随机种子重推）" aria-label="重生成">${icon("refresh")}</button></td>`;
     tr.innerHTML = `<td>${item.index}</td><td>${escapeHtml(item.variant_id)}</td>
       <td>${escapeHtml(m.framing || "-")}</td><td>${escapeHtml(m.angle || "-")}</td><td>${escapeHtml(m.expression || "-")}</td>
       <td>${escapeHtml(m.pose || "-")}</td>
       <td>${escapeHtml(item.background || "—")}</td><td>${escapeHtml(item.lighting || "—")}</td>
-      ${promptCell}${dtCell}${capCell}`;
+      ${promptCell}${dtCell}${capCell}${regenCell}`;
     tbody.appendChild(tr);
   }
   // 点击复制（闪一下底色示意已复制，无弹窗打断）
-  tbody.onclick = (ev) => {
+  tbody.onclick = async (ev) => {
+    const regenBtn = ev.target.closest("[data-regen]");
+    if (regenBtn) {
+      const idx = Number(regenBtn.dataset.regen);
+      const item = result.items.find((it) => it.index === idx);
+      if (!item) return;
+      const label = `#${String(item.index).padStart(3, "0")}`;
+      const seed = Math.floor(Math.random() * 100001);
+      regenBtn.disabled = true;
+      Media.setStatus(`${label} 重新生成中…（种子 ${seed}）`);
+      try {
+        const out = await api(`/runs/${encodeURIComponent(result.run_id)}/regenerate`, {
+          method: "POST",
+          body: JSON.stringify({ item_index: item.index, seed }),
+        });
+        if (!out.ok) {
+          Media.setStatus(`${label} ${out.error || "已入队但出图超时"}`, true);
+          return;
+        }
+        await Media.syncImages(result.run_id);
+        Media.setStatus(`${label} 已重新生成（种子 ${out.seed}）`);
+      } catch (err) {
+        Media.setStatus(`${label} 重新生成失败：${err.message}`, true);
+      } finally {
+        regenBtn.disabled = false;
+      }
+      return;
+    }
     const cell = ev.target.closest(".copy-cell");
     if (!cell) return;
     const text = cell.dataset.caption

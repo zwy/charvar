@@ -16,12 +16,12 @@ const GenRefs = (() => {
     ["character_sheet", "设定图（整套）"],
     ["pose", "姿势构图（人偶线稿参照）"],
     ["face", "人脸（同脸虚构参照）"],
+    ["costume", "服饰（整套服装参照）"],
   ];
   const DEFAULT_ROLE = "front";
 
   const state = {
     references: [], // [{source, role, name, url, localUrl}]
-    subjectSlots: {},
     onChange: null,
   };
 
@@ -150,51 +150,20 @@ const GenRefs = (() => {
     }
   }
 
-  /* ---------- 来源：主体档案槽位 ----------
-     主体只有一处选择：第 ① 步的「主体档案」（#gen-subject）—— 提示词主体与参考图
-     必须是同一个主体，否则提示词里的锁定项和参考图里的人会对不上。 */
-  async function loadKindOptions() {
-    const subjectId = ($("#gen-subject") || {}).value || "";
-    const kindSel = $("#gen-ref-kind");
-    if (!kindSel) return;
-    if (!subjectId) {
-      kindSel.innerHTML = `<option value="">（先在①选主体档案）</option>`;
-      state.subjectSlots[subjectId] = [];
-      return;
-    }
-    try {
-      const data = await api(`/subjects/${encodeURIComponent(subjectId)}/images`);
-      state.subjectSlots[subjectId] = data.slots || [];
-      const ready = (data.slots || []).filter((s) => s.is_ready);
-      kindSel.innerHTML = ready.length
-        ? ready.map((s) => `<option value="${escapeHtml(s.kind)}">${escapeHtml(s.label)}</option>`).join("")
-        : `<option value="">（该主体还没有就绪的图片）</option>`;
-    } catch {
-      kindSel.innerHTML = `<option value="">（加载失败）</option>`;
-    }
-  }
-
-  function onAddFromSubject() {
-    const subjectId = ($("#gen-subject") || {}).value || "";
-    const kind = $("#gen-ref-kind").value;
-    if (!subjectId || !kind) {
-      setStatus($("#gen-status"), "先在①选主体档案和图片类型（只有就绪的图片能选）", true);
-      return;
-    }
-    const slots = state.subjectSlots[subjectId] || [];
-    const slot = slots.find((s) => s.kind === kind);
-    add({
+  /* ---------- 来源：最近生成 ---------- */
+  /* 主体档案弹层的 pick → 参考图（role=槽位 kind 自带分工）；
+     预设页的弹层语义（锁定主体/换主体清图）由 gen.js 决定，这里只做「加」这一步 */
+  function addSubjectRef(pick) {
+    return add({
       source: "subject",
-      subject_id: subjectId,
-      kind,
-      // 档案槽位自带分工（front/headshot/…），不用猜
-      role: kind,
-      name: `${subjectId} / ${(slot && slot.label) || kind}`,
-      url: slot ? slot.thumb_url || slot.original_url : "",
+      subject_id: pick.subject_id,
+      kind: pick.kind,
+      role: pick.kind,
+      name: pick.name || `${pick.subject_id} / ${pick.label || pick.kind}`,
+      url: pick.url,
     });
   }
 
-  /* ---------- 来源：最近生成 ---------- */
   function onPickRecent() {
     Media.showPanelModal("从最近生成选择参考图", (body, close) => {
       body.innerHTML = `<span class="hint">加载中…</span>`;
@@ -330,6 +299,22 @@ const GenRefs = (() => {
     });
   }
 
+  /* ---------- 来源：服饰库（只锚服装与整套配件，不锚身份） ----------
+     pick.item_id / pick.source_id（双库同 id 分键 → 裸 item 引用写全 source/item），
+     role 固定 costume。requireImage = 纯文本条目禁选。 */
+  async function onPickCostume() {
+    showCostumeBrowser((pick) => {
+      add({
+        source: "costume",
+        costume_id: pick.item_id,
+        costume_source: pick.source_id || "",
+        role: "costume",
+        name: pick.name || pick.item_id,
+        url: pick.url,
+      });
+    }, { requireImage: true });
+  }
+
   /* 服饰库弹层：渲染逻辑在 costumegallery.js（与顶栏「服饰」整页及工作流模式弹层同源共用），
      这里只挂弹层骨架。requireImage = 纯文本条目禁选（自由生图参考图必须真有图可发）。 */
   function showCostumeBrowser(onPick, { title = "服饰库（只锚服装与整套配件）", requireImage = false } = {}) {
@@ -343,7 +328,7 @@ const GenRefs = (() => {
      六个槽位按钮（character_sheet/半身/人脸头像/全身正面/侧面/背面）切预览，「加入参考图」确认。
      只有就绪（is_ready）的槽位可选；onPick({subject_id, kind, label, name, url}) 由
      发起方决定落入哪边 —— 预设页与 图片页（自由生图 + 工作流模式）共用。 */
-  function showSubjectBrowser(onPick, { title = "主体档案 · 先选主体，再选一张槽位图", currentId = "", currentKind = "" } = {}) {
+  function showSubjectBrowser(onPick, { title = "主体档案 · 先选主体，再选一张槽位图", currentId = "", currentKind = "", lockSubject = false } = {}) {
     Media.showPanelModal(title, (body, close) => {
       body.innerHTML = `<div class="pose-browser"><div class="pose-master"><div class="hint">载入中…</div><div class="pose-grid image-grid"></div></div><div class="pose-detail"></div></div>`;
       const grid = body.querySelector(".pose-grid");
@@ -372,8 +357,14 @@ const GenRefs = (() => {
             (thumb ? `<img src="${esc(thumb)}" alt="" loading="lazy">` : `<div class="pose-thumb-empty">无图</div>`) +
             `</div>` +
             `<div class="image-meta"><strong>${esc(s.id)}</strong><span class="pose-zh">${esc(s.name)}</span></div>`;
+          // lockSubject（预设页）：只允许点①所选主体，其余置灰提示
+          if (lockSubject && s.id !== currentId) {
+            card.style.opacity = "0.45";
+            card.title = "预设页的主体锁定为①所选（提示词主体与参考图主体必须一致）";
+          }
 
           card.addEventListener("click", () => {
+            if (lockSubject && s.id !== currentId) return;
             selected = s;
             const slots = slotsCache[s.id] || [];
             // 进详情默认选第一张就绪的槽位图，避免每次都从空预览开始
@@ -507,6 +498,9 @@ const GenRefs = (() => {
       } else if (ref.source === "face") {
         spec.face_id = ref.face_id;
         if (ref.face_source) spec.source = ref.face_source;
+      } else if (ref.source === "costume") {
+        spec.costume_id = ref.costume_id;
+        if (ref.costume_source) spec.source = ref.costume_source;
       } else {
         spec.run_id = ref.run_id;
         spec.index = ref.index || 0;
@@ -555,22 +549,22 @@ const GenRefs = (() => {
   function mount() {
     const file = $("#gen-ref-file");
     if (file) file.addEventListener("change", onUpload);
-    const addBtn = $("#btn-gen-ref-add");
-    if (addBtn) addBtn.addEventListener("click", onAddFromSubject);
     const recentBtn = $("#btn-gen-recent-add");
     if (recentBtn) recentBtn.addEventListener("click", onPickRecent);
     const poseBtn = $("#btn-gen-pose-add");
     if (poseBtn) poseBtn.addEventListener("click", onPickPose);
     const faceBtn = $("#btn-gen-face-add");
     if (faceBtn) faceBtn.addEventListener("click", onPickFace);
+    const costumeBtn = $("#btn-gen-costume-add");
+    if (costumeBtn) costumeBtn.addEventListener("click", onPickCostume);
     const clearBtn = $("#btn-gen-ref-clear");
     if (clearBtn) clearBtn.addEventListener("click", () => clear().catch(() => {}));
     render();
-    loadKindOptions().catch(() => {});
   }
 
   return {
     mount,
+    addSubjectRef,
     specs,
     roles,
     count,
@@ -584,10 +578,6 @@ const GenRefs = (() => {
     showFaceBrowser,
     showCostumeBrowser,
     showSubjectBrowser,
-    // 主体档案换了 → 参考图的槽位下拉要重刷（主体只有一个选择器，在①）
-    reloadKinds() {
-      return loadKindOptions();
-    },
     // 换主体时清掉主体档案来源的参考图（旧主体的人跟新主体对不上）
     dropSubjectRefs,
     onChange(fn) {

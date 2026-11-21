@@ -11,7 +11,7 @@ STATIC = REPO / "web" / "static"
 
 # 页面名 → 该页必须包含的主元素 id（抽几个关键 id 防串页/缺页）
 PAGE_NEEDLE_IDS = {
-    "gen": ["gen-subject", "gen-preset", "push-result", "btn-contact-sheet"],
+    "gen": ["gen-seed", "gen-preset", "push-result", "btn-contact-sheet"],
     "adhoc": ["adhoc-prompt", "adhoc-ref-list"],
     "video": ["video-prompt", "video-frame-list"],
     "upscale": ["ups-target", "ups-input-list"],
