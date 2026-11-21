@@ -1,0 +1,35 @@
+# 本文件由 `charvar subject derive` 生成（LLM 抽取 + 引用核对 + 审计），可人工修订。
+# 来源模板：koharu.md（sha256:e6fa9c8d40ee）
+# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-11-21 07:28 UTC
+# 起草 2 轮 · 审计 2 轮 · 审计通过 · 引用核对：23/23 条命中，无需修复
+id: koharu
+name: 小春
+subject_noun: woman
+trigger_word: koharu
+reference_tag: <image1>
+style_lock:
+- 真人写实摄影，日系写真风格
+- 色彩明亮柔和
+- 保留细微皮肤纹理与真实发丝，锐化与磨皮克制，保留毛孔与细小绒毛的细节
+identity_lock:
+- 东亚，二十多岁，带一点少女感与稚气，不是成熟御姐
+- 深棕色中长发，长度到胸口下方，发尾自然内扣；额前是分缝的空气刘海，刘海很薄、稀疏，额头的绝大部分露出来，只有几缕细发丝斜落到眉眼附近，两侧发丝顺贴脸颊，发根蓬松，发丝有真实的光泽与层次
+- 脸型是柔和的鹅蛋形轮廓，额头饱满，颧骨平滑，下颌线圆润收窄，下巴圆润不过尖
+- 眉毛很细、颜色偏淡、眉形平直，眉峰不明显；眼睛是深棕色的杏眼，眼型细长而偏大，上下眼睑略有弧度，双眼皮褶皱清晰，眼尾略微下垂，睫毛自然上翘，眼神清澈；鼻梁细直，鼻头小巧；嘴唇小而饱满，上唇薄、下唇略厚，唇色是淡的珊瑚粉色
+- 皮肤白皙偏暖，质感干净通透，脸颊饱满、带有年轻的肉感，轮廓线柔和，只有若有若无的极淡粉色晕染，妆容轻薄干净
+- 侧脸轮廓能读出鼻梁、唇形与下颌线的完整侧面线条
+- 侧面能读出胸廓向前凸出、腰部向内收束与臀部向后翘起的弧线
+outfit_lock:
+- 白色圆领短袖 T 恤，棉质，合身剪裁，布料紧贴上半身，袖口在上臂中段，领口是一圈窄的罗纹边；前胸的布料被胸部撑起绷紧、形成两个饱满的弧形轮廓，胸部下缘的轮廓线清晰可见，肩部与下摆保持自然的垂坠
+- 布面是哑光质感的白色棉布
+- 浅蓝色牛仔短裤，高腰，版型略宽松，裤脚在大腿中段，腰头是一道浅色的牛仔布带
+- 布面是哑光质感的浅蓝牛仔布
+- 无鞋，双脚赤裸
+- 无随身配饰。默认造型不含帽子、首饰、包袋、手表
+- 背面是白色 T 恤的后身，领口在后颈收成一道窄的罗纹边，后背的布料被胸部向前顶起、在肩胛下方形成横向的绷紧弧线，两条手臂的袖口在上臂中段
+- 背面是浅蓝色牛仔短裤的后片，腰头是一道浅色牛仔布带，后片正中有一道纵向的育克分割线与中缝开口
+body_lock:
+- 'slender hourglass: small-boned frame, narrow shoulders, thin ribcage, slim torso; her bust is extremely large, full, round, flaring to both sides, its widest width about half again her outer shoulder width, with its own forward volume and a marked taper to the waist, that width over twice the ribcage width, its lower edge a palm below the armpit, in profile projecting deeper than its own width'
+- 'an extremely thin, clearly defined waist cinched at the lower ribs, flat abdomen opening to the hips; her hips are round, full and lifted backward, their widest width close to the shoulder width, with a horizontal turn under it; her upper arms at their widest are narrower than her bust, forearms taper, wrists thin; one thigh under two thirds the hip width, calves slender and as wide as her ankles'
+extra: Keep the same face, hairstyle, skin tone, body proportions and the same outfit
+  in every pose and every new scene.
