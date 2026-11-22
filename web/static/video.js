@@ -1022,7 +1022,12 @@ $("#btn-video-generate").addEventListener("click", async () => {
   if (!prompt) return setStatus($("#video-status"), "提示词为空", true);
   const isI2v = videoState.mode === "i2v";
   if (isI2v) {
-    // 图生视频：至少要有一路输入素材（首帧 / 参考图 / 参考视频）
+    // heygen avatar 系的输入契约：恰好 1 段音频 + 1 张参考图（或 1 条参考视频）——
+    // 首帧不算（frame_images 与 input_references 两路），别浪费一次提交
+    if (videoState.audioRef && !videoState.references.length && !videoState.videoReferences.length) {
+      return setStatus($("#video-status"), "音频参考需配 1 张参考图（或 1 条参考视频）：在「参考图」区加入人物图", true);
+    }
+    // 图生视频：至少要有一路输入素材（首帧 / 参考图 / 参考视频；音频自身不算）
     if (!videoState.firstFrame && !videoState.references.length && !videoState.videoReferences.length) {
       return setStatus($("#video-status"), "图生视频需要至少一路输入：首帧图、参考图或参考视频（上方任一区加入）", true);
     }
@@ -1034,11 +1039,6 @@ $("#btn-video-generate").addEventListener("click", async () => {
     // 即梦单独尾帧不收（按 首帧→尾帧 发送）
     if (videoState.backend === "dreamina" && videoState.lastFrame && !videoState.firstFrame) {
       return setStatus($("#video-status"), "即梦尾帧必须与首帧成对（先设首帧）", true);
-    }
-    // heygen avatar 系的输入契约：恰好 1 段音频 + 1 张参考图（或 1 条参考视频）——
-    // 首帧不算（frame_images 与 input_references 两路），别浪费一次提交
-    if (videoState.audioRef && !videoState.references.length && !videoState.videoReferences.length) {
-      return setStatus($("#video-status"), "音频参考需配 1 张参考图（或 1 条参考视频）：在「参考图」区加入人物图", true);
     }
   }
   // 种子留空 = 随机 0–100000（与生成页/图片页同一约定，随机源在调用方这一侧）
