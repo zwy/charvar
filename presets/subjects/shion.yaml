@@ -1,0 +1,37 @@
+# 本文件由 `charvar subject derive` 生成（LLM 抽取 + 引用核对 + 审计），可人工修订。
+# 来源模板：shion.md（sha256:6d19237ada47）
+# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-11-21 11:14 UTC
+# 起草 1 轮 · 审计 1 轮 · 审计通过 · 引用核对：30/30 条命中，无需修复
+id: shion
+name: 紫苑
+subject_noun: woman
+trigger_word: shion
+reference_tag: <image1>
+style_lock:
+- 真人写实摄影，日系写真风格，柔和均匀的影棚漫射光，色彩明亮柔和
+- 保留细微皮肤纹理与真实发丝，锐化与磨皮克制，保留毛孔与细小绒毛的细节
+- 整体是写实摄影质感，不是插画、不是动漫
+identity_lock:
+- 东亚，十八岁，少女感明显、气质清冷，不是成熟御姐
+- 脸型是柔和的鹅蛋形轮廓、脸颊略窄，额头饱满，颧骨平滑，下颌线圆润收窄，下巴圆润不过尖
+- 眉毛很细、颜色偏淡、眉形平直，眉峰不明显
+- 眼睛是深棕色的杏眼，眼型细长而偏大，上下眼睑略有弧度，双眼皮褶皱清晰，眼尾略微上扬，睫毛自然上翘，眼神清澈
+- 鼻梁细直，鼻头小巧
+- 嘴唇小而饱满，上唇薄、下唇略厚，唇色是淡的豆沙粉色
+- 皮肤白皙偏暖，质感干净通透，脸颊饱满、带有年轻的肉感，轮廓线柔和，只有若有若无的极淡粉色晕染，妆容轻薄干净
+- 深棕色偏栗的中长发，长度到胸口下方，发尾自然内扣
+- 头发在脑后低位扎起，扎起处是一个低马尾，马尾的发尾自然垂落在后背上；两侧有碎发从耳前垂下，长度到下颌附近
+- 额前是分缝的空气刘海，刘海很薄、稀疏，额头的绝大部分露出来，只有几缕细发丝斜落到眉眼附近，发根蓬松，发丝有真实的光泽与层次
+outfit_lock:
+- 上身穿一件白色水手服上衣，棉质，合身剪裁，布料紧贴上半身，肩线自然落在肩头、不落肩，袖口在上臂中段，袖口是一道窄的白色罗纹边；布面是哑光质感的白色棉布；布面是哑光质感的白色棉布；布面是哑光质感的白色棉布
+- 领子是一片米白色的小方角翻领，前沿只到锁骨下方、宽不过肩宽的一半，从肩部一路向后延伸盖住后背中央，领口在后颈收成一条平直的边，后背的布料被胸部向前顶起，在肩胛下方形成一道横向的绷紧弧线
+- 领口正中系着一枚深藏青色的领巾，领巾是细长的两条带子，自然垂在胸前
+- 仅胸部一段的面料被撑起绷紧，胸部从领巾两侧明显向左右鼓出，前胸形成两个饱满的弧形轮廓，胸部下缘的轮廓线清晰可见，肩部、腰部与衣摆保持自然垂坠
+- 下身穿一件深藏青色百褶裙，高腰，裙身是密密的竖向褶裥，每一道褶裥的宽度均匀，裙摆在大腿中段，腰头是一道深藏青色的宽布带；布面是哑光质感的深藏青布料；背面是裙的后片，后片正中有一道纵向的缝合中缝，裙摆是一圈完整闭合的裙边、不开叉，臀部完全被裙布包住，从背面看不到内裤或任何皮肤
+- 白色过膝袜，袜口是两道细的深藏青色罗纹边，袜身紧贴小腿；无鞋，双脚赤裸
+- 无随身配饰；默认造型不含帽子、首饰、包袋、手表
+body_lock:
+- 'slender adult hourglass: small-boned frame, narrow level shoulders, a fleshy torso with a cinched waist; her bust is very large, full and round, its widest width about half again her outer shoulder width, with its own forward volume, a clear bust-to-waist drop, its lower edge sagging under its own weight, that width over twice the ribcage width, in profile projecting deeper than its own width'
+- 'a fine waistline cinched below the ribcage, opening to the hips; her hips are round, full, lifted backward, their widest width about a third wider than her outer shoulders, with a horizontal turn under it; her upper arms carry muscle and fat thickness, never spindly, narrower than her bust, wrists thin; her thighs are full and wide, narrowing to the knee; her calves taper, as wide as her ankles'
+extra: Keep the same face, hairstyle, hair color, skin tone and body figure, and the
+  same outfit, consistent in every pose and every new scene.
