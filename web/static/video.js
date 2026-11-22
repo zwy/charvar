@@ -1,6 +1,6 @@
 /* 视频页（web 面板）：
    二级页签 = 供应商（OpenRouter / 即梦），一级页签 = 模式（文生视频 t2v /
-   图生视频 i2v），显式选择。
+   参考生视频 i2v），显式选择。
    与出图（adhoc.js）同构：同一套暂存参考图四件套、GenRefs 弹层选图（主体档案 /
    动作库 / 人脸库 / 服饰库，见 genrefs.js）、供应商切换（档位切走再切回不重置）。
    输入区按「供应商 × 选中模型」的能力显隐（videoInputCaps）：
@@ -299,7 +299,7 @@ function updateVideoCostHint() {
     const bucket = imageCount >= 2 ? "2+" : String(imageCount);
     const learned = Number(((entry0.learned_rates || {})[`${res}|${bucket}`] || {}).per_s);
     if (Number.isFinite(learned) && learned > 0) {
-      const seg = (videoState.mode === "i2v" ? "图生视频" : "文生视频") +
+      const seg = (videoState.mode === "i2v" ? "参考生视频" : "文生视频") +
         (imageCount ? ` · ${imageCount} 张图` : "");
       el.textContent = `预计 ≈ $${(learned * seconds).toFixed(2)}（实测价 · ${seg} · ${seconds}s${$("#video-resolution").value ? ` · ${$("#video-resolution").value}` : ""}，以账单为准）`;
       return;
@@ -328,7 +328,7 @@ function updateVideoCostHint() {
     return;
   }
   const estimate = rate * seconds + perImage * imageCount;
-  const seg = (videoState.mode === "i2v" ? "图生视频" : "文生视频") +
+  const seg = (videoState.mode === "i2v" ? "参考生视频" : "文生视频") +
     (imageCount ? ` · ${imageCount} 张图` : "");
   el.textContent = `预计 ≈ $${estimate.toFixed(2)}（目录价 · ${seg} · ${seconds}s${$("#video-resolution").value ? ` · ${$("#video-resolution").value}` : ""}，以账单为准）`;
 }
@@ -378,14 +378,14 @@ function videoInputCaps() {
   };
 }
 
-/* 输入区显隐：模式 × 能力。文生视频全部收起；图生视频按所选模型亮
+/* 输入区显隐：模式 × 能力。文生视频全部收起；参考生视频按所选模型亮
    （首帧区恒显 —— 两供应商现有目录里所有模型都收首帧；尾帧区在模型支持
    且首帧已设时亮；参考图/参考视频区按 m2v 资质与目录）。 */
 function applyVideoMode() {
   const isI2v = videoState.mode === "i2v";
   const caps = videoInputCaps();
   $("#video-frame-block").hidden = !isI2v || !caps.firstFrame;
-  // 模型支持尾帧就在图生视频下常显 —— 未设首帧时区内提示「先设首帧」，选择器挡住
+  // 模型支持尾帧就在参考生视频下常显 —— 未设首帧时区内提示「先设首帧」，选择器挡住
   // （之前藏在「首帧已设」后面，切到支持尾帧的模型也看不到，用户以为没做）
   $("#video-lastframe-block").hidden = !isI2v || !caps.lastFrame;
   $("#video-refs-block").hidden = !isI2v || !caps.refs;
@@ -1027,9 +1027,9 @@ $("#btn-video-generate").addEventListener("click", async () => {
     if (videoState.audioRef && !videoState.references.length && !videoState.videoReferences.length) {
       return setStatus($("#video-status"), "音频参考需配 1 张参考图（或 1 条参考视频）：在「参考图」区加入人物图", true);
     }
-    // 图生视频：至少要有一路输入素材（首帧 / 参考图 / 参考视频；音频自身不算）
+    // 参考生视频：至少要有一路输入素材（首帧 / 参考图 / 参考视频；音频自身不算）
     if (!videoState.firstFrame && !videoState.references.length && !videoState.videoReferences.length) {
-      return setStatus($("#video-status"), "图生视频需要至少一路输入：首帧图、参考图或参考视频（上方任一区加入）", true);
+      return setStatus($("#video-status"), "参考生视频需要至少一路输入：首帧图、参考图或参考视频（上方任一区加入）", true);
     }
     // 即梦互斥：首帧与参考素材同给会被后端拦，前端先拦并给出明确指引
     if (videoState.backend === "dreamina" && videoState.firstFrame &&
@@ -1083,7 +1083,7 @@ $("#btn-video-generate").addEventListener("click", async () => {
     video_references: videoState.mode === "i2v"
       ? videoState.videoReferences.map((ref) => ({ staged_id: ref.id }))
       : [],
-    // 音频参考 ≤1 条（staged 上传）：只在图生视频页签带 —— heygen avatar 系对口型
+    // 音频参考 ≤1 条（staged 上传）：只在参考生视频页签带 —— heygen avatar 系对口型
     audio: videoState.mode === "i2v" && videoState.audioRef
       ? { staged_id: videoState.audioRef.id }
       : null,
