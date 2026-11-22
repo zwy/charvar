@@ -69,6 +69,15 @@
 <button id="btn-video-vref-clear" type="button">清空参考视频</button>
 </div>
 </div>
+<div class="form-section" id="video-arefs-block" hidden>
+<div class="form-section-title"><span>音频参考</span><span id="video-aref-count" class="hint"></span></div>
+<span class="hint">≤1 条 · mp3/m4a/wav/ogg ≤48MB · 对口型：成片时长与画幅跟随音频与参考素材</span>
+<div id="video-aref-list" class="ref-grid"></div>
+<div class="actions">
+<label class="btn file-btn">上传音频<input type="file" id="video-aref-file" accept="audio/mpeg,audio/mp4,audio/wav,audio/ogg,.mp3,.m4a,.wav,.ogg" hidden></label>
+<button id="btn-video-aref-clear" type="button">移除音频</button>
+</div>
+</div>
 <div class="actions"><button id="btn-video-generate" class="primary">生成视频</button><span id="video-status" class="status"></span>
 <span class="hint" id="video-cost-hint"></span></div>
 </div>

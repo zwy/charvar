@@ -83,6 +83,7 @@ class VideoRequest(BaseModel):
     wait: bool = True  # CLI 用（阻塞到成品）；web 恒传 wait=False 走轮询
     staged_ref_ids: list[str] = Field(default_factory=list)  # web 暂存参考图 id，ready 时清理
     staged_video_ref_ids: list[str] = Field(default_factory=list)  # web 暂存参考视频 id，ready 时清理
+    staged_audio_ref_ids: list[str] = Field(default_factory=list)  # web 暂存音频参考 id，ready 时清理
     out: Path | None = None
 
     def request_model(self) -> str:
@@ -302,6 +303,91 @@ def prune_staged_video_references(max_age_s: float = 24 * 3600) -> int:
     return removed
 
 
+# ---------- 暂存音频参考（网页上传；图/视频池之外独立目录，互不误删） ----------
+
+# 音频参考（heygen avatar 系对口型）：上限给 48MB 与参考视频一致（几十分钟的
+# mp3 都够；真超了多半是传错文件，拦）
+_AUDIO_MAX_BYTES = 48 * 1024 * 1024
+
+# 魔数嗅探结果 → 落盘后缀（audio/mp4 是 ftyp 盒子里的音频轨，惯用 .m4a）
+_AUDIO_MIME_SUFFIX = {
+    "audio/mpeg": ".mp3",
+    "audio/ogg": ".ogg",
+    "audio/wav": ".wav",
+    "audio/mp4": ".m4a",
+}
+
+
+def audio_refs_dir() -> Path:
+    """暂存音频参考目录：``<adhoc_video>/_arefs/``。"""
+    return video_root() / "_arefs"
+
+
+def save_staged_audio_reference(data: bytes, filename: str = "") -> Path:
+    """把上传的音频存进暂存目录，按魔数判后缀（mp3/m4a/wav/ogg 之外直接拒）。"""
+    if not data:
+        raise AdhocVideoError("音频参考是空的")
+    if len(data) > _AUDIO_MAX_BYTES:
+        raise AdhocVideoError(
+            f"音频参考超过 {_AUDIO_MAX_BYTES // (1024 * 1024)}MB 上限（收到 {len(data) // (1024 * 1024)}MB）"
+        )
+    directory = audio_refs_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    draft = directory / f"{uuid.uuid4().hex}.bin"
+    try:
+        draft.write_bytes(data)
+        suffix = _AUDIO_MIME_SUFFIX.get(openrouter_video.sniff_audio_ref(draft))
+    except _ORError as exc:
+        draft.unlink(missing_ok=True)
+        raise AdhocVideoError(str(exc)) from exc
+    if suffix is None:
+        draft.unlink(missing_ok=True)
+        raise AdhocVideoError("音频参考不是可识别的容器（mp3/m4a/wav/ogg）")
+    target = directory / f"{draft.stem}{suffix}"
+    draft.rename(target)
+    return target
+
+
+def staged_audio_reference(ref_id: str) -> Path:
+    """按 id 取暂存音频路径（非法 id 报错）。"""
+    if not re.fullmatch(r"[0-9a-f]{32}", str(ref_id or "")):
+        raise AdhocVideoError(f"非法音频参考 id：{ref_id}")
+    matches = sorted(audio_refs_dir().glob(f"{ref_id}.*"))
+    for path in matches:
+        if path.suffix.lower() in (".mp3", ".m4a", ".wav", ".ogg") and path.is_file():
+            return path
+    raise AdhocVideoError(f"音频参考不存在或已清理：{ref_id}")
+
+
+def clear_staged_audio_references(ref_ids: list[str]) -> None:
+    """删掉用完的暂存音频（成片 ready 时调用，失败时保留以便重试）。"""
+    for ref_id in ref_ids or []:
+        try:
+            staged_audio_reference(ref_id).unlink(missing_ok=True)
+        except AdhocVideoError:
+            continue
+
+
+def prune_staged_audio_references(max_age_s: float = 24 * 3600) -> int:
+    """清掉过期未用的暂存音频，返回删掉几个。"""
+    directory = audio_refs_dir()
+    if not directory.is_dir():
+        return 0
+    now = time.time()
+    removed = 0
+    for path in directory.iterdir():
+        if not path.is_file():
+            continue
+        try:
+            if now - path.stat().st_mtime < max_age_s:
+                continue
+        except OSError:
+            continue
+        path.unlink(missing_ok=True)
+        removed += 1
+    return removed
+
+
 # ---------- 记录列表与 manifest ----------
 
 
@@ -390,12 +476,20 @@ def delete_run(run_id: str) -> None:
     if not directory.is_dir():
         raise FileNotFoundError(f"没有记录：{run_id}")
     try:
-        status = str((read_manifest(run_id) or {}).get("status") or "")
+        manifest = read_manifest(run_id) or {}
+        status = str(manifest.get("status") or "")
     except (OSError, ValueError):
+        manifest = {}
         status = ""
     if status in ("pending", "in_progress"):
         raise AdhocVideoError(f"作业还在跑（{status}），等出片或失败后再删：{run_id}")
+    request = manifest.get("request") or {}
     shutil.rmtree(directory)
+    # 记录删了 = manifest 里记的暂存 id 再没机会被清（成片 ready 才清）：
+    # 删除是兜底清理点，三个暂存池一起扫，避免占盘到 24h 兜底才收。
+    clear_staged_references(list(request.get("staged_ref_ids") or []))
+    clear_staged_video_references(list(request.get("staged_video_ref_ids") or []))
+    clear_staged_audio_references(list(request.get("staged_audio_ref_ids") or []))
 
 
 def save_copy(run_id: str, copy: dict[str, Any]) -> dict[str, Any]:
@@ -432,6 +526,7 @@ def _new_manifest(req: VideoRequest, run_id: str, *, job_id: str = "", model: st
             "audio_path": str(req.audio_path or ""),
             "staged_ref_ids": list(req.staged_ref_ids),
             "staged_video_ref_ids": list(req.staged_video_ref_ids),
+            "staged_audio_ref_ids": list(req.staged_audio_ref_ids),
             "out": str(req.out or ""),
         },
         "job": {"id": job_id, "status": "pending", "model": model},
@@ -460,6 +555,8 @@ def _summary(manifest: dict[str, Any]) -> dict[str, Any]:
         "seed": result.get("seed") if result else request.get("seed"),
         "cost": result.get("cost"),
         "duration_ms": result.get("duration_ms") or 0,
+        # 音频参考走没走（heygen avatar 系对口型；bool —— 前端摘要行用）
+        "audio": bool(request.get("audio_path")),
     }
 
 
@@ -794,9 +891,10 @@ def _finalize(
         result.manifest_path = str(run_dir / "manifest.json")
         manifest["result"] = result.model_dump()
         manifest = _mark(run_dir, manifest, status="ready", error="")
-        # 暂存参考图/视频用完了清掉（首帧也可能来自暂存）
+        # 暂存参考图/视频/音频用完了清掉（首帧也可能来自暂存）
         clear_staged_references(list(request.get("staged_ref_ids") or []))
         clear_staged_video_references(list(request.get("staged_video_ref_ids") or []))
+        clear_staged_audio_references(list(request.get("staged_audio_ref_ids") or []))
     else:
         error = payload.get("error")
         error = str(error) if error else "OpenRouter 视频作业失败"
@@ -902,9 +1000,10 @@ def _finalize_dreamina(
     result.manifest_path = str(run_dir / "manifest.json")
     manifest["result"] = result.model_dump()
     manifest = _mark(run_dir, manifest, status="ready", error="")
-    # 暂存参考图/视频用完了清掉（失败路径保留以便重试 —— 与 OpenRouter 同策略）
+    # 暂存参考图/视频/音频用完了清掉（失败路径保留以便重试 —— 与 OpenRouter 同策略）
     clear_staged_references(list(request.get("staged_ref_ids") or []))
     clear_staged_video_references(list(request.get("staged_video_ref_ids") or []))
+    clear_staged_audio_references(list(request.get("staged_audio_ref_ids") or []))
     return manifest
 
 def refresh(run_id: str, db_path: Path | None = None) -> dict[str, Any]:

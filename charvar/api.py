@@ -432,6 +432,12 @@ class StagedVideoRefSpec(BaseModel):
     staged_id: str
 
 
+class StagedAudioRefSpec(BaseModel):
+    """一条音频参考的来源（v1 只认「上传暂存」；heygen avatar 系对口型）。"""
+
+    staged_id: str
+
+
 class VideoGenerateRequest(BaseModel):
     """网页「视频」页的请求（与 CLI ``charvar video`` 同一套参数；OpenRouter / 即梦两路）。
 
@@ -443,6 +449,8 @@ class VideoGenerateRequest(BaseModel):
     视频没有 LLM 锚定句，参考图只当图发）。
     参考视频 = OpenRouter input_references 的 video_url（Seedance gen2+ 才接）/
     即梦 multimodal2video 的 --video（≤2 条，只认上传暂存）。
+    音频参考 = input_references 的 audio_url（heygen avatar 系对口型，≤1 条，
+    只认上传暂存）——成片时长跟随音频，provider 不收 duration/画幅时自动降级。
     OpenRouter 侧首帧与参考图同给时首帧优先（官方语义）；即梦侧该组合**提交前
     直接拦**（首帧与全能参考互斥）。last_frame 尾帧图：模型声明支持才发
     （OpenRouter 按 supported_frame_images；即梦必须与首帧成对，单独尾帧被拦）。
@@ -459,6 +467,7 @@ class VideoGenerateRequest(BaseModel):
     last_frame: AdhocReferenceSpec | None = None
     references: list[AdhocReferenceSpec] = Field(default_factory=list)
     video_references: list[StagedVideoRefSpec] = Field(default_factory=list)
+    audio: StagedAudioRefSpec | None = None
 
 
 class UpscaleGenerateRequest(BaseModel):
@@ -2276,6 +2285,8 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
                     "supported_aspect_ratios": item.get("supported_aspect_ratios"),
                     "supported_frame_images": item.get("supported_frame_images"),
                     "seed": bool(item.get("seed")),
+                    # 音频参考（audio_url；目录无声明字段，id 含 avatar 判 —— heygen avatar 系）
+                    "supports_audio": openrouter_video.supports_audio_ref(str(item.get("id") or "")),
                     "pricing_skus": item.get("pricing_skus") or {},
                     # 实测价缓存（成片 usage.cost 折算的每秒实收率；估算优先用它）
                     "learned_rates": openrouter_video.learned_rates_for(str(item.get("id") or "")),
@@ -2342,6 +2353,38 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         except adhoc_video_service.AdhocVideoError as exc:
             raise HTTPException(404, str(exc)) from exc
 
+    @app.post("/videos/audio-references")
+    def api_video_reference_upload_audio(file: UploadFile) -> dict[str, Any]:
+        """上传一段音频参考 → 暂存并返回 id（input_references 的 audio_url；heygen avatar 系）。"""
+        data = file.file.read()
+        try:
+            path = adhoc_video_service.save_staged_audio_reference(data, file.filename or "")
+        except adhoc_video_service.AdhocVideoError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        adhoc_video_service.prune_staged_audio_references()
+        return {"id": path.stem, "name": file.filename or path.name, "path": str(path)}
+
+    @app.delete("/videos/audio-references/{ref_id}")
+    def api_video_reference_delete_audio(ref_id: str) -> dict[str, Any]:
+        try:
+            adhoc_video_service.staged_audio_reference(ref_id).unlink(missing_ok=True)
+        except adhoc_video_service.AdhocVideoError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        return {"ok": True}
+
+    @app.get("/videos/audio-reference/{ref_id}")
+    def api_video_reference_file_audio(ref_id: str) -> FileResponse:
+        """暂存音频参考的试放（提交成功并成片后会被清掉，404 是正常的）；媒体类型按魔数判。"""
+        try:
+            path = adhoc_video_service.staged_audio_reference(ref_id)
+        except adhoc_video_service.AdhocVideoError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        try:
+            media_type = openrouter_video.sniff_audio_ref(path)
+        except openrouter_video.OpenRouterVideoError:
+            media_type = "application/octet-stream"
+        return FileResponse(path, media_type=media_type)
+
     @app.post("/videos/generate")
     def api_video_generate(req: VideoGenerateRequest) -> dict[str, Any]:
         """视频：给一段提示词出一段视频（异步作业，提交即返回）。
@@ -2363,6 +2406,14 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             except adhoc_video_service.AdhocVideoError as exc:
                 raise HTTPException(400, str(exc)) from exc
             video_staged_ids.append(spec.staged_id)
+        audio_path: Path | None = None
+        audio_staged_ids: list[str] = []
+        if req.audio is not None:
+            try:
+                audio_path = adhoc_video_service.staged_audio_reference(req.audio.staged_id)
+            except adhoc_video_service.AdhocVideoError as exc:
+                raise HTTPException(400, str(exc)) from exc
+            audio_staged_ids.append(req.audio.staged_id)
         video_req = adhoc_video_service.VideoRequest(
             prompt=req.prompt,
             backend=req.backend,
@@ -2375,9 +2426,11 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
             last_frame=last_frames[0] if last_frames else None,
             reference_paths=reference_paths,
             reference_video_paths=video_ref_paths,
+            audio_path=audio_path,
             wait=False,
             staged_ref_ids=staged_ids + first_staged + last_staged,
             staged_video_ref_ids=video_staged_ids,
+            staged_audio_ref_ids=audio_staged_ids,
         )
         try:
             result = adhoc_video_service.generate(video_req, db_path)

@@ -444,6 +444,108 @@ def test_staged_video_reference_bad_id(env):
         adhoc_video.staged_video_reference("../evil")
 
 
+# ---------- 音频参考（audio_url；heygen avatar 系对口型）与 _arefs 暂存池 ----------
+
+
+def _mp3_bytes():
+    return b"ID3\x04" + b"\x00\x00\x00\x00" + b"\x00" * 24
+
+
+def test_generate_audio_reference_passthrough(env, monkeypatch):
+    calls = _stub_openrouter(monkeypatch)
+    _fake_poster(monkeypatch)
+    audio = env / "voice.mp3"
+    audio.write_bytes(_mp3_bytes())
+    result = adhoc_video.generate(_req(reference_paths=[_png(env / "cat.png")], audio_path=audio))
+    assert result.status == "ready"
+    body = calls["submit"][0]
+    audio_parts = [p for p in body["input_references"] if p["type"] == "audio_url"]
+    assert len(audio_parts) == 1
+    assert audio_parts[0]["audio_url"]["url"].startswith("data:audio/mpeg;base64,")
+    manifest = adhoc_video.read_manifest(result.run_id)
+    assert manifest["request"]["audio_path"] == str(audio)
+
+
+def test_generate_audio_rejected_dreamina(env):
+    audio = env / "voice.mp3"
+    audio.write_bytes(_mp3_bytes())
+    with pytest.raises(adhoc_video.AdhocVideoError):
+        adhoc_video.validate(_req(backend="dreamina", audio_path=audio))
+
+
+def test_generate_audio_rejected_bad_container(env):
+    bogus = env / "oops.mp3"
+    bogus.write_bytes(b"plain text")
+    with pytest.raises(adhoc_video.AdhocVideoError):
+        adhoc_video.validate(_req(audio_path=bogus))
+
+
+def test_staged_audio_reference_roundtrip_and_cleanup(env, monkeypatch):
+    calls = _stub_openrouter(monkeypatch)
+    _fake_poster(monkeypatch)
+    saved = adhoc_video.save_staged_audio_reference(_mp3_bytes(), "voice.mp3")
+    assert saved.parent.name == "_arefs"
+    assert adhoc_video.staged_audio_reference(saved.stem) == saved
+    # 后缀按魔数判（mp3 是 ID3 头），不信任上传文件名
+    assert saved.suffix == ".mp3"
+    _png(env / "cat.png")
+    image = adhoc_video.save_staged_reference((env / "cat.png").read_bytes(), "cat.png")
+    req = _req(
+        reference_paths=[image],
+        audio_path=saved,
+        staged_ref_ids=[image.stem],
+        staged_audio_ref_ids=[saved.stem],
+    )
+    result = adhoc_video.generate(req)
+    assert result.status == "ready"
+    assert not saved.exists()  # ready 后清掉
+    assert not image.exists()
+    body = calls["submit"][0]
+    types = [p["type"] for p in body["input_references"]]
+    assert types == ["image_url", "audio_url"]
+    summary = adhoc_video.refresh(result.run_id)
+    assert summary["audio"] is True
+
+
+def test_staged_audio_invalid_container(env):
+    with pytest.raises(adhoc_video.AdhocVideoError):
+        adhoc_video.save_staged_audio_reference(b"plain text", "a.mp3")
+    # 暂存目录里没有残留（先写草稿后嗅探的失败路径要把草稿删干净）
+    assert list(adhoc_video.audio_refs_dir().glob("*")) == []
+
+
+def test_staged_audio_bad_id(env):
+    with pytest.raises(adhoc_video.AdhocVideoError):
+        adhoc_video.staged_audio_reference("../evil")
+
+
+def test_prune_staged_audio_references(env):
+    saved = adhoc_video.save_staged_audio_reference(_mp3_bytes(), "voice.mp3")
+    old = time.time() - 25 * 3600
+    import os
+
+    os.utime(saved, (old, old))
+    assert adhoc_video.prune_staged_audio_references() == 1
+    assert not saved.exists()
+    assert adhoc_video.prune_staged_audio_references() == 0
+
+
+def test_delete_run_clears_staged_audio(env, tmp_path, monkeypatch):
+    _stub_openrouter(monkeypatch)
+    _fake_poster(monkeypatch)
+    result = adhoc_video.generate(_req())
+    manifest = json.loads((adhoc_video.run_dir(result.run_id) / "manifest.json").read_text())
+    manifest["request"]["staged_audio_ref_ids"] = ["a" * 32]
+    (adhoc_video.run_dir(result.run_id) / "manifest.json").write_text(json.dumps(manifest))
+    saved = adhoc_video.save_staged_audio_reference(_mp3_bytes(), "v.mp3")
+    # 把 manifest 里的 id 换成真实暂存文件名再删，验证删除兜底清理
+    manifest["request"]["staged_audio_ref_ids"] = [saved.stem]
+    (adhoc_video.run_dir(result.run_id) / "manifest.json").write_text(json.dumps(manifest))
+    adhoc_video.delete_run(result.run_id)
+    assert not saved.exists()
+    assert not adhoc_video.run_dir(result.run_id).exists()
+
+
 def test_refresh_treats_cancelled_as_terminal(env, monkeypatch):
     _stub_openrouter(monkeypatch, poll_payloads=[{"status": "cancelled", "error": "Job was cancelled"}])
     pending = adhoc_video.generate(_req(wait=False))

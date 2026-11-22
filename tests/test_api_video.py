@@ -365,3 +365,99 @@ def test_generate_dreamina_empty_params_resolve_defaults(client, tmp_path, monke
     assert resp.status_code == 200, resp.text
     assert captured["resolution"] == "720p" and captured["duration"] == 5
     assert captured["ratio"] == "9:16"  # VideoRequest 默认画幅
+
+
+# ---------- 音频参考（audio_url；heygen avatar 系对口型） ----------
+
+
+def _mp3_bytes():
+    return b"ID3\x04" + b"\x00\x00\x00\x00" + b"\x00" * 24
+
+
+def test_upload_and_delete_audio_reference(client):
+    resp = client.post("/videos/audio-references", files={"file": ("v.mp3", _mp3_bytes(), "audio/mpeg")})
+    assert resp.status_code == 200, resp.text
+    ref_id = resp.json()["id"]
+    assert resp.json()["name"] == "v.mp3"
+    got = client.get(f"/videos/audio-reference/{ref_id}")
+    assert got.status_code == 200
+    assert got.headers["content-type"].startswith("audio/mpeg")
+    assert client.delete(f"/videos/audio-references/{ref_id}").json() == {"ok": True}
+    assert client.get(f"/videos/audio-reference/{ref_id}").status_code == 404
+
+
+def test_upload_audio_rejects_bad_container(client):
+    resp = client.post("/videos/audio-references", files={"file": ("a.mp3", b"plain", "audio/mpeg")})
+    assert resp.status_code == 400
+
+
+def test_generate_with_audio_reference(client, tmp_path, monkeypatch):
+    _inject_catalog(tmp_path, monkeypatch)
+    seen = {}
+
+    def fake_submit(body, *, api_key=None, base_url=None, timeout_s=None):
+        seen.update(body)
+        return openrouter_video.VideoJob("job-audio", "pending")
+
+    monkeypatch.setattr(openrouter_video, "submit", fake_submit)
+    monkeypatch.setattr(openrouter_video, "wait_for_job", lambda *a, **k: (_ for _ in ()).throw(AssertionError()))
+    monkeypatch.setattr(openrouter_video, "poll", lambda job_id, **kw: {"status": "completed", "unsigned_urls": [], "usage": {"cost": 0.24}})
+    monkeypatch.setattr(openrouter_video, "download", lambda job_id, **kw: b"\x00\x00\x00\x20ftyp" + b"\x00" * 12)
+    monkeypatch.setattr(adhoc_video, "_make_poster", lambda p, d: None)
+
+    image_id = client.post("/videos/references", files={"file": ("cat.png", _png_bytes(), "image/png")}).json()["id"]
+    audio_id = client.post("/videos/audio-references", files={"file": ("v.mp3", _mp3_bytes(), "audio/mpeg")}).json()["id"]
+    resp = client.post("/videos/generate", json={
+        "prompt": "the cat sings along",
+        "references": [{"staged_id": image_id}],
+        "audio": {"staged_id": audio_id},
+    })
+    assert resp.status_code == 200, resp.text
+    parts = seen["input_references"]
+    assert [p["type"] for p in parts] == ["image_url", "audio_url"]
+    assert parts[1]["audio_url"]["url"].startswith("data:audio/mpeg;base64,")
+
+    # 成片 ready：暂存参考图与音频一并清掉，状态摘要带音频标记
+    status = client.get(resp.json()["status_url"]).json()
+    assert status["status"] == "ready"
+    assert status["audio"] is True
+    assert client.get(f"/videos/audio-reference/{audio_id}").status_code == 404
+    assert client.get(f"/videos/reference/{image_id}").status_code == 404
+
+
+def test_generate_audio_bad_staged_id_rejected(client, tmp_path, monkeypatch):
+    _inject_catalog(tmp_path, monkeypatch)
+    _stub_modules(monkeypatch)
+    resp = client.post("/videos/generate", json={
+        "prompt": "clip", "audio": {"staged_id": "0" * 32},
+    })
+    assert resp.status_code == 400
+    assert "音频" in resp.json()["detail"]
+
+
+def test_generate_audio_dreamina_backend_rejected(client, tmp_path, monkeypatch):
+    _inject_catalog(tmp_path, monkeypatch)
+    _stub_modules(monkeypatch)
+    audio_id = client.post("/videos/audio-references", files={"file": ("v.mp3", _mp3_bytes(), "audio/mpeg")}).json()["id"]
+    resp = client.post("/videos/generate", json={
+        "prompt": "clip", "backend": "dreamina", "audio": {"staged_id": audio_id},
+    })
+    assert resp.status_code == 400
+    assert "即梦" in resp.json()["detail"]
+
+
+def test_video_models_reports_supports_audio(client, tmp_path, monkeypatch):
+    catalog = {
+        "data": [
+            {"id": "heygen/avatar-iv", "name": "Avatar IV", "seed": False,
+             "pricing_skus": {"duration_seconds": "0.05"}},
+            {"id": "heygen/heygen-video-1", "name": "HeyGen Video", "seed": True,
+             "pricing_skus": {"duration_seconds_480p": "0.02"}},
+        ]
+    }
+    cache = pathlib.Path(tmp_path) / "openrouter" / "video-models.json"
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text(json.dumps(catalog), encoding="utf-8")
+    models = {m["id"]: m for m in client.get("/videos/models").json()["data"]}
+    assert models["heygen/avatar-iv"]["supports_audio"] is True
+    assert models["heygen/heygen-video-1"]["supports_audio"] is False

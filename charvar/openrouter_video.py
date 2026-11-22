@@ -352,6 +352,16 @@ def encode_audio_reference(path: Any) -> str:
     return f"data:{mime};base64,{base64.b64encode(source.read_bytes()).decode('ascii')}"
 
 
+def supports_audio_ref(model_id: str) -> bool:
+    """模型是否接音频参考（audio_url）。
+
+    目录没有独立声明字段，按 id 含「avatar」判 —— 官方示例与实测口径里只有
+    heygen avatar 系（音频驱动对口型：avatar-iv / heygen-avatar-6 / -turbo）接；
+    其它模型发了会被 provider 拒、``_DEGRADABLE`` 自动降级悄悄摘掉，面板先别亮。
+    """
+    return "avatar" in str(model_id or "").lower()
+
+
 # ---------- 请求体 ----------
 
 

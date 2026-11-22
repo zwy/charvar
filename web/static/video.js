@@ -5,9 +5,10 @@
    动作库 / 人脸库 / 服饰库，见 genrefs.js）、供应商切换（档位切走再切回不重置）。
    输入区按「供应商 × 选中模型」的能力显隐（videoInputCaps）：
    - OpenRouter：按目录 supported_frame_images 定首帧/尾帧；参考图（input_references
-     ≤4，图+视频合计）与参考视频任一模型可发（被拒自动降级）；
+     ≤4，图+视频+音频合计）与参考视频任一模型可发（被拒自动降级）；音频参考只在
+     目录 supports_audio（id 含 avatar —— heygen avatar 系）时显示；
    - 即梦：按 DREAMINA_VIDEO_MODELS 的 modes（t2v / m2v / first_last_frame）与
-     m2v_ref（图/视频/合计上限）；
+     m2v_ref（图/视频/合计上限）；音频参考不亮（即梦无此通路，后端 validate 拦）。
    - 即梦首帧与参考素材互斥（后端 dispatch_mode 会拦），前端提交前拦。
    关键差异：视频是异步作业 —— 提交即返回 run_id，前端每 8s 轮询
    /videos/{run_id}/status 到 ready/failed；页面载入时找未终态的 run 恢复轮询
@@ -19,6 +20,7 @@ const videoState = {
   catalog: null,
   references: [],
   videoReferences: [],
+  audioRef: null,
   firstFrame: null,
   lastFrame: null,
   activeRun: null,
@@ -338,6 +340,8 @@ function updateVideoCostHint() {
    独立声明字段 → 可发，被拒降级（与后端一致）。
    即梦：modes 含 first_last_frame 才有首帧/尾帧；含 m2v 才有参考图/参考视频
    （m2v_ref 有图/视频分项上限）。 */
+/* 音频参考开关跟随 /videos/models 的 supports_audio（id 含 avatar —— heygen
+   avatar 系对口型，目录没收录的模型不亮：发了也会被 provider 拒后悄悄降级）。 */
 function videoInputCaps() {
   if (videoState.backend === "dreamina") {
     const entry = dreaminaModelEntry() || {
@@ -354,6 +358,7 @@ function videoInputCaps() {
       lastFrame: hasFrames,
       refs: hasM2v,
       videoRefs: hasM2v && (caps.video || 0) > 0,
+      audio: false, // 即梦无音频参考通路（后端 validate 先拦）
       maxImage: hasM2v ? (caps.image || 0) : 0,
       maxVideo: hasM2v ? (caps.video || 0) : 0,
       maxTotal: hasM2v ? (caps.total || 0) : 0,
@@ -367,6 +372,7 @@ function videoInputCaps() {
     lastFrame: !entry || frames.length === 0 || frames.includes("last_frame"),
     refs: true,
     videoRefs: true,
+    audio: Boolean(entry && entry.supports_audio),
     maxImage: 4, maxVideo: 4, maxTotal: 4,
     exclusive: false, // 官方语义：首帧优先，参考图只作外观参考
   };
@@ -384,8 +390,10 @@ function applyVideoMode() {
   $("#video-lastframe-block").hidden = !isI2v || !caps.lastFrame;
   $("#video-refs-block").hidden = !isI2v || !caps.refs;
   $("#video-vrefs-block").hidden = !isI2v || !caps.videoRefs;
+  $("#video-arefs-block").hidden = !isI2v || !caps.audio;
   updateVideoRefHint();
   updateVideoVrefHint();
+  updateVideoArefHint();
 }
 
 /* 参考图 / 参考视频区的标题计数：数量 + 控件里看不到的上限/互斥（灰字只补信息） */
@@ -421,6 +429,18 @@ function updateVideoVrefHint() {
       parts.push("与参考图合计 ≤4（仅部分模型接视频参考，被拒自动降级）");
       if (videoState.firstFrame) parts.push("首帧优先");
     }
+  }
+  el.textContent = parts.join(" · ");
+}
+
+/* 音频参考区标题计数：avatar 输入契约（音频 + 参考图/参考视频）是控件里看不到的信息 */
+function updateVideoArefHint() {
+  const el = $("#video-aref-count");
+  if (!el) return;
+  const n = videoState.audioRef ? 1 : 0;
+  const parts = [`已选 ${n} 段`];
+  if (videoState.audioRef && !videoState.references.length && !videoState.videoReferences.length) {
+    parts.push("avatar 系需配 1 张参考图或 1 条参考视频 —— 还没有，提交会被拒");
   }
   el.textContent = parts.join(" · ");
 }
@@ -741,6 +761,7 @@ function renderVideoVrefs() {
       }
       videoState.videoReferences.splice(index, 1);
       renderVideoVrefs();
+      updateVideoArefHint();
     });
     el.appendChild(del);
     box.appendChild(el);
@@ -767,12 +788,81 @@ $("#btn-video-vref-clear").addEventListener("click", async () => {
   const refs = videoState.videoReferences.slice();
   videoState.videoReferences = [];
   renderVideoVrefs();
+  updateVideoArefHint();
   for (const ref of refs) {
     if (ref.type === "staged") {
       try {
         await api(`/videos/video-references/${encodeURIComponent(ref.id)}`, { method: "DELETE" });
       } catch { /* 已清理 */ }
     }
+  }
+});
+
+/* ---------- 音频参考（≤1 条；heygen avatar 系对口型：成片时长=音频时长） ---------- */
+
+function renderVideoAref() {
+  const box = $("#video-aref-list");
+  if (!box) return;
+  box.innerHTML = "";
+  if (!videoState.audioRef) {
+    const empty = document.createElement("div");
+    empty.className = "ref-empty";
+    empty.textContent = "未选音频";
+    box.appendChild(empty);
+    updateVideoArefHint();
+    return;
+  }
+  const el = document.createElement("div");
+  el.className = "ref-pick";
+  const preview = document.createElement("audio");
+  preview.controls = true;
+  preview.preload = "metadata";
+  preview.src = `/videos/audio-reference/${encodeURIComponent(videoState.audioRef.id)}`;
+  el.appendChild(preview);
+  const name = document.createElement("span");
+  name.className = "ref-name";
+  name.textContent = videoState.audioRef.name || "音频参考";
+  el.appendChild(name);
+  const badge = document.createElement("span");
+  badge.className = "badge";
+  badge.textContent = "#音频";
+  el.appendChild(badge);
+  box.appendChild(el);
+  updateVideoArefHint();
+}
+
+$("#video-aref-file").addEventListener("change", async (ev) => {
+  const file = (ev.target.files || [])[0];
+  ev.target.value = "";
+  if (!file) return;
+  // ≤1 条：换音频时先把旧的暂存删掉（失败保留以便重试的约定不打折）
+  const prev = videoState.audioRef;
+  videoState.audioRef = null;
+  renderVideoAref();
+  if (prev && prev.type === "staged") {
+    try {
+      await api(`/videos/audio-references/${encodeURIComponent(prev.id)}`, { method: "DELETE" });
+    } catch { /* 已清理 */ }
+  }
+  try {
+    const out = await apiUpload("/videos/audio-references", file);
+    videoState.audioRef = { type: "staged", id: out.id, name: out.name || file.name };
+    renderVideoAref();
+    setStatus($("#video-status"), "已设音频参考");
+  } catch (err) {
+    setStatus($("#video-status"), `音频上传失败：${err.message}`, true);
+  }
+  updateVideoArefHint();
+});
+
+$("#btn-video-aref-clear").addEventListener("click", async () => {
+  const ref = videoState.audioRef;
+  videoState.audioRef = null;
+  renderVideoAref();
+  if (ref && ref.type === "staged") {
+    try {
+      await api(`/videos/audio-references/${encodeURIComponent(ref.id)}`, { method: "DELETE" });
+    } catch { /* 已清理 */ }
   }
 });
 
@@ -945,6 +1035,11 @@ $("#btn-video-generate").addEventListener("click", async () => {
     if (videoState.backend === "dreamina" && videoState.lastFrame && !videoState.firstFrame) {
       return setStatus($("#video-status"), "即梦尾帧必须与首帧成对（先设首帧）", true);
     }
+    // heygen avatar 系的输入契约：恰好 1 段音频 + 1 张参考图（或 1 条参考视频）——
+    // 首帧不算（frame_images 与 input_references 两路），别浪费一次提交
+    if (videoState.audioRef && !videoState.references.length && !videoState.videoReferences.length) {
+      return setStatus($("#video-status"), "音频参考需配 1 张参考图（或 1 条参考视频）：在「参考图」区加入人物图", true);
+    }
   }
   // 种子留空 = 随机 0–100000（与生成页/图片页同一约定，随机源在调用方这一侧）
   const seedRaw = $("#video-seed").value.trim();
@@ -988,6 +1083,10 @@ $("#btn-video-generate").addEventListener("click", async () => {
     video_references: videoState.mode === "i2v"
       ? videoState.videoReferences.map((ref) => ({ staged_id: ref.id }))
       : [],
+    // 音频参考 ≤1 条（staged 上传）：只在图生视频页签带 —— heygen avatar 系对口型
+    audio: videoState.mode === "i2v" && videoState.audioRef
+      ? { staged_id: videoState.audioRef.id }
+      : null,
     // 首帧区 UI 只出 staged/recent/subject 三种来源（四库只进参考图区）；
     // 后端 /videos 的 spec 解析对首帧同样支持六种来源，改 UI 时这里同步
     first_frame: videoState.mode === "i2v" && videoState.firstFrame
@@ -1089,12 +1188,14 @@ function dropVideoRefsSent() {
   const freed = videoState.references.filter((r) => usedTypes.has(r.type));
   videoState.references = [];
   videoState.videoReferences = [];
+  videoState.audioRef = null;
   videoState.firstFrame = null;
   videoState.lastFrame = null;
   freed.forEach(releaseVideoRef);
   renderVideoFrame();
   renderVideoLastFrame();
   renderVideoVrefs();
+  renderVideoAref();
   applyVideoMode();
 }
 
@@ -1436,6 +1537,7 @@ function initVideo() {
   renderVideoLastFrame();
   renderVideoRefs();
   renderVideoVrefs();
+  renderVideoAref();
   applyVideoMode();
   $("#video-model").addEventListener("change", () => applyVideoEnums(false));
   $("#video-dreamina-model").addEventListener("change", () => {
