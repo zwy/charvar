@@ -1,7 +1,7 @@
 {
   "name": "charvar-skill",
-  "version": "1.10.0",
-  "updated": "2026-11-15",
+  "version": "1.11.0",
+  "updated": "2026-11-22",
   "description": "按提示词实际出图/出视频的 Claude Code skill：ComfyUI、OpenRouter、即梦三条通路 + 视频放大（SeedVR2/FFmpeg）+ OpenRouter 语音（TTS）+ 主体档案 CLI。",
   "entrypoint": "SKILL.md",
   "files": {
@@ -11,11 +11,16 @@
   },
   "checks": {
     "command": "python3 -m pytest tests/test_skills.py",
-    "last_run": "2026-11-11",
+    "last_run": "2026-11-22",
     "result": "passed",
     "note": "本 skill 无自带脚本；由仓库级 tests/test_skills.py 校验 frontmatter、版本同步与文件清单。"
   },
   "history": [
+    {
+      "version": "1.11.0",
+      "updated": "2026-11-22",
+      "note": "视频 OpenRouter 通路新增音频参考：charvar video openrouter --audio（mp3/m4a/wav/ogg 魔数校验，input_references 发 audio_url）；heygen avatar 系（avatar-6-turbo）音频驱动对口型可用——时长=音频、画幅跟随素材（别发 duration/aspect/size）、provider 多参数拒收自动降级；网页视频页音频上传未接。"
+    },
     {
       "version": "1.10.0",
       "updated": "2026-11-15",

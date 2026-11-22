@@ -5,8 +5,8 @@ description: Generate images with the charvar project's ComfyUI, OpenRouter, or 
 
 # charvar 生图
 
-版本：1.10.0  
-更新：2026-11-15
+版本：1.11.0  
+更新：2026-11-22
 
 通过 charvar 项目的 CLI 出图。三条后端：**comfyui**（本机/局域网 ComfyUI）、
 **openrouter**（OpenRouter 在线生图）和 **dreamina**（即梦官方画布 CLI `dreamina-canvas`，消耗即梦积分）。
@@ -106,6 +106,14 @@ charvar 的网页顶栏也有「图片」页签（`http://127.0.0.1:8710`），�
 
 ```bash
 ~/.local/bin/charvar video openrouter --prompt "the woman dances, spins, ends in a pose" --first-frame out/character_front.png --duration 8
+```
+
+带**音频参考**（heygen avatar 系对口型：1 段音频驱动口型/动作 + 1 张参考图；
+视频时长 = 音频时长，prompt 是动作提示；avatar 系不收 duration/aspect/size，
+`--aspect` 必须给空串，且账户余额要够它的预检估价）：
+
+```bash
+~/.local/bin/charvar video openrouter --prompt "the orange cat sings to the camera" --audio ~/voice/song.mp3 --ref out/cat.png --resolution 1080p --aspect ""
 ```
 
 - 时长/分辨率/画幅的合法值随所选模型目录变（超枚举提交前会报错）：先跑

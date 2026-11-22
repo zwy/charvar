@@ -79,6 +79,7 @@ class VideoRequest(BaseModel):
     last_frame: Path | None = None  # 尾帧图（first+last 模型；首尾成对或单独给）
     reference_paths: list[Path] = Field(default_factory=list)  # 参考图 ≤4
     reference_video_paths: list[Path] = Field(default_factory=list)  # 参考视频 ≤2（Seedance gen2+）
+    audio_path: Path | None = None  # 音频参考 ≤1（heygen avatar 系；仅 OpenRouter 通路）
     wait: bool = True  # CLI 用（阻塞到成品）；web 恒传 wait=False 走轮询
     staged_ref_ids: list[str] = Field(default_factory=list)  # web 暂存参考图 id，ready 时清理
     staged_video_ref_ids: list[str] = Field(default_factory=list)  # web 暂存参考视频 id，ready 时清理
@@ -428,6 +429,7 @@ def _new_manifest(req: VideoRequest, run_id: str, *, job_id: str = "", model: st
             "last_frame": str(req.last_frame or ""),
             "reference_paths": [str(p) for p in req.reference_paths],
             "reference_video_paths": [str(p) for p in req.reference_video_paths],
+            "audio_path": str(req.audio_path or ""),
             "staged_ref_ids": list(req.staged_ref_ids),
             "staged_video_ref_ids": list(req.staged_video_ref_ids),
             "out": str(req.out or ""),
@@ -485,6 +487,16 @@ def validate(req: VideoRequest) -> None:
             raise AdhocVideoError(f"参考视频不存在：{path}")
         try:
             openrouter_video.sniff_video_ref(Path(path))
+        except _ORError as exc:
+            raise AdhocVideoError(str(exc)) from exc
+    if req.audio_path is not None:
+        # avatar 系靠音频驱动：发错文件只会烧一次提交费；即梦没有这条通路
+        if req.backend == "dreamina":
+            raise AdhocVideoError("即梦通路不支持音频参考（音频参考只有 OpenRouter 通路）")
+        if not Path(req.audio_path).exists():
+            raise AdhocVideoError(f"音频参考不存在：{req.audio_path}")
+        try:
+            openrouter_video.sniff_audio_ref(Path(req.audio_path))
         except _ORError as exc:
             raise AdhocVideoError(str(exc)) from exc
     if req.first_frame is not None and not Path(req.first_frame).exists():
@@ -624,6 +636,12 @@ def _submit(req: VideoRequest, run_id: str, db_path: Path | None) -> dict[str, A
             openrouter_video.sniff_video_ref(Path(source))
         except _ORError as exc:
             raise AdhocVideoError(str(exc)) from exc
+    # 音频参考同参考视频：原样 data URL 发，提交前把魔数再验一遍
+    if req.audio_path is not None:
+        try:
+            openrouter_video.sniff_audio_ref(Path(req.audio_path))
+        except _ORError as exc:
+            raise AdhocVideoError(str(exc)) from exc
     has_images = first_frame is not None or bool(refs) or last_frame is not None
     prompt = _rewrite_prompt(req.prompt, has_images)
     try:
@@ -637,6 +655,7 @@ def _submit(req: VideoRequest, run_id: str, db_path: Path | None) -> dict[str, A
             first_frame_path=first_frame,
             last_frame_path=last_frame,
             reference_paths=refs,
+            audio_path=req.audio_path,
             reference_videos=list(req.reference_video_paths),
         )
         job = openrouter_video.submit(body, api_key=api_key, base_url=base_url)

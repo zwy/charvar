@@ -1281,6 +1281,9 @@ def video_openrouter(
     video_ref: Optional[list[str]] = typer.Option(
         None, "--video-ref", help="参考视频路径，可重复（≤2 条 mp4/mov/webm；Seedance gen2+ 才接）"
     ),
+    audio: Optional[str] = typer.Option(
+        None, "--audio", help="音频参考路径（1 条 mp3/m4a/wav/ogg；heygen avatar 系对口型：视频时长=音频时长）"
+    ),
     first_frame: Optional[str] = typer.Option(
         None, "--first-frame", help="首帧图路径（1 张；图生视频 frame_images，主体一致性靠它）"
     ),
@@ -1311,6 +1314,7 @@ def video_openrouter(
         backend="openrouter",
         reference_paths=[Path(p).expanduser() for p in (ref or [])],
         reference_video_paths=[Path(p).expanduser() for p in (video_ref or [])],
+        audio_path=Path(audio).expanduser() if audio else None,
         first_frame=Path(first_frame).expanduser() if first_frame else None,
         aspect_ratio=aspect,
         duration=duration,

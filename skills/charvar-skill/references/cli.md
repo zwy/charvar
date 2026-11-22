@@ -94,6 +94,7 @@ API Key 取值顺序：显式参数 > 设置页 > `OP_IMAGE_API_KEY` > `LLM_API_
 | `--first-frame` | path | — | 首帧图（1 张）。图生视频，**主体一致性靠它** |
 | `--ref` | list | — | 参考图路径，可重复，最多 4 张（`input_references`） |
 | `--video-ref` | list | — | 参考视频路径，可重复，≤2 条 mp4/mov/webm |
+| `--audio` | path | — | 音频参考（1 条 mp3/m4a/wav/ogg）。heygen avatar 系对口型：视频时长＝音频时长 |
 | `--aspect` | str | `9:16` | 画幅；合法值随所选模型变（heygen：21:9/16:9/4:3/1:1/3:4/9:16） |
 | `--duration` | int | 不发送 | 时长秒数；合法值随模型变（heygen 支持 5–15） |
 | `--resolution` | str | 不发送 | 分辨率档（480p/768p/2K…）；合法值随模型变 |
@@ -111,6 +112,10 @@ API Key 取值顺序：显式参数 > 设置页 > `OP_IMAGE_API_KEY` > `LLM_API_
 - `--ref` = `input_references`（≤4 张），只做风格／内容参考。
 - 两者同给时官方语义**首帧优先**。
 - `--video-ref` 只有 OpenRouter 侧的 Seedance gen2+ 系认，其它 provider 忽略；即梦侧走全能参考（`charvar video dreamina`，见下）。
+- `--audio` = `input_references` 里的 `audio_url`（≤1 条），**只 heygen avatar 系收**
+  （如 `heygen/heygen-avatar-6-turbo`：1 段音频 + 1 张参考图/1 段参考视频）。
+  avatar 系是音频驱动：时长＝音频时长（别发 `--duration`）、画幅跟随参考素材（`--aspect ""`）、
+  prompt 是动作提示；账户 credits 要过它的最大花费预检（真价≈目录价/秒）。
 
 时长／分辨率／画幅**超枚举会在提交前被拒**（不扣费），所以提交前先列一次目录：
 

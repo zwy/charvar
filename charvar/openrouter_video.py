@@ -10,6 +10,10 @@
   （超枚举是 400，白扣一次提交 —— 尽量在提交前拦截）；
 - 图参与两种方式：``frame_images``（首帧/末帧，图生视频）、``input_references``
   （参考图，仅供参考）；同给时 frame_images 优先（官方文档语义）。
+- 音频参考也走 ``input_references``：``{"type": "audio_url", "audio_url": {...}}``
+  （heygen avatar 系官方示例格式）。avatar 系是音频驱动的对口型模型——
+  需要「恰好 1 段音频 + 1 张参考图（或 1 段参考视频）」，视频时长 = 音频时长，
+  prompt 在那边变成动作提示。
 - 与生图一致的红线：httpx ``trust_env=False``（shell 的 ALL_PROXY 会劫持地址）、
   seed 收敛到 2^53-1、API key 复用 ``openrouter_image.resolve_api_key``
   （``OP_IMAGE_API_KEY`` / ``LLM_API_KEY``，同一家 OpenRouter）。
@@ -312,6 +316,42 @@ def encode_video_reference(path: Any) -> str:
     return f"data:{mime};base64,{base64.b64encode(source.read_bytes()).decode('ascii')}"
 
 
+# ---------- 音频参考（input_references 里的 audio_url；heygen avatar 系才接） ----------
+
+
+def sniff_audio_ref(path: Path) -> str:
+    """音频参考文件的容器格式 → mime（按魔数判，不按后缀）。
+
+    常见音频容器都放行：mp3（ID3 头 / MPEG 帧同步）、m4a・mp4 音频（ftyp 盒子）、
+    wav（RIFF....WAVE）、ogg（OggS）。HeyGen avatar 官方示例用的是 mp3。
+    """
+    head = path.read_bytes()[:12]
+    if head.startswith(b"ID3"):
+        return "audio/mpeg"
+    if len(head) >= 2 and head[0] == 0xFF and (head[1] & 0xE0) == 0xE0:
+        return "audio/mpeg"
+    if head.startswith(b"OggS"):
+        return "audio/ogg"
+    if head.startswith(b"RIFF") and head[8:12] == b"WAVE":
+        return "audio/wav"
+    if len(head) >= 8 and head[4:8] == b"ftyp":
+        return "audio/mp4"
+    raise OpenRouterVideoParamError(
+        f"音频参考不是可识别的容器（mp3/m4a/wav/ogg）：{path.name}"
+    )
+
+
+def encode_audio_reference(path: Any) -> str:
+    """音频参考 → data URL（本地文件；远程 URL 由调用方直接当 url 传）。"""
+    source = Path(path)
+    if not source.exists():
+        raise OpenRouterVideoParamError(f"音频参考不存在：{source}")
+    mime = sniff_audio_ref(source)
+    import base64
+
+    return f"data:{mime};base64,{base64.b64encode(source.read_bytes()).decode('ascii')}"
+
+
 # ---------- 请求体 ----------
 
 
@@ -326,6 +366,7 @@ def build_body(
     first_frame_path: Any = None,
     last_frame_path: Any = None,
     reference_paths: list[Any] | None = None,
+    audio_path: Any = None,
     reference_videos: list[Any] | None = None,
 ) -> dict[str, Any]:
     """组装 ``POST /api/v1/videos`` 请求体；提交前按目录枚举校验（超枚举 400 白扣钱）。
@@ -340,6 +381,9 @@ def build_body(
     - reference_paths / reference_videos：``input_references``（与首帧同给时
       frame_images 优先，这里不拦，由 provider 语义裁决）。图按 data URL 发；
       视频（Seedance gen2+ 才接）按 magic 嗅探容器后编码进 video_url data URL。
+    - audio_path：音频参考（heygen avatar 系才接）→ 同一份 ``input_references``
+      里的 audio_url data URL（官方示例：1 图 + 1 音频）；图无音频的 avatar
+      请求由 provider 拒，这里不做跨模型强校验。
     """
     if not prompt or not prompt.strip():
         raise OpenRouterVideoParamError("prompt 不能为空")
@@ -417,6 +461,8 @@ def build_body(
     parts: list[dict[str, Any]] = []
     for p in list(reference_paths or [])[:_MAX_REFERENCES]:
         parts.append({"type": "image_url", "image_url": {"url": openrouter_image.encode_reference(p)}})
+    if audio_path is not None:
+        parts.append({"type": "audio_url", "audio_url": {"url": encode_audio_reference(audio_path)}})
     for v in list(reference_videos or []):
         parts.append({"type": "video_url", "video_url": {"url": encode_video_reference(v)}})
     if len(parts) > _MAX_REFERENCES:
@@ -456,6 +502,32 @@ def _extract_job(payload: dict[str, Any]) -> VideoJob:
 # 提交后被 provider 拒了可以摘掉重试的参数（画幅枚举这些提交前已校验，
 # 这里只兜「目录没收录的参数」：seed / duration / frame_images / input_references）。
 _DEGRADABLE = ("seed", "duration", "resolution", "aspect_ratio", "frame_images", "input_references")
+
+
+def _rejected_video_params(message: str, sent_keys: set[str]) -> set[str]:
+    """从错误信息里解析被 provider 拒收的参数名（可能一次点名多个）。
+
+    heygen avatar 系实测消息形如 ``…does not support duration (the audio track
+    sets the length); aspect_ratio (the output follows the reference media);
+    size (…)`` —— 截 ``does not support`` 之后、按分号切分去括号取首词，只认
+    确实发过（``sent_keys``）的名字；切不出来时回落生图侧的单参数解析。
+    """
+    import re
+
+    candidates: set[str] = set()
+    marker = "does not support"
+    idx = message.find(marker)
+    if idx >= 0:
+        tail = message[idx + len(marker):].strip()
+        for chunk in re.sub(r"\([^)]*\)", " ", tail).split(";"):
+            words = re.findall(r"[A-Za-z_0-9]+", chunk)
+            if words:
+                candidates.add(words[0])
+    hits = candidates & sent_keys
+    if hits:
+        return hits
+    single = openrouter_image._rejected_parameter(message)
+    return {single} if single else set()
 
 
 def submit(
@@ -500,12 +572,17 @@ def submit(
         error = _error_from_response(resp)
         if not isinstance(error, OpenRouterVideoFetchError):
             raise error
-        rejected = openrouter_image._rejected_parameter(str(error))
-        if not rejected or rejected not in _DEGRADABLE or rejected in tried:
+        rejected = _rejected_video_params(str(error), set(current))
+        fresh = {name for name in rejected if name in _DEGRADABLE and name not in tried}
+        if not fresh:
             raise error
-        tried.add(rejected)
-        logger.info("openrouter_video.param_degraded | model=%s | rejected=%s", current.get("model"), rejected)
-        current.pop(rejected, None)
+        tried.update(fresh)
+        logger.info(
+            "openrouter_video.param_degraded | model=%s | rejected=%s",
+            current.get("model"), ",".join(sorted(fresh)),
+        )
+        for name in fresh:
+            current.pop(name, None)
         if not current:
             raise error
 
