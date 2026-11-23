@@ -235,6 +235,32 @@ mode 按输入自动分派（charvar 内部处理，调的人不用选）：
 列 OpenRouter 可用的语音模型、voice 枚举与每百万字符价目（免费档标「免费」）。
 参数与 `video models` 一致：`--refresh`（忽略本地缓存重拉）、`--json`（原始目录）。
 
+## charvar music openrouter
+
+用 OpenRouter 出一段音乐/歌曲（Lyria 3；chat/completions 流式音频）。**同步**：
+SSE 流收完才返回，整曲可能要几分钟。流派/节奏/乐器/是否人声/歌词都写在提示词里。
+
+| 参数 | 类型 | 默认 | 说明 |
+|---|---|---|---|
+| `--prompt` | str | — | 乐曲描述 |
+| `--prompt-file` | str | — | 提示词文件路径；`-` 表示读 stdin |
+| `--model` | str | 设置页/`OP_MUSIC_MODEL`/兜底 `google/lyria-3-clip-preview` | 模型 slug（pro 整曲 $0.08、clip 30 秒 $0.04） |
+| `--seed` | int | 空=不发送 | 复现用；目录声明 seed 的模型才透传 |
+| `--timeout` | float | `600` | HTTP 超时秒数（整曲较慢，默认比语音长） |
+| `--out` / `-o` | path | — | 另外落一份到这个路径 |
+| `--json` | flag | — | 结果以 JSON 输出到终端 |
+
+- `~/.local/bin/charvar music models` 查模型清单（output_modalities=audio 目录 + 预估价）。
+- **出口走系统代理**（自动跟随；`OP_MUSIC_PROXY` 覆写）：直连被 OpenRouter 按地区
+  403（Lyria provider 限制），与其他 OpenRouter 通路的 bypass 代理红线相反。
+- 产物按魔数嗅探落盘（Lyria 实测完整 MP3）；裸流（pcm16 等）第一期不支持。
+- manifest 记实收费用（流末 `usage.cost`）与预估价（目录 description 一口价）两层。
+
+## charvar music models
+
+列 OpenRouter 声明音频输出的模型与预估价。参数与 `tts models` 一致：
+`--refresh`（忽略本地缓存重拉）、`--json`（原始目录）。
+
 ## 产物落盘（生图）
 
 不给 `--out` 时：
@@ -273,6 +299,18 @@ data/generated/adhoc_tts/{id}/
 ```
 
 语音同样**不落 runs 表**；没有 thumbs（音频没有海报帧）。
+
+## 产物落盘（音乐）
+
+不给 `--out` 时：
+
+```
+data/generated/adhoc_music/{id}/
+├── original/000000.mp3    ← 音频（Lyria 完整 MP3；按魔数嗅探定后缀）
+└── manifest.json          ← 完整请求 + 实收费用（usage.cost），失败也留痕
+```
+
+音乐同样**不落 runs 表**，没有 thumbs。
 
 ## JSON 输出格式
 
@@ -314,6 +352,8 @@ data/generated/adhoc_tts/{id}/
 | `OP_VIDEO_TIMEOUT` | 视频单次提交轮询超时秒数 |
 | `OP_TTS_MODEL` | 语音默认模型（默认免费档 `heygen/heygen-voice-1-turbo:free`；设置页 DB 值优先） |
 | `OP_TTS_TIMEOUT` | 语音单次合成 HTTP 超时秒数（默认 300） |
+| `OP_MUSIC_MODEL` | 音乐默认模型（默认 `google/lyria-3-clip-preview`；设置页 DB 值优先） |
+| `OP_MUSIC_TIMEOUT` | 音乐单次生成 HTTP 超时秒数（默认 600，整曲较慢） |
 | `DREAMINA_IMAGE_MODEL` | 即梦 model_version 默认（默认 5.0） |
 | `DREAMINA_IMAGE_RESOLUTION` | 即梦分辨率档默认（2K/4K，默认 2K；小写大写都收） |
 | `DREAMINA_IMAGE_TIMEOUT` | 即梦单次生图总等待预算秒数（默认 300） |

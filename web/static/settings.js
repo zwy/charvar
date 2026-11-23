@@ -167,6 +167,22 @@ async function loadSettings() {
     }
     tSel.innerHTML = tOptions.join("");
     tSel.value = ort.model || "";
+    // OpenRouter 音乐：模型下拉来自 /music/models 目录；已存值不在清单里时补一项
+    const orm = settings.openrouter_music || {};
+    let musicCatalog = null;
+    try {
+      musicCatalog = await api("/music/models");
+    } catch {} // 清单读不到时下拉里只剩「跟随默认」
+    const musicModels = (musicCatalog && musicCatalog.data) || [];
+    const mSel = $("#set-or-music-model");
+    const defaultMusicModel = (musicCatalog && musicCatalog.default_model) || "";
+    const mOptions = [`<option value="">跟随默认（${escapeHtml(defaultMusicModel || "OP_MUSIC_MODEL / lyria-3-clip-preview")}）</option>`]
+      .concat(musicModels.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(modelLabel(m.id, m.name))}</option>`));
+    if (orm.model && !musicModels.some((m) => m.id === orm.model)) {
+      mOptions.push(`<option value="${escapeHtml(orm.model)}">${escapeHtml(orm.model)}（不在当前清单里）</option>`);
+    }
+    mSel.innerHTML = mOptions.join("");
+    mSel.value = orm.model || "";
     // 即梦：model 下拉（画布目录，tables.js 与后端 _IMAGE_MODELS 同源）+ 分辨率档按模型配对；
     // 已存值不在清单/档位时补一项（存旧值不丢）。空 = env/默认链（seedream_4.7 · 2K）。
     const dm = settings.dreamina || {};
@@ -280,6 +296,10 @@ $("#btn-settings-save").addEventListener("click", async () => {
   patch.openrouter_tts = {
     model: $("#set-or-tts-model").value.trim(),
   };
+  // OpenRouter 音乐：model 空串 = 落库为空 = 回到 env（OP_MUSIC_MODEL）/ lyria-3-clip
+  patch.openrouter_music = {
+    model: $("#set-or-music-model").value.trim(),
+  };
   // 放大页默认：workflow 空串 = 落库为空 = adhoc_upscale 兜底 workflow
   patch.upscale = {
     backend: $("#set-ups-backend").value,
@@ -315,5 +335,7 @@ $("#btn-or-video-models-refresh").addEventListener("click", () =>
   refreshModelCatalog("/videos/models?refresh=1", (d) => (d.data || []).length, $("#or-video-models-status")));
 $("#btn-or-tts-models-refresh").addEventListener("click", () =>
   refreshModelCatalog("/tts/models?refresh=1", (d) => (d.data || []).length, $("#or-tts-models-status")));
+$("#btn-or-music-models-refresh").addEventListener("click", () =>
+  refreshModelCatalog("/music/models?refresh=1", (d) => (d.data || []).length, $("#or-music-models-status")));
 
 loadSettings();

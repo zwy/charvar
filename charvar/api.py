@@ -26,9 +26,11 @@ from charvar import adhoc_compose as adhoc_compose_service
 from charvar import adhoc_upscale as adhoc_upscale_service
 from charvar import adhoc_video as adhoc_video_service
 from charvar import adhoc_tts as adhoc_tts_service
+from charvar import adhoc_music as adhoc_music_service
 from charvar import dreamina_image
 from charvar import dreamina_video
 from charvar import openrouter_image
+from charvar import openrouter_music
 from charvar import openrouter_tts
 from charvar import openrouter_video
 from charvar import social_copy
@@ -80,6 +82,7 @@ _PAGE_ROUTES = {
     "/ui/video": "video.html",
     "/ui/upscale": "upscale.html",
     "/ui/tts": "tts.html",
+    "/ui/music": "music.html",
     "/ui/recipes": "recipes.html",
     "/ui/subjects": "subjects.html",
     "/ui/poses": "poses.html",
@@ -499,6 +502,19 @@ class TtsGenerateRequest(BaseModel):
     model: str | None = None  # 空 = 设置页/env 默认(免费 turbo:free)
     voice: str = ""  # 空 = 不发(目录枚举非空时 client 兜底第一项)
     response_format: str = ""  # 空 = 自动(探测缓存 > 静态表 > API 默认 pcm)
+
+
+class MusicGenerateRequest(BaseModel):
+    """网页「音乐」页的请求(与 CLI ``charvar music`` 同一套参数;OpenRouter 同步通路)。
+
+    音乐生成是**同步**的:本端点等 SSE 流收完再响应(整曲可能要几分钟,前端 hint
+    说明等待),不需要视频那套 status 轮询。seed 空串 = 不发送;显式给才透传
+    (目录声明 seed 的模型,如 Lyria)。
+    """
+
+    prompt: str
+    model: str | None = None  # 空 = 设置页/env 默认(lyria-3-clip-preview)
+    seed: str = ""  # 空 = 不发送
 
 
 def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
@@ -1209,6 +1225,10 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         # 即梦视频：默认链 DB > DREAMINA_VIDEO_MODEL > seedance_2.0_fast_vip
         data["dreamina_video_default_model"] = dreamina_video.resolve_model(
             settings.dreamina_video.model
+        )
+        # 音乐：默认链 DB > OP_MUSIC_MODEL > lyria-3-clip（供设置页/音乐页占位提示）
+        data["openrouter_music_default_model"] = openrouter_music.resolve_model(
+            settings.openrouter_music.model
         )
         # 即梦生图：生效默认（DB > env > 缺省，settings_service.dreamina_image_defaults），
         # 供前端下拉空值标签/说明行显示真实默认，别在前端写死「默认 5.0 · 2K」这类过期字样
@@ -2784,6 +2804,107 @@ def build_app(static_dir: Path | None = None, db_path=None) -> FastAPI:
         except FileNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
         except adhoc_tts_service.AdhocTtsError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return {"ok": True, "deleted": run_id}
+
+    # ---- 音乐（charvar.adhoc_music：web 与 CLI charvar music 同一通路） ----
+    # 同步生成（像语音）：/music/generate 等 SSE 流收完再响应，没有 status 轮询。
+    # 整曲可能要几分钟，前端按钮旁 hint 说明等待。路由声明纪律同 /tts 段：
+    # 字面路径（/music/models、/music）必须在 /music/{run_id}/… 之前。
+
+    @app.get("/music/models")
+    def api_music_models(refresh: bool = Query(False)) -> dict[str, Any]:
+        """音乐模型目录（output_modalities=audio；缓存本地 JSON）。"""
+        try:
+            with _db() as conn:
+                creds = settings_service.openrouter_credentials(conn)
+            data = openrouter_music.list_models(
+                force_refresh=refresh, api_key=creds["api_key"], base_url=creds["base_url"]
+            )
+        except openrouter_music.OpenRouterMusicError as exc:
+            raise HTTPException(502, f"读音乐模型目录失败：{exc}") from exc
+        models: list[dict[str, Any]] = []
+        for item in data.get("data") or []:
+            if not isinstance(item, dict):
+                continue
+            models.append(
+                {
+                    "id": str(item.get("id") or ""),
+                    "name": str(item.get("name") or ""),
+                    "pricing": item.get("pricing") or {},
+                }
+            )
+        with _db() as conn:
+            default_model = settings_service.openrouter_music_config(conn)["model"]
+        # 目录顺序多 provider 混排，下拉展示统一按 id 排序（缓存 JSON 保持上游原样）
+        models.sort(key=lambda m: (m["id"].lower(), m["name"].lower()))
+        return {"data": models, "default_model": default_model}
+
+    @app.post("/music/generate")
+    def api_music_generate(req: MusicGenerateRequest) -> dict[str, Any]:
+        """音乐：给一段提示词出一行歌曲（同步，等 SSE 流收完）。
+
+        走的是 CLI ``charvar music`` 同一套（``charvar.adhoc_music``），不落 runs 表。
+        """
+        music_req = adhoc_music_service.MusicRequest(
+            prompt=req.prompt,
+            model=(req.model or "").strip() or None,
+            seed=(req.seed or "").strip(),
+        )
+        try:
+            result = adhoc_music_service.generate(music_req, db_path)
+        except adhoc_music_service.AdhocMusicError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except Exception as exc:  # noqa: BLE001 - 网络/后端异常统一转 502
+            raise HTTPException(502, f"音乐生成失败：{exc}") from exc
+        payload = result.model_dump()
+        payload["audio_url"] = f"/music/{result.run_id}/audio"
+        return payload
+
+    @app.get("/music")
+    def api_music_list(
+        response: Response,
+        limit: int = Query(20, ge=1, le=100),
+        offset: int = Query(0, ge=0),
+    ) -> list[dict[str, Any]]:
+        """最近的 音乐记录（读 manifest.json；不落 runs 表）。
+
+        列表本体保持裸数组；总数走 X-Total-Count 响应头，给「最近生成」翻页。
+        """
+        response.headers["X-Total-Count"] = str(adhoc_music_service.count_recent())
+        return adhoc_music_service.list_recent(limit, offset)
+
+    @app.get("/music/{run_id}/audio")
+    def api_music_audio(run_id: str) -> FileResponse:
+        try:
+            path = adhoc_music_service.audio_file(run_id)
+        except adhoc_music_service.AdhocMusicError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        media_type = _AUDIO_MEDIA_TYPES.get(
+            path.suffix.lower().lstrip("."), "application/octet-stream"
+        )
+        return FileResponse(path, media_type=media_type)
+
+    @app.get("/music/{run_id}/manifest")
+    def api_music_manifest(run_id: str) -> dict[str, Any]:
+        try:
+            path = adhoc_music_service.run_dir(run_id) / "manifest.json"
+        except adhoc_music_service.AdhocMusicError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        if not path.exists():
+            raise HTTPException(404, f"没有 manifest：{run_id}")
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    @app.delete("/music/{run_id}")
+    def api_music_run_delete(run_id: str) -> dict[str, Any]:
+        """删一条音乐记录（音频/manifest 整目录移除，不可恢复）。"""
+        try:
+            adhoc_music_service.delete_run(run_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        except adhoc_music_service.AdhocMusicError as exc:
             raise HTTPException(400, str(exc)) from exc
         return {"ok": True, "deleted": run_id}
 

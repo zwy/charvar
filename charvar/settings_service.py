@@ -131,6 +131,18 @@ class OpenRouterTtsSettings(BaseModel):
     model: str = ""
 
 
+class OpenRouterMusicSettings(BaseModel):
+    """OpenRouter 音乐生成(Lyria 3 等,``charvar.adhoc_music``)配置。
+
+    - model 空串 = 用 env ``OP_MUSIC_MODEL``(再缺省 google/lyria-3-clip-preview,$0.04/条);
+    - API key 与生图/视频/语音同链路,这里不重复配;
+    - seed / voice / audio_format 不进配置:seed 是否生效随模型变(显式给才发),
+      audio 配置第一期对外不暴露。
+    """
+
+    model: str = ""
+
+
 class UpscaleSettings(BaseModel):
     """「放大」页（视频放大）默认偏好：请求显式 > 这里 > 兜底。
 
@@ -156,6 +168,7 @@ class AppSettings(BaseModel):
     openrouter_video: OpenRouterVideoSettings = Field(default_factory=OpenRouterVideoSettings)
     dreamina_video: DreaminaVideoSettings = Field(default_factory=DreaminaVideoSettings)
     openrouter_tts: OpenRouterTtsSettings = Field(default_factory=OpenRouterTtsSettings)
+    openrouter_music: OpenRouterMusicSettings = Field(default_factory=OpenRouterMusicSettings)
     default_negative_prompt: str = ""
 
 
@@ -212,6 +225,12 @@ def get_settings(conn: sqlite3.Connection) -> AppSettings:
     upscale = (
         UpscaleSettings.model_validate(up_raw) if isinstance(up_raw, dict) else UpscaleSettings()
     )
+    om_raw = data.get("openrouter_music")
+    openrouter_music = (
+        OpenRouterMusicSettings.model_validate(om_raw)
+        if isinstance(om_raw, dict)
+        else OpenRouterMusicSettings()
+    )
     # 迁移：旧的单模型配置（DB 里的 openrouter.model）平移到两个模式；
     # 新字段各自可再覆盖。model 字段本体保留在返回值里，读接口不再展示。
     if not openrouter.t2i_model:
@@ -229,6 +248,7 @@ def get_settings(conn: sqlite3.Connection) -> AppSettings:
         openrouter_video=openrouter_video,
         dreamina_video=dreamina_video,
         openrouter_tts=openrouter_tts,
+        openrouter_music=openrouter_music,
         default_negative_prompt=str(data.get("default_negative_prompt") or ""),
     )
 
@@ -251,6 +271,7 @@ def save_settings(conn: sqlite3.Connection, patch: dict) -> AppSettings:
             "openrouter_video",
             "dreamina_video",
             "openrouter_tts",
+            "openrouter_music",
             "default_negative_prompt",
         ):
             continue
@@ -365,6 +386,19 @@ def openrouter_tts_config(conn: sqlite3.Connection) -> dict[str, str]:
 
     settings = get_settings(conn)
     return {"model": openrouter_tts.resolve_model(settings.openrouter_tts.model)}
+
+
+def openrouter_music_config(conn: sqlite3.Connection) -> dict[str, str]:
+    """OpenRouter 音乐生成的生效配置:DB > env(OP_MUSIC_MODEL)> 缺省 lyria-3-clip。
+
+    - model 走 openrouter_music.resolve_model 的完整链路;
+    - seed / voice / audio_format 不进配置(seed 显式给才发,audio 配置第一期不暴露),
+      提交前校验在 charvar.openrouter_music。
+    """
+    from charvar import openrouter_music
+
+    settings = get_settings(conn)
+    return {"model": openrouter_music.resolve_model(settings.openrouter_music.model)}
 
 
 def llm_overrides(conn: sqlite3.Connection) -> dict[str, str] | None:

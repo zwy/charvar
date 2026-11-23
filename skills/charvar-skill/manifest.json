@@ -1,12 +1,12 @@
 {
   "name": "charvar-skill",
-  "version": "1.11.0",
-  "updated": "2026-11-22",
-  "description": "按提示词实际出图/出视频的 Claude Code skill：ComfyUI、OpenRouter、即梦三条通路 + 视频放大（SeedVR2/FFmpeg）+ OpenRouter 语音（TTS）+ 主体档案 CLI。",
+  "version": "1.12.0",
+  "updated": "2026-11-23",
+  "description": "按提示词实际出图/出视频的 Claude Code skill：ComfyUI、OpenRouter、即梦三条通路 + 视频放大（SeedVR2/FFmpeg）+ OpenRouter 语音（TTS）+ 音乐（Lyria 3）+ 主体档案 CLI。",
   "entrypoint": "SKILL.md",
   "files": {
     "manifest.json": "版本、文件清单与检查结果记录。",
-    "SKILL.md": "核心入口：三条生图通路、视频、放大、语音、主体档案命令与排错表。",
+    "SKILL.md": "核心入口：三条生图通路、视频、放大、语音、音乐、主体档案命令与排错表。",
     "references/cli.md": "完整 CLI 参数参考。"
   },
   "checks": {
@@ -16,6 +16,11 @@
     "note": "本 skill 无自带脚本；由仓库级 tests/test_skills.py 校验 frontmatter、版本同步与文件清单。"
   },
   "history": [
+    {
+      "version": "1.12.0",
+      "updated": "2026-11-23",
+      "note": "新增音乐生成通路（OpenRouter Lyria 3）：charvar music openrouter|models（提示词 → mp3，chat/completions 流式音频 stream:true 必开、SSE delta.audio.data 拼接，同步一步到终态，整曲可能几分钟）；默认 google/lyria-3-clip-preview（$0.04/条）；seed 显式给且目录声明才透传；出口走系统代理（直连被地区 403，与其他 OpenRouter 通路 bypass 红线相反，OP_MUSIC_PROXY 覆写）；产物魔数嗅探（实测完整 MP3，裸流第一期不支持）；实收费用（usage.cost）+ description 一口价预估两层；网页新增「音乐」页签。"
+    },
     {
       "version": "1.11.0",
       "updated": "2026-11-22",

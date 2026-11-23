@@ -16,6 +16,7 @@ PAGE_NEEDLE_IDS = {
     "video": ["video-prompt", "video-frame-list"],
     "upscale": ["ups-target", "ups-input-list"],
     "tts": ["tts-text", "tts-voice"],
+    "music": ["music-prompt", "music-model", "music-seed"],
     "recipes": ["recipes-table", "recipe-runs-table"],
     "subjects": ["s-id", "subject-image-slots"],
     "poses": ["pose-page-root"],

@@ -5,7 +5,7 @@
 
 const NAV_PAGES = [
   ["gen", "预设"], ["adhoc", "图片"], ["video", "视频"], ["upscale", "放大"],
-  ["tts", "语音"], ["recipes", "配方"], ["subjects", "主体"], ["faces", "人脸"],
+  ["tts", "语音"], ["music", "音乐"], ["recipes", "配方"], ["subjects", "主体"], ["faces", "人脸"],
   ["poses", "动作"], ["costumes", "服饰"], ["runs", "历史"], ["settings", "设置"],
 ];
 

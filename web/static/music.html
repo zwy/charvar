@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>charvar · 音乐</title><link rel="stylesheet" href="/static/style.css"><link rel="icon" type="image/svg+xml" href="/static/favicon.svg"><link rel="alternate icon" type="image/png" sizes="1024x1024" href="/static/icon.png"><link rel="apple-touch-icon" href="/static/icon.png"></head><body>
+<!-- 真多页页面文件：顶栏由 nav.js 渲染；分组容器只用 .form-section（见 .superdesign/design-system.md）。
+     脚本清单见文件尾；加新页 = 本文件 + nav.js NAV_PAGES + charvar/api.py 路由表三处同步 -->
+<header class="topbar"></header>
+<main>
+<section id="page-music"><div class="card"><div class="row-head"><h2>音乐</h2><span class="hint">给一段提示词出一行歌曲 · 整曲生成可能要几分钟</span></div>
+<div class="form-section">
+<div class="form-section-title">模型与参数</div>
+<div class="form-grid">
+<label>模型<select id="music-model"></select></label>
+<label>seed<input type="number" id="music-seed" placeholder="留空 = 不发送"></label>
+</div>
+</div>
+<div class="form-section">
+<div class="form-section-title">提示词</div>
+<label aria-label="乐曲描述"><textarea id="music-prompt" rows="5" placeholder="乐曲描述：流派、节奏、乐器、是否人声、歌词…都写在这里"></textarea></label>
+</div>
+<div class="actions"><button id="btn-music-generate" class="primary">生成音乐</button><span class="hint">等流收完才返回，请耐心等待</span><span id="music-status" class="status"></span></div>
+</div>
+<div class="card" id="music-result-card" hidden><div class="row-head"><h2>结果 <span id="music-result-summary"></span></h2><div class="actions">
+<a id="music-dl-audio" class="btn" hidden download>下载音频</a>
+<a id="music-dl-manifest" class="btn" hidden>manifest.json</a>
+</div></div>
+<div class="tts-result"><audio id="music-result-player" controls preload="metadata"></audio></div><p id="music-result-text" class="hint" hidden></p><p id="music-result-meta" class="hint"></p></div>
+<div class="card"><div class="row-head"><h2>最近生成</h2><div class="actions"><button id="btn-music-recent-refresh" class="btn-icon" data-icon="refresh" title="刷新" aria-label="刷新"></button></div></div>
+<div id="music-recent" class="image-grid"></div></div>
+</section>
+</main><script src="/static/core.js"></script><script src="/static/nav.js"></script><script src="/static/media.js"></script><script src="/static/music.js"></script></body></html>

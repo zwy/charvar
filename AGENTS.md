@@ -35,7 +35,7 @@ styling=锚脸+发型+服装（section 随条目存，锚定分句 `face`/`face_
 
 `charvar/adhoc.py` 是「给一段提示词出一张图」的独立通路：不进主体档案 6 槽位、不跑预设批量、不落 runs 表。
 
-- CLI：`charvar image comfyui|openrouter|dreamina|models`（`--prompt`/`--prompt-file`/`--ref`/`--aspect`/`--seed`/`--out`/`--json`；`dreamina` 子命令没有 `--seed`，即梦不暴露）。产物默认落 `data/generated/adhoc/{id}/`（图 + 缩略图 + manifest.json）。
+- CLI：`charvar image comfyui|openrouter|dreamina|models`（flags 见 `-h`；`dreamina` 没有 `--seed`，即梦不暴露）。产物默认落 `data/generated/adhoc/{id}/`（图 + 缩略图 + manifest.json）。
 - **网页入口**：顶栏「图片」页签（`web/static/adhoc.js`），后端 `/adhoc/*`（`charvar/api.py`）。走的是**同一个** `charvar/adhoc.py` —— 网页与 CLI 是同一套参数语义、同一套落盘、同一份 manifest。改动 `charvar/adhoc.py` 的参数名或输出格式时，CLI、网页、skill 三处都要同步。
 - 网页的参考图只认三种来源：上传暂存（`/adhoc/references`）、主体档案里已就绪的档案图、图片页「最近生成」的原图（spec 带 `run_id`；run_id 过该模块自己的严格正则，文件名由服务端从该 run 的 `original/` 目录按落盘布局定 —— 浏览器永远不给路径）。**不接受任意路径** —— 那是把文件读权限开给了浏览器。
 - 本项目外的项目/其他 agent 也调它；参数名与输出格式是对外契约，改动要兼容。
@@ -47,33 +47,45 @@ styling=锚脸+发型+服装（section 随条目存，锚定分句 `face`/`face_
 `charvar/adhoc_video.py` 是「给一段提示词出一段视频」的同构通路，双供应商：OpenRouter
 （`charvar/openrouter_video.py`）与即梦（`charvar/dreamina_video.py`，细则见 `docs/即梦视频.md`）。
 
-- CLI：`charvar video openrouter|dreamina`（`--prompt`/`--first-frame`/`--ref`/`--video-ref`/`--aspect`/`--duration`/`--resolution`/`--model`/`--out`/`--json`；`--seed` 仅 openrouter）与 `charvar video models --provider openrouter|dreamina`（列枚举/价目）；产物落 `data/generated/adhoc_video/{id}/`，不落 runs 表。即梦按输入分派画布 mode：文生 `t2v` / 首帧 `first_last_frame`（尾帧首获支持，按 [首,尾] 顺序）/ 参考图·视频 = `m2v`（全能参考）；默认 `seedance_2.0_fast_vip`（720p、4–15s，旧名自动映射）。
+- CLI：`charvar video openrouter|dreamina`（flags 见 `-h`；`--seed` 仅 openrouter）与 `charvar video models --provider openrouter|dreamina`（列枚举/价目）；产物落 `data/generated/adhoc_video/{id}/`，不落 runs 表。即梦按输入分派画布 mode：文生 `t2v` / 首帧 `first_last_frame`/ 参考图·视频 = `m2v`（全能参考）；默认 `seedance_2.0_fast_vip`（旧名自动映射）。
 - **网页入口**：顶栏「视频」页签（`web/static/video.js`），后端 `/videos/*`（`charvar/api.py`），同一套 `charvar/adhoc_video.py`；改参数名/输出格式时 CLI、网页、skill 三处同步。
-- 视频是**异步作业**：web 提交即返回 pending，前端每 8s 打 `GET /videos/{run_id}/status`（引擎 `adhoc_video.refresh`，幂等，终态后不打上游）；CLI `--timeout`（默认 900s）阻塞轮询，超时作业仍在跑（manifest 保持 in_progress，网页可续查）；作业 id/收片按供应商（docs 详情）。
+- 视频是**异步作业**：web 提交即返回 pending，前端每 8s 打 `GET /videos/{run_id}/status`（引擎 `adhoc_video.refresh`，幂等，终态后不打上游）；CLI `--timeout`（默认 900s）阻塞轮询，超时作业仍在跑；作业 id/收片按供应商（docs 详情）。
 - 参数枚举**提交前校验**（超档 400 白扣提交费）：OpenRouter 按 `GET /api/v1/videos/models` 目录（缓存 `data/openrouter/video-models.json`；目录标 `seed: false` 不发；拒参自动降级重试）；即梦按 `_VIDEO_MODELS` 静态表拦（分辨率/时长/ratio 必填、字面值按模型目录透传；`dreamina_canvas.py` 与 tables.js 两处同源，CLI 升级同步）。
 - 首帧图 = 图生视频（主体一致性靠它；**别用 character_sheet，四视图拼图会出多人**——用单人全身正面/front 槽位）；参考图 = `input_references`（≤4）；首帧与参考图同给首帧优先（i2v 页签不并送参考图；即梦该组合提交前拦）。
 - 默认链两边 = 请求显式 > 设置页（DB） > env > 兜底：OpenRouter `OP_VIDEO_MODEL`/heygen-video-1（key 与生图同链路）；即梦 `DREAMINA_VIDEO_MODEL`/`seedance_2.0_fast_vip`（无 key=本机 `dreamina-canvas auth login`；无 seed 不发送；按积分计费；首用合规需网页端先过一次；详见 docs/即梦视频.md）。
-- **AI 文案**：视频页「最近生成」卡 → `POST /videos/{run_id}/copy`（`social_copy.py`，无 CLI）：LLM 按 run 的 prompt 写标题/简介/话题，写进 `manifest["copy"]`（title≤20字/intro≤200/tags≤5），已有文案直出不重调 LLM。细则见 `docs/视频文案.md`。
+- **AI 文案**：视频页「最近生成」卡 → `POST /videos/{run_id}/copy`（`social_copy.py`，无 CLI）：LLM 按 run 的 prompt 写标题/简介/话题，写进 `manifest["copy"]`已有文案直出不重调 LLM。细则见 `docs/视频文案.md`。
 
 ### 语音（OpenRouter TTS 通路）
 
-`charvar/adhoc_tts.py` 是「给一段文本出一段音频」的同构通路，只接 OpenRouter
-（`charvar/openrouter_tts.py` 客户端）；API 细节与实测话术见 `docs/语音通路.md`。
+`charvar/adhoc_tts.py`：给一段文本出一段音频，只接 OpenRouter。**同步通路**（与视频
+不同）：`POST /audio/speech` 直接返回音频字节流，web 等音频返回再响应，**无 status 轮询**；
+细则见 `docs/语音通路.md`。
 
-- **同步通路**（与视频不同）：`POST /audio/speech` 一次请求直接返回音频字节流，web `/tts/generate` 等音频返回再响应，**无 status 轮询端点**。
-- CLI：`charvar tts openrouter`（`--prompt`/`--prompt-file`/`--voice`/`--model`/`--format`/`--out`/`--json`）
-  + `charvar tts models`；产物落 `data/generated/adhoc_tts/{id}/`（无 thumbs）。
-  **网页入口**：顶栏「语音」页签（`tts.js`）+ `/tts/*`；改参数名/输出格式三处同步（同图片页）。
-- 模型目录走 `GET /api/v1/models?output_modalities=speech`，缓存
-  `data/openrouter/speech-models.json`（三份缓存之一）。
-- **voice 实测必填**（heygen/minimax 不带 voice 一律 400）：目录 `supported_voices`
-  非空时请求空值自动取第一项兜底；枚举为空的模型（fish/seed）不发送。
-- **格式协商**（链与细节见 `docs/语音通路.md`）：请求显式 > 探测缓存
-  （值级，与生图 capabilities.json 语义不同别混）> 静态表 > API 默认；被拒按
-  400 话术换值重试记档。裸 PCM 封 WAV —— **落盘永远是可播的 wav/mp3**。
-- HeyGen 系 5000 字符单次上限提交前拦；响应无费用头，按目录价估算展示；
-  默认链 请求显式 > 设置页「OpenRouter 语音」组 > `OP_TTS_MODEL` > 免费档
-  `heygen/heygen-voice-1-turbo:free`；声音克隆（input_references）第二期。
+- CLI：`charvar tts openrouter|models`；产物落 `data/generated/adhoc_tts/{id}/`（无
+  thumbs；落盘永远可播的 wav/mp3）；**网页入口**：顶栏「语音」页签 + `/tts/*`。
+- **voice 实测必填**（heygen/minimax 不带一律 400）：目录枚举非空时空值自动取首项
+  兜底，枚举为空的不发送；目录缓存 speech-models.json。
+- **格式协商**：请求显式 > 探测缓存（值级，别与生图 capabilities.json 混）>
+  静态表 > API 默认；被拒按 400 话术换值重试记档。
+- HeyGen 系 5000 字符提交前拦；响应无费用头按目录价估算；默认链 请求显式 > 设置页
+  「OpenRouter 语音」组 > `OP_TTS_MODEL` > 免费档 turbo:free；声音克隆第二期。
+
+### 音乐（OpenRouter Lyria 通路）
+
+`charvar/adhoc_music.py`：给一段提示词出一行歌曲（Lyria 3；同构语音，细则见
+`docs/音乐通路.md`）。
+
+- **同步**（像语音）：走 `POST /api/v1/chat/completions` 流式音频（modalities
+  text+audio，**`stream: true` 必开**；SSE 分片 `delta.audio.data` 拼接后一次 decode）；
+  产物按魔数嗅探（Lyria 实测完整 MP3，裸流第一期不支持）。
+- **出口必须走系统代理**（`OP_MUSIC_PROXY` 覆写，自动跟随系统代理端口，没开回退
+  直连）——直连被按地区 403；与 bypass 代理红线**相反**。
+- CLI：`charvar music openrouter|models`；产物落 `data/generated/adhoc_music/{id}/`；**网页入口**：顶栏「音乐」页签 + `/music/*`；三处同步。
+- 目录 `output_modalities=audio` 缓存 `data/openrouter/music-models.json`（第四份）；
+  预估价从 description 抽一口价（pricing 恒 0），实收回写 `usage.cost`，两层分开记；
+  seed 显式给且目录声明才发送。
+- 默认链：请求显式 > 设置页「OpenRouter 音乐」组 > `OP_MUSIC_MODEL` >
+  `google/lyria-3-clip-preview`；超时 `OP_MUSIC_TIMEOUT` 默认 600s。
 
 ## 仓库里的 skills（`skills/`）
 
@@ -122,7 +134,7 @@ styling=锚脸+发型+服装（section 随条目存，锚定分句 `face`/`face_
 ## 全站视觉分组与文案
 
 - **分组容器全站唯一** = `.form-section`（flex column + gap sp-2），组标题 `.form-section-title`（右侧可放状态，如「已选 0 张」）；组间用 `margin-top sp-3 + padding-top sp-3 + 1px 分隔线`，**不要**给 `.card` 的直接子元素手写 margin。
-  预设页① 拆三组（主体与种子 / 供应商参数 / 参考图），② 拆两组（预设与外观 / 提示词参数）；图片 = 供应商与参数 / 提示词 / 参考图；视频 = 模式与参数 / 提示词 / 首帧图 / 参考图 / 参考视频；主体档案 = 基本信息 / 锁定项 / 补充；设置页一卡一主题。**别新造 `.gen-group` 这类第二套分组类。**
+  各页分组拆法以 design-system.md 的清单为准。**别新造 `.gen-group` 这类第二套分组类。**
 - **间距只在 4/8/12/16 阶梯内收紧**：`.card` padding `14px 16px`、`.card > * + *` 用 sp-3、`.form-grid` 行距 sp-2、`.settings-grid`（设置页专用）行距 sp-3（列距均 sp-4）；`.segmented .seg` padding `4px 12px`。500px 断点要同步。
 - **灰字只写「控件里看不到的信息」**（枚举/像素/数量/不可逆后果），删掉复述控件、导航说明与实现细节长段落；每块最多一句，宁可删（细则见 design-system.md）。
 - 参考图区统一形态：组标题 + 右侧「已选 N 张」+ `.ref-empty` 虚线空态框（`#gen-ref-count` / `#adhoc-ref-count` / `#video-ref-count`）。

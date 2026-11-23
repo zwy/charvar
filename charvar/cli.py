@@ -54,6 +54,8 @@ app.add_typer(video_app, name="video")
 upscale_app = typer.Typer(help="放大：把一段视频的短边放大到目标档位（SeedVR2 / FFmpeg）", no_args_is_help=True)
 app.add_typer(upscale_app, name="upscale")
 app.add_typer(tts_app, name="tts")
+music_app = typer.Typer(help="音乐：给一段提示词直接出一行歌曲（OpenRouter Lyria，同步流式）", no_args_is_help=True)
+app.add_typer(music_app, name="music")
 pose_app = typer.Typer(help="姿势库（pose-db-01 人偶线稿参考图）", no_args_is_help=True)
 app.add_typer(pose_app, name="pose")
 costume_app = typer.Typer(help="服饰库（costume-db-01 服饰参考图）", no_args_is_help=True)
@@ -1642,6 +1644,108 @@ def tts_models(
                 typer.echo(f"    价格：{price}")
             except (TypeError, ValueError):
                 pass
+        typer.echo("")
+
+
+# ---------- music（音乐） ----------
+
+def _run_music(req, json_out: bool) -> None:
+    """跑一次音乐生成并输出结果（--json 时 stdout 只有 JSON）。"""
+    from charvar import adhoc_music as adhoc_music_service
+
+    try:
+        result = adhoc_music_service.generate(req)
+    except adhoc_music_service.AdhocMusicError as exc:
+        _die(str(exc))
+        return
+    except Exception as exc:  # noqa: BLE001 - 网络/后端异常转友好提示
+        _die(f"{type(exc).__name__}: {exc}")
+        return
+    if json_out:
+        typer.echo(result.model_dump_json())
+        return
+    typer.echo(f"完成：{result.audio_path}")
+    typer.echo(f"  模型：{result.model or ''}  seed：{result.seed_sent if result.seed_sent is not None else '（未发送）'}")
+    if result.transcript:
+        typer.echo(f"  transcript：{result.transcript}")
+    if result.text_content:
+        snippet = result.text_content.strip()
+        typer.echo(f"  说明：{snippet[:200]}{'…' if len(snippet) > 200 else ''}")
+    if result.duration_s is not None:
+        typer.echo(f"  时长：{result.duration_s:.1f}s · {result.size_bytes} 字节")
+    if result.cost_real is not None:
+        typer.echo(f"  实收：${result.cost_real:.4f}")
+    elif result.cost is not None:
+        typer.echo(f"  预计：${result.cost:.4f}")
+    typer.echo(f"  用时：{result.duration_ms / 1000:.1f}s  manifest → {result.manifest_path}")
+
+
+@music_app.command("openrouter")
+def music_openrouter(
+    prompt: Optional[str] = typer.Option(None, "--prompt", help="乐曲描述（流派/节奏/乐器/是否人声/歌词）"),
+    prompt_file: Optional[str] = typer.Option(None, "--prompt-file", help="提示词文件（- 表示读 stdin）"),
+    model: Optional[str] = typer.Option(
+        None, "--model", help="模型 slug（默认设置页 / OP_MUSIC_MODEL，兜底 google/lyria-3-clip-preview）"
+    ),
+    seed: str = typer.Option("", "--seed", help="复现用整数种子（空 = 不发送；Lyria 声明支持 seed）"),
+    timeout: float = typer.Option(600.0, "--timeout", help="HTTP 超时秒数（默认 600，整曲生成可能要几分钟）"),
+    out: Optional[Path] = typer.Option(None, "--out", "-o", help="另外落一份到这个路径"),
+    json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出到终端"),
+) -> None:
+    """用 OpenRouter 出一段音乐（文本 → mp3；chat/completions 流式，同步一步到终态）。
+
+    默认模型 google/lyria-3-clip-preview（30 秒片段 $0.04/条；pro 整曲 $0.08）。
+    产物按魔数嗅探落盘（Lyria 实测完整 MP3）；裸流（pcm16 等）第一期不支持。
+    歌词/流派/节奏都写在提示词里。
+    """
+    from charvar import adhoc_music as adhoc_music_service
+
+    req = adhoc_music_service.MusicRequest(
+        prompt=_read_prompt(prompt, prompt_file),
+        backend="openrouter",
+        model=model,
+        seed=seed,
+        out=out,
+    )
+    _run_music(req, json_out)
+
+
+@music_app.command("models")
+def music_models(
+    refresh: bool = typer.Option(False, "--refresh", help="忽略本地缓存，强制拉取最新目录"),
+    json_out: bool = typer.Option(False, "--json", help="结果以 JSON 输出到终端"),
+) -> None:
+    """列 OpenRouter 声明音频输出的模型（output_modalities=audio）。"""
+    from charvar import openrouter_music
+
+    try:
+        data = openrouter_music.list_models(force_refresh=refresh)
+    except openrouter_music.OpenRouterMusicError as exc:
+        _die(f"读 OpenRouter 音乐模型目录失败：{exc}")
+        return
+
+    if json_out:
+        typer.echo(json.dumps(data, ensure_ascii=False))
+        return
+
+    items = [m for m in (data.get("data") or []) if isinstance(m, dict)]
+    if not items:
+        typer.echo("（目录为空）")
+        return
+    for model in items:
+        model_id = str(model.get("id") or "").strip()
+        if not model_id:
+            continue
+        typer.echo(f"{model_id}\t{str(model.get('name') or model_id)}")
+        params = [str(p) for p in (model.get("supported_parameters") or [])]
+        if params:
+            typer.echo(f"    参数：{', '.join(params)}")
+        try:
+            estimate = openrouter_music.estimate_cost(model_id)
+        except Exception:  # noqa: BLE001 - 预估只是展示，目录异常不阻断列表
+            estimate = None
+        if estimate is not None:
+            typer.echo(f"    预计：${estimate:.2f}/次（实收回写流末 usage.cost）")
         typer.echo("")
 
 

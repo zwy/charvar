@@ -1,12 +1,12 @@
 ---
 name: charvar-skill
-description: Generate images with the charvar project's ComfyUI, OpenRouter, or Dreamina backends from any project. This skill should be used when the user asks to "用 comfyui 生图", "用 openrouter 生图", "用即梦生图", "charvar 帮我出图", "generate an image with comfyui", or otherwise asks to produce an image via the charvar CLI; also for short videos via OpenRouter or the Dreamina (即梦) CLI ("charvar 帮我出段视频", "用 openrouter 生视频", "用即梦生视频", "generate a video with charvar"), for upscaling a video's short side to a target tier via SeedVR2 (ComfyUI) or FFmpeg ("帮我把这段视频放大", "upscale this video with charvar"), for text-to-speech via OpenRouter ("charvar 帮我出语音", "把这段文字变成语音", "用 openrouter 生语音", "generate speech / TTS with charvar"), and for charvar subject-profile tasks such as "导入角色档案", "从模板生成主体档案" or using the charvar subject CLI, and for drafting the six subject-image slot prompts (character_sheet/headshot/portrait/front/side/behind) without an existing profile via "charvar subject prompt" ("起草主体图提示词", "AI 起草定妆图提示词", "帮我起草设定图提示词").
+description: Generate images with the charvar project's ComfyUI, OpenRouter, or Dreamina backends. Use when the user asks "用 comfyui 生图", "用 openrouter 生图", "用即梦生图", "charvar 帮我出图", "generate an image with comfyui", or wants an image via the charvar CLI; also for short videos via OpenRouter or the Dreamina (即梦) CLI ("charvar 帮我出段视频", "用 openrouter 生视频", "用即梦生视频", "generate a video with charvar"), for upscaling a video's short side to a target tier via SeedVR2 (ComfyUI) or FFmpeg ("帮我把这段视频放大", "upscale this video with charvar"), for text-to-speech via OpenRouter ("charvar 帮我出语音", "把这段文字变成语音", "用 openrouter 生语音"), for music / songs via OpenRouter Lyria ("charvar 帮我出音乐", "帮我生一首歌", "generate music / a song with charvar"), and for charvar subject-profile tasks such as "导入角色档案", "从模板生成主体档案" or using the charvar subject CLI, and for drafting the six subject-image slot prompts (character_sheet/headshot/portrait/front/side/behind) without an existing profile via "charvar subject prompt" ("起草主体图提示词", "帮我起草设定图提示词").
 ---
 
 # charvar 生图
 
-版本：1.11.0  
-更新：2026-11-22
+版本：1.12.0  
+更新：2026-11-23
 
 通过 charvar 项目的 CLI 出图。三条后端：**comfyui**（本机/局域网 ComfyUI）、
 **openrouter**（OpenRouter 在线生图）和 **dreamina**（即梦官方画布 CLI `dreamina-canvas`，消耗即梦积分）。
@@ -169,6 +169,27 @@ charvar 的网页顶栏也有「图片」页签（`http://127.0.0.1:8710`），�
 - 网页顶栏「语音」页签是同一条通路（`http://127.0.0.1:8710`），可直接试放/下载。
 - 声音克隆（参考音频音色复刻）暂未接入；需要时先在网页/CLI 里用默认 voice。
 
+## 音乐（OpenRouter Lyria 通路）
+
+给一段提示词出**一首歌/一段曲子**（同步：SSE 流收完才返回，整曲可能要几分钟，别中途打断）。
+默认模型 `google/lyria-3-clip-preview`（30 秒片段 $0.04/条；`-pro-preview` 整曲 $0.08，
+`OP_MUSIC_MODEL` 可换）。流派/节奏/乐器/是否人声/歌词都写在提示词里：
+
+```bash
+~/.local/bin/charvar music openrouter --prompt "An upbeat 1970s funk groove, instrumental, 112 BPM" --out out/funk.mp3
+```
+
+- 模型清单：`~/.local/bin/charvar music models`（output_modalities=audio 目录，含预估价）。
+- **出口走系统代理**（自动跟随；`OP_MUSIC_PROXY` 可覆写）：直连被 OpenRouter 按地区
+  403（Lyria provider 有限制），这点与其他 OpenRouter 通路的 bypass 代理红线相反。
+  系统代理没开时 Lyria 报「not available in your region」，先开代理再试。
+- `--seed 整数` 复现用（空 = 不发送；Lyria 声明支持 seed，效果由 provider 裁决）。
+- 产物按魔数嗅探落盘（Lyria 实测完整 MP3）：
+  `data/generated/adhoc_music/<run_id>/original/000000.mp3` + manifest.json，不落 runs 表；
+  manifest 里有实收费用（流末 usage.cost）。
+- 网页顶栏「音乐」页签是同一条通路（`http://127.0.0.1:8710`），可直接试放/下载。
+- 提示词为空 / seed 非整数都在提交前拦截（不浪费流式提交）。
+
 ## 主体档案：从模板导入（subject derive / add / verify）
 
 手里只有「角色全场景通用提示词模板」.md、要建主体档案时：
@@ -329,6 +350,7 @@ PY
 
 ## 版本记录
 
+- **1.12.0**（2026-11-23）**新增音乐生成通路（OpenRouter Lyria 3）**：`charvar music openrouter`（提示词 → mp3，chat/completions 流式音频：`stream: true` 必开，SSE 分片 `delta.audio.data` 拼接；同步一步到终态，整曲可能要几分钟）与 `charvar music models`。默认模型 `google/lyria-3-clip-preview`（$0.04/条，30 秒；pro 整曲 $0.08，`OP_MUSIC_MODEL` 可换）。要点：seed 显式给且目录声明才透传（不引入随机源）；产物按魔数嗅探（实测完整 MP3，裸流第一期不支持）；实收费用回写（流末 usage.cost）+ 目录 description 一口价预估两层分开记；网页顶栏新增「音乐」页签同一条通路。
 - **1.10.0**（2026-11-15）**主体档案新增「人脸头像」槽位（`portrait`）＋生图画幅新增 4:5**：6 槽位（character_sheet → headshot → portrait → front → side → behind，portrait 基于三视图编辑、默认 4:5）；`--aspect` 枚举加 4:5（ComfyUI 2K 像素表 1856×2320；即梦仅「图片美学 V8.2」收 4:5，其他模型提交前拦截）。
 
 - **1.9.0**（2026-11-11）**新增视频放大通路**：`charvar upscale comfyui|ffmpeg`（短边放大到 720p/1080p/4k；SeedVR2 超分走 ComfyUI 队列，ffmpeg 本机插值秒级）；源短边已达标原样返回；网页新增「放大」页签（同一条通路）与设置页「放大页默认」组。
