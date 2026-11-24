@@ -1,0 +1,35 @@
+# 本文件由 `charvar subject derive` 生成（LLM 抽取 + 引用核对 + 审计），可人工修订。
+# 来源模板：rinran.md（sha256:a513b472c491）
+# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-11-24 06:25 UTC
+# 起草 2 轮 · 审计 2 轮 · 审计通过 · 引用核对：19/19 条命中，无需修复
+id: rinran
+name: 铃兰
+subject_noun: woman
+trigger_word: rinran
+reference_tag: <image1>
+style_lock:
+- 真人写实摄影，日系写真风格，柔和均匀的影棚漫射光，色彩明亮柔和，保留细微皮肤纹理与真实发丝，锐化与磨皮克制，保留毛孔与细小绒毛的细节
+identity_lock:
+- 原创角色，成年女性（二十岁上下）
+- 东亚，十九到二十二岁，少女感明显，但不做幼童化处理
+- 脸型是柔和的鹅蛋形轮廓，额头饱满圆润，颧骨完全看不出来、从颧骨到下颌是一条连续的圆润弧线，下颌线圆润收窄、下巴圆润不过尖；耳朵上是一对很小的细链吊坠耳环，链子极细、坠子是小小的几何形金属片。
+- 眉毛很细、颜色是深棕色、眉形平直、眉峰不明显、眉尾自然收细
+- 眼睛是深棕色的杏眼，眼型细长而偏大，上下眼睑略有弧度，双眼皮褶皱清晰，眼尾略微下垂，睫毛自然上翘，眼神清澈
+- 鼻梁细直、鼻翼窄、鼻头小巧；嘴唇小而饱满，上唇薄、下唇略厚。
+- 皮肤白皙偏暖、质感干净通透，脸颊饱满带肉感
+- 深棕色中长发，长度到胸口下方，发尾自然内扣。额前是很薄的空气刘海，刘海很薄、很稀疏，额头的绝大部分露出来，只有几缕细发丝斜斜地落到眉眼附近。两侧发丝顺贴脸颊，发根蓬松，发丝有真实的光泽与层次。
+- 妆感是清淡干净的日系妆：底妆白皙通透，眼妆极淡——只在睫毛根部与眼尾有一点点深色、眼线细而柔和；腮红只有若有若无的极淡粉色晕染；唇是淡的珊瑚粉色唇釉、哑光；整体是几乎看不出来的素颜感，不是浓妆。
+outfit_lock:
+- 一件白色的细罗纹高领长袖针织衫：领口是一圈窄的白色罗纹高领，贴到脖子下缘；面料是细罗纹针织，有清晰的纵向织纹；合身剪裁、布料紧贴上半身，前胸的布料被胸部撑起绷紧、形成两个饱满的弧形轮廓，胸部下缘的轮廓线清晰可见；袖子是长袖，袖口贴合手腕。
+- 祖母绿的高腰半身裙：腰头在肋骨下方的高腰位置，腰头是一道细密的褶裥；裙身是祖母绿偏冷调的缎面，有柔和的光泽与自然的斜向垂坠褶；裙长到膝盖下方。
+- 白色中筒袜，袜口是一道浅浅的灰色细罗纹边，袜身紧贴小腿。
+- 黑色圆头乐福鞋，鞋面有一道横向的一字带，鞋底是薄底低跟。
+- 背面是同一件白色细罗纹高领长袖针织衫的后身：领口在后颈收成一道窄的白色罗纹高领边，后背中央有一道纵向的缝合线，后背的布料被胸部向前顶起、在肩胛下方形成一道横向的绷紧弧线，两条手臂的袖口贴合手腕。
+- 裙子的背面是祖母绿缎面，腰头是一道细密的褶裥，后片正中有一道纵向的缝合中缝，臀下的布料顺着臀部向后翘起并自然收住。
+- 侧面的结构：侧脸轮廓能读出额头、鼻梁、鼻头、唇形与下颌线的完整侧面线条；侧面能读出胸廓微微向前凸出、腰部向内收束与臀部向后翘起的弧线。
+- 默认造型不含手链、包袋、帽子、眼镜等随身配饰；这对小耳坠是头部识别锚点，不算可摘配饰，默认造型一直戴着。
+body_lock:
+- 'slender hourglass: small-boned frame, narrow shoulders, thin ribcage, slim torso; her bust is extremely large, full, round, flaring to both sides, its widest width about half again her outer shoulder width, with its own forward volume and a marked taper to the waist, that width over twice the ribcage width, its lower edge a palm below the armpit, in profile projecting deeper than its own width'
+- 'an extremely thin, clearly defined waist cinched at the lower ribs, flat abdomen opening to the hips; her hips are round, full and lifted backward, their widest width close to the shoulder width, with a horizontal turn under it; her upper arms at their widest are narrower than her bust, forearms taper, wrists thin; one thigh under two thirds the hip width, calves slender and as wide as her ankles'
+extra: Keep the same facial features, hairstyle, skin tone and makeup, and the same
+  outfit, consistent in every pose and every new scene.

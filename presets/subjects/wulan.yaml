@@ -1,0 +1,40 @@
+# 本文件由 `charvar subject derive` 生成（LLM 抽取 + 引用核对 + 审计），可人工修订。
+# 来源模板：wulan.md（sha256:3ec5cc9d6946）
+# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-11-24 04:44 UTC
+# 起草 3 轮 · 审计 3 轮 · 审计通过 · 引用核对：36/36 条命中，无需修复
+id: wulan
+name: 雾岚
+subject_noun: woman
+trigger_word: wulan
+reference_tag: <image1>
+style_lock:
+- 真人写实摄影，现代社交媒体写真风格
+- 色彩明亮柔和，保留细微皮肤纹理与真实发丝，锐化与磨皮克制，保留毛孔与细小绒毛的细节
+- 整体是写实摄影质感，不是插画、不是动漫
+identity_lock:
+- 原创角色，成年女性（二十岁上下）
+- 东南亚／混血感，十九到二十二岁，成人感明确，氛围是轻熟的社交媒体主播
+- 脸型是柔和的鹅蛋脸，脸颊饱满有肉感，脸颊最宽处比下巴宽出约三分之一，颧骨完全看不出来，从颧骨到下颌是一条连续的圆润弧线，额头饱满圆润，下颌线圆润不尖，下巴小巧圆润；耳朵上是一对很小的金色耳钉。
+- 眉毛是深棕色的细眉，眉形自然平缓、眉峰柔和、眉尾自然收细
+- 眼睛是略呈杏形的圆眼，瞳孔是深棕近黑色，上眼线清晰并向眼尾略微拉长，睫毛浓密纤长、根根分明、向外翘起，双眼皮褶皱清晰，眼下有清晰的卧蚕
+- 鼻梁直而窄，鼻翼窄，鼻头小巧圆润；嘴唇饱满，上唇有清晰的唇珠、下唇略厚
+- 皮肤白皙偏暖、质感干净通透，脸颊带肉感
+- 妆感是精致的欧美浓妆：白皙通透的底妆，眼妆明显——深棕到黑色的眼影晕染在整个眼窝与下眼睑，眼线清晰并向眼尾拉长，睫毛浓密纤长、向外翘起；颧骨上扫着一大片暖粉色的腮红；唇是浓郁的玫红莓果色唇釉、哑光质感；整体是欧美网红妆的浓度，不是清淡的日系裸妆。
+- 深棕近黑色的长直发，发量非常蓬松，长度到胸口下方，发尾有轻微的自然卷；中分偏一点点，两侧各有一缕自然垂落到胸前；发根蓬松，发丝有真实的光泽与层次
+outfit_lock:
+- 一件雾霾蓝偏灰的紧身长袖针织连衣裙；面料是细罗纹针织，有细微的纵向织纹和柔和的光泽；衣服紧贴身体，把肩、胸、腰、臀的轮廓都裹出来；袖子是长袖，袖口贴合手腕；裙长到膝上，裙摆在大腿中段收住。
+- 领口是很深的 V 领，V 领的尖一路开下去、落到胸线附近。
+- 领口正中有一列竖排的深色小纽扣当门襟，纽扣从 V 领尖往下排。
+- 脖子上叠戴两条细金链项链：一条短的落在锁骨附近、吊坠是一个很小的圆环，另一条长的垂到胸口下方、吊坠是一个小坠饰。
+- 白色中筒袜，袜口是一道浅浅的灰色细罗纹边，袜身紧贴小腿。
+- 黑色圆头乐福鞋，鞋面有一道横向的一字带，鞋底是薄底低跟。
+- 默认造型不含手链、包袋、帽子、眼镜等随身配饰；那两条细金链项链是深 V 领里的固定颈部细节、那对小耳钉是头部识别锚点，都不算可摘配饰，默认造型一直戴着。
+- 连衣裙的背面：后背是一整片雾霾蓝的针织布料，布料顺着背部曲线贴身；后领口是一圈很窄的同色包边；后背中央有一道纵向的缝合线；肩胛下方因为胸部向前顶起而形成一道横向的绷紧弧线；两条手臂的袖口在手腕上方一寸处；后腰有一道横向的接缝；背面能读出后脑的深棕近黑色头发与发尾轻微的自然卷。
+- 裙子的背面：裙摆是一圈简单的针织收边、不开叉；臀部完全被裙布包住，从背面看不到内裤或任何皮肤。
+- 侧面的结构：侧脸轮廓能读出额头、鼻梁、鼻头、唇形与下颌线的完整侧面线条；侧面能读出胸廓微微向前凸出、腰部向内收束与臀部向后翘起的弧线。
+body_lock:
+- 'a slender adult female with a small frame: narrow shoulders, a narrow thin ribcage and a slim torso; her bust is very large, rounded and clearly expanding sideways, its widest width about half again her outer shoulder width, projecting forward as a volume of its own with the lower contour flaring outward, and the outer bust contour cutting sharply in toward her waist'
+- 'her upper arms are much narrower than her bust, forearms slim, wrists fine; a clearly cinched waistline narrow beneath the ribcage, abdomen flat, opening smoothly to the hips; her hips are round, full and pushed back, about as wide as her shoulders, with a horizontal turn under the seat; each thigh is under two thirds of her hip width, tapering to the knee; calves narrow to slim ankles'
+extra: Keep the same face, the same makeup and hairstyle, the same figure and the
+  same single set of clothing in every new pose and every new scene; nothing about
+  the identity changes with pose or setting.
