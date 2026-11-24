@@ -1,0 +1,37 @@
+# 本文件由 `charvar subject derive` 的起草＋审计流程后**人工重建锁项**（雫 shizuku）。
+# derive 起草 1 轮 · 审计 2 轮未通过，未写出任何文件；
+#   问题单：[omission] 锚点表中的「族裔与年龄感」一行在 identity_lock 中没有对应条目。
+# 人工核对问题单后，从模板的锚点表与固定前缀**逐字重建**全部锁项（不是 LLM 自由文本）。
+# 来源模板：shizuku.md（sha256:3463c6b31679）
+# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-11-24 08:04 UTC
+id: shizuku
+name: 雫
+subject_noun: woman
+trigger_word: shizuku
+reference_tag: <image1>
+style_lock:
+- 真人写实摄影，高真实度人像特写质感，柔和均匀的影棚漫射光
+- 保留毛孔、细小绒毛与细微皮肤纹理，保留真实发丝，锐化与磨皮克制
+identity_lock:
+- 原创角色，成年女性（二十岁上下）
+- 东亚，十九到二十二岁，少女感明显，但不做幼童化处理
+- 脸型是窄长的鹅蛋形轮廓，额头饱满圆润，颧骨完全看不出来、从颧骨到下颌是一条连续的圆润弧线，下颌线清晰收窄、下巴圆润不过尖
+- 眉毛是淡灰棕色、很细，眉形自然平直、眉峰不明显、眉尾自然收细
+- 眼睛是深棕近黑的杏仁形，眼型细长而偏大，上眼睑褶皱清晰，睫毛根根分明、向上翘，眼尾平直略微下垂，下眼睑有浅浅的卧蚕，眼白干净
+- 鼻梁细直偏窄、鼻翼窄、鼻头小巧圆润
+- 嘴唇小而饱满，上唇薄、下唇略厚
+- 皮肤白皙偏冷调、质感干净，脸颊与鼻翼有很淡的雀斑，额头与鼻翼有轻微泛红
+- 纯黑色的长发，长度到胸口下方，发尾自然内扣；偏分，额前散落大量极细的碎发丝，部分贴在额头上，两侧发丝顺贴脸颊；发根蓬松，发丝有真实的光泽与层次，靠近发根的一段带着湿冷的水光感，发丝上有细密的水珠状亮点
+- 妆感是几乎看不出来的素颜感：没有眼影、没有腮红、没有修容；眉毛保留本来的淡灰棕色，没有描画；只有唇部是淡的豆沙玫瑰粉色唇釉、哑光质感，整体几乎看不出化了妆
+outfit_lock:
+- 白色细罗纹高领长袖针织衫：领口是一圈窄的白色罗纹高领，贴到脖子下缘；面料是细罗纹针织，有清晰的纵向织纹；合身剪裁、布料紧贴上半身，前胸的布料被胸部撑起绷紧、形成两个饱满的弧形轮廓，胸部下缘的轮廓线清晰可见；仅胸部一段的面料被撑起绷紧，肩部、腰部与衣摆保持自然垂坠；袖子是长袖，袖口贴合手腕
+- 浅灰色的直筒长裤：腰头在腰线位置，是一道平整的窄腰头；裤身是浅灰色的哑光面料，布料有轻微的自然垂坠感；裤腿是笔直的直筒轮廓，从大腿到脚踝宽度几乎不变，裤长到脚踝
+- 白色中筒袜，袜口是一道浅浅的灰色细罗纹边，袜身紧贴小腿；白色小圆头平底皮鞋，鞋面是干净的素面皮革，鞋底是薄底
+- 背面是同一件白色细罗纹高领长袖针织衫的后身：领口在后颈收成一道窄的白色罗纹高领边，后背中央有一道纵向的缝合线，后背的布料被胸部向前顶起、在肩胛下方形成一道横向的绷紧弧线，两条手臂的袖口贴合手腕
+- 裤子的背面是浅灰色的哑光面料，腰头是一道平整的窄腰头，后片正中有一道纵向的缝合中缝，臀下的布料顺着臀部向后翘起并自然收住
+- 侧面的结构：侧脸轮廓能读出额头、鼻梁、鼻头、唇形与下颌线的完整侧面线条；侧面能读出胸廓微微向前凸出、腰部向内收束与臀部向后翘起的弧线。
+- 默认造型不含手链、包袋、帽子、眼镜、耳环等任何配饰
+body_lock:
+- 'slender adult hourglass: small-boned frame, narrow level shoulders, a fleshy torso with a cinched waist; her bust is very large, full and round, its widest width about half again her outer shoulder width, with its own forward volume, a clear bust-to-waist drop, its lower edge sagging under its own weight, that width over twice the ribcage width, in profile projecting deeper than its own width'
+- 'a fine waistline cinched below the ribcage, opening to the hips; her hips are round, full, lifted backward, their widest width about a third wider than her outer shoulders, with a horizontal turn under it; her upper arms carry muscle and fat thickness, never spindly, narrower than her bust, wrists thin; her thighs are full and wide, narrowing to the knee; her calves taper, as wide as her ankles'
+extra: Keep the same facial features, hairstyle, skin tone and makeup, and the same outfit, consistent in every pose and every new scene.
