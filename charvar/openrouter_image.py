@@ -9,8 +9,12 @@
   ——避免同时传三个画幅参数。
 - 产物直接落 charvar 的图片资产目录（``data/generated/{run_id}/original/``），
   不另开一套落盘目录，这样图片墙 / contact sheet / 合成视频全部复用。
-- 出网请求一律 ``httpx trust_env=False``（本机 shell 的 ALL_PROXY 会劫持地址），
-  与 ``charvar.llm`` / ``charvar.exporters.comfyui`` 保持一致。
+- 出网请求 ``httpx trust_env=False``（本机 shell 的 ALL_PROXY 会劫持地址），但
+  OpenRouter 通路的**出口代理**走 :func:`resolve_proxy` 链（显式 > env
+  ``OP_IMAGE_PROXY`` > macOS 系统代理 > 直连，与音乐通路同款）：OpenRouter 按请求
+  出口 IP 判区，直连出口的推理 POST 被 400 ``Request path cannot be relayed``
+  （2026-11-25 实测，语音/视频同受影响）；trust_env=False 保留——环境变量仍被忽略，
+  ComfyUI 内网请求不受影响。
 - 不传 ``negative_prompt``：OpenRouter Images API 没有这个字段。
 - 画幅/分辨率/质量等参数按 ``data/openrouter/api-response.json`` 里每个模型的
   ``supported_parameters`` 动态决定（见 :func:`model_capabilities`），
@@ -26,6 +30,7 @@ import os
 import re
 import threading
 import time
+import urllib.request
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -205,9 +210,33 @@ def models_cache_path() -> Path:
 # ---------- HTTP ----------
 
 
-def _http_client(timeout: float) -> httpx.Client:
-    # trust_env=False：忽略 shell 的 ALL_PROXY 等环境代理（与 charvar.llm 同一策略）
-    return httpx.Client(trust_env=False, timeout=httpx.Timeout(timeout, write=60.0))
+def resolve_proxy(
+    proxy: str | None = None, *, env_key: str = "OP_IMAGE_PROXY"
+) -> str | None:
+    """OpenRouter 通路的出口代理：显式 > env ``env_key`` > macOS 系统代理 > 直连。
+
+    与音乐通路（``openrouter_music.resolve_proxy``，``OP_MUSIC_PROXY``）同款：
+    OpenRouter 按请求出口 IP 判区，本机直连的推理 POST 被 400
+    ``Request path cannot be relayed``（2026-11-25 实测），必须走系统代理出口。
+    跟随系统代理的当前端口（不写死，QuickQ 端口每次启动会变）；系统代理没开时
+    回退直连。生图/视频/语音/LLM 四条通路各自用本函数，env 键不同。
+    """
+    for candidate in (proxy, _env(env_key)):
+        candidate = str(candidate or "").strip()
+        if candidate:
+            return candidate
+    try:
+        proxies = urllib.request.getproxies()
+    except Exception:  # noqa: BLE001 - 读系统代理失败按直连走
+        return None
+    value = str(proxies.get("https") or proxies.get("http") or "").strip()
+    return value or None
+
+
+def _http_client(timeout: float, proxy: str | None = None) -> httpx.Client:
+    # trust_env=False：忽略 shell 的 ALL_PROXY 等环境代理；出口代理由 resolve_proxy
+    # 显式给出（显式 proxy 不算环境劫持，ComfyUI 等内网通路不传 proxy 即直连）
+    return httpx.Client(trust_env=False, timeout=httpx.Timeout(timeout, write=60.0), proxy=proxy)
 
 
 def _error_from_response(resp: httpx.Response) -> OpenRouterImageError:
@@ -330,7 +359,7 @@ def _fetch_and_cache_models(cache_path: Path, api_key: str | None, base_url: str
     if key:
         headers["Authorization"] = f"Bearer {key}"
     try:
-        with _http_client(_LIST_MODELS_TIMEOUT_S) as client:
+        with _http_client(_LIST_MODELS_TIMEOUT_S, resolve_proxy()) as client:
             resp = client.get(f"{resolve_base_url(base_url)}/images/models", headers=headers)
     except httpx.HTTPError as exc:
         raise OpenRouterFetchError(f"请求 OpenRouter 模型清单失败：{exc}") from exc
@@ -925,7 +954,7 @@ def _post_generate(
     while True:
         current = attempts[-1]
         try:
-            with _http_client(resolve_timeout(timeout_s)) as client:
+            with _http_client(resolve_timeout(timeout_s), resolve_proxy()) as client:
                 resp = client.post(
                     f"{resolve_base_url(base_url)}/images",
                     headers={

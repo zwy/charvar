@@ -963,3 +963,22 @@ def test_concurrent_probe_records_are_not_lost(fake_model_list, monkeypatch):
         list(pool.map(probe, range(8)))
     cache = json.loads(openrouter_image.capabilities_cache_path().read_text())
     assert sorted(cache["meta/muse-image"]["rejected"]) == [f"p{i}" for i in range(8)]
+
+
+# ---------- 出口代理链（与音乐通路同款） ----------
+
+
+def test_resolve_proxy_chain(monkeypatch):
+    # 显式 > OP_IMAGE_PROXY > 系统代理 > 直连(None)
+    assert openrouter_image.resolve_proxy("http://x:1") == "http://x:1"
+    monkeypatch.setenv("OP_IMAGE_PROXY", "http://x:2")
+    assert openrouter_image.resolve_proxy(None) == "http://x:2"
+    monkeypatch.setattr("urllib.request.getproxies", lambda: {"https": "http://127.0.0.1:3"})
+    monkeypatch.delenv("OP_IMAGE_PROXY")
+    assert openrouter_image.resolve_proxy(None) == "http://127.0.0.1:3"
+    # 系统代理没开 → 直连
+    monkeypatch.setattr("urllib.request.getproxies", lambda: {})
+    assert openrouter_image.resolve_proxy(None) is None
+    # socks 条目走不了（httpx 原生不带 socks 扩展）：只取 https/http
+    monkeypatch.setattr("urllib.request.getproxies", lambda: {"socks": "socks5://127.0.0.1:4"})
+    assert openrouter_image.resolve_proxy(None) is None

@@ -158,3 +158,43 @@ def test_chat_json_parse_error_carries_text(monkeypatch):
     with pytest.raises(llm.LLMParseError) as exc_info:
         llm.chat_json([{"role": "user", "content": "hi"}])
     assert exc_info.value.text == '{"variants": [{"id": "a", "prompt": "p'
+
+
+# ---------- 出口代理链（与音乐通路同款；系统代理兜底仅限 openrouter.ai） ----------
+
+
+def test_resolve_proxy_chain(monkeypatch):
+    # 显式(config/参数) > LLM_PROXY > 系统代理(仅 openrouter.ai) > 直连
+    assert llm.resolve_proxy("https://openrouter.ai/api/v1", "http://x:1") == "http://x:1"
+    monkeypatch.setenv("LLM_PROXY", "http://x:2")
+    assert llm.resolve_proxy("https://openrouter.ai/api/v1") == "http://x:2"
+    monkeypatch.setattr("urllib.request.getproxies", lambda: {"https": "http://127.0.0.1:3"})
+    monkeypatch.delenv("LLM_PROXY")
+    assert llm.resolve_proxy("https://openrouter.ai/api/v1") == "http://127.0.0.1:3"
+    # 非 openrouter.ai 基址（自建/内网 LLM 等）不进系统代理
+    assert llm.resolve_proxy("http://192.168.1.174:8188/api") is None
+    # 系统代理没开 → 直连
+    monkeypatch.setattr("urllib.request.getproxies", lambda: {})
+    assert llm.resolve_proxy("https://openrouter.ai/api/v1") is None
+
+
+def test_chat_passes_proxy_to_client(monkeypatch):
+    seen = {}
+
+    class FakeClient:
+        def __init__(self, **kw):
+            seen["proxy"] = kw.get("proxy")
+            self._inner = httpx.Client(transport=httpx.MockTransport(
+                lambda req: _ok_content("hello")))
+
+        def __enter__(self):
+            return self._inner
+
+        def __exit__(self, *args):
+            self._inner.close()
+
+    monkeypatch.setattr(llm, "_http_client", lambda **kw: FakeClient(**kw))
+    monkeypatch.setenv("LLM_API_KEY", "sk-test")
+    monkeypatch.setenv("LLM_PROXY", "http://x:2")
+    assert llm.chat([{"role": "user", "content": "hi"}]) == "hello"
+    assert seen["proxy"] == "http://x:2"

@@ -14,7 +14,9 @@
   （heygen avatar 系官方示例格式）。avatar 系是音频驱动的对口型模型——
   需要「恰好 1 段音频 + 1 张参考图（或 1 段参考视频）」，视频时长 = 音频时长，
   prompt 在那边变成动作提示。
-- 与生图一致的红线：httpx ``trust_env=False``（shell 的 ALL_PROXY 会劫持地址）、
+- 与生图一致的红线：httpx ``trust_env=False``（shell 的 ALL_PROXY 会劫持地址；出口
+  代理走 :func:`resolve_proxy` 链，``OP_VIDEO_PROXY`` > 系统代理 > 直连，与音乐通路
+  同款——OpenRouter 按出口 IP 判区，直连推理 POST 被 400）、
   seed 收敛到 2^53-1、API key 复用 ``openrouter_image.resolve_api_key``
   （``OP_IMAGE_API_KEY`` / ``LLM_API_KEY``，同一家 OpenRouter）。
 
@@ -133,9 +135,14 @@ def models_cache_path() -> Any:
 # ---------- HTTP ----------
 
 
-def _http_client(timeout: float) -> httpx.Client:
+def resolve_proxy(proxy: str | None = None) -> str | None:
+    """视频通路的出口代理：显式 > env ``OP_VIDEO_PROXY`` > 系统代理 > 直连（与生图同链）。"""
+    return openrouter_image.resolve_proxy(proxy, env_key="OP_VIDEO_PROXY")
+
+
+def _http_client(timeout: float, proxy: str | None = None) -> httpx.Client:
     # trust_env=False：忽略 shell 的 ALL_PROXY 等环境代理（与 openrouter_image 同一策略）
-    return httpx.Client(trust_env=False, timeout=httpx.Timeout(timeout, write=60.0))
+    return httpx.Client(trust_env=False, timeout=httpx.Timeout(timeout, write=60.0), proxy=proxy)
 
 
 def _error_from_response(resp: httpx.Response) -> OpenRouterVideoError:
@@ -198,7 +205,7 @@ def list_models(
         if key:
             headers["Authorization"] = f"Bearer {key}"
         try:
-            with _http_client(_LIST_MODELS_TIMEOUT_S) as client:
+            with _http_client(_LIST_MODELS_TIMEOUT_S, resolve_proxy()) as client:
                 resp = client.get(f"{resolve_base_url(base_url)}/videos/models", headers=headers)
         except httpx.HTTPError as exc:
             raise OpenRouterVideoFetchError(f"请求 OpenRouter 视频模型目录失败：{exc}") from exc
@@ -562,7 +569,7 @@ def submit(
     tried: set[str] = set()
     while True:
         try:
-            with _http_client(resolve_timeout(timeout_s)) as client:
+            with _http_client(resolve_timeout(timeout_s), resolve_proxy()) as client:
                 resp = client.post(
                     f"{resolve_base_url(base_url)}/videos",
                     headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
@@ -611,7 +618,7 @@ def poll(
     if not str(job_id or "").strip():
         raise OpenRouterVideoParamError("job_id 不能为空")
     try:
-        with _http_client(resolve_timeout(timeout_s)) as client:
+        with _http_client(resolve_timeout(timeout_s), resolve_proxy()) as client:
             resp = client.get(
                 f"{resolve_base_url(base_url)}/videos/{job_id}",
                 headers={"Authorization": f"Bearer {key}"},
@@ -671,7 +678,7 @@ def download(
         raise OpenRouterVideoParamError("job_id 不能为空")
     target = url or f"{resolve_base_url(base_url)}/videos/{job_id}/content?index=0"
     try:
-        with _http_client(resolve_timeout(timeout_s)) as client:
+        with _http_client(resolve_timeout(timeout_s), resolve_proxy()) as client:
             resp = client.get(target, headers={"Authorization": f"Bearer {key}"})
     except httpx.HTTPError as exc:
         raise OpenRouterVideoFetchError(f"下载视频失败：{exc}") from exc

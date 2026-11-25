@@ -246,7 +246,7 @@ class _FakeClientFactory:
     def __init__(self, handler):
         self._transport = httpx.MockTransport(handler)
 
-    def __call__(self, timeout=300.0, **kw):
+    def __call__(self, timeout=300.0, proxy=None, **kw):
         outer = self
 
         class FakeClient:
@@ -533,3 +533,18 @@ def test_pricing_hints_skips_tier_without_own_sku():
 def test_pricing_hints_empty_when_no_pricing():
     assert openrouter_video.pricing_hints({}) == []
     assert openrouter_video.pricing_hints({"pricing_skus": {}}) == []
+
+
+# ---------- 出口代理链（与生图/音乐通路同款） ----------
+
+
+def test_resolve_proxy_chain(monkeypatch):
+    # 显式 > OP_VIDEO_PROXY > 系统代理 > 直连(None)
+    assert openrouter_video.resolve_proxy("http://x:1") == "http://x:1"
+    monkeypatch.setenv("OP_VIDEO_PROXY", "http://x:2")
+    assert openrouter_video.resolve_proxy(None) == "http://x:2"
+    monkeypatch.setattr("urllib.request.getproxies", lambda: {"https": "http://127.0.0.1:3"})
+    monkeypatch.delenv("OP_VIDEO_PROXY")
+    assert openrouter_video.resolve_proxy(None) == "http://127.0.0.1:3"
+    monkeypatch.setattr("urllib.request.getproxies", lambda: {})
+    assert openrouter_video.resolve_proxy(None) is None

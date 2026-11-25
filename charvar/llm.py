@@ -1,10 +1,14 @@
 """LLM 客户端（OpenAI 规范 chat completions，兼容任意 provider）。
 
 移植自 spellforge/styles/llm.py（与 riban-ranking 同骨架），改动：
-- requests → httpx，且 trust_env=False 直连（项目红线：所有出网请求 bypass 代理）；
+- requests → httpx，trust_env=False 忽略 shell 环境代理；出口代理走
+  :func:`resolve_proxy` 链（显式 config/参数 > env ``LLM_PROXY`` > 系统代理 > 直连，
+  与音乐通路同款）——OpenRouter 按请求出口 IP 判区，直连出口的推理 POST 被 400
+  ``Request path cannot be relayed``（2026-11-25 实测）；系统代理兜底只对
+  openrouter.ai 基址生效，防自建/内网 LLM 被塞进 QuickQ 出口；
 - 配置优先级：显式 override 参数（调用方传 DB 设置）> 环境变量 / .env
   （.env 已由 charvar.paths 在 import 时载入 os.environ）。
-环境变量：LLM_BASE_URL / LLM_API_KEY / LLM_MODEL。
+环境变量：LLM_BASE_URL / LLM_API_KEY / LLM_MODEL / LLM_PROXY。
 """
 from __future__ import annotations
 
@@ -12,6 +16,8 @@ import json
 import os
 import re
 import time
+import urllib.parse
+import urllib.request
 from typing import Any
 
 import httpx
@@ -20,7 +26,7 @@ DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash"
 _TIMEOUT = 300.0  # 30 条全批改写的输出很长（>1.5 万 token），放宽到 5 分钟
 
-_CONFIG_KEYS = ("base_url", "api_key", "model")
+_CONFIG_KEYS = ("base_url", "api_key", "model", "proxy")
 
 
 class LLMError(RuntimeError):
@@ -38,6 +44,27 @@ class LLMParseError(LLMError):
 def _http_client(**kw: Any) -> httpx.Client:
     # trust_env=False：忽略 shell 的 ALL_PROXY 等环境代理（与 comfyui_exporter 同策略）
     return httpx.Client(trust_env=False, **kw)
+
+
+def resolve_proxy(base_url: str, proxy: str | None = None) -> str | None:
+    """LLM 通路的出口代理：显式 > env ``LLM_PROXY`` > 系统代理 > 直连。
+
+    系统代理兜底只在 openrouter.ai 基址下生效（OpenRouter 按出口 IP 判区）；其他
+    provider（可能是自建/内网服务）不送进系统代理，保持直连。
+    """
+    for candidate in (proxy, os.environ.get("LLM_PROXY")):
+        candidate = str(candidate or "").strip()
+        if candidate:
+            return candidate
+    host = (urllib.parse.urlparse(str(base_url or "")).hostname or "").lower()
+    if host not in ("openrouter.ai", "www.openrouter.ai"):
+        return None
+    try:
+        proxies = urllib.request.getproxies()
+    except Exception:  # noqa: BLE001 - 读系统代理失败按直连走
+        return None
+    value = str(proxies.get("https") or proxies.get("http") or "").strip()
+    return value or None
 
 
 def get_llm_config(override: dict | None = None) -> dict:
@@ -110,7 +137,8 @@ def chat(
             payload["response_format"] = rf
         attempt += 1
         try:
-            with _http_client(timeout=httpx.Timeout(_TIMEOUT, write=60.0)) as client:
+            proxy = resolve_proxy(cfg["base_url"], cfg.get("proxy"))
+            with _http_client(timeout=httpx.Timeout(_TIMEOUT, write=60.0), proxy=proxy) as client:
                 resp = client.post(
                     url,
                     headers={

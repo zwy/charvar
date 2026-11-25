@@ -16,7 +16,9 @@ API 形态(2026-10 实测 + 官方文档,与生图/视频的两条通路都不�
   兜底第一项(与视频页「枚举默认取第一项」同款);枚举为空的模型(fish/seed)
   不发送,交给 provider 裁决。
 
-与生图/视频一致的红线:httpx ``trust_env=False``(shell 的 ALL_PROXY 会劫持地址)、
+与生图/视频一致的红线:httpx ``trust_env=False``(shell 的 ALL_PROXY 会劫持地址;
+出口代理走 :func:`resolve_proxy` 链,``OP_TTS_PROXY`` > 系统代理 > 直连,与音乐通路
+同款——OpenRouter 按出口 IP 判区,直连推理 POST 被 400)、
 API key 复用 ``openrouter_image.resolve_api_key``(同一家 OpenRouter)、
 目录缓存冷启动并发只拉一次。
 """
@@ -149,9 +151,14 @@ def capabilities_cache_path() -> Path:
 # ---------- HTTP ----------
 
 
-def _http_client(timeout: float) -> httpx.Client:
+def resolve_proxy(proxy: str | None = None) -> str | None:
+    """语音通路的出口代理:显式 > env ``OP_TTS_PROXY`` > 系统代理 > 直连(与生图同链)。"""
+    return openrouter_image.resolve_proxy(proxy, env_key="OP_TTS_PROXY")
+
+
+def _http_client(timeout: float, proxy: str | None = None) -> httpx.Client:
     # trust_env=False:忽略 shell 的 ALL_PROXY 等环境代理(与 openrouter_image 同一策略)
-    return httpx.Client(trust_env=False, timeout=httpx.Timeout(timeout, write=60.0))
+    return httpx.Client(trust_env=False, timeout=httpx.Timeout(timeout, write=60.0), proxy=proxy)
 
 
 def _error_from_response(resp: httpx.Response) -> OpenRouterTtsError:
@@ -215,7 +222,7 @@ def list_models(
         if key:
             headers["Authorization"] = f"Bearer {key}"
         try:
-            with _http_client(_LIST_MODELS_TIMEOUT_S) as client:
+            with _http_client(_LIST_MODELS_TIMEOUT_S, resolve_proxy()) as client:
                 resp = client.get(
                     f"{resolve_base_url(base_url)}/models?{_LIST_MODELS_QUERY}", headers=headers
                 )
@@ -465,7 +472,7 @@ def _post_speech(
     tried: set[str] = set()
     while True:
         try:
-            with _http_client(resolve_timeout(timeout_s)) as client:
+            with _http_client(resolve_timeout(timeout_s), resolve_proxy()) as client:
                 resp = client.post(
                     f"{resolve_base_url(base_url)}/audio/speech",
                     headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},

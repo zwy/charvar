@@ -61,7 +61,7 @@ def _entry(env, model_id="heygen/heygen-voice-1-turbo:free"):
 def _install(env, handler):
     transport = httpx.MockTransport(handler)
 
-    def factory(timeout: float) -> httpx.Client:
+    def factory(timeout: float, proxy: str | None = None) -> httpx.Client:
         return httpx.Client(transport=transport, timeout=httpx.Timeout(timeout, write=60.0))
 
     openrouter_tts._http_client = factory  # type: ignore[assignment]
@@ -330,3 +330,17 @@ def test_wrap_pcm_roundtrip(env):
         assert handle.getnframes() == 50
         assert handle.getframerate() == 24000
         assert handle.getnchannels() == 2
+
+# ---------- 出口代理链（与生图/音乐通路同款） ----------
+
+
+def test_resolve_proxy_chain(monkeypatch):
+    # 显式 > OP_TTS_PROXY > 系统代理 > 直连(None)
+    assert openrouter_tts.resolve_proxy("http://x:1") == "http://x:1"
+    monkeypatch.setenv("OP_TTS_PROXY", "http://x:2")
+    assert openrouter_tts.resolve_proxy(None) == "http://x:2"
+    monkeypatch.setattr("urllib.request.getproxies", lambda: {"https": "http://127.0.0.1:3"})
+    monkeypatch.delenv("OP_TTS_PROXY")
+    assert openrouter_tts.resolve_proxy(None) == "http://127.0.0.1:3"
+    monkeypatch.setattr("urllib.request.getproxies", lambda: {})
+    assert openrouter_tts.resolve_proxy(None) is None
