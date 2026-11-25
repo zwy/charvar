@@ -1,0 +1,41 @@
+# 本文件由 `subject/mai_角色开发/修正主体档案.py` **从模板逐字重建**（Mai／mai）。
+# 建档时 OpenRouter 额度耗尽（402 Payment Required），`charvar subject derive` 跑不了，
+#   因此档案不经 derive 起草。
+# 锁项逐字取自 final/mai/全场景通用提示词模板.md 的「识别锚点表」与「固定前缀」，
+#   不是 LLM 自由文本；每条锁项都有逐字断言保证与模板不脱节。
+# 审计：`charvar subject verify mai` **连跑三轮全部通过**（用户换 key 后补跑，2026-11-24）。
+# 来源模板：mai.md（sha256:3f34ec58c2c9）
+# 语言：zh（模板原文摘录）  模型：deepseek/deepseek-v4.1-flash-1017  时间：2026-11-24 09:49 UTC
+id: mai
+name: Mai
+subject_noun: woman
+trigger_word: mai
+reference_tag: <image1>
+style_lock:
+- 真人写实摄影
+- 柔和均匀的影棚漫射光，色彩明亮柔和偏暖
+- 保留真实发丝与细微皮肤纹理，锐化与磨皮克制
+identity_lock:
+- 原创角色，成年女性（二十岁上下）
+- 东南亚人，十九到二十三岁，少女感明显，但不做幼童化处理
+- 脸型是柔和的鹅蛋形，额头饱满圆润，颧骨柔和不突出，下颌线流畅收窄，下巴圆润不过尖
+- 眉毛是浅棕褐色、很细，眉形自然平缓，眉峰不明显，眉尾自然消散
+- 眼睛是深棕灰色的大杏眼，眼型偏圆，上眼睑褶皱清晰，睫毛浓密纤长、卷翘上翘，下眼睑有一条浅粉色的卧蚕，眼白干净
+- 鼻梁细直偏窄，鼻翼很窄，鼻头小巧圆润
+- 嘴唇饱满，上唇薄、下唇略厚，唇珠清楚
+- 皮肤白皙偏暖调，质感细腻干净，脸颊与鼻翼没有雀斑
+- 浅金棕色的长发，长度到背部中段，发尾自然内扣、末端分成几缕细流；发根是深一些的棕色，发丝里有更浅的金棕色高光，发丝有真实的层次与光泽，发根微微蓬松；额前是一层薄薄的空气刘海，刘海纤细稀疏、发丝透光，斜向分到额头两侧，两侧各有一缕较长的碎发顺贴脸颊
+- 妆感是带妆的暖调日常妆：上眼睑靠睫毛根部是深棕紫色眼影，向眼窝上方渐变到裸粉色，眼尾有一段深棕色晕染；上睫毛根部有深棕色眼线，眼尾明显拉长上挑；眉毛保留本来的浅棕褐色，只做了柔和的填色；唇是饱和的玫红色唇釉，唇中心最饱和、唇线柔化晕开，上唇唇珠清楚、下唇略厚，缎面微哑光质感
+outfit_lock:
+- 外面穿一件米白色的钩针蕾丝无袖背心。领口是方的，前沿只到锁骨下方，宽度不超过两肩外缘宽度的一半。前襟正中是一列小圆扣。衣身是多行钩针镂空的花纹带，镂空蕾丝纹样透出里层的肤色。衣摆是一圈尖角状的钩针蕾丝花边，垂坠地搭在腰头之上，衣长到胯部。合身剪裁，布料顺着上半身曲线落下，在胸部一段轻微绷紧，肩部、腰部与衣摆保持自然垂坠。
+- 下面穿一条驼色的百褶长裙。腰头在腰线位置，是一道平整的窄腰头，被上装的衣摆盖住。裙身是细密的刀褶褶裥，褶线从腰头一路垂直垂下、间距均匀。前片是交叠的裹片，从一侧的髋部斜向另一侧交叠，在腰下形成一个倒 V 形的交叠点，交叠点往下有一道开衩，露出里面的腿部。裙长到脚踝。
+- 白色小圆头平底皮鞋，鞋面是干净的素面皮革，薄底。
+- 脖子上戴一条很细的金色项链，链身贴着锁骨往下垂，吊坠是一个竖长的金色小长方形，吊坠里嵌着一排细小的亮点。
+- 背面是同一件米白色钩针蕾丝无袖背心的后身：后背是一整片钩针镂空的蕾丝布料，能透出里层的肤色，两条肩带从肩头绕到后背，衣摆同样是一圈尖角状的钩针蕾丝花边
+- 裙子的背面是驼色细密刀褶的哑光布料，腰头是一道平整的窄腰头，后片正中没有开衩，臀下的布料顺着臀部向后翘起并自然收住
+- 侧面的结构：侧脸轮廓能读出额头、鼻梁、鼻头、唇形与下颌线的完整侧面线条；侧面能读出胸廓微微向前凸出、腰部向内收束与臀部向后翘起的弧线，裙子的开衩在侧面看成一道竖直的缝隙。
+- 默认造型不含手表、包袋、帽子、眼镜、耳环等配饰，脖子上只戴那条细金链项链。
+body_lock:
+- 'slender adult hourglass: small-boned frame, narrow level shoulders, a fleshy torso with a cinched waist; her bust is very large, full and round, its widest width about half again her outer shoulder width, with its own forward volume, a clear bust-to-waist drop, its lower edge sagging under its own weight, that width over twice the ribcage width, in profile projecting deeper than its own width'
+- 'a fine waistline cinched below the ribcage, opening to the hips; her hips are round, full, lifted backward, their widest width about a third wider than her outer shoulders, with a horizontal turn under it; her upper arms carry muscle and fat thickness, never spindly, narrower than her bust, wrists thin; her thighs are full and wide, narrowing to the knee; her calves taper, as wide as her ankles'
+extra: Keep the same facial features, hairstyle, skin tone and makeup, and the same outfit, consistent in every pose and every new scene.
